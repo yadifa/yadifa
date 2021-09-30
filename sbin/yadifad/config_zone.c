@@ -301,14 +301,16 @@ config_section_zone_stop(struct config_section_descriptor_s *csd)
         }
 #endif
 
-#if DNSCORE_HAS_TCP_MANAGER
         for(host_address *ha = zone_desc->notifies; ha != NULL; ha = ha->next)
         {
             socketaddress sa;
+#if DNSCORE_HAS_TCP_MANAGER
             socklen_t sa_len = host_address2sockaddr(ha, &sa);
             tcp_manager_host_register(&sa, sa_len, g_config->max_secondary_tcp_queries);
-        }
+#else
+            server_tcp_client_register(&sa.ss, g_config->max_secondary_tcp_queries);
 #endif
+        }
         
         // load the descriptor (most likely offline)
 

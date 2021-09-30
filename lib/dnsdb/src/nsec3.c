@@ -95,7 +95,8 @@
 #define MODULE_MSG_HANDLE g_dnssec_logger
 extern logger_handle *g_dnssec_logger;
 
-
+#define N3IRRVDT_TAG 0x544456525249334e
+#define RRVDATA_TAG 0x41544144565252
 
 /**
  * used by nsec3_label_link
@@ -1528,7 +1529,7 @@ nsec3_item_resource_record_view_data_item_set(nsec3_item_rrv_data_t *rrv_data, n
     {
         free(rrv_data->rdata);
         rrv_data->rdata_buffer_size = (required_size + 128) & ~127;
-        MALLOC_OBJECT_ARRAY_OR_DIE(rrv_data->rdata, u8, rrv_data->rdata_buffer_size, GENERIC_TAG);
+        MALLOC_OBJECT_ARRAY_OR_DIE(rrv_data->rdata, u8, rrv_data->rdata_buffer_size, RRVDATA_TAG);
     }
 
     rrv_data->rdata_size = nsec3_zone_item_to_rdata(rrv_data->n3, item, rrv_data->rdata, rrv_data->rdata_buffer_size);
@@ -1591,6 +1592,7 @@ nsec3_item_rrv_new_instance(void *data, const u8 *fqdn, u16 rtype, u16 rclass, s
 {
     (void)data;
     (void)fqdn;
+    (void)rtype;
     (void)rclass;
     yassert(rtype == TYPE_RRSIG);
     struct zdb_packed_ttlrdata *ttlrdata;
@@ -1612,7 +1614,7 @@ static const struct resource_record_view_vtbl nsec3_item_rrv_vtbl =
 void
 nsec3_item_resource_record_view_init(resource_record_view *rrv)
 {
-    ZALLOC_OBJECT_OR_DIE(rrv->data, nsec3_item_rrv_data_t, GENERIC_TAG);
+    ZALLOC_OBJECT_OR_DIE(rrv->data, nsec3_item_rrv_data_t, N3IRRVDT_TAG);
     ZEROMEMORY(rrv->data, sizeof(nsec3_item_rrv_data_t));
     rrv->vtbl = &nsec3_item_rrv_vtbl;
 }

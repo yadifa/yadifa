@@ -50,13 +50,13 @@
 
 #define MODULE_MSG_HANDLE		g_system_logger
 
-#define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
+#define THRDQSPG_TAG 0x4750535144524854
 
 void threaded_queue_slg_init(threaded_queue_slg_t *q, int ignored_size)
 {
     (void)ignored_size;
     threaded_queue_slg_page_t *page = NULL;
-    ZALLOC_OBJECT_OR_DIE(page, threaded_queue_slg_page_t, GENERIC_TAG);
+    ZALLOC_OBJECT_OR_DIE(page, threaded_queue_slg_page_t, THRDQSPG_TAG);
     page->size = 0;
     page->next = NULL;
 
@@ -155,7 +155,7 @@ threaded_queue_slg_enqueue(threaded_queue_slg_t *q, void *data)
             }
             else
             {
-                ZALLOC_OBJECT_OR_DIE(next_page, threaded_queue_slg_page_t, GENERIC_TAG);
+                ZALLOC_OBJECT_OR_DIE(next_page, threaded_queue_slg_page_t, THRDQSPG_TAG);
             }
 
             next_page->data[0] = data;

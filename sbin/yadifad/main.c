@@ -209,7 +209,7 @@ main_dump_info()
     log_info("got %u CPUs", sys_get_cpu_count());
     log_info("using %u UDP listeners per interface", g_config->thread_count_by_address);
     log_info("accepting up to %u TCP queries", g_config->max_tcp_queries);
-#if DNSCORE_HAS_ZALLOC
+#if DNSCORE_HAS_ZALLOC_SUPPORT
     log_info("self-managed memory enabled"); // ZALLOC
 #endif
 }
@@ -491,10 +491,10 @@ main_exit()
 
     if(server_do_clean_exit)
     {
+        log_info("stopping database");
+
         database_shutdown(g_config->database);
-        
-        database_finalize();
-        
+
         if(own_pid)
         {
             log_info("releasing pid file lock");
@@ -512,7 +512,6 @@ main_exit()
 #if HAS_ACL_SUPPORT
         acl_definitions_free();
 #endif
-        
         dnscore_finalize();
     }
     else
@@ -732,6 +731,35 @@ main(int argc, char *argv[])
 
 #ifndef WIN32
     {
+        if(g_config->set_nofile >= 0)
+        {
+            struct rlimit nofile_limits = {0, 0};
+
+            if(g_config->set_nofile == 0)
+            {
+                int tcp = g_config->max_tcp_queries;
+                int addresses = host_address_count(g_config->listen);
+                int workers_by_addresses = g_config->thread_count_by_address;
+
+                int nofile = tcp * 2 + addresses * workers_by_addresses + 1024;
+
+                nofile_limits.rlim_cur = nofile;
+                nofile_limits.rlim_max = nofile;
+            }
+            else
+            {
+                nofile_limits.rlim_cur = g_config->set_nofile;
+                nofile_limits.rlim_max = g_config->set_nofile;
+            }
+
+            ttylog_notice("setting file open limits to %i", nofile_limits.rlim_cur);
+
+            if(setrlimit(RLIMIT_NOFILE, &nofile_limits) < 0)
+            {
+                ttylog_err("failed to set file open limits to %i : %r", nofile_limits.rlim_cur, ERRNO_ERROR);
+            }
+        }
+
         struct rlimit limits;
         getrlimit(RLIMIT_NOFILE, &limits);
 
@@ -791,75 +819,71 @@ main(int argc, char *argv[])
 #if HAS_EVENT_DYNAMIC_MODULE
     dynamic_module_startup();
 #endif
-    
+    while(!dnscore_shuttingdown())
+    {
+        log_info("starting notify service");
 
-        while(!dnscore_shuttingdown())
-        {
-            log_info("starting notify service");
-
-            notify_service_start();
+        notify_service_start();
 
 #if HAS_DYNUPDATE_SUPPORT
 
-            log_info("starting dynupdate service");
+        log_info("starting dynupdate service");
 
-            // dynupdate service
-            //
-            // called by the dns server
-            // uses the database
+        // dynupdate service
+        //
+        // called by the dns server
+        // uses the database
 
-            dynupdate_query_service_init();
-            dynupdate_query_service_start();
+        dynupdate_query_service_init();
+        dynupdate_query_service_start();
 #endif
 /*
-            if(ctrl_has_dedicated_listen())
-            {
-                // start ctrl server on its address(es) that does not match the DNS server addresses
-            }
+        if(ctrl_has_dedicated_listen())
+        {
+            // start ctrl server on its address(es) that does not match the DNS server addresses
+        }
 */
-            log_info("starting server");
+        log_info("starting server");
 
-            if(ISOK(ret = server_service_start_and_wait()))
-            {
-                exit_code = EXIT_SUCCESS;
-            }
-            else
-            {
-                exit_code = EXIT_FAILURE;
-            }
+        if(ISOK(ret = server_service_start_and_wait()))
+        {
+            exit_code = EXIT_SUCCESS;
+        }
+        else
+        {
+            exit_code = EXIT_FAILURE;
+        }
 
 #if HAS_DYNUPDATE_SUPPORT
-            log_info("stopping dynupdate service");
+        log_info("stopping dynupdate service");
 
-            dynupdate_query_service_stop();
-            dynupdate_query_service_finalise();
+        dynupdate_query_service_stop();
+        dynupdate_query_service_finalise();
 
-            log_info("dynupdate service stopped");
+        log_info("dynupdate service stopped");
 #endif
 
-            log_info("stopping notify service");
+        log_info("stopping notify service");
 
-            notify_service_stop();
+        notify_service_stop();
 
-            if(!dnscore_shuttingdown())
-            {            
-                // server stop
-               // server context stop
-               server_context_stop();
-               // server context start
-               if(ISOK(ret = server_context_create()))
-               {
-                   // server start
-               }
-               else
-               {
-                   log_try_err("failed to start server: %r", ret);
-               }
-            }
+        if(!dnscore_shuttingdown())
+        {
+            // server stop
+           // server context stop
+           server_context_stop();
+           // server context start
+           if(ISOK(ret = server_context_create()))
+           {
+               // server start
+           }
+           else
+           {
+               log_try_err("failed to start server: %r", ret);
+           }
         }
-    
+    }
 
-    
 #if HAS_EVENT_DYNAMIC_MODULE
     dynamic_module_shutdown();
 #endif

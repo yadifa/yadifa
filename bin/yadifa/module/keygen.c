@@ -242,7 +242,7 @@ keygen_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *ar
     (void)callback_owned;
 
     ya_result ret = cmdline_get_opt_long(desc, "origin", arg_name);
-
+    (void)ret;
     return CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS;
 }
 
@@ -422,9 +422,6 @@ keygen_run(const module_s *m)
     (void)m;
 
     ya_result                                                    return_code;
-#if 0
-    keygen_config_print();
-#endif
 
     /*    ------------------------------------------------------------    */
 

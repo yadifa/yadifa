@@ -51,7 +51,7 @@
 
 #if HAS_ATOMIC_FEATURES
 
-#define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
+#define THREADED_QUEUE_NBRB_TAG 0x4252424e5154	/* TQUEUE */
 
 #define BASE_WAIT               5               // us
 #define BASE_WAIT_MAX           500000          // so about 0.5 secs max
@@ -126,7 +126,7 @@ threaded_nbrb_init(threaded_nbrb *queue, int max_size)
         real_size = 0x1000000;
     }
 
-    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*)* real_size, THREADED_QUEUE_TAG);
+    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*)* real_size, THREADED_QUEUE_NBRB_TAG);
     queue->empty_slots = real_size;
     queue->filled_slots = 0;
     queue->write_offset = 0;

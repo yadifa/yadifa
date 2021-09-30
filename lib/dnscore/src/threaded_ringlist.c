@@ -56,7 +56,7 @@
 
 #include "dnscore/mutex.h"
 
-#define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
+#define THREADED_QUEUE_RINGLIST_TAG 0x54534c474e525154 /* TQRNGLST */
 
 /*
  * The maximum number of nodes I should ever require is the queue size + 1
@@ -188,7 +188,7 @@ threaded_ringlist_enqueue(threaded_ringlist* queue, void* constant_pointer)
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(node, threaded_ringlist_node, THREADED_QUEUE_TAG);
+        MALLOC_OBJECT_OR_DIE(node, threaded_ringlist_node, THREADED_QUEUE_RINGLIST_TAG);
     }
 
     node->prev = queue->prev;
@@ -261,7 +261,7 @@ threaded_ringlist_try_enqueue(threaded_ringlist* queue, void* constant_pointer)
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(node, threaded_ringlist_node, THREADED_QUEUE_TAG);
+        MALLOC_OBJECT_OR_DIE(node, threaded_ringlist_node, THREADED_QUEUE_RINGLIST_TAG);
     }
 
     node->prev = queue->prev;

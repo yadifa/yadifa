@@ -69,6 +69,8 @@
 /* 0 = nothing, 1 = warns and worse, 2 = info and worse, 3 = debug and worse */
 #define VERBOSE_THREAD_LOG      0
 
+#define DEBUG_THREAD_TAG_COLLISIONS 0
+
 /* Disable when in release mode */
 
 #if !DEBUG
@@ -169,7 +171,7 @@ thread_copy_tag_with_pid_and_tid(pid_t pid, thread_t tid, char *out_9_bytes)
     return out_9_bytes;
 }
 
-#if DEBUG
+#if DEBUG_THREAD_TAG_COLLISIONS
 static int thread_set_tag_with_pid_and_tid_collisions = 0;
 #endif
 
@@ -236,7 +238,7 @@ thread_set_tag_with_pid_and_tid(pid_t pid_, thread_t tid_, const char *tag8chars
         
         key = (key + 1) & THREAD_TAG_HASH_PRIME;
 
-#if DEBUG
+#if DEBUG_THREAD_TAG_COLLISIONS
         ++thread_set_tag_with_pid_and_tid_collisions;
         formatln("thread_set_tag_with_pid_and_tid_collisions = %i", thread_set_tag_with_pid_and_tid_collisions);
 #endif

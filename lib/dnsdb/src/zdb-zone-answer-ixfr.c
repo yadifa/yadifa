@@ -470,55 +470,93 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     message_set_authoritative_answer(mesg);
     message_set_authority_count(mesg, 0);
-    
+
+    u32 journal_serial_from, journal_serial_to;
+    return_value = zdb_zone_journal_get_serial_range(data->zone, &journal_serial_from, &journal_serial_to);
+
     dns_resource_record rr;
     dns_resource_record_init(&rr);
-    
-    if(FAIL(return_value = zdb_zone_journal_get_ixfr_stream_at_serial(data->zone, serial, &fis, &rr)))
+
+    if(ISOK(return_value))
     {
-        if(return_value == ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE)
+        if(serial_ge(serial, journal_serial_from) && serial_le(serial, journal_serial_to))
         {
-            u32 from, to;
-            
-            ya_result range_ret = zdb_zone_journal_get_serial_range(data->zone, &from, &to);
-            
-            if(ISOK(range_ret))
-            {
-                log_info("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d out of the journal range [%d; %d]", data->zone->origin, message_get_sender_sa(mesg), serial, from, to);
-            }
-            else
-            {
-                log_err("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d, but the journal range cannot be retrieved: %r", data->zone->origin, message_get_sender_sa(mesg), serial, range_ret);
-            }
+            // good
+            log_info("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d which is in [%d; %d]", data->zone->origin, message_get_sender_sa(mesg), serial, journal_serial_from, journal_serial_to);
+            return_value = zdb_zone_journal_get_ixfr_stream_at_serial(data->zone, serial, &fis, &rr);
         }
         else
         {
-            if(return_value != ZDB_ERROR_ICMTL_NOTFOUND)
+            log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d which is out of [%d; %d]", data->zone->origin, message_get_sender_sa(mesg), serial, journal_serial_from, journal_serial_to);
+            return_value = ZDB_JOURNAL_SERIAL_OUT_OF_KNOWN_RANGE;
+        }
+    }
+    else
+    {
+        if(return_value == ZDB_ERROR_ICMTL_NOTFOUND)
+        {
+            log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d but there is no journal to be found", data->zone->origin, message_get_sender_sa(mesg), serial);
+        }
+        else
+        {
+            if(return_value == ERROR)
             {
-                if(return_value != /**/ ERROR)
-                {
-                    log_err("zone write ixfr: %{dnsname}: %{sockaddr}: unable to open journal: %r", data->zone->origin, message_get_sender_sa(mesg), return_value);
-                }
-                else // a generic error occurs when the journal is being maintained
-                {
-                    log_info("zone write ixfr: %{dnsname}: %{sockaddr}: journal is busy", data->zone->origin, message_get_sender_sa(mesg));
-                    return_value = ZDB_JOURNAL_IS_BUSY;
-                }
+                return_value = ZDB_JOURNAL_IS_BUSY;
             }
-            else
+
+            if(return_value == ZDB_JOURNAL_IS_BUSY)
             {
-                log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: there is no journal", data->zone->origin, message_get_sender_sa(mesg));
+                log_notice("zone write ixfr: %{dnsname}: %{sockaddr}: host asked for serial %d but the journal is being maintained", data->zone->origin, message_get_sender_sa(mesg), serial);
             }
         }
-        
+    }
+
+#if 0
+    if((rand() & 3) == 3)
+    {
+        if(ISOK(return_value))
+        {
+            dns_resource_record_clear(&rr);
+            input_stream_close(&fis);
+            return_value = ZDB_JOURNAL_IS_BUSY;
+        }
+    }
+#endif
+
+    if(FAIL(return_value))
+    {
         dns_resource_record_clear(&rr);
 
+        if(return_value != ZDB_JOURNAL_IS_BUSY)
+        {
 #if DNSCORE_HAS_TCP_MANAGER
-        zdb_zone_answer_axfr(data->zone, mesg, data->sctx, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+            zdb_zone_answer_axfr(data->zone, mesg, data->sctx, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
 #else
-        zdb_zone_answer_axfr(data->zone, mesg, data->sockfd, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
-        data->sockfd = -1;
+            zdb_zone_answer_axfr(data->zone, mesg, data->sockfd, NULL, data->disk_tp, data->packet_size_limit, data->packet_records_limit, data->compress_dname_rdata);
+            data->sockfd = -1;
 #endif
+        }
+        else
+        {
+#if DNSCORE_HAS_TCP_MANAGER
+            output_stream_flush(&tcpos);
+            output_stream *tcpos_filtered = buffer_output_stream_get_filtered(&tcpos);
+            fd_output_stream_detach(tcpos_filtered);
+#endif
+            message_set_status(mesg, RCODE_SERVFAIL);
+            message_transform_to_signed_error(mesg);
+
+#if DNSCORE_HAS_TCP_MANAGER
+            ya_result ret = message_send_tcp(mesg, tcp_manager_socket(data->sctx));
+            if(ISOK(ret))
+            {
+                tcp_manager_write_update(data->sctx, ret);
+            }
+#else
+            message_send_tcp(mesg, data->sockfd);
+#endif
+        }
+
         data->return_code = return_value;
 
         zdb_zone_answer_ixfr_thread_exit(data);

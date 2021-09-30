@@ -172,9 +172,10 @@ zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
             else
             {
                 iter->mode = ZDB_ZONE_LABEL_ITERATOR_END_OF_ITERATION;
-
-                FALLTHROUGH // fallthrough
             }
+
+            // FALLTHROUGH // fallthrough
+            break;
         }
     }
 

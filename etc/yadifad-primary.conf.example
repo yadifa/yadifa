@@ -1,6 +1,6 @@
 <zone>
 	domain		somedomain.eu
-	file		primaries/somedomain.eu.
+	file		masters/somedomain.eu.zone
 	type		primary
 </zone>
 

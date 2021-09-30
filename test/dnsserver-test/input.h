@@ -127,4 +127,4 @@ u16 record_input_data_feed_script[] =
     TYPE_SOA, TYPE_NS, TYPE_NS, TYPE_MX
 }
 */
-ya_result record_input_data_feed(struct input_stream_input_data_s *input_data, const u16 *script, size_t script_count, const u8 *fqdn, size_t *index);
+ya_result record_input_data_feed(struct input_stream_input_data_s *input_data, const u16 *script, size_t script_count, const u8 *fqdn, s64 *index);

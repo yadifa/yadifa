@@ -901,7 +901,7 @@ server_rw_udp_sender_thread(void *parms)
 
                             if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
                             {
-                                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
                             }
                         }
                     }
@@ -1293,8 +1293,8 @@ server_rw_query_loop(struct service_worker_s *worker)
 #if HAS_ZALLOC_STATISTICS_SUPPORT
                         zalloc_print_stats(termout);
 #endif
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-                        debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS); // do NOT enable the dump
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+                        debug_stat(DEBUG_STAT_TAGS|DEBUG_STAT_MMAP); // do NOT enable the dump
 #endif
                         journal_log_status();
 

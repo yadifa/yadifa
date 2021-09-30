@@ -477,7 +477,8 @@ signal_handler_thread(void* parms)
     thread_set_name("signal", 0, 0);
     
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("signal");
+    static char signal_thread_tag[9] = "signal";
+    logger_handle_set_thread_tag(signal_thread_tag);
 #endif
     
     log_info("signal: thread started");

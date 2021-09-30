@@ -72,6 +72,8 @@
 #include "process_class_ch.h"
 #include "server_context.h"
 
+#include "server.h"
+
 #if HAS_EVENT_DYNAMIC_MODULE
 #include "dynamic-module-handler.h"
 #endif
@@ -180,6 +182,7 @@ CONFIG_U32_RANGE(zone_unload_thread_count    , S_ZONE_UNLOAD_THREAD_COUNT, ZONE_
 CONFIG_ENUM(     network_model               ,S_NETWORK_MODEL, network_model_enum) // doc
 /* Max number of TCP queries  */
 CONFIG_U32_RANGE(max_tcp_queries             , S_MAX_TCP_QUERIES          ,TCP_QUERIES_MIN, TCP_QUERIES_MAX) // doc
+CONFIG_U32_RANGE(max_tcp_queries_per_address , S_MAX_TCP_QUERIES_PER_ADDRESS,TCP_QUERIES_MIN, TCP_QUERIES_MAX) // doc
 CONFIG_U32_RANGE(max_secondary_tcp_queries   , S_MAX_SECONDARY_TCP_QUERIES,TCP_QUERIES_MIN, TCP_QUERIES_MAX) // doc
 CONFIG_U32(      tcp_query_min_rate          , S_TCP_QUERY_MIN_RATE       ) // doc
 CONFIG_U32_RANGE(tcp_queue_size              , S_TCP_QUEUE_SIZE           , S_TCP_QUEUE_SIZE_MIN, S_TCP_QUEUE_SIZE_MAX)
@@ -214,7 +217,7 @@ CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        ) // d
 CONFIG_U32_RANGE(axfr_retry_failure_delay_multiplier, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX) // doc
 CONFIG_U32_RANGE(axfr_retry_failure_delay_max, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX) // doc
 CONFIG_U32_RANGE(worker_backlog_queue_size   , S_SERVER_RW_BACKLOG_QUEUE_SIZE, SERVER_RW_BACKLOG_QUEUE_SIZE_MIN, SERVER_RW_BACKLOG_QUEUE_SIZE_MAX ) // doc
-
+CONFIG_S32(set_nofile, "-1")
 CONFIG_BOOL(check_policies, "0")
 
 #if HAS_EVENT_DYNAMIC_MODULE
@@ -424,7 +427,6 @@ config_main_verify_and_update_file(const char *base_path, char **dirp)
 static ya_result
 config_main_section_postprocess_tcp_manager_register_callback(const char* itf_name, const socketaddress* sa, void* data)
 {
-
     (void)itf_name;
     (void)data;
     socklen_t sa_len;
@@ -440,12 +442,28 @@ config_main_section_postprocess_tcp_manager_register_callback(const char* itf_na
     }
     return SUCCESS;
 }
+#else
+static ya_result
+config_main_section_postprocess_clients_register_callback(const char* itf_name, const socketaddress* sa, void* data)
+{
+
+    (void)itf_name;
+    (void)data;
+    if((sa->sa.sa_family == AF_INET) || (sa->sa.sa_family == AF_INET6))
+    {
+        server_tcp_client_register(&sa->ss, g_config->max_secondary_tcp_queries);
+    }
+
+    return SUCCESS;
+}
 #endif
 
 static ya_result
 config_main_section_postprocess(struct config_section_descriptor_s *csd)
 {
     (void)csd;
+
+    dnscore_meminfo_t *mi = dnscore_meminfo_get(NULL);
 
     u32 port = 0;
     u32 cpu_per_core = (sys_has_hyperthreading())?2:1;
@@ -466,6 +484,14 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         if((ha->version == HOST_ADDRESS_IPV4) || (ha->version == HOST_ADDRESS_IPV6))
         {
             network_interfaces_forall(config_main_section_postprocess_tcp_manager_register_callback, NULL);
+        }
+    }
+#else
+    for(host_address *ha = g_config->known_hosts; ha != NULL; ha = ha->next)
+    {
+        if((ha->version == HOST_ADDRESS_IPV4) || (ha->version == HOST_ADDRESS_IPV6))
+        {
+            network_interfaces_forall(config_main_section_postprocess_clients_register_callback, NULL);
         }
     }
 #endif
@@ -508,6 +534,18 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     
     host_address_set_default_port_value(g_config->listen, ntohs(port));
     host_address_set_default_port_value(g_config->do_not_listen, ntohs(port));
+
+    if(g_config->max_tcp_queries_per_address > g_config->max_tcp_queries)
+    {
+        ttylog_warn("config: main: max_tcp_queries_per_address higher than max_tcp_queries (%i)", g_config->max_tcp_queries);
+        g_config->max_tcp_queries_per_address = g_config->max_tcp_queries;
+    }
+
+    if(g_config->max_secondary_tcp_queries > g_config->max_tcp_queries)
+    {
+        ttylog_warn("config: main: max_secondary_tcp_queries higher than max_tcp_queries (%i)", g_config->max_tcp_queries);
+        g_config->max_secondary_tcp_queries = g_config->max_tcp_queries;
+    }
 
 #ifndef WIN32
     if(g_config->server_flags & SERVER_FL_CHROOT)
@@ -577,7 +615,40 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
         g_config->thread_count_by_address = MAX(sys_get_cpu_count() / cpu_per_core, 1);
         ttylog_warn("config: bounding down thread-count-by-address to the number of physical CPUs (%d)", g_config->thread_count_by_address);
     }
-    
+
+    if(mi->program_memory_limit > 0)
+    {
+        const s64 estimated_usage_for_one_thread = (SERVER_POOL_BUFFER_SIZE + sizeof(message_data_with_buffer) + 0x8000 + 0x20000);
+        const double estimated_threshold = 0.50;
+        const s64 tcp_queries_soft_limit = 1024;
+        s64 estimated_current_memory_usage = 0;
+        s64 estimated_thread_count = g_config->max_tcp_queries + g_config->thread_count_by_address;
+        s64 estimated_memory_usage = estimated_thread_count * estimated_usage_for_one_thread + estimated_current_memory_usage;
+        double estimated_memory_usage_ratio = estimated_memory_usage;
+        estimated_memory_usage_ratio /= mi->program_memory_limit;
+        if(estimated_memory_usage_ratio > estimated_threshold)
+        {
+            ttylog_warn("config: estimated memory usage by both UDP and TCP threads seems high compared to the memory available.");
+            ttylog_warn("config: the program may be killed by OOM without notice.");
+            ttylog_warn("config: this doesn't take into account the memory used to load the zones.");
+
+            s32 cpu_count = sys_get_cpu_count();
+            s64 suggested_thread_count_by_address = cpu_count;
+            if(g_config->thread_count_by_address > cpu_count)
+            {
+                ttylog_warn("config: maybe reduce the thread-count-by-address from %i to %i", g_config->thread_count_by_address, suggested_thread_count_by_address);
+            }
+            double reverse = estimated_threshold * mi->program_memory_limit;
+            reverse /= estimated_usage_for_one_thread;
+            s64 suggested_max_tcp_queries = MAX(((s64)reverse) - suggested_thread_count_by_address, 1);
+            ttylog_warn("config: reducing the max-tcp-queries from %i to %lli will disable this warning", g_config->max_tcp_queries, suggested_max_tcp_queries);
+            if(suggested_max_tcp_queries > tcp_queries_soft_limit)
+            {
+                ttylog_warn("config: in practice, a max-tcp-queries value of %lli is plenty", tcp_queries_soft_limit);
+            }
+        }
+    }
+
     g_config->tcp_query_min_rate_us = 0.000001 * g_config->tcp_query_min_rate;
     message_set_minimum_troughput_default(g_config->tcp_query_min_rate_us);
     
@@ -610,8 +681,6 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     }
 #endif
 
-
-    
     /// @note config_main_verify_and_update_directory updates the folder with the base_path
     
     /**

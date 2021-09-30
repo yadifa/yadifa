@@ -63,9 +63,6 @@
 
 #define TSIG_TCP_PERIOD 99
 
-/* overrites the detected TSIG with 0xff */
-#define TSIG_DESTROY_DEBUG 1
-
 /*
  * AVL definition part begins here
  */
@@ -254,6 +251,9 @@ static const value_name_table hmac_digest_enum[]=
     {0, NULL}
 };
 
+static ya_result tsig_digest_answer(message_data *mesg);
+static ya_result tsig_add_tsig(message_data *mesg);
+
 ya_result
 tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname)
 {
@@ -408,6 +408,115 @@ tsig_update_time(message_data *mesg)
 }
 
 static ya_result
+tsig_process_append_unsigned(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset)
+{
+    u16* tsig_rdata_size_position_p;
+    u16 tsig_rdata_size;
+    message_set_status(mesg, FP_RCODE_NOTAUTH); // no fingerprint here, it's RFC
+    message_update_answer_status(mesg);
+    message_set_rcode(mesg, RCODE_NOTAUTH);
+    packet_reader_set_position(purd, tsig_offset);
+
+    packet_reader_skip_zone_record(purd);
+    packet_reader_skip_bytes(purd, 4);
+    tsig_rdata_size_position_p = (u16*)packet_reader_get_current_ptr_const(purd, 2);
+    packet_reader_read_u16_unchecked(purd, &tsig_rdata_size);
+    packet_reader_skip_fqdn(purd); // algorithm
+    u8 *p = (u8*)packet_reader_get_current_ptr_const(purd, 16);
+    if(p != NULL)
+    {
+        message_set_answer(mesg); // Make the message an answer
+
+        // overwrite the TSIG without the MAC and with a BADKEY error code
+        // keep the name and the algorithm
+
+        u32 now = timeus() / ONE_SECOND_US;
+        SET_U16_AT_P(p, 0);
+        p += 2;
+        SET_U32_AT_P(p, htonl(now));
+        p += 4;
+        SET_U16_AT_P(p, NU16(300));
+        p += 2;
+        SET_U16_AT_P(p, 0);
+        p += 2;
+        SET_U16_AT_P(p, message_get_id(mesg));
+        p += 2;
+        SET_U16_AT_P(p, NU16(RCODE_BADKEY));
+        p += 2;
+        SET_U16_AT_P(p, 0);
+        p += 2;
+
+        // adjust the TSIG rdata size
+
+        SET_U16_AT_P(tsig_rdata_size_position_p, htons((p - (u8*)tsig_rdata_size_position_p) - 2));
+
+        // adjust the message size
+
+        packet_reader_skip_unchecked(purd, 16);
+        message_set_size(mesg, packet_reader_position(purd));
+
+        return TSIG_BADKEY; /// @note TSIG_BADKEY is a ya_result error code, RCODE_BADKEY is the DNS error code
+    }
+    else
+    {
+        return DNS_ERROR_CODE(RCODE_FORMERR);
+    }
+}
+
+#if 0
+static ya_result
+tsig_process_append_badtime(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset)
+{
+    u16* tsig_rdata_size_position_p;
+    u16 tsig_rdata_size;
+    message_set_status(mesg, FP_RCODE_NOTAUTH); // no fingerprint here, it's RFC
+    message_set_rcode(mesg, RCODE_NOTAUTH);
+    packet_reader_set_position(purd, tsig_offset);
+
+    packet_reader_skip_zone_record(purd);
+    packet_reader_get_current_ptr_const(purd, &tsig_rdata_size_position_p);
+    packet_reader_read_u16_unchecked(purd, &tsig_rdata_size);
+    packet_reader_skip_fqdn(purd); // algorithm
+
+    u8 *p = (u8*)packet_reader_get_current_ptr_const(purd, 16);
+    if(p != NULL)
+    {
+        message_set_answer(mesg); // Make the message an answer
+
+        u32 now = timeus() / ONE_SECOND_US;
+
+        // skip the time
+
+        p += 8;
+
+        SET_U16_AT_P(p, 0);
+        p += 2;
+        SET_U16_AT_P(p, message_get_id(mesg));
+        p += 2;
+        SET_U16_AT_P(p, NU16(RCODE_BADKEY));
+        p += 2;
+        SET_U16_AT_P(p, 0);
+        p += 2;
+
+        // adjust the TSIG rdata size
+
+        SET_U16_AT_P(tsig_rdata_size_position_p, htons((p - (u8*)tsig_rdata_size_position_p) - 2));
+
+        // adjust the message size
+
+        packet_reader_skip_unchecked(purd, 16);
+        message_set_size(mesg, packet_reader_position(purd));
+
+        return TSIG_BADKEY; /// @note TSIG_BADKEY is a ya_result error code, RCODE_BADKEY is the DNS error code
+    }
+    else
+    {
+        return DNS_ERROR_CODE(RCODE_FORMERR);
+    }
+}
+#endif
+
+static ya_result
 tsig_verify_query(message_data *mesg)
 {
     u32 md_len = 0;
@@ -463,11 +572,43 @@ tsig_verify_query(message_data *mesg)
 
     if((md_len != mesg->_tsig.mac_size) || (memcmp(mesg->_tsig.mac, md, md_len) != 0))
     {
-        log_debug("tsig_verify_query: BADSIG");
-        message_set_status(mesg, FP_TSIG_ERROR);
         mesg->_tsig.error = NU16(RCODE_BADSIG);
+
+        packet_unpack_reader_data purd;
+        purd.packet = message_get_buffer(mesg);
+        purd.packet_size = message_get_buffer_size(mesg);
+        u16 additionals = 1; // message_is_edns0(mesg)?2:1;
+        message_set_additional_count(mesg, message_get_additional_count(mesg) + additionals);
+        tsig_process_append_unsigned(mesg, &purd, mesg->_tsig.tsig_offset);
         return TSIG_BADSIG;
     }
+
+    u64 then = (u64)ntohs(mesg->_tsig.timehi);
+    then <<= 32;
+    then |= (u64)ntohl(mesg->_tsig.timelo);
+    u64 now = time(NULL);
+    s64 fudge = ntohs(mesg->_tsig.fudge);
+
+    if(llabs((s64)((s64)then - now)) > fudge) // cast to signed in case now > then
+    {
+        mesg->_tsig.error = NU16(RCODE_BADTIME);
+        message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
+
+        message_update_answer_status(mesg);
+        message_set_rcode(mesg, RCODE_NOTAUTH);
+
+        free(mesg->_tsig.other);
+        mesg->_tsig.other_len = NU16(6);
+        MALLOC_OR_DIE(u8*, mesg->_tsig.other, 6, TSIGOTHR_TAG);
+        SET_U16_AT_P(mesg->_tsig.other, 0);
+        SET_U32_AT_P(mesg->_tsig.other + 4, htonl(time(NULL)));
+        tsig_digest_answer(mesg);
+        tsig_add_tsig(mesg);
+
+        return TSIG_BADTIME;
+    }
+
+    // no truncation supported at the moment
 
     return SUCCESS;
 }
@@ -534,18 +675,25 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
 
     hmac_free(hmac);
 
-    //if(md_len != ntohs(mesg->_tsig.mac_size))
-    if(md_len != mac_size)
+    if((md_len != mac_size) || (memcmp(mesg->_tsig.mac, md, md_len) != 0))
     {
         message_set_status(mesg, FP_TSIG_ERROR);
         return TSIG_BADSIG;
     }
 
-    if(memcmp(mesg->_tsig.mac, md, md_len) != 0)
+    u64 then = (u64)ntohs(mesg->_tsig.timehi);
+    then <<= 32;
+    then |= (u64)ntohl(mesg->_tsig.timelo);
+    u64 now = time(NULL);
+    s64 fudge = ntohs(mesg->_tsig.fudge);
+
+    if(llabs((s64)((s64)then - now)) > fudge) // cast to signed in case now > then
     {
-        log_debug("tsig_verify_answer: BADSIG");
-        message_set_status(mesg, FP_TSIG_ERROR);
-        return TSIG_BADSIG;
+        mesg->_tsig.error = NU16(RCODE_BADTIME);
+        message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
+
+        tsig_append_unsigned_error(mesg);
+        return TSIG_BADTIME;
     }
 
     return SUCCESS;
@@ -609,6 +757,8 @@ tsig_digest_query(message_data *mesg)
 static ya_result
 tsig_digest_answer(message_data *mesg)
 {
+    yassert(message_has_tsig(mesg));
+
     tsig_hmac_t hmac = tsig_hmac_allocate();
 
     if(hmac == NULL)
@@ -622,47 +772,53 @@ tsig_digest_answer(message_data *mesg)
     log_debug("tsig_digest_answer(%p = %{dnsname} %{dnstype} %{dnsclass})",
             mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
 #endif
-    
-    if(FAIL(hmac_init(hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+
+    if(mesg->_tsig.tsig != NULL && message_tsig_get_key_size(mesg) > 0)
     {
-        hmac_free(hmac);
-        return ERROR;
-    }
+        if(FAIL(hmac_init(hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+        {
+            hmac_free(hmac);
+            return ERROR;
+        }
 
-    u16 mac_size_network = htons(mesg->_tsig.mac_size);
-    hmac_update(hmac, (u8*) & mac_size_network, 2);
-    hmac_update(hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
+        u16 mac_size_network = htons(mesg->_tsig.mac_size);
+        hmac_update(hmac, (u8*) & mac_size_network, 2);
+        hmac_update(hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
 
-    /* DNS message */
+        /* DNS message */
 
-    hmac_update(hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+        hmac_update(hmac, message_get_buffer_const(mesg), message_get_size(mesg));
 
-    /* TSIG Variables */
+        /* TSIG Variables */
 
-    hmac_update(hmac, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
-    hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
-    hmac_update(hmac, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-    hmac_update(hmac, (u8*) & mesg->_tsig.timehi, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.timelo, 4);
-    hmac_update(hmac, (u8*) & mesg->_tsig.fudge, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.error, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.other_len, 2);
+        hmac_update(hmac, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
+        hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
+        hmac_update(hmac, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
+        hmac_update(hmac, (u8*) & mesg->_tsig.timehi, 2);
+        hmac_update(hmac, (u8*) & mesg->_tsig.timelo, 4);
+        hmac_update(hmac, (u8*) & mesg->_tsig.fudge, 2);
+        hmac_update(hmac, (u8*) & mesg->_tsig.error, 2);
+        hmac_update(hmac, (u8*) & mesg->_tsig.other_len, 2);
 
-    if(mesg->_tsig.other_len != 0)
-    {
-        hmac_update(hmac, mesg->_tsig.other, ntohs(mesg->_tsig.other_len));
-    }
+        if(mesg->_tsig.other_len != 0)
+        {
+            hmac_update(hmac, mesg->_tsig.other, ntohs(mesg->_tsig.other_len));
+        }
 
-    u32 tmp_mac_size;
-    hmac_final(hmac, mesg->_tsig.mac, &tmp_mac_size);
-    mesg->_tsig.mac_size = tmp_mac_size;
+        u32 tmp_mac_size;
+        hmac_final(hmac, mesg->_tsig.mac, &tmp_mac_size);
+        mesg->_tsig.mac_size = tmp_mac_size;
 
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_digest_answer: computed");
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, tmp_mac_size, 32);
+        log_debug("tsig_digest_answer: computed");
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, tmp_mac_size, 32);
 #endif
     
-    hmac_free(hmac);
+        hmac_free(hmac);
+    }
+    else
+    {
+    }
 
     return SUCCESS;
 }
@@ -689,7 +845,9 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 {
     u16 ar_count = message_get_additional_count(mesg);
     u8 algorithm[256];
-    
+
+    mesg->_tsig.tsig_offset = (u16)tsig_offset;
+
     if((tctr->qclass == CLASS_ANY) && (tctr->ttl == 0))
     {
         /*
@@ -698,26 +856,6 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
          * We must know the key, else there is a few error options available.
          */
 
-        if(tsig == NULL)
-        {
-            /* oops */
-
-            /**
-             * If a non-forwarding server does not recognize the key used by the
-             * client, the server MUST generate an error response with RCODE 9
-             * (NOTAUTH) and TSIG ERROR 17 (BADKEY).
-             *
-             * The server SHOULD log the error.
-             *
-             */
-
-            mesg->_tsig.error = NU16(RCODE_BADKEY);
-            message_set_status(mesg, FP_RCODE_NOTAUTH); // no fingerprint here, it's RFC
-            message_set_rcode(mesg, RCODE_NOTAUTH);
-
-            return TSIG_BADKEY;
-        }
-        
         /*
          * Got the TSIG:
          *
@@ -726,9 +864,6 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
          */
 
         ya_result return_code;
-
-        message_set_size(mesg, tsig_offset);
-        message_set_additional_count(mesg, ar_count - 1);
 
         /*
          * Read the algorithm name and see if it matches our TSIG key
@@ -740,19 +875,33 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 
             mesg->_tsig.error = NU16(RCODE_BADKEY);
             message_set_status(mesg, FP_TSIG_BROKEN);
-            return TSIG_BADKEY; // format error reading the key name
+            return DNS_ERROR_CODE(FP_TSIG_BROKEN); // format error reading the algorithm name
         }
 
         u8 alg = tsig_get_algorithm(algorithm);
 
-        if(tsig->mac_algorithm != alg)
+        if((tsig == NULL) || (alg == HMAC_UNKNOWN) || ((tsig != NULL) && (tsig->mac_algorithm != alg)))
         {
-            /* oops */
+            /**
+             * If a non-forwarding server does not recognize the key used by the
+             * client, the server MUST generate an error response with RCODE 9
+             * (NOTAUTH) and TSIG ERROR 17 (BADKEY).
+             *
+             * The server SHOULD log the error.
+             *
+             */
+
+            // The TSIG is modified here so we don't need to memorise the name of an unknown key.
 
             mesg->_tsig.error = NU16(RCODE_BADKEY);
-            message_set_status(mesg, FP_TSIG_ERROR);
-            return TSIG_BADKEY; // mismatched algorithm
+
+            return_code = tsig_process_append_unsigned(mesg, purd, tsig_offset);
+
+            return return_code;
         }
+
+        message_set_size(mesg, tsig_offset);
+        message_set_additional_count(mesg, ar_count - 1);
 
         /*
          * Save the TSIG.
@@ -780,14 +929,6 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
          * I cannot use time_t because on some systems time_t is 32 bits.  I need more.
          * The next best thing is u64
          */
-
-        u64 then = (u64)ntohs(mesg->_tsig.timehi);
-        then <<= 32;
-        then |= (u64)ntohl(mesg->_tsig.timelo);
-
-        u64 now = time(NULL);
-
-        s64 fudge = ntohs(mesg->_tsig.fudge);
 
         u16 mac_size = ntohs(mesg->_tsig.mac_size);  /* NETWORK => NATIVE */
 
@@ -834,13 +975,6 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
                 return TSIG_FORMERR;
             }
         }
-        
-        if(llabs((s64)((s64)then - now)) > fudge) // cast to signed in case now > then
-        {
-            mesg->_tsig.error = NU16(RCODE_BADTIME);
-            message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
-            return TSIG_BADTIME;
-        }
 
         /*
          * We can now process the wire and compute the HMAC
@@ -873,19 +1007,6 @@ tsig_process_query(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig
         
         free(mesg->_tsig.other);
         mesg->_tsig.other = NULL;
-        mesg->_tsig.error = htons(RCODE_BADSIG);
-    }
-    
-    switch(return_value)
-    {
-        case TSIG_FORMERR:
-            break;
-        case TSIG_BADTIME:
-            tsig_append_error(mesg);
-            break;
-        default:
-            tsig_append_unsigned_error(mesg);
-            break;
     }
 
     return return_value;
@@ -919,17 +1040,20 @@ tsig_process_answer(message_data *mesg, packet_unpack_reader_data *purd, u32 tsi
     if(ISOK(return_value = tsig_process(mesg, purd, tsig_offset, message_tsig_get_key(mesg), tctr)))
     {
         // verify the tsig in the answer
-        
-        if(FAIL(return_value = tsig_verify_answer(mesg, mac, mac_size)))
+
+        if(mesg->_tsig.error == 0) /// @todo 20210825 edf -- should be more accurate
         {
-            /* oops */
+            if(FAIL(return_value = tsig_verify_answer(mesg, mac, mac_size)))
+            {
+                /* oops */
 
-            free(mesg->_tsig.other);
-            mesg->_tsig.other = NULL;
-            mesg->_tsig.error = htons(RCODE_BADSIG);
+                free(mesg->_tsig.other);
+                mesg->_tsig.other = NULL;
+                mesg->_tsig.error = htons(RCODE_BADSIG);
 
-            tsig_append_error(mesg);
-        }        
+                tsig_append_error(mesg);
+            }
+        }
     }
     
     return return_value;
@@ -1039,7 +1163,7 @@ tsig_extract_and_process(message_data *mesg)
  *
  */
 
-ya_result
+static ya_result
 tsig_add_tsig(message_data *mesg)
 {
     u16 ar_count = message_get_additional_count(mesg);
@@ -1047,6 +1171,8 @@ tsig_add_tsig(message_data *mesg)
     /* Converted after network read ... so why do I do this ? */
     u16 mac_size = mesg->_tsig.mac_size;
     u16 other_len = ntohs(mesg->_tsig.other_len);
+
+    // if((mesg->_tsig.tsig != NULL) && (mac_size > 0))
 
     if(message_get_buffer_size(mesg) < message_get_size(mesg) +         // valid use of message_get_buffer_size()
                                        message_tsig_get_key(mesg)->name_len + /* DNS NAME of the TSIG (name of the key) */
@@ -1117,17 +1243,25 @@ ya_result
 tsig_sign_answer(message_data *mesg)
 {
     yassert(message_is_additional_section_ptr_set(mesg));
-    
-    ya_result ret;
 
-    tsig_update_time(mesg);
-    
-    if(ISOK(ret = tsig_digest_answer(mesg)))
+    if(message_has_tsig(mesg))
     {
-        ret = tsig_add_tsig(mesg);
+        ya_result ret;
+
+        tsig_update_time(mesg);
+
+        if(ISOK(ret = tsig_digest_answer(mesg)))
+        {
+            ret = tsig_add_tsig(mesg);
+        }
+
+        return ret;
     }
-    
-    return ret;
+    else
+    {
+        log_err("tsig_digest_answer() called on a message without TSIG");
+        return INVALID_STATE_ERROR;
+    }
 }
 
 /**
@@ -1140,9 +1274,9 @@ tsig_sign_query(message_data *mesg)
     yassert(message_is_additional_section_ptr_set(mesg));
     
     ya_result ret;
-    
-    tsig_update_time(mesg);
-    
+
+    // tsig_update_time(mesg);
+
     if(ISOK(ret = tsig_digest_query(mesg)))
     {
         ret = tsig_add_tsig(mesg);
@@ -1158,6 +1292,7 @@ tsig_sign_query(message_data *mesg)
  *
  */
 
+#if 0
 ya_result
 tsig_append_unsigned_error(message_data *mesg)
 {
@@ -1182,6 +1317,73 @@ tsig_append_unsigned_error(message_data *mesg)
             12 /*DO NOT REPLACE*/) /* = time + fudge + mac size + original id + error + other len */
     {
         /* Cannot sign */
+
+        return TSIG_UNABLE_TO_SIGN;
+    }
+
+    u8 *tsig_ptr = message_get_buffer_limit(mesg);
+
+    /* record */
+
+    memcpy(tsig_ptr, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
+    tsig_ptr += mesg->_tsig.tsig->name_len;
+
+    memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
+    tsig_ptr += sizeof(tsig_typeclassttl);
+    u16 *rdata_size_ptr = (u16*)tsig_ptr;
+    tsig_ptr += 2;
+
+    /* rdata */
+
+    memcpy(tsig_ptr, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
+    tsig_ptr += mesg->_tsig.tsig->mac_algorithm_name_len;
+
+    SET_U16_AT(tsig_ptr[ 0], mesg->_tsig.timehi);
+    SET_U32_AT(tsig_ptr[ 2], mesg->_tsig.timelo);
+    SET_U16_AT(tsig_ptr[ 6], mesg->_tsig.fudge);
+    SET_U16_AT(tsig_ptr[ 8], 0); /* MAC len */
+    SET_U16_AT(tsig_ptr[10], mesg->_tsig.original_id);
+    SET_U16_AT(tsig_ptr[12], mesg->_tsig.error);
+    SET_U16_AT(tsig_ptr[14], 0); /* Error len */
+
+    tsig_ptr += 16;
+
+    u16 rdata_size = (tsig_ptr - (u8*)rdata_size_ptr) - 2;
+
+    SET_U16_AT(*rdata_size_ptr, htons(rdata_size));
+
+    message_set_size(mesg, tsig_ptr - message_get_buffer(mesg));
+
+    message_set_additional_count(mesg, ar_count + 1);
+
+    return SUCCESS;
+}
+#endif
+
+ya_result
+tsig_append_unsigned_error(message_data *mesg)
+{
+    yassert(message_is_additional_section_ptr_set(mesg));
+
+    u16 ar_count = message_get_additional_count(mesg);
+
+    packet_unpack_reader_data purd;
+    packet_reader_init_from_message(&purd, mesg);
+
+    packet_reader_skip_fqdn(&purd);
+    purd.offset += 4;
+    message_set_size(mesg, purd.offset);
+
+    message_set_query_answer_authority_additional_counts_ne(mesg, NU16(1), 0, 0, 0);
+
+    if(!message_has_tsig(mesg) ||
+            message_get_buffer_size(mesg) < message_get_size(mesg) + // valid use of message_get_buffer_size()
+            mesg->_tsig.tsig->name_len + /* DNS NAME of the TSIG (name of the key) */
+            0 + /* MAC */
+            0 + /* OTHER DATA */
+            12  /* DO NOT REPLACE THIS VALUE */) /* = time + fudge + mac size + original id + error + other len */
+    {
+    /* Cannot sign */
 
         return TSIG_UNABLE_TO_SIGN;
     }

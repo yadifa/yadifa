@@ -256,6 +256,7 @@ bool dnscore_monitored_fail(ya_result ret);
 
 #define DNS_ERROR_BASE                          0x80030000
 #define DNS_ERROR_CODE(code_)                   ((s32)(DNS_ERROR_BASE+(code_)))
+#define IS_DNS_ERROR_CODE(code_)                (((code_)&0xffff0000) == DNS_ERROR_BASE)
 #define DOMAIN_TOO_LONG                         DNS_ERROR_CODE(1)    /* FQDN is longer than 255           */
 #define INCORRECT_IPADDRESS                     DNS_ERROR_CODE(2)    /* Incorrect ip address              */
 #define INCORRECT_RDATA                         DNS_ERROR_CODE(3)

@@ -872,6 +872,7 @@ file_pool_get_size(file_pool_file_t f, size_t *sizep)
 
         if(FAIL(ret))
         {
+            *sizep = 0;
             return ret;
         }
 
@@ -883,7 +884,7 @@ file_pool_get_size(file_pool_file_t f, size_t *sizep)
     }
     else
     {
-        return ERROR;
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
 }
 
@@ -1253,19 +1254,21 @@ file_pool_seek(file_pool_file_t f, ssize_t position, int from)
         case SEEK_END:
         {   
             size_t size;
-            file_pool_get_size(f, &size); // can only fail if a NULL is given
-            
-            ssize_t p =size + position;
-            
-            if(p >= 0)
+            if(ISOK(ret = file_pool_get_size(f, &size))) // can only fail if a NULL is given)
             {
-                f->position = p;
+                ssize_t p = size + position;
+
+                if(p >= 0)
+                {
+                    f->position = p;
+                }
+                else
+                {
+                    f->position = 0;
+                }
+                ret = (ssize_t)f->position;
             }
-            else
-            {
-                f->position = 0;
-            }
-            ret = (ssize_t)f->position;
+
             break;
         }
         default:

@@ -50,9 +50,10 @@
 #include <dnscore/dnscore.h>
 
 #define OSPRINT_DUMP_LAYOUT_GROUP_MASK      0x0000ff00U
-#define OSPRINT_DUMP_LAYOUT_GROUP_SHIFT     8U
+#define OSPRINT_DUMP_LAYOUT_GROUP_SHIFT     0x00000008U
 #define OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK  0x000000ffU
-#define OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT 0U
+#define OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT 0x00000000U
+#define OSPRINT_DUMP_OFFSET                 0x80000000U
 #define OSPRINT_DUMP_ADDRESS                0x40000000U
 #define OSPRINT_DUMP_HEX                    0x20000000U
 #define OSPRINT_DUMP_TEXT                   0x10000000U
@@ -63,6 +64,7 @@
 #define OSPRINT_DUMP_LAYOUT_GERY            0x00000003U
     
 #define OSPRINT_DUMP_ALL                    (OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
+#define OSPRINT_DUMP_BUFFER                 (OSPRINT_DUMP_OFFSET|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
 #define OSPRINT_DUMP_HEXTEXT                (OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
 #define OSPRINT_DUMP_BASE16                 (OSPRINT_DUMP_LAYOUT_DENSE|OSPRINT_DUMP_HEX)
 
@@ -270,6 +272,7 @@ void print_char(char value);
 
 void osprint_char(output_stream *os, char value);
 void osprint_char_times(output_stream *os, char value, int times);
+void osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags, const void* base_pointer_);
 void osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags);
 
 ya_result osprint_type_bitmap(output_stream *os, const u8 *rdata_pointer, u16 rdata_size);

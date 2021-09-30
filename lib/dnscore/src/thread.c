@@ -55,7 +55,8 @@
 
 #include "dnscore/logger.h"
 
-#define MODULE_MSG_HANDLE		g_system_logger
+#define MODULE_MSG_HANDLE g_system_logger
+#define PTHCWRAP_TAG 0x5041525743485450
 
 #if HAS_PTHREAD_SETNAME_NP
 
@@ -162,7 +163,7 @@ ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *func
     ret = pthread_create(t, NULL, function_thread, function_args);
 #else
     struct pthead_create_wrapper_s *pthead_create_wrapper_args;
-    MALLOC_OBJECT_OR_DIE(pthead_create_wrapper_args, struct pthead_create_wrapper_s, GENERIC_TAG);
+    MALLOC_OBJECT_OR_DIE(pthead_create_wrapper_args, struct pthead_create_wrapper_s, PTHCWRAP_TAG);
     pthead_create_wrapper_args->function_thread = function_thread;
     pthead_create_wrapper_args->function_args = function_args;
     ret = pthread_create(t, NULL, pthead_create_wrapper, pthead_create_wrapper_args);

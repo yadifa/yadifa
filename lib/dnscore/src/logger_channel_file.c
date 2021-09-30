@@ -341,15 +341,15 @@ logger_channel_file_reopen(logger_channel* chan)
     logger_channel_file_msg(chan, LOG_NOTICE,
 
 #if (DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | I | reopening '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %s | %8s | I | reopening '%s'",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | I | reopening '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %08x | %8s | I | reopening '%s'",
 #elif DNSCORE_HAS_LOG_THREAD_TAG
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | %8s | I | reopening '%s'",
 #elif HAS_LOG_THREAD_ID
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | I | reopening '%s'",
 #elif HAS_LOG_PID
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | I | reopening '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %8s | I | reopening '%s'",
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopening '%s'",
 #endif
@@ -395,15 +395,15 @@ logger_channel_file_reopen(logger_channel* chan)
     logger_channel_file_msg(chan, LOG_NOTICE,
     
 #if (DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | I | reopened '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %s | %8s | I | reopened '%s'",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | I | reopened '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %08x | %8s | I | reopened '%s'",
 #elif DNSCORE_HAS_LOG_THREAD_TAG
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | %8s | I | reopened '%s'",
 #elif HAS_LOG_THREAD_ID
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | I | reopened '%s'",
 #elif HAS_LOG_PID
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | I | reopened '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %8s | I | reopened '%s'",
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopened '%s'",
 #endif

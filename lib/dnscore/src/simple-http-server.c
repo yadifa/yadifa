@@ -77,6 +77,9 @@
 #define SIMPLE_REST_SERVER_CLIENT_LINE_SIZE 4096
 #define SIMPLE_REST_SERVER_CLIENT_LISTEN_BACKLOG 30
 
+#define SRSTCLNT_TAG 0x544e4c4354535253
+#define SRSTPAGE_TAG 0x4547415054535253
+
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */
 
@@ -550,7 +553,7 @@ simple_rest_server_client_new_instance(simple_rest_server *srs)
 {
     simple_rest_server_client *client;
     
-    ZALLOC_OBJECT_OR_DIE(client, simple_rest_server_client, GENERIC_TAG);
+    ZALLOC_OBJECT_OR_DIE(client, simple_rest_server_client, SRSTCLNT_TAG);
     client->srs = srs;
     client->sa_len = sizeof(client->sa);
     client->sockfd = -1;
@@ -634,7 +637,7 @@ simple_rest_server_page_new_instance(const char *path, simple_rest_server_page_w
 {
     simple_rest_server_page *page;
     
-    ZALLOC_OBJECT_OR_DIE(page, simple_rest_server_page, GENERIC_TAG);
+    ZALLOC_OBJECT_OR_DIE(page, simple_rest_server_page, SRSTPAGE_TAG);
     page->path = strdup(path);
     page->writer = page_writer;
     page->private = page_private;

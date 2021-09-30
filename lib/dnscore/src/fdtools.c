@@ -62,9 +62,14 @@
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
+#if DEBUG
+#define DEBUG_FD_OPEN_CLOSE_MONITOR 1
+#else
 #define DEBUG_FD_OPEN_CLOSE_MONITOR 0
+#endif
 
 #define FDTRACK_TAG 0x4b434152544446
+#define MTIMESET_TAG 0x544553454d49544d
 
 #if DEBUG
 // avoids logging these operations in the logger.
@@ -1673,7 +1678,7 @@ file_mtime_set_get_for_file(const char *filename)
     else
     {
         sets_node->key = strdup(filename);
-        ZALLOC_OBJECT_OR_DIE(ret, file_mtime_set_t, GENERIC_TAG);
+        ZALLOC_OBJECT_OR_DIE(ret, file_mtime_set_t, MTIMESET_TAG);
         ret->files_mtime.root = NULL;
         ret->files_mtime.compare = ptr_set_asciizp_node_compare;
         ret->name = strdup(filename);

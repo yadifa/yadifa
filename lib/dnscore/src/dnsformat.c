@@ -925,6 +925,69 @@ static const format_handler_descriptor hostaddr_format_handler_descriptor ={
 };
 
 static void
+hostaddrip_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+{
+    (void)reserved_for_method_parameters;
+
+    char buffer[MAX_DOMAIN_LENGTH + 1 + 5 + 1];
+    char *src = buffer;
+
+    if(val != NULL)
+    {
+        host_address *ha = (struct host_address*)val;
+
+        switch(ha->version)
+        {
+            case HOST_ADDRESS_IPV4:
+            {
+                if(inet_ntop(AF_INET, ha->ip.v4.bytes, buffer, sizeof(buffer)) != NULL)
+                {
+                }
+                else
+                {
+                    src = strerror(errno);
+                }
+                break;
+            }
+            case HOST_ADDRESS_IPV6:
+            {
+                if(inet_ntop(AF_INET6, ha->ip.v6.bytes, buffer, sizeof(buffer)) != NULL)
+                {
+                }
+                else
+                {
+                    src = strerror(errno);
+                }
+                break;
+            }
+            case HOST_ADDRESS_DNAME:
+            {
+                buffer[0] = '\0';
+                dnsname_to_cstr(buffer, ha->ip.dname.dname);
+                break;
+            }
+            default:
+            {
+                src = "INVALID";
+                break;
+            }
+        }
+    }
+    else
+    {
+        src = "NULL";
+    }
+
+    format_asciiz(src, stream, padding, pad_char, left_justified);
+}
+
+static const format_handler_descriptor hostaddrip_format_handler_descriptor ={
+    "hostaddrip",
+    10,
+    hostaddrip_format_handler_method
+};
+
+static void
 hostaddrlist_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
     (void)reserved_for_method_parameters;
@@ -1243,6 +1306,7 @@ netformat_class_init()
     format_registerclass(&sockaddr_format_handler_descriptor);
     format_registerclass(&sockaddrip_format_handler_descriptor);
     format_registerclass(&hostaddr_format_handler_descriptor);
+    format_registerclass(&hostaddrip_format_handler_descriptor);
     format_registerclass(&hostaddrlist_format_handler_descriptor);
 }
 

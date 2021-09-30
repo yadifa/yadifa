@@ -50,8 +50,6 @@
 
 #define MODULE_MSG_HANDLE		g_system_logger
 
-#define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
-
 #define DLL_POOL 1
 
 /*

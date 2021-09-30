@@ -58,13 +58,18 @@
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/process.h>
 #include <dnscore/async.h>
+#include <dnscore/error_state.h>
 
 pid_t fork_ex();
 
 logger_handle *parent = LOGGER_HANDLE_SINK;
 logger_handle *child = LOGGER_HANDLE_SINK;
 
+error_state_t error_state;
+
 #define HEAP_SIZE 0x40000000
+
+#define DO_PHASE_ONE 0
 
 #define CHILDREN 4
 
@@ -74,6 +79,8 @@ logger_handle *child = LOGGER_HANDLE_SINK;
 #if 0
 #define MICROPAUSE 10000
 #endif
+
+#if DO_PHASE_ONE
 
 static char one_kb_string[1048] =
     "BEGIN0123456789ABCDEFGHIJKLMNOPQ"
@@ -118,6 +125,10 @@ struct thread_ctx
     int count;
 };
 
+#if DNSCORE_HAS_LOG_THREAD_TAG
+static char logging_stuff_thread_tag[9] = "stuff";
+#endif
+
 static void*
 logging_stuff_thread(void *args)
 {
@@ -127,8 +138,10 @@ logging_stuff_thread(void *args)
     int count = ctx->count;
     
 #define MODULE_MSG_HANDLE ctx->logger
-    
-    logger_handle_set_thread_tag("stuff");
+
+#if DNSCORE_HAS_LOG_THREAD_TAG
+    logger_handle_set_thread_tag(logging_stuff_thread_tag);
+#endif
     
     async_wait(aw);
         
@@ -169,6 +182,7 @@ logging_stuff_thread(void *args)
     
     return NULL;
 }
+#endif
 
 int
 main(int argc, char *argv[])
@@ -205,7 +219,7 @@ main(int argc, char *argv[])
         
     logger_init_ex(0x100000, HEAP_SIZE);
     logger_start();
-    
+
     {
         output_stream stdout_os;
         logger_channel *stdout_channel;
@@ -231,9 +245,55 @@ main(int argc, char *argv[])
         
         sleep(1);
     }
-    
+
+
+#define MODULE_MSG_HANDLE parent
+
+    log_info("three minutes of test of same error on/off hammering");
+
+    static const s64 delay = 1000000;
+    static const s64 half_delay = delay / 2;
+
+    for(s64 now = timeus(), stop = now + 180UL * ONE_SECOND_US; now < stop ; now = timeus())
+    {
+        if((now % delay) < half_delay)
+        {
+            error_state_clear(&error_state, MODULE_MSG_HANDLE, MSG_NOTICE, "temporary");
+        }
+
+        if(error_state_log(&error_state, ERROR))
+        {
+            log_err("an error occured (on purprose): %r", ERROR);
+        }
+    }
+
+    error_state_clear(&error_state, MODULE_MSG_HANDLE, MSG_NOTICE, "an error");
+
+    log_info("three minutes of test of same error on/off hammering done");
+
+#undef MODULE_MSG_HANDLE
+
+#define MODULE_MSG_HANDLE parent
+
+    log_info("three minutes of test of same error hammering");
+
+    for(s64 now = timeus(), stop = now + 180 * ONE_SECOND_US; now < stop ; now = timeus())
+    {
+        if(error_state_log(&error_state, ERROR))
+        {
+            log_err("an error occured (on purprose): %r", ERROR);
+        }
+    }
+
+    error_state_clear(&error_state, MODULE_MSG_HANDLE, MSG_NOTICE, "an error");
+
+    log_info("three minutes of test of same error hammering done");
+
+#undef MODULE_MSG_HANDLE
+
+#if DO_PHASE_ONE
     async_wait_s *aw = async_wait_create_shared(0, 1);
-    
+
 #if CHILDREN
     u8 child_heap_id[CHILDREN];
     pid_t pid[CHILDREN];
@@ -261,7 +321,10 @@ main(int argc, char *argv[])
 
         if(pid[f] == 0)
         {
-            logger_handle_set_thread_tag("childid");
+#if DNSCORE_HAS_LOG_THREAD_TAG
+            static char childid_thread_tag[9] = "childid";
+            logger_handle_set_thread_tag(childid_thread_tag);
+#endif
             
             logger_set_shared_heap(child_heap_id[f]);
 
@@ -458,6 +521,14 @@ main(int argc, char *argv[])
             flushout();
         }
 #endif
+    }
+#endif // DO_PHASE_ONE
+
+#define MODULE_MSG_HANDLE parent
+
+    for(int i = 0; i < 64; ++i)
+    {
+        log_info("duplicated log line (test)");
     }
 
     flushout();

@@ -223,7 +223,7 @@ buffered_file_cache_new_instance(const char* name, u32 count, u8 log2_granularit
     
     buffered_file_cache_t fc;
     
-    ZALLOC_OBJECT_OR_DIE(fc, struct buffered_file_cache_t_, FILE_CACHE_TAG);
+    ZALLOC_OBJECT_OR_DIE(fc, struct buffered_file_cache_t_, BUFFERED_FILE_CACHE_TAG);
     
 #if BUFFERED_STATISTICS_ON_STDOUT
     memset(fc, 0, sizeof(*fc));

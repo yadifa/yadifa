@@ -61,6 +61,7 @@
 #include <dnscore/packet_reader.h>
 #include <dnscore/zone_reader_text.h>
 #include <dnscore/zone_reader_axfr.h>
+#include <dnscore/serial.h>
 
 #include <dnsdb/zdb_zone.h>
 #include <dnsdb/zdb_utils.h>
@@ -92,8 +93,6 @@
 #endif
 
 #define MODULE_MSG_HANDLE g_server_logger
-
-#define DBLOADQ_TAG 0x5144414f4c4244
 
 /**********************************************************************************************************************/
 

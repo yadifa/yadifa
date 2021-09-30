@@ -62,8 +62,6 @@
 #undef debug_stat
 #undef debug_mallocated
 
-#define AVL_NODE_TAG 0x0045444F4E4c5641 /* "AVLNODE" */
-
 /*
  * The following macros are defining relevant fields in the node
  */

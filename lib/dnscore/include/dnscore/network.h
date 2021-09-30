@@ -111,6 +111,10 @@ int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *
 
 int socketaddress_compare_ip(const void *a, const void *b);
 
+int sockaddr_storage_compare_ip(const void *key_a, const void *key_b);
+
+void sockaddr_storage_copy(struct sockaddr_storage *dest, const struct sockaddr_storage *src);
+
 static inline u16 sockaddr_port_ne(socketaddress *sa)
 {
     switch(sa->sa.sa_family)

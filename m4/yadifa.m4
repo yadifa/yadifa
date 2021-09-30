@@ -131,6 +131,8 @@ dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
         AC_SEARCH_LIBS([SSL_library_init],[ssl],,[
             AC_SEARCH_LIBS([OPENSSL_init_ssl],[ssl],,[exit 1])
             ])
+        AC_CHECK_FUNC(EVP_PKEY_new_raw_public_key,HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY,)
+
         AC_DEFINE_UNQUOTED(HAS_OPENSSL, [1], [linked with an OpenSSL compatible API])
     else
         AC_DEFINE_UNQUOTED(HAS_OPENSSL, [0], [not linked with an OpenSSL compatible API])
@@ -404,7 +406,7 @@ AC_HAS_ENABLE(lock_debug,LOCK_DEBUG_SUPPORT,[zone lock debug support])
 
 dnl FILEPOOL CACHE
 dnl ================
-AC_HAS_ENABLE(filepool_cache,FILEPOOL_CACHE,[file pool uses cache (dev)])
+dnl AC_HAS_ENABLE(filepool_cache,FILEPOOL_CACHE,[file pool uses cache (dev)])
 
 dnl INSTANCIATED ZONES DEBUG
 dnl ========================
@@ -433,7 +435,33 @@ AC_HAS_ENABLE(full_ascii7,FULL_ASCII7,[acceptance of ASCII7 characters in DNS na
 
 dnl ECDSA
 dnl =====
-AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not support it)])
+AC_HAS_DISABLE(ecdsa,ECDSA_SUPPORT,[Elliptic Curve (ECDSA) support (Use this if the available SSL library does not support it properly)])
+
+dnl EDDSA
+dnl =====
+dnl AC_HAS_DISABLE(eddsa, EDDSA_SUPPORT,[Edward Curve (EDDSA) support (Use this if the available SSL library does not support it properly)])
+AC_MSG_CHECKING(if EDDSA has been disabled)
+AC_ARG_ENABLE(EDDSA, AC_HELP_STRING([--disable-eddsa]), [Disable EDDSA])
+case "y$enable_eddsa" in
+    yyes|y)
+        if test "x$ac_cv_func_EVP_PKEY_new_raw_public_key" == xyes; then
+            AC_DEFINE_UNQUOTED([HAS_EDDSA_SUPPORT], [1], [EDDSA support enabled (EVP_PKEY_new_raw_public_key found)])
+            enable_eddsa=yes
+            AC_MSG_RESULT([no])
+        else
+            AC_DEFINE_UNQUOTED([HAS_EDDSA_SUPPORT], [0], [EDDSA support disabled (EVP_PKEY_new_raw_public_key not found)])
+            enable_eddsa=no
+            AC_MSG_RESULT([yes])
+        fi
+        ;;
+    yno|*)
+        AC_DEFINE_UNQUOTED([HAS_EDDSA_SUPPORT], [0], [EDDSA support disabled])
+        enable_eddsa=no
+        AC_MSG_RESULT([yes])
+        ;;
+esac
+AM_CONDITIONAL([HAS_EDDSA], [test y$enable_eddsa != yno])
+AC_SUBST(HAS_EDDSA)
 
 dnl SYSTEMD-RESOLVED
 dnl ================
@@ -448,7 +476,8 @@ AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[defaults axfr-strict-auth
 dnl TCP MANAGER
 dnl ==========================================================================
 
-AC_HAS_ENABLE(tcp_manager,TCP_MANAGER,[Enables the TCP manager])
+dnl not for release
+dnl AC_HAS_ENABLE(tcp_manager,TCP_MANAGER,[Enables the TCP manager (experimental)])
 
 dnl STRDUP
 dnl ==========================================================================

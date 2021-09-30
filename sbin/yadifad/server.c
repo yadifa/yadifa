@@ -58,6 +58,9 @@
 #include <dnscore/service.h>
 #include <dnscore/process.h>
 #include <dnscore/socket-server.h>
+#include <dnscore/error_state.h>
+#include <sys/mman.h>
+
 #if DNSCORE_HAS_TCP_MANAGER
 #include <dnscore/tcp_manager.h>
 #endif
@@ -97,6 +100,12 @@ logger_handle *g_server_logger = LOGGER_HANDLE_SINK;
 #include "dynamic-module-handler.h"
 #endif
 
+/**
+ * 20210922 edf -- this appears to be more efficient.  It may be enabled for production builds after thorough testing.
+ */
+
+#define SERVER_TCP_USE_LAZY_MAPPING 0
+
 #define NETWORK_AUTO_RECONFIGURE_COUNTDOWN_DEFAULT 10
 
 #define SVRPOOLB_TAG 0x424c4f4f50525653
@@ -107,12 +116,51 @@ logger_handle *g_server_logger = LOGGER_HANDLE_SINK;
 // DEBUG build: log debug 5 of outgoing wire
 #define DUMP_TCP_OUTPUT_WIRE 0
 
-#define POOL_BUFFER_SIZE 0x80000
+struct server_process_tcp_thread_parm
+{
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_socket_context_t *sctx;
+#else
+    //zdb *database;
+    socketaddress sa;
+    socklen_t addr_len;
+    int sockfd;
+#endif
+    int svr_sockfd;
+};
+
+typedef struct server_process_tcp_thread_parm server_process_tcp_thread_parm;
+
+#if SERVER_TCP_USE_LAZY_MAPPING
+struct tcp_thread_memory_s
+{
+    //server_process_tcp_thread_parm parm;
+    message_data_with_buffer message_data __attribute__((aligned(64)));
+    u8 pool_buffer[SERVER_POOL_BUFFER_SIZE] __attribute__((aligned(4096)));
+    u8 padding_buffer[0x8000] __attribute__((aligned(4096)));
+};
+
+typedef struct tcp_thread_memory_s tcp_thread_memory_t;
+
+#endif
 
 static struct thread_pool_s *server_tcp_thread_pool = NULL;
 struct thread_pool_s *server_disk_thread_pool = NULL;
+#if SERVER_TCP_USE_LAZY_MAPPING
+static tcp_thread_memory_t *tcp_thread_memory = NULL;
+static u32 thread_memory_size = 0;
+#endif
 
 #include "server.h"
+
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+static debug_bench_s debug_accept;
+static debug_bench_s debug_accept_reject;
+static debug_bench_s debug_server_process_tcp_task;
+static debug_bench_s debug_tcp_reply;
+static debug_bench_s debug_tcp_read_size;
+static debug_bench_s debug_tcp_read_message;
+#endif
 
 server_statistics_t server_statistics;
 static bool server_statistics_initialised = FALSE;
@@ -148,7 +196,6 @@ static struct server_desc_s server_type[] =
         server_rw_query_loop,
         "multithreaded deferred resolve"
     },
-
 #if __linux__ && HAVE_SENDMMSG
     {
         server_mm_context_init,
@@ -176,7 +223,7 @@ static struct server_desc_s server_type[] =
 static inline ya_result
 server_tcp_reply(message_data *mesg, tcp_manager_socket_context_t *sctx)
 {
-    ssize_t ret;
+    ssize_t ret = ERROR;
 
 #if DEBUG
     log_debug("tcp: %{sockaddr}: replying %i bytes", message_get_sender_sa(mesg), message_get_size(mesg));
@@ -222,19 +269,9 @@ server_tcp_reply(message_data *mesg, tcp_manager_socket_context_t *sctx)
 static inline ya_result
 server_tcp_reply_error(message_data *mesg, tcp_manager_socket_context_t *sctx, u16 error_code)
 {
-    ssize_t ret;
+    ssize_t ret = ERROR;
 
     log_debug("tcp: %{sockaddr}: replying %i bytes (error code %i)", message_get_sender_sa(mesg), message_get_size(mesg), error_code);
-
-#if DNSCORE_HAS_TCP_MANAGER
-    /*
-    tcp_manager_set_nodelay(sctx, TRUE);
-    tcp_manager_set_cork(sctx, FALSE);
-     */
-#else
-    tcp_set_nodelay(sockfd, TRUE);
-    tcp_set_cork(sockfd, FALSE);
-#endif
 
     if(ISOK(ret = message_make_error_and_reply_tcp_with_default_minimum_throughput(mesg, error_code, tcp_manager_socket(sctx))))
     {
@@ -248,16 +285,6 @@ server_tcp_reply_error(message_data *mesg, tcp_manager_socket_context_t *sctx, u
         log_err("tcp: %{sockaddr}: could not reply error code %u (%i bytes): %r", message_get_sender_sa(mesg), message_get_size(mesg), error_code, (ya_result)ret);
     }
 
-#if DNSCORE_HAS_TCP_MANAGER
-    /*
-    tcp_manager_set_nodelay(sctx, FALSE);
-    tcp_manager_set_cork(sctx, TRUE);
-     */
-#else
-    tcp_set_nodelay(sockfd, TRUE);
-    tcp_set_cork(sockfd, FALSE);
-#endif
-
     return (ya_result)ret;
 }
 #else
@@ -269,18 +296,32 @@ server_tcp_reply_error(message_data *mesg, tcp_manager_socket_context_t *sctx, u
  * @param sockfd
  */
 
+static error_state_t server_tcp_reply_error_state = ERROR_STATE_INITIALIZER;
+
 static inline ya_result
 server_tcp_reply(message_data *mesg, int sockfd)
 {
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+    u64 bench = debug_bench_start(&debug_tcp_reply);
+#endif
+
     ssize_t ret;
 
     if(ISOK(ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd)))
     {
+        error_state_clear_locked(&server_tcp_reply_error_state, NULL, 0, NULL);
     }
     else
     {
-        log_err("tcp: could not answer: %r", (ya_result)ret);
+        if(error_state_log_locked(&server_tcp_reply_error_state, ret))
+        {
+            log_err("tcp: could not answer: %r", (ya_result)ret);
+        }
     }
+
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+    debug_bench_stop(&debug_tcp_reply, bench);
+#endif
 
     return (ya_result)ret;
 }
@@ -298,23 +339,151 @@ server_tcp_reply_error(message_data *mesg, int sockfd, u16 error_code)
     ssize_t ret;
     if(ISOK(ret = message_make_error_and_reply_tcp_with_default_minimum_throughput(mesg, error_code, sockfd)))
     {
+        error_state_clear_locked(&server_tcp_reply_error_state, NULL, 0, NULL);
     }
     else
     {
-        log_err("tcp: could not answer: %r", (ya_result)ret);
+        if(error_state_log_locked(&server_tcp_reply_error_state, ret))
+        {
+            log_err("tcp: could not answer: %r", (ya_result)ret);
+        }
     }
 
     return (ya_result)ret;
 }
 #endif
 
-
-
 /*******************************************************************************************************************
  *
  * TCP protocol
  *
  ******************************************************************************************************************/
+
+#if !DNSCORE_HAS_TCP_MANAGER
+
+static ptr_set ip_to_tcp_client_set = {NULL, sockaddr_storage_compare_ip};
+static mutex_t ip_to_tcp_client_set_mtx = MUTEX_INITIALIZER;
+static ptr_set ip_to_tcp_query_set = {NULL, sockaddr_storage_compare_ip};
+static mutex_t ip_to_tcp_query_set_mtx = MUTEX_INITIALIZER;
+
+void
+server_tcp_client_register(const struct sockaddr_storage* sa, s64 connections_max)
+{
+    mutex_lock(&ip_to_tcp_client_set_mtx);
+    ptr_node *node = ptr_set_insert(&ip_to_tcp_client_set, (struct sockaddr_storage*)sa);
+    if(node->key == sa)
+    {
+        struct sockaddr_storage *ssp;
+        ZALLOC_OBJECT_OR_DIE(ssp, struct sockaddr_storage, GENERIC_TAG);
+        sockaddr_storage_copy(ssp, sa);
+        node->key = ssp;
+    }
+    node->value_s64 = connections_max;
+    mutex_unlock(&ip_to_tcp_client_set_mtx);
+}
+
+s64
+server_tcp_client_connections_max(const struct sockaddr_storage* sa, s64 default_value)
+{
+    s64 ret;
+    mutex_lock(&ip_to_tcp_client_set_mtx);
+    ptr_node *node = ptr_set_find(&ip_to_tcp_client_set, sa);
+    if(node != NULL)
+    {
+        ret = node->value_s64;
+    }
+    else
+    {
+        ret = default_value;
+    }
+    mutex_unlock(&ip_to_tcp_client_set_mtx);
+    return ret;
+}
+
+#if 0
+static u32
+server_tcp_queries_for_ip_count(struct sockaddr* sa)
+{
+    u32 ret = 0;
+    mutex_lock(&ip_to_tcp_query_set_mtx);
+    ptr_node *node = ptr_set_find(&ip_to_tcp_query_set, sa);
+    if(node != NULL)
+    {
+        ret = (u32)node->value_u64;
+    }
+    mutex_unlock(&ip_to_tcp_query_set_mtx);
+    return ret;
+}
+
+static void
+server_tcp_queries_for_ip_increment(struct sockaddr_storage* sa)
+{
+    mutex_lock(&ip_to_tcp_query_set_mtx);
+    ptr_node *node = ptr_set_insert(&ip_to_tcp_query_set, sa);
+    if(node->value_s64 > 0)
+    {
+        ++node->value_s64;
+    }
+    else
+    {
+        struct sockaddr_storage *ssp;
+        ZALLOC_OBJECT_OR_DIE(ssp, struct sockaddr_storage, GENERIC_TAG);
+        node->key = ssp;
+        node->value_s64 = 0;
+    }
+    mutex_unlock(&ip_to_tcp_query_set_mtx);
+}
+#endif
+
+static bool
+server_tcp_queries_for_ip_increment_if_less(struct sockaddr_storage* sa, s64 max_value)
+{
+    bool ret = TRUE;
+
+    mutex_lock(&ip_to_tcp_query_set_mtx);
+    ptr_node *node = ptr_set_insert(&ip_to_tcp_query_set, sa);
+    if(node->value_s64 > 0)
+    {
+        if(node->value_s64 < max_value)
+        {
+            ++node->value_s64;
+        }
+        else
+        {
+            ret = FALSE;
+        }
+    }
+    else
+    {
+        struct sockaddr_storage *ssp;
+        ZALLOC_OBJECT_OR_DIE(ssp, struct sockaddr_storage, GENERIC_TAG);
+        sockaddr_storage_copy(ssp, sa);
+        node->key = ssp;
+        node->value_s64 = 1;
+    }
+    mutex_unlock(&ip_to_tcp_query_set_mtx);
+    return ret;
+}
+
+static void
+server_tcp_queries_for_ip_decrement(struct sockaddr_storage* sa)
+{
+    mutex_lock(&ip_to_tcp_query_set_mtx);
+    ptr_node *node = ptr_set_find(&ip_to_tcp_query_set, sa);
+    if(node->value_s64 > 1)
+    {
+        --node->value_s64;
+    }
+    else
+    {
+        struct sockaddr_storage *ssp = node->key;
+        ptr_set_delete(&ip_to_tcp_query_set, ssp);
+        ZFREE_OBJECT(ssp);
+    }
+    mutex_unlock(&ip_to_tcp_query_set_mtx);
+}
+
+#endif
 
 /** \brief Does the tcp processing
  *
@@ -382,11 +551,19 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
         log_debug("tcp: waiting for length prefix, loop %i", loop_count);
 #endif
 
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        u64 bench = debug_bench_start(&debug_tcp_read_size);
+#endif
+
 #if DNSCORE_HAS_TCP_MANAGER
         // tcp_manager_cancellable(sctx); // tells that it's about to wait for something new
         next_message_size = tcp_manager_read_fully(sctx, (u8*)&dns_query_len, 2);
 #else
         next_message_size = readfully_limited_ex(sockfd, &dns_query_len, 2, 3000000, g_config->tcp_query_min_rate_us);
+#endif
+
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        debug_bench_stop(&debug_tcp_read_size, bench);
 #endif
         if(next_message_size != 2)
         {
@@ -400,7 +577,7 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 
                 if(ret != MAKE_ERRNO_ERROR(EBADF))
                 {
-                    log_err("tcp: %{sockaddr}: loop %i: length prefix not received after %5.3fs: %r", message_get_sender_sa(mesg), loop_count, s, ret);
+                    log_debug("tcp: %{sockaddr}: loop %i: length prefix not received after %5.3fs: %r", message_get_sender_sa(mesg), loop_count, s, ret);
                 }
                 else
                 {
@@ -449,12 +626,19 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
         log_debug("tcp: %{sockaddr}: waiting for %i bytes", message_get_sender_sa(mesg), native_dns_query_len);
 #endif
 
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        bench = debug_bench_start(&debug_tcp_read_message);
+#endif
+
 #if DNSCORE_HAS_TCP_MANAGER
         received = tcp_manager_read_fully(sctx, message_get_buffer(mesg), native_dns_query_len);
 #else
         received = readfully_limited_ex(sockfd, message_get_buffer(mesg), native_dns_query_len, 3000000, g_config->tcp_query_min_rate_us);
 #endif
 
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        debug_bench_stop(&debug_tcp_read_message, bench);
+#endif
         if(received != native_dns_query_len)
         {
             if(ISOK(received))
@@ -479,7 +663,16 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
             break;
         }
 
+#if DNSCORE_HAS_TCP_MANAGER
+        // nothing
+#else
+        tcp_set_nodelay(sockfd, TRUE);
+        tcp_set_cork(sockfd, FALSE);
+#endif
+
         message_set_size(mesg, received);
+
+        bool received_query = message_isquery(mesg);
 
 #if DEBUG
         log_debug("tcp: %{sockaddr}: received %i bytes", message_get_sender_sa(mesg), native_dns_query_len);
@@ -518,7 +711,6 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                                  */
 
                                 TCPSTATS(tcp_axfr_count++);
-
 #if DNSCORE_HAS_TCP_MANAGER
                                 ret = axfr_process(mesg, sctx);
 #else
@@ -552,27 +744,28 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 #endif
                                 return ret; /* IXFR PROCESSING: process then closes: all in background */
                             }
-
 #if DEBUG
                             log_debug("tcp: %{sockaddr}: querying database", message_get_sender_sa(mesg));
 #endif
-
-                            TCPSTATS(tcp_queries_count++);
-
                             /*
                              * This query must go through the task channel.
                              */
 
                             database_query(g_config->database, mesg);
-
 #if DNSCORE_HAS_TCP_MANAGER
                             ret = server_tcp_reply(mesg, sctx);
 #else
                             ret = server_tcp_reply(mesg, sockfd);
 #endif
-                            TCPSTATS(tcp_referrals_count += message_get_referral(mesg));
-                            TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-                            TCPSTATS(tcp_output_size_total += message_get_size(mesg));
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_queries_count++);
+                            TCPSTATS_FIELD(tcp_referrals_count += message_get_referral(mesg));
+                            TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
 
                             break;
                         } // case query IN
@@ -580,24 +773,36 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                         {
                             log_query(svr_sockfd, mesg);
                             class_ch_process(mesg);
-                            TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-
 #if DNSCORE_HAS_TCP_MANAGER
                             ret = server_tcp_reply(mesg, sctx);
 #else
                             ret = server_tcp_reply(mesg, sockfd);
 #endif
-
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_queries_count++);
+                            TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
                             break;
                         }
                         default:
                         {
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply_error(mesg, sctx, FP_NOT_SUPP_CLASS);
+                            ret = server_tcp_reply_error(mesg, sctx, FP_NOT_SUPP_CLASS);
 #else
-                            server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
+                            ret = server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
 #endif
-                            TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_queries_count++);
+                            TCPSTATS_FIELD(tcp_fp[FP_NOT_SUPP_CLASS]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
                             break;
                         }
                     } // query class
@@ -606,31 +811,39 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                 {
                     log_warn("query [%04hx] from %{sockaddr} error %i : %r", ntohs(message_get_id(mesg)), message_get_sender_sa(mesg), message_get_status(mesg), ret);
 
-                    TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-                    
                     if(ret == UNPROCESSABLE_MESSAGE && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
                     {
-                        log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer_const(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                        log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer_const(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
                     }
                     
-                    if( (ret != INVALID_MESSAGE) &&
-                        (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (message_get_status(mesg) != RCODE_FORMERR)) &&
-                        message_isquery(mesg) )
+                    // note: message_isquery(mesg) => INVALID_MESSAGE
+
+                    if( (ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (message_get_status(mesg) != RCODE_FORMERR)) && received_query )
                     {
-                        if(!message_has_tsig(mesg))
+                        if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                         {
                             message_transform_to_error(mesg);
                         }
-
 #if DNSCORE_HAS_TCP_MANAGER
                         ret = server_tcp_reply(mesg, sctx);
 #else
                         ret = server_tcp_reply(mesg, sockfd);
 #endif
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_queries_count++);
+                        TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                        if(ISOK(ret))
+                        {
+                            TCPSTATS_FIELD(tcp_output_size_total += ret);
+                        }
+                        TCPSTATS_UNLOCK();
                     }
                     else
                     {
-                        TCPSTATS(tcp_dropped_count++);
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_queries_count++);
+                        TCPSTATS_FIELD(tcp_dropped_count++);
+                        TCPSTATS_UNLOCK();
 
 #if !DNSCORE_HAS_TCP_MANAGER
                         tcp_set_agressive_close(sockfd, 1);
@@ -652,16 +865,20 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                         case CLASS_IN:
                         {
                             // a master sent a notify using TCP ...
-                            
                             notify_process(mesg);
-
 #if DNSCORE_HAS_TCP_MANAGER
                             ret = server_tcp_reply(mesg, sctx);
 #else
                             ret = server_tcp_reply(mesg, sockfd);
 #endif
-
-                            TCPSTATS(tcp_notify_input_count++);
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_notify_input_count++);
+                            TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
                             break;
                         }
                         default:
@@ -671,7 +888,14 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 #else
                             ret = server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
 #endif
-                            TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_notify_input_count++);
+                            TCPSTATS_FIELD(tcp_fp[FP_NOT_SUPP_CLASS]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
                             break;
                         }
                     } // notify class
@@ -680,26 +904,36 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                 {
                     log_warn("notify [%04hx] from %{sockaddr} error %i : %r", ntohs(message_get_id(mesg)), message_get_sender_sa(mesg), message_get_status(mesg), ret);
 
-                    TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-#if DEBUG
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
-#endif
-                    if( (ret != INVALID_MESSAGE) && ((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)) && message_isquery(mesg) )
+                    if(ret == UNPROCESSABLE_MESSAGE && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
                     {
-                        if(!message_has_tsig(mesg))
+                        log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
+                    }
+
+                    if( (ret != INVALID_MESSAGE) && ((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)) && received_query)
+                    {
+                        if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                         {
                             message_transform_to_error(mesg);
                         }
-
 #if DNSCORE_HAS_TCP_MANAGER
                         ret = server_tcp_reply(mesg, sctx);
 #else
                         ret = server_tcp_reply(mesg, sockfd);
 #endif
-                    }
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_notify_input_count++);
+                        TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                        if(ISOK(ret))
+                        {
+                            TCPSTATS_FIELD(tcp_output_size_total += ret);
+                        }
+                        TCPSTATS_UNLOCK();                    }
                     else
                     {
-                        TCPSTATS(tcp_dropped_count++);
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_notify_input_count++);
+                        TCPSTATS_FIELD(tcp_dropped_count++);
+                        TCPSTATS_UNLOCK();
 
 #if !DNSCORE_HAS_TCP_MANAGER
                         tcp_set_agressive_close(sockfd, 1);
@@ -730,8 +964,6 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                              *       scheduler if needed.
                              */
 #if HAS_DYNUPDATE_SUPPORT
-                            TCPSTATS(tcp_updates_count++);
-
                             if(message_get_query_type(mesg) == TYPE_SOA)
                             {
                                 log_info("update [%04hx] %{dnsname} from %{sockaddr}",
@@ -761,25 +993,46 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
 #else
                             ret = server_tcp_reply(mesg, sockfd);
 #endif
-                            TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-#else
-                            ya_result send_ret;
-                            if(FAIL(send_ret = message_make_error_and_reply_tcp_with_default_minimum_throughput(mesg, FP_FEATURE_DISABLED, sockfd)))
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_updates_count++);
+                            TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                            if(ISOK(ret))
                             {
-                                log_notice("tcp: could not answer: %r", send_ret);
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
                             }
-                            TCPSTATS(tcp_fp[FP_FEATURE_DISABLED]++);
+                            TCPSTATS_UNLOCK();
+#else
+
+#if DNSCORE_HAS_TCP_MANAGER
+                            ret = server_tcp_reply_error(mesg, sctx, FP_FEATURE_DISABLED);
+#else
+                            ret = server_tcp_reply_error(mesg, sockfd, FP_FEATURE_DISABLED);
+#endif
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_fp[FP_FEATURE_DISABLED]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
 #endif
                             break;
                         } // update class IN
                         default:
                         {
 #if DNSCORE_HAS_TCP_MANAGER
-                            server_tcp_reply_error(mesg, sctx, FP_NOT_SUPP_CLASS);
+                            ret = server_tcp_reply_error(mesg, sctx, FP_NOT_SUPP_CLASS);
 #else
-                            server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
+                            ret = server_tcp_reply_error(mesg, sockfd, FP_NOT_SUPP_CLASS);
 #endif
-                            TCPSTATS(tcp_fp[FP_NOT_SUPP_CLASS]++);
+                            TCPSTATS_LOCK();
+                            TCPSTATS_FIELD(tcp_updates_count++);
+                            TCPSTATS_FIELD(tcp_fp[FP_NOT_SUPP_CLASS]++);
+                            if(ISOK(ret))
+                            {
+                                TCPSTATS_FIELD(tcp_output_size_total += ret);
+                            }
+                            TCPSTATS_UNLOCK();
                             break;
                         }
                     } // update class
@@ -788,26 +1041,37 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                 {
                     log_warn("update [%04hx] from %{sockaddr} error %i : %r", ntohs(message_get_id(mesg)), message_get_sender_sa(mesg),  message_get_status(mesg), ret);
 
-                    TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-#if DEBUG
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
-#endif
-                    if( (ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (message_get_status(mesg) != RCODE_FORMERR)) && message_isquery(mesg) )
+                    if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
                     {
-                        if(!message_has_tsig(mesg))
+                        log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
+                    }
+
+                    if( (ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (message_get_status(mesg) != RCODE_FORMERR)) && received_query)
+                    {
+                        if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                         {
                             message_transform_to_error(mesg);
                         }
-
 #if DNSCORE_HAS_TCP_MANAGER
                         ret = server_tcp_reply(mesg, sctx);
 #else
                         ret = server_tcp_reply(mesg, sockfd);
 #endif
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_updates_count++);
+                        TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                        if(ISOK(ret))
+                        {
+                            TCPSTATS_FIELD(tcp_output_size_total += ret);
+                        }
+                        TCPSTATS_UNLOCK();
                     }
                     else
                     {
-                        TCPSTATS(tcp_dropped_count++);
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_updates_count++);
+                        TCPSTATS_FIELD(tcp_dropped_count++);
+                        TCPSTATS_UNLOCK();
 
 #if !DNSCORE_HAS_TCP_MANAGER
                         tcp_set_agressive_close(sockfd, 1);
@@ -826,13 +1090,41 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                 {
                     // note: ctrl_message_process contains reply code
 
-                    ret = ctrl_message_process(mesg, sockfd);
+                    ret = ctrl_message_process(mesg);
+
+                    if(ret != SUCCESS_DROPPED)
+                    {
+#if DNSCORE_HAS_TCP_MANAGER
+                        ret = server_tcp_reply(mesg, sctx);
+#else
+                        ret = server_tcp_reply(mesg, sockfd);
+#endif
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_queries_count++); // ?
+                        TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                        if(ISOK(ret))
+                        {
+                            TCPSTATS_FIELD(tcp_output_size_total += ret);
+                        }
+                        TCPSTATS_UNLOCK();
+                    }
+                    else
+                    {
+                        TCPSTATS_LOCK();
+                        TCPSTATS_FIELD(tcp_dropped_count++);
+                        TCPSTATS_UNLOCK();
+#if !DNSCORE_HAS_TCP_MANAGER
+                        tcp_set_agressive_close(sockfd, 1);
+#endif
+                    }
                 }
                 else
                 {
                     // this IP/port is not configured to listen CTRL queries
 
-                    TCPSTATS(tcp_dropped_count++);
+                    TCPSTATS_LOCK();
+                    TCPSTATS_FIELD(tcp_dropped_count++);
+                    TCPSTATS_UNLOCK();
 #if !DNSCORE_HAS_TCP_MANAGER
                     tcp_set_agressive_close(sockfd, 1);
 #endif
@@ -844,29 +1136,67 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
             default:
             {
                 log_warn("unknown opcode %x [%04hx] from %{sockaddr} error: %r", message_get_opcode(mesg), ntohs(message_get_id(mesg)), message_get_sender_sa(mesg), MAKE_DNSMSG_ERROR(FP_NOT_SUPP_OPC));
-                
-                if( (ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (message_get_status(mesg) != RCODE_FORMERR)) && message_isquery(mesg) )
-                {
-                    if(ISOK(ret = message_process_lenient(mesg)))
-                    {
-                        message_set_status(mesg, FP_RCODE_NOTIMP);
-                        message_transform_to_error(mesg);
 
-                        if(message_has_tsig(mesg))
-                        {
-                            tsig_sign_answer(mesg);
-                        }
+                log_notice("opcode-%i (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu : %r (%r) (%{sockaddrip}) size=%hu",
+                           (u32)(message_get_opcode(mesg) >> OPCODE_SHIFT),
+                           ntohs(message_get_id(mesg)),
+                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                           message_get_query_count(mesg), // QC
+                           message_get_answer_count(mesg), // AC
+                           message_get_authority_count(mesg), // NS
+                           message_get_additional_count(mesg), // AR
+                           MAKE_DNSMSG_ERROR(message_get_status(mesg)),
+                           ret,
+                           message_get_sender_sa(mesg),
+                           message_get_size_u16(mesg));
+
+                ret = message_process_lenient(mesg);
+                
+                if(message_get_status(mesg) == RCODE_OK) // else a TSIG may have some complain
+                {
+                    message_set_status(mesg, FP_RCODE_NOTIMP);
+                    message_update_answer_status(mesg);
+#if DNSCORE_HAS_TSIG_SUPPORT
+                    if(message_has_tsig(mesg))
+                    {
+                        tsig_sign_answer(mesg);
+                    }
+#endif
+                }
+
+                if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
+                {
+                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
+                }
+
+                if((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
+                {
+                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    {
+                        message_edns0_clear_undefined_flags(mesg);
+                        message_transform_to_error(mesg);
+                    }
 
 #if DNSCORE_HAS_TCP_MANAGER
-                        ret = server_tcp_reply(mesg, sctx);
+                    ret = server_tcp_reply(mesg, sctx);
 #else
-                        ret = server_tcp_reply(mesg, sockfd);
+                    ret = server_tcp_reply(mesg, sockfd);
 #endif
+                    TCPSTATS_LOCK();
+                    TCPSTATS_FIELD(tcp_undefined_count++);
+                    TCPSTATS_FIELD(tcp_fp[message_get_status(mesg)]++);
+                    if(ISOK(ret))
+                    {
+                        TCPSTATS_FIELD(tcp_output_size_total += ret);
                     }
+                    TCPSTATS_UNLOCK();
                 }
                 else
                 {
-                    TCPSTATS(tcp_dropped_count++);
+                    TCPSTATS_LOCK();
+                    TCPSTATS_FIELD(tcp_undefined_count++);
+                    TCPSTATS_FIELD(tcp_dropped_count++);
+                    TCPSTATS_UNLOCK();
 
 #if !DNSCORE_HAS_TCP_MANAGER
                     tcp_set_agressive_close(sockfd, 1);
@@ -976,21 +1306,6 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
     return ret;
 }
 
-typedef struct server_process_tcp_thread_parm server_process_tcp_thread_parm;
-
-struct server_process_tcp_thread_parm
-{
-#if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_socket_context_t *sctx;
-#else
-    //zdb *database;
-    socketaddress sa;
-    socklen_t addr_len;
-    int sockfd;
-#endif
-    int svr_sockfd;
-};
-
 static void*
 server_process_tcp_thread(void* parm)
 {
@@ -998,19 +1313,26 @@ server_process_tcp_thread(void* parm)
     log_debug("tcp: begin");
 #endif
     server_process_tcp_thread_parm* tcp_parm = (server_process_tcp_thread_parm*)parm;
-    message_data_with_buffer mesg_buff;
+    size_t pool_buffer_size = SERVER_POOL_BUFFER_SIZE; // 128KB
+    u8 *pool_buffer;
 
+#if SERVER_TCP_USE_LAZY_MAPPING
+    u32 thread_index = thread_pool_thread_index_get();
+    tcp_thread_memory_t *thread_memory = &tcp_thread_memory[thread_index];
+    message_data *mesg = message_data_with_buffer_init(&thread_memory->message_data); // tcp
+    pool_buffer = &thread_memory->pool_buffer[0];
+#else
+    message_data_with_buffer mesg_buff;
 #if DEBUG
     memset(&mesg_buff, 0xff, sizeof(mesg_buff));
 #endif
     message_data *mesg = message_data_with_buffer_init(&mesg_buff); // tcp
-    
-    size_t pool_buffer_size = POOL_BUFFER_SIZE; // 128KB
-    u8 *pool_buffer;
     MALLOC_OBJECT_ARRAY_OR_DIE(pool_buffer, u8, pool_buffer_size, SVRPOOLB_TAG);
+#endif
+
     message_set_pool_buffer(mesg, pool_buffer, pool_buffer_size);
 #if DNSCORE_HAS_TCP_MANAGER
-    message_copy_sender_from_sa(mesg, &(tcp_manager_socketaddress(tcp_parm->sctx)->sa), tcp_manager_socklen(tcp_parm->sctx));
+    message_copy_sender_from_sa(mesg, tcp_manager_sockaddr(tcp_parm->sctx), tcp_manager_socklen(tcp_parm->sctx));
 #else
     message_copy_sender_from_sa(mesg, &tcp_parm->sa.sa, tcp_parm->addr_len);
 #endif
@@ -1019,20 +1341,89 @@ server_process_tcp_thread(void* parm)
     log_debug("tcp: processing stream from %{sockaddr}", message_get_sender_sa(mesg));
 #endif
 
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+    u64 bench = debug_bench_start(&debug_server_process_tcp_task);
+#endif
+
 #if DNSCORE_HAS_TCP_MANAGER
     server_process_tcp_task(mesg, tcp_parm->sctx, tcp_parm->svr_sockfd);
 #else
     server_process_tcp_task(mesg, tcp_parm->sockfd, tcp_parm->svr_sockfd);
 #endif
 
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+    debug_bench_stop(&debug_server_process_tcp_task, bench);
+#endif
+
+#if SERVER_TCP_USE_LAZY_MAPPING
+    formatln("thread: %p: madvise(%p, %d = %x, MADV_DONTNEED)", pthread_self(), thread_memory, (sizeof(tcp_thread_memory_t) + 4095) & ~4095, (sizeof(tcp_thread_memory_t) + 4095) & ~4095);
+    madvise(thread_memory, (sizeof(tcp_thread_memory_t) + 4095) & ~4095, MADV_DONTNEED);
+#else
     free(pool_buffer);
-    free(parm);
+#endif
+
+#if !DNSCORE_HAS_TCP_MANAGER
+    server_tcp_queries_for_ip_decrement(&tcp_parm->sa.ss);
+#endif
+
+    ZFREE_OBJECT(tcp_parm);
 
 #if DEBUG
     log_debug("tcp: end");
 #endif
 
     return NULL;
+}
+
+static error_state_t server_process_tcp_error_state = ERROR_STATE_INITIALIZER;
+
+ya_result
+server_process_tcp_init()
+{
+#if SERVER_TCP_USE_LAZY_MAPPING
+    if(thread_memory_size == 0)
+    {
+        u32 thread_count = thread_pool_get_size(server_tcp_thread_pool);
+        u32 tmp_thread_memory_size = thread_count * sizeof(tcp_thread_memory_t);
+        void *tmp_tcp_thread_memory = mmap(NULL, tmp_thread_memory_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+
+        if(tmp_tcp_thread_memory == MAP_FAILED)
+        {
+            return ERRNO_ERROR;
+        }
+#if DEBUG
+        u8 *tcp_thread_memory_ptr = (u8*)tmp_tcp_thread_memory;
+        for(u64 i = 0; i < tmp_thread_memory_size; i += 4096)
+        {
+            tcp_thread_memory_ptr[i] = 1;
+        }
+        madvise(tmp_tcp_thread_memory, tmp_thread_memory_size, MADV_DONTNEED);
+#endif
+        tcp_thread_memory = (tcp_thread_memory_t*)tmp_tcp_thread_memory;
+        thread_memory_size = tmp_thread_memory_size;
+
+        return SUCCESS;
+    }
+    else
+    {
+        return INVALID_STATE_ERROR;
+    }
+#else
+    return SUCCESS;
+#endif
+}
+
+void
+server_process_tcp_finalize()
+{
+#if SERVER_TCP_USE_LAZY_MAPPING
+    if(thread_memory_size > 0)
+    {
+        munmap(tcp_thread_memory, thread_memory_size);
+        thread_memory_size = 0;
+        tcp_thread_memory = NULL;
+    }
+#endif
 }
 
 void
@@ -1062,11 +1453,13 @@ server_process_tcp(int servfd)
     {
         TCPSTATS(tcp_input_count++);
 
+        error_state_clear(&server_process_tcp_error_state, MODULE_MSG_HANDLE, MSG_NOTICE, "tcp: accept call");
+
         assert(sctx != NULL);
 
         log_debug("server_process_tcp: scheduling job");
 
-        MALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
+        ZALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
         parm->sctx = sctx;
         parm->svr_sockfd = servfd;
 
@@ -1074,6 +1467,14 @@ server_process_tcp(int servfd)
     }
     else
     {
+        if((ret & 0xffff0000) == ERRNO_ERROR_BASE)
+        {
+            if(error_state_log(&server_process_tcp_error_state, ret))
+            {
+                log_err("tcp: accept returned %r", MAKE_ERRNO_ERROR(ret));
+            }
+        }
+
         log_debug("server_process_tcp: %r", ret);
 
         TCPSTATS(tcp_overflow_count++);
@@ -1095,43 +1496,93 @@ server_process_tcp(int servfd)
 
     if(current_tcp >= g_config->max_tcp_queries)
     {
-        log_info("tcp: rejecting: already %d/%d handled", current_tcp, g_config->max_tcp_queries);
+        log_debug("tcp: rejecting: already %d/%d handled", current_tcp, g_config->max_tcp_queries);
 
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        u64 bench = debug_bench_start(&debug_accept_reject);
+#endif
         int rejected_fd = accept(servfd, &addr.sa, &addr_len);
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        debug_bench_stop(&debug_accept_reject, bench);
+#endif
 
         tcp_set_abortive_close(rejected_fd);
         close_ex(rejected_fd);
-
         TCPSTATS(tcp_overflow_count++);
-        
+
+#if DEBUG
+        log_debug("server_process_tcp_thread_start end (with an error)");
+#endif
         return;
     }
 
-    TCPSTATS(tcp_input_count++);
-
-    MALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
+    ZALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
 
     /* don't test -1, test < 0 instead (test + js instead of add + stall + jz */
-    while((parm->sockfd = accept(servfd, &addr.sa, &addr_len)) < 0)
+    for(;;)
     {
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        u64 bench = debug_bench_start(&debug_accept);
+#endif
+        parm->sockfd = accept(servfd, &addr.sa, &addr_len);
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        debug_bench_stop(&debug_accept, bench);
+#endif
+        if(parm->sockfd >= 0)
+        {
+            break;
+        }
+
         int err = errno;
 
         if(err != EINTR)
         {
-            log_err("tcp: accept returned %r", MAKE_ERRNO_ERROR(err));
-            free(parm);
+            err = MAKE_ERRNO_ERROR(err);
+            if(error_state_log(&server_process_tcp_error_state, err))
+            {
+                log_err("tcp: accept returned %r", err);
+            }
+
+            ZFREE_OBJECT(parm);
+
+#if DEBUG
+            log_debug("server_process_tcp_thread_start end (with an error)");
+#endif
             return;
         }
     }
 
-    if(addr_len > MAX(sizeof(struct sockaddr_in),sizeof(struct sockaddr_in6)))
+    error_state_clear(&server_process_tcp_error_state, MODULE_MSG_HANDLE, MSG_NOTICE, "tcp: accept call");
+
+#if DEBUG
+    if(addr_len > sizeof(union socketaddress))
     {
         log_err("tcp: addr_len = %i, max allowed is %i", addr_len, MAX(sizeof(struct sockaddr_in),sizeof(struct sockaddr_in6)));
 
+        TCPSTATS(tcp_overflow_count++);
+        tcp_set_abortive_close(parm->sockfd);
         close_ex(parm->sockfd);
-        
-        free(parm);
+        ZFREE_OBJECT(parm);
 
+        log_debug("server_process_tcp_thread_start end (with an error)");
+        return;
+    }
+#endif
+
+    s64 max_connections = server_tcp_client_connections_max(&addr.ss, g_config->max_tcp_queries_per_address);
+
+    if(!server_tcp_queries_for_ip_increment_if_less(&addr.ss, max_connections))
+    {
+        log_debug("tcp: %{sockaddr} has too many active connections", &parm->sa);
+
+        TCPSTATS(tcp_overflow_count++);
+        tcp_set_abortive_close(parm->sockfd);
+        close_ex(parm->sockfd);
+        ZFREE_OBJECT(parm);
+
+#if DEBUG
+        log_debug("server_process_tcp_thread_start end (with an error)");
+#endif
         return;
     }
 
@@ -1141,6 +1592,8 @@ server_process_tcp(int servfd)
     
     if(poll_add(parm->sockfd))
     {
+        TCPSTATS(tcp_input_count++);
+
         log_debug("tcp: using slot %d/%d", current_tcp + 1 , g_config->max_tcp_queries);
 
         /*
@@ -1162,10 +1615,18 @@ server_process_tcp(int servfd)
     }
     else
     {
-        log_debug("server_process_tcp_thread_start tcp overflow");
-        
+        log_debug("tcp: no available slots (%d used)", g_config->max_tcp_queries);
+
+        server_tcp_queries_for_ip_decrement(&parm->sa.ss);
+
+#if DEBUG
+        log_debug("server_process_tcp_thread_start tcp overflow (poll)");
+#endif
+
+        TCPSTATS(tcp_overflow_count++);
+        tcp_set_abortive_close(parm->sockfd);
         close_ex(parm->sockfd);
-        free(parm);
+        ZFREE_OBJECT(parm);
     }
 #endif
 
@@ -1235,9 +1696,6 @@ static ya_result
 server_run(struct service_worker_s *worker)
 {
     ya_result ret = server_type[g_config->network_model].loop(worker);
-    
-
-        
     return ret;
 }
 
@@ -1253,10 +1711,14 @@ server_service_apply_configuration()
             // the thread-pool size is wrong
             ya_result return_code;
 
+            server_process_tcp_finalize();
+
             if(FAIL(return_code = thread_pool_resize(server_tcp_thread_pool, g_config->max_tcp_queries)))
             {
                 return return_code;
             }
+
+            server_process_tcp_init();
 
             if(return_code != g_config->max_tcp_queries)
             {
@@ -1267,6 +1729,13 @@ server_service_apply_configuration()
 
         if((server_tcp_thread_pool == NULL) && (g_config->max_tcp_queries > 0))
         {
+            u32 max_thread_pool_size = thread_pool_get_max_thread_per_pool_limit();
+            if(max_thread_pool_size < (u32)g_config->max_tcp_queries)
+            {
+                log_warn("updating the maximum thread pool size to match the number of TCP queries (from %i to %i)", max_thread_pool_size, g_config->max_tcp_queries);
+                thread_pool_set_max_thread_per_pool_limit(g_config->max_tcp_queries);
+            }
+
             server_tcp_thread_pool = thread_pool_init_ex(g_config->max_tcp_queries, g_config->max_tcp_queries * 2, "svrtcp");
 
             if(server_tcp_thread_pool == NULL)
@@ -1275,6 +1744,8 @@ server_service_apply_configuration()
 
                 return THREAD_CREATION_ERROR;
             }
+
+            server_process_tcp_init();
         }
 
         if(server_disk_thread_pool == NULL)
@@ -1324,6 +1795,8 @@ server_service_deconfigure()
         log_info("destroying TCP pool");
         thread_pool_destroy(server_tcp_thread_pool);
         server_tcp_thread_pool = NULL;
+
+        server_process_tcp_finalize();
     }
 
     if(server_disk_thread_pool != NULL)
@@ -1555,6 +2028,16 @@ server_service_init()
     if(!server_handler_initialised && ISOK(ret = service_init_ex(&server_service_handler, server_service_main, "yadifad", 1)))
     {
         error_register(SUCCESS_DROPPED, "DROPPED");
+
+#if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
+        debug_bench_register(&debug_accept, "accept");
+        debug_bench_register(&debug_accept_reject, "accept-reject");
+        debug_bench_register(&debug_server_process_tcp_task, "process_tcp_task");
+        debug_bench_register(&debug_tcp_reply, "tcp_reply");
+        debug_bench_register(&debug_tcp_read_size, "tcp_read_size");
+        debug_bench_register(&debug_tcp_read_message, "tcp_read_message");
+#endif
+
         server_handler_initialised = TRUE;
     }
     
@@ -1625,9 +2108,9 @@ server_service_stop_nowait()
     if(server_handler_initialised)
     {
         err = SERVICE_NOT_RUNNING;
-
+#if HAS_DYNUPDATE_SUPPORT
         dynupdate_query_service_reset();
-
+#endif
         if(!service_stopped(&server_service_handler))
         {
             err = service_stop(&server_service_handler);
@@ -1646,9 +2129,9 @@ server_service_stop()
     if(server_handler_initialised)
     {
         err = SERVICE_NOT_RUNNING;
-
+#if HAS_DYNUPDATE_SUPPORT
         dynupdate_query_service_reset();
-
+#endif
         if(!service_stopped(&server_service_handler))
         {
             err = service_stop(&server_service_handler);
@@ -1670,7 +2153,9 @@ server_service_reconfigure()
 
         if(!service_stopped(&server_service_handler))
         {
+#if HAS_DYNUPDATE_SUPPORT
             dynupdate_query_service_reset();
+#endif
             err = service_reconfigure(&server_service_handler);
         }
     }

@@ -915,6 +915,13 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
         return return_value;
     }
 
+    if(message_get_rcode(mesg) != RCODE_NOERROR)
+    {
+        pool_release(&xfr_pool, pool);
+
+        return DNS_ERROR_CODE(message_get_rcode(mesg));
+    }
+
     packet_reader_init_from_message(&pr, mesg);
     packet_reader_read_fqdn(&pr, record, RDATA_MAX_LENGTH + 1);
 

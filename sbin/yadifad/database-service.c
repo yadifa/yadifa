@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
  *
  * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
- * The YADIFA TM software product is provided undecannr the BSD 3-clause license:
+ * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -128,6 +128,7 @@ extern logger_handle *g_server_logger;
 #endif
 
 #define DBLOADQ_TAG 0x5144414f4c4244
+#define DBMSGCB_TAG 0x424347534d4244
 
 //#define DATABASE_SERVICE_QUEUE_SIZE 0x4000
 #define DATABASE_SERVICE_QUEUE_SIZE 0x1000000
@@ -490,6 +491,7 @@ database_service_finalize()
                 zone->alarm_handle = ALARM_HANDLE_INVALID;
                 zdb_zone_release(zone);
             }
+
             zone_unlock(zone_desc, ZONE_LOCK_UNLOAD);
         }
 
@@ -528,9 +530,7 @@ database_service_finalize()
         log_debug("dropping zone settings");
         
         zone_free_all(&database_zone_desc);
-        
 
-        
         database_handler_initialised = FALSE;
     }
 
@@ -2692,7 +2692,7 @@ static void
 database_callback_run(database_message *message)
 {
     database_message_callback_s *cb;
-    ZALLOC_OBJECT_OR_DIE(cb, database_message_callback_s, DBCB_TAG);
+    ZALLOC_OBJECT_OR_DIE(cb, database_message_callback_s, DBMSGCB_TAG);
     *cb = message->payload.callback;
     thread_pool_enqueue_call(database_callback_thread_pool, database_callback_thread, cb, NULL, "callback");
 }

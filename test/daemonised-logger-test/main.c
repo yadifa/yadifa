@@ -119,6 +119,8 @@ struct thread_ctx
     int count;
 };
 
+static char logging_stuff_thread_tag[8] = "stuff";
+
 static void*
 logging_stuff_thread(void *args)
 {
@@ -129,7 +131,7 @@ logging_stuff_thread(void *args)
     
 #define MODULE_MSG_HANDLE ctx->logger
     
-    logger_handle_set_thread_tag("stuff");
+    logger_handle_set_thread_tag(logging_stuff_thread_tag);
     
     async_wait(aw);
         
@@ -314,8 +316,10 @@ main(int argc, char *argv[])
 
         if(pid[f] == 0)
         {
-            logger_handle_set_thread_tag("childid");
-            
+#if DNSCORE_HAS_LOG_THREAD_TAG
+            static char childid_thread_tag[9] = "childid";
+            logger_handle_set_thread_tag(childid_thread_tag);
+#endif
             logger_set_shared_heap(child_heap_id[f]);
 
     #if MMAP_TEST

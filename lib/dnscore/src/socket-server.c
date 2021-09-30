@@ -407,7 +407,8 @@ socket_server_wire_thread(void* args)
     thread_set_name("wire", 0, 0);
 
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("wire");
+    static char wire_thread_tag[9] = "wire";
+    logger_handle_set_thread_tag(wire_thread_tag);
 #endif
 
     // will block when the pipe is full (4KB)
@@ -448,7 +449,8 @@ socket_server_server()
 #endif
 
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("socksvr");
+    static char socksvr_thread_tag[9] = "socksvr";
+    logger_handle_set_thread_tag(socksvr_thread_tag);
 #endif
 
     log_info("socket-server: started");

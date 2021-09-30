@@ -54,6 +54,8 @@
 #include <dnscore/format.h>
 #include <dnscore/packet_writer.h>
 
+#include <dnscore/error_state.h>
+
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
@@ -87,6 +89,8 @@ static config_control g_ctrl_config =
     TRUE
 };
 
+static error_state_t ctrl_tcp_reply_error_state = ERROR_STATE_INITIALIZER;
+
 static inline ya_result
 ctrl_tcp_reply(message_data *mesg, int sockfd)
 {
@@ -94,10 +98,14 @@ ctrl_tcp_reply(message_data *mesg, int sockfd)
 
     if(ISOK(ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd)))
     {
+        error_state_clear_locked(&ctrl_tcp_reply_error_state, NULL, 0, NULL);
     }
     else
     {
-        log_err("ctrl: tcp: could not answer: %r", (ya_result)ret);
+        if(error_state_log_locked(&ctrl_tcp_reply_error_state, ret))
+        {
+            log_err("ctrl: tcp: could not answer: %r", (ya_result)ret);
+        }
     }
 
     return (ya_result)ret;
@@ -109,10 +117,14 @@ ctrl_tcp_reply_error(message_data *mesg, int sockfd, u16 error_code)
     ssize_t ret;
     if(ISOK(ret = message_make_error_and_reply_tcp_with_default_minimum_throughput(mesg, error_code, sockfd)))
     {
+        error_state_clear_locked(&ctrl_tcp_reply_error_state, NULL, 0, NULL);
     }
     else
     {
-        log_err("ctrl: tcp: could not answer: %r", (ya_result)ret);
+        if(error_state_log_locked(&ctrl_tcp_reply_error_state, ret))
+        {
+            log_err("ctrl: tcp: could not answer: %r", (ya_result)ret);
+        }
     }
 
     return (ya_result)ret;
@@ -150,11 +162,13 @@ ctrl_get_enabled()
 
 
 ya_result
-ctrl_message_process(message_data *mesg, int sockfd)
+ctrl_message_process(message_data *mesg)
 {
-    ya_result return_code;
+    ya_result ret;
 
-    if(ISOK(return_code = message_process(mesg)))
+    bool received_query = message_isquery(mesg);
+
+    if(ISOK(ret = message_process(mesg)))
     {
         switch(message_get_query_class(mesg))
         {
@@ -164,69 +178,45 @@ ctrl_message_process(message_data *mesg, int sockfd)
                 break;
             } // ctrl class CTRL
 
-
             default:
             {
-                log_warn("query [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
+                log_warn("ctrl [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
                          ntohs(message_get_id(mesg)),
                          message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
                          message_get_sender_sa(mesg));
 
                 message_set_status(mesg, FP_CLASS_NOTFOUND);
-                message_transform_to_error(mesg);
+                message_transform_to_signed_error(mesg);
 
                 break;
             }
         } // switch(class)
-
-        if(message_get_status(mesg) != FP_PACKET_DROPPED)
-        {
-            TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-
-            ctrl_tcp_reply(mesg, sockfd);
-        }
-        else
-        {
-            TCPSTATS(tcp_dropped_count++);
-            tcp_set_agressive_close(sockfd, 1);
-        }
     }
     else // an error occurred : no query to be done at all
     {
-        log_warn("ctrl [%04hx] error %i : %r", ntohs(message_get_id(mesg)), message_get_status(mesg), return_code);
+        log_warn("ctrl [%04hx] from %{sockaddr} error %i : %r", ntohs(message_get_id(mesg)), message_get_sender_sa(mesg), message_get_status(mesg), ret);
 
-        TCPSTATS(tcp_fp[message_get_status(mesg)]++);
-#if DEBUG
-        log_memdump_ex(MODULE_MSG_HANDLE, MSG_DEBUG5, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
-#endif
-        if( (return_code != INVALID_MESSAGE) &&
-            (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || message_get_status(mesg) != RCODE_FORMERR) &&
-            (message_isquery(mesg)) )
+        if((ret == INVALID_MESSAGE) && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
         {
-            if(message_tsig_get_key(mesg) == NULL)
+            log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
+        }
+
+        if((ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || message_get_status(mesg) != RCODE_FORMERR) && received_query )
+        {
+            if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
             {
                 message_transform_to_error(mesg);
-
-                ctrl_tcp_reply(mesg, sockfd);
             }
-            else
-            {
-                log_err("tcp: could not answer: not signed");
 
-                TCPSTATS(tcp_dropped_count++);
-                tcp_set_agressive_close(sockfd, 1);
-            }
+            ret = SUCCESS;
         }
         else
         {
-            log_err("tcp: could not answer: not a valid control query");
-
-            TCPSTATS(tcp_dropped_count++);
-            tcp_set_agressive_close(sockfd, 1);
+            ret = SUCCESS_DROPPED;
         }
     }
 
-    return return_code;
+    return ret;
 }
 
 #endif // HAS_CTRL

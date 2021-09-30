@@ -88,18 +88,24 @@ message_viewer_default_seven(message_viewer *viewer, u32 section_idx, u16 count)
 
 
 static void
-message_viewer_default_eight(message_viewer *viewer, u8 *record_wire, u16 rclass, u16 rtype)
+message_viewer_default_eight(message_viewer *viewer, const u8 *record_wire, u16 rclass, u16 rtype)
 {
     printf("eight!\n");
 }
 
 
 static void
-message_viewer_default_nine(message_viewer *viewer, u8 *record_wire, u8 view_mode_with)
+message_viewer_default_nine(message_viewer *viewer, const u8 *record_wire, u8 view_mode_with)
 {
     printf("nine!\n");
 }
 
+static ya_result message_viewer_default_pseudosection_record(message_viewer *mv, const u8 *record_wire)
+{
+    (void)mv;
+    (void)record_wire;
+    return 0;
+}
 
 static const message_viewer_vtbl default_viewer_vtbl = {
        message_viewer_default_three,
@@ -109,6 +115,7 @@ static const message_viewer_vtbl default_viewer_vtbl = {
        message_viewer_default_seven,
        message_viewer_default_eight,
        message_viewer_default_nine,
+       message_viewer_default_pseudosection_record,
        "message_viewer_default",
 };
 

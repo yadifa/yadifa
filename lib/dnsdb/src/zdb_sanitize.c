@@ -1318,6 +1318,11 @@ zdb_sanitize_zone_rrset_flags_records(zdb_rr_label *label, dnsname_stack *name, 
 static ya_result
 zdb_sanitize_zone_rrset_flags_label(zdb_rr_label *label, dnsname_stack *name, u16 flags, zdb_rr_label **parent)
 {
+    if((label == NULL) || (name == NULL) || (parent == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
     u16 shutdown_test_countdown = 10000;
 
     ya_result ret = SUCCESS;

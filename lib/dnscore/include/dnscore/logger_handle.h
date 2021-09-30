@@ -119,6 +119,8 @@ typedef struct logger_handle logger_handle;
 #define LOGGER_HANDLE_NAME_SIZE_MAX 16
 #define LOGGER_HANDLE_FORMATTED_NAME_SIZE_MAX 8
 
+#define LOGGER_REPEAT_COMPRESSION 1
+
 struct logger_handle // ~ 5 * 64
 {
     u8 active[MSG_LEVEL_COUNT]; // 16 /// @note 20200818 edf -- I know what I always say about layout.  This is an exception.  Keep it first.
@@ -151,7 +153,7 @@ struct logger_channel
 {
     void *data;
     const struct logger_channel_vtbl *vtbl;
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if LOGGER_REPEAT_COMPRESSION
     struct logger_message *last_message;
     u32 last_message_count;
 #endif

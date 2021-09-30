@@ -66,6 +66,11 @@
 // export TSAN_OPTIONS=detect_deadlocks=1:second_deadlock_stack=1
 // -sanitize=thread
 
+#define MTXCOBJ_TAG 0x4a424f4358544d
+#define MTXCPT_TAG 0x54504358544d
+#define MTXCTHRD_TAG 0x445248544358544d
+#define MTXCMON_TAG 0x4e4f4d5358544d
+
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 static void
 mutex_debug_logger_handle_msg(const void* handle, u32 level, const char* fmt, ...)
@@ -237,7 +242,7 @@ void mutex_contention_object_create(void *mutex_ptr, bool recursive)
     ptr_node *mutex_node = ptr_set_insert(&mutex_contention_mutex_to_threads_set, mutex_ptr);
     if(mutex_node->value == NULL)
     {
-        MALLOC_OBJECT_OR_DIE(mcu, mutex_contention_object_t, GENERIC_TAG);
+        MALLOC_OBJECT_OR_DIE(mcu, mutex_contention_object_t, MTXCOBJ_TAG);
         mcu->mutex = mutex_ptr;
         ptr_set_init(&mcu->threads);
         mcu->threads.compare = ptr_set_ptr_node_compare;
@@ -323,7 +328,7 @@ mutex_contention_lock_begin(thread_t thread, void *mutex_ptr, stacktrace st, con
     {
         log_info("mutex monitor: %p has not been passed to mutex_contention_object_create(void*,bool): static?", mutex_ptr);
 
-        MALLOC_OBJECT_OR_DIE(mco, mutex_contention_object_t, GENERIC_TAG);
+        MALLOC_OBJECT_OR_DIE(mco, mutex_contention_object_t, MTXCOBJ_TAG);
         mco->mutex = mutex_ptr;
         ptr_set_init(&mco->threads);
         mco->threads.compare = ptr_set_ptr_node_compare;
@@ -341,7 +346,7 @@ mutex_contention_lock_begin(thread_t thread, void *mutex_ptr, stacktrace st, con
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(mcp, mutex_contention_point_t, GENERIC_TAG);
+        MALLOC_OBJECT_OR_DIE(mcp, mutex_contention_point_t, MTXCPT_TAG);
         mcp->st = st;
         mcp->lock_wait = 0;
         mcp->lock_loops = 0;
@@ -364,7 +369,7 @@ mutex_contention_lock_begin(thread_t thread, void *mutex_ptr, stacktrace st, con
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(mct, mutex_contention_thread_t, GENERIC_TAG);
+        MALLOC_OBJECT_OR_DIE(mct, mutex_contention_thread_t, MTXCTHRD_TAG);
         ptr_set_init(mct);
         mct->compare = ptr_set_ptr_node_compare;
         thread_node->value = mct;
@@ -381,7 +386,7 @@ mutex_contention_lock_begin(thread_t thread, void *mutex_ptr, stacktrace st, con
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(mcm, mutex_contention_monitor_t, GENERIC_TAG);
+        MALLOC_OBJECT_OR_DIE(mcm, mutex_contention_monitor_t, MTXCMON_TAG);
         mcm->owning_thread = thread;
         mcm->contention_point = mcp;
         mcm->mutex_object = mco;

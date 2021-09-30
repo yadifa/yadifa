@@ -60,7 +60,7 @@
 #endif
 
 #include <dnscore/sys_types.h>
-#include "timems.h"
+#include <dnscore/timems.h>
 
 #if defined(__MACH__)
 #include <dnscore/osx_clock_gettime.h>
@@ -253,6 +253,15 @@ void mutex_init_recursive(mutex_t *mtx);
 int mutex_init_process_shared(mutex_t *mtx);
 void mutex_init(mutex_t *mtx);
 void mutex_destroy(mutex_t *mtx);
+
+/**
+ * Wrapper for mutex_destroy, with a more appropriate name.
+ */
+
+static inline void mutex_finalize(mutex_t *mtx)
+{
+    mutex_destroy(mtx);
+}
 
 #if __APPLE__
 typedef mutex_t spinlock_t;

@@ -99,7 +99,7 @@
  * A macro to allocate a new node
  */
 #define AVL_ALLOC_NODE(node,reference)                                                      \
-	ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE*, node, (sizeof(AVL_NODE_TYPE)), AVL_NODE_TAG);   \
+	ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE*, node, (sizeof(AVL_NODE_TYPE)), NSECNODE_TAG);   \
 	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE))
 
 /*

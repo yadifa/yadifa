@@ -44,7 +44,7 @@
 
 #pragma once
 
-#include "dnscore/sys_types.h"
+#include <dnscore/sys_types.h>
 
 #ifndef CONFIG_CMDLINE_C
 extern const char CMDLINE_CONTAINER[];

@@ -149,6 +149,12 @@ struct ptr_node
 #define AVL_NODE_TYPE   ptr_node
 
 /*
+ * The tag for the node
+ */
+
+#define PTR_NODE_TAG 0x45444f4e525450 // PTRNODE
+
+/*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
 #define AVL_TREE_TYPE   ptr_set
@@ -200,6 +206,7 @@ extern "C"
 #undef AVL_MAX_DEPTH
 #undef AVL_PREFIX
 #undef AVL_NODE_TYPE
+#undef AVL_NODE_TAG
 #undef AVL_TREE_TYPE
 #undef AVL_CONST_TREE_TYPE
 #undef AVL_TREE_ROOT

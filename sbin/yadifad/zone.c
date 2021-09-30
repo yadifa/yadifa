@@ -484,7 +484,15 @@ zone_free_all(zone_data_set *dset)
                 mutex_lock(&zone_desc_rc_mtx);
                 s32 rc = zone_desc->rc;
                 mutex_unlock(&zone_desc_rc_mtx);
-
+#if DEBUG
+                zone_lock(zone_desc, ZONE_LOCK_LOAD);
+                zdb_zone *zone = zone_set_loaded_zone(zone_desc, NULL);
+                if(zone != NULL)
+                {
+                    zdb_zone_release(zone);
+                }
+                zone_unlock(zone_desc, ZONE_LOCK_LOAD);
+#endif
                 if(rc != 1)
                 {
                     if(rc > 0)

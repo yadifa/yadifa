@@ -221,7 +221,7 @@ avl_create_node(hashcode hash)
 {
     avl_node* node;
 
-    ZALLOC_OBJECT_OR_DIE( node, avl_node, AVL_NODE_TAG);
+    ZALLOC_OBJECT_OR_DIE( node, avl_node, DATABASE_AVL_NODE_TAG);
 
     LEFT_CHILD(node) = NULL;
     RIGHT_CHILD(node) = NULL;

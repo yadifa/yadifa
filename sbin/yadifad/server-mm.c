@@ -56,6 +56,7 @@
 // keep this order -->
 
 #include "server-config.h"
+#include <dnscore/dnscore-config-features.h>
 
 #ifndef WIN32
 #ifndef __USE_GNU
@@ -152,6 +153,8 @@ extern logger_handle* g_statistics_logger;
 
 #define RWNTCTXS_TAG 0x53585443544e5752
 #define RWNTCTX_TAG 0x585443544e5752
+#define SMMMSGS_TAG 0x5347534d4d4d53
+#define MMSGHDR_TAG 0x52444847534d4d
 
 // note: MODULE_MSG_HANDLE is defined in server_error.h
 
@@ -380,9 +383,9 @@ server_mm_udp_worker_thread(void *parms)
     }
 
     message_data** messages;
-    MALLOC_OBJECT_ARRAY_OR_DIE(messages, message_data*, udp_packets_count, GENERIC_TAG);
-    MALLOC_OBJECT_ARRAY_OR_DIE(udp_packets, struct mmsghdr, udp_packets_count, GENERIC_TAG);
-    MALLOC_OBJECT_ARRAY_OR_DIE(udp_packets_send, struct mmsghdr, udp_packets_count, GENERIC_TAG);
+    MALLOC_OBJECT_ARRAY_OR_DIE(messages, message_data*, udp_packets_count, SMMMSGS_TAG);
+    MALLOC_OBJECT_ARRAY_OR_DIE(udp_packets, struct mmsghdr, udp_packets_count, MMSGHDR_TAG);
+    MALLOC_OBJECT_ARRAY_OR_DIE(udp_packets_send, struct mmsghdr, udp_packets_count, MMSGHDR_TAG);
 
     for(u32 i = 0; i < udp_packets_count; ++i)
     {
@@ -1015,8 +1018,8 @@ server_mm_query_loop(struct service_worker_s *worker)
 #if HAS_ZALLOC_STATISTICS_SUPPORT
                         zalloc_print_stats(termout);
 #endif
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-                        debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS); // do NOT enable the dump
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT || DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+                        debug_stat(DEBUG_STAT_TAGS|DEBUG_STAT_MMAP); // do NOT enable the dump
 #endif
                         journal_log_status();
 

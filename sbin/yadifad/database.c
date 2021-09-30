@@ -851,7 +851,6 @@ database_zone_ensure_private_keys(zdb_zone *zone)
         do
         {
             u16 flags = DNSKEY_FLAGS(*dnskey_rrset);
-            //u8  protocol = DNSKEY_PROTOCOL(*dnskey_rrset);
             u8  algorithm = DNSKEY_ALGORITHM(*dnskey_rrset);
             u16 tag = DNSKEY_TAG(*dnskey_rrset);                  // note: expensive
             dnssec_key *key = NULL;
@@ -1566,6 +1565,19 @@ database_update(zdb *database, message_data *mesg)
 ya_result
 database_shutdown(zdb *database)
 {
+    if(database == NULL)
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+    formatln("database_shutdown(%p) begin", database);
+    debug_stat(DEBUG_STAT_TAGS|DEBUG_STAT_MMAP);
+    zalloc_print_stats(&__termout__);
+    flushout();
+    flusherr();
+#endif
+
     database_service_stop();
     
     if(database != NULL)
@@ -1576,8 +1588,16 @@ database_shutdown(zdb *database)
     
     database_finalize();
     g_config->database = NULL;
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+    formatln("database_shutdown(%p) done", database);
+    debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS|DEBUG_STAT_DUMP|DEBUG_STAT_WALK|DEBUG_STAT_MMAP);
+    zalloc_print_stats(&__termout__);
+    flushout();
+    flusherr();
+#endif
     
-    return OK;
+    return SUCCESS;
 }
 
 /**

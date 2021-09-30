@@ -67,8 +67,6 @@
 
 #define MODULE_MSG_HANDLE g_server_logger
 
-#define DBLOADQ_TAG 0x5144414f4c4244
-
 /**********************************************************************************************************************/
 
 #define DSZDLPRM_TAG 0x4d52504c445a5344
@@ -391,7 +389,14 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
                     {
                         if(return_value != STOPPED_BY_APPLICATION_SHUTDOWN)
                         {
-                            log_err("slave: %{dnsname}: ixfr query error from master at %{hostaddr}: %r", origin, servers, return_value);
+                            if(IS_DNS_ERROR_CODE(return_value))
+                            {
+                                log_notice("slave: %{dnsname}: ixfr query error from master at %{hostaddr}: %r", origin, servers, return_value);
+                            }
+                            else
+                            {
+                                log_warn("slave: %{dnsname}: ixfr query error from master at %{hostaddr}: %r", origin, servers, return_value);
+                            }
                         }
 
                         may_try_next_master = is_multimaster;

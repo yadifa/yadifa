@@ -46,11 +46,8 @@ ya_result
 message_buffer_processor(message_viewer *mv, const u8 *buffer, u16 length)
 {
     ya_result                                                  return_value;
-
     packet_unpack_reader_data                                          purd;
-
     u8                          record_wire[MAX_DOMAIN_LENGTH + 10 + 65535];
-
     u16                                                            count[4];
 
     /*    ------------------------------------------------------------    */
@@ -67,85 +64,144 @@ message_buffer_processor(message_viewer *mv, const u8 *buffer, u16 length)
         message_viewer_header(mv, buffer);
     }
 
+    // ;; WARNING: recursion requested but not available
+
+    const u8 *opt_record = NULL;
+    const u8 *tsig_record = NULL;
+
+    packet_reader_init_at(&purd, buffer, length, DNS_HEADER_LENGTH);
+
+    for(u32 n = count[0]; n > 0; --n)
+    {
+        packet_reader_skip_zone_record(&purd);
+    }
+
+    for(u32 section_idx = 1; section_idx < 4; section_idx++)
+    {
+        for(u16 n = count[section_idx]; n > 0; n--)
+        {
+            // Get next record and put the packet reader offset on the next record
+
+            // note: packet_reader_read_record unpacks the name
+
+            if(FAIL(return_value = packet_reader_read_record(&purd, record_wire, sizeof(record_wire))))
+            {
+                return return_value;
+            }
+
+            if(section_idx == 3)
+            {
+                const u8 *p = record_wire + dnsname_len(record_wire);
+                u16 record_type = GET_U16_AT_P(p);
+                if(record_type == TYPE_OPT)
+                {
+                    opt_record = record_wire;
+                    --count[3];
+                    message_viewer_pseudosection_record(mv, record_wire);
+                }
+                else if(record_type == TYPE_TSIG)
+                {
+                    tsig_record = record_wire;
+                    --count[3];
+                }
+            }
+        }
+    }
+
     /* SECTION QUESTION */
     u32 section_idx    = 0;
 
-    if(message_viewer_requires_section(section_idx, mv->view_mode_with))
+    bool show_question_section = message_viewer_requires_section(0, mv->view_mode_with);
+
+    if(show_question_section)
     {
         /* Print SECTION name */
         message_viewer_section_header(mv, section_idx, count[section_idx]);
     }
 
     /* init packet reader with buffer. length and offset in the buffer */
-    purd.packet        = buffer;
-    purd.packet_size   = length;
-    purd.offset        = DNS_HEADER_LENGTH;
+
+    packet_reader_init_at(&purd, buffer, length, DNS_HEADER_LENGTH);
 
     for(u16 n = count[section_idx]; n > 0; n--)
     {
         /* 1. GET EVERYTHING FROM THE BUFFER FOR QUESTION + OFFSET packet reader */
 
-        /* Retrieve QNAME from packet reader */
-        if(FAIL(return_value = packet_reader_read_fqdn(&purd, record_wire, sizeof(record_wire))))
+        if(FAIL(return_value = packet_reader_read_zone_record(&purd, record_wire, sizeof(record_wire))))
         {
             return return_value;
         }
+
+        const u8 *p = record_wire + dnsname_len(record_wire);
 
         /* Retrieve QTYPE from packet reader */
-        u16 rtype;
-        if(FAIL(return_value = packet_reader_read_u16(&purd, &rtype)))
-        {
-            return return_value;
-        }
-
+        u16 rtype = GET_U16_AT_P(p);
+        p += 2;
         /* Retrieve QCLASS from packet reader */
-        u16 rclass;
-        if(FAIL(return_value = packet_reader_read_u16(&purd, &rclass)))
-        {
-            return return_value;
-        }
+        u16 rclass = GET_U16_AT_P(p);;
+        //p += 2;
 
-        if(message_viewer_requires_section(section_idx, mv->view_mode_with))
+        if(show_question_section)
         {
             /* Print everything from QUESTION SECTION */
             message_viewer_question_record(mv, record_wire, rclass, rtype);
         }
     }
 
-    if(message_viewer_requires_section(section_idx, mv->view_mode_with))
+    if(show_question_section)
     {
         message_viewer_section_footer(mv, section_idx, count[section_idx]);
     }
 
-
     /* SECTIONS WITHOUT QUESTION */
     for(u32 section_idx = 1; section_idx < 4; section_idx++)
     {
-        if(message_viewer_requires_section(section_idx, mv->view_mode_with))
+        bool show_section = message_viewer_requires_section(section_idx, mv->view_mode_with) && (count[section_idx] > 0);
+        bool print_footer = show_section;
+
+        if(show_section)
         {
-            message_viewer_section_header (mv, section_idx, count[section_idx]);
+            message_viewer_section_header(mv, section_idx, count[section_idx]);
         }
 
         for(u16 n = count[section_idx]; n > 0; n--)
         {
-            /* Get next record and put the packet reader offset on the next record */
+            // Get next record and put the packet reader offset on the next record
+
+            // note: packet_reader_read_record unpacks the name
+
             if(FAIL(return_value = packet_reader_read_record(&purd, record_wire, sizeof(record_wire))))
             {
                 return return_value;
             }
 
-            if(message_viewer_requires_section(section_idx, mv->view_mode_with))
+            if(show_section)
             {
                 /* Initialize the values needed for printing */
                 message_viewer_section_record(mv, record_wire, section_idx);
             }
         }
 
-        if(message_viewer_requires_section(section_idx, mv->view_mode_with))
+        if(print_footer)
         {
             message_viewer_section_footer(mv, section_idx, count[section_idx]);
         }
     }
+
+    if(opt_record)
+    {
+        --count[3];
+        packet_reader_read_record(&purd, record_wire, sizeof(record_wire));
+    }
+
+    if(tsig_record)
+    {
+        --count[3];
+        packet_reader_read_record(&purd, record_wire, sizeof(record_wire));
+        message_viewer_pseudosection_record(mv, record_wire);
+    }
+
+    // here handle extraneous bytes
 
     return 0;
 }

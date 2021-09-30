@@ -212,8 +212,6 @@ query_result_view(message_viewer *mv, message_data *mesg, s64 duration, ya_resul
     ya_result                                              return_value = 0;
     /*    ------------------------------------------------------------    */
 
-
-
     u16 old_view_mode_with = mv->view_mode_with; // save
 
     if(FAIL(query_return_code))
@@ -223,6 +221,7 @@ query_result_view(message_viewer *mv, message_data *mesg, s64 duration, ya_resul
 
     message_viewer_start(mv);
     message_buffer_processor(mv, message_get_buffer(mesg), message_get_size(mesg));
+
     if(ISOK(query_return_code))
     {
         message_viewer_bytes_and_message_update(mv, message_get_size(mesg), 1);
@@ -257,6 +256,8 @@ query_result_view(message_viewer *mv, message_data *mesg, s64 duration, ya_resul
         }
     }
 
+    println("");
+
     /// @todo 20150716 gve -- return_value is not really used
     if(return_value < 0)
     {
@@ -265,4 +266,3 @@ query_result_view(message_viewer *mv, message_data *mesg, s64 duration, ya_resul
     flushout();
     return return_value;
 }
-

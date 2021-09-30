@@ -55,6 +55,8 @@
 #include "dnscore/zalloc.h"
 #include "dnscore/format.h"
 
+#define JSON_TAG 0x4e4f534a
+
 struct json_value_array
 {
     intptr type;
@@ -102,7 +104,7 @@ static json
 json_type_new_intance(enum json_type type)
 {
     json ret;
-    ZALLOC_OBJECT_OR_DIE(ret, union json, GENERIC_TAG);
+    ZALLOC_OBJECT_OR_DIE(ret, union json, JSON_TAG);
     ret->type = type;
     return ret;
 }
@@ -436,7 +438,7 @@ json_delete(json j)
             free(j->string.text);
             FALLTHROUGH // fall through
         case JSON_BOOLEAN:
-            FALLTHROUGH // fall through
+            //FALLTHROUGH // fall through
         case JSON_NUMBER:
         {
             ZFREE_OBJECT(j);

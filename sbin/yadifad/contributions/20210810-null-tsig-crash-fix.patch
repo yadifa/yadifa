@@ -1,0 +1,22 @@
+From: "Arjun singh" <ajsinghyadav00@gmail.com>
+Date: Tue, 10 Aug 2021 11:57:14 +0530
+Subject: NULL-Pointer DOS Attack
+Source: Internal ticket report
+Note: A proof of concept was provided with the report.  The proposed fix has been transposed here as a patch.
+
+---
+diff -ur trunk/lib/dnscore/src/tsig.c trunk-tsig-fix/lib/dnscore/src/tsig.c
+--- trunk/lib/dnscore/src/tsig.c	2021-05-28 08:39:31.000000000 +0200
++++ trunk-tsig-fix/lib/dnscore/src/tsig.c	2021-08-24 12:35:33.228664598 +0200
+@@ -609,6 +609,11 @@
+ static ya_result
+ tsig_digest_answer(message_data *mesg)
+ {
++    if(mesg->_tsig.tsig == NULL)
++    {
++        return ERROR;
++    }    
++
+     tsig_hmac_t hmac = tsig_hmac_allocate();
+ 
+     if(hmac == NULL)

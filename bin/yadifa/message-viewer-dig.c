@@ -100,9 +100,8 @@ message_viewer_dig_end(message_viewer *mv, long time_duration)
     osformat(os, ";; Query time: %ld msec\n", time_duration);
 
     /** @todo 20150710 gve -- still need to implemented the server viewable line */
-//    osformat(os, ";; SERVER: %{hostaddr}(%{hostaddr})\n", config->server, config->server);
-
-    osformat(os,   ";; WHEN: %s", ctime(&timep));
+    osformat(os, ";; SERVER: %{hostaddr}(%{hostaddrip})\n", mv->host, mv->host);
+    osformat(os, ";; WHEN: %s", ctime(&timep));
 
     if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
@@ -112,7 +111,7 @@ message_viewer_dig_end(message_viewer *mv, long time_duration)
     {
         osformat(os, ";; MSG SIZE rcvd: %ld", mv->bytes);
     }
-    //osformat(os, "\n");
+    osformat(os, "\n");
 }
 
 
@@ -183,8 +182,10 @@ message_viewer_dig_header(message_viewer *mv, const u8 *buffer)
              count_name[0], count[0],
              count_name[1], count[1],
              count_name[2], count[2],
-             count_name[3], count[3]
-    );
+             count_name[3], count[3]);
+
+    // note: should handle ;; WARNING: recursion requested but not available
+    osprintln(os, "");
 }
 
 
@@ -233,7 +234,7 @@ message_viewer_dig_section_footer(message_viewer *mv, u32 section_idx, u16 count
 
 
 static void
-message_viewer_dig_question_record(message_viewer *mv, u8 *record_wire, u16 rclass, u16 rtype)
+message_viewer_dig_question_record(message_viewer *mv, const u8 *record_wire, u16 rclass, u16 rtype)
 {
     if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
@@ -283,7 +284,7 @@ message_viewer_dig_question_record(message_viewer *mv, u8 *record_wire, u16 rcla
 
 
 static void
-message_viewer_dig_section_record(message_viewer *mv, u8 *record_wire, u8 section_idx)
+message_viewer_dig_section_record(message_viewer *mv, const u8 *record_wire, u8 section_idx)
 {
     (void)section_idx;
 
@@ -301,10 +302,9 @@ message_viewer_dig_section_record(message_viewer *mv, u8 *record_wire, u8 sectio
 
     /*    ------------------------------------------------------------    */
 
-
     /* 1. get the needed parameters: FQDN, TYPE, CLASS, TTL, RDATA size */
-    u8 *rname      = record_wire;
-    u8 *rdata      = rname + dnsname_len(rname);
+    const u8 *rname      = record_wire;
+    const u8 *rdata      = rname + dnsname_len(rname);
     u16 rtype      = GET_U16_AT(rdata[0]);
     u16 rclass     = GET_U16_AT(rdata[2]);
     u32 rttl       = ntohl(GET_U32_AT(rdata[4]));
@@ -337,7 +337,6 @@ message_viewer_dig_section_record(message_viewer *mv, u8 *record_wire, u8 sectio
     osformat(os, "%7d", rttl);
     output_stream_write_u8(os, (u8)' ');
 
-
     /* C. write CLASS + alignment for next item */
     next = counters.write_count + 7;
 
@@ -366,6 +365,93 @@ message_viewer_dig_section_record(message_viewer *mv, u8 *record_wire, u8 sectio
     flushout();
 }
 
+static ya_result
+message_viewer_dig_pseudosection_record(message_viewer *mv, const u8 *record_wire)
+{
+    const u8 *p = record_wire;
+    const u8 *name = p;
+    p += dnsname_len(p);
+    u16 rtype = GET_U16_AT_P(p);
+    p += 2;
+    u16 rclass = GET_U16_AT_P(p);
+    p += 2;
+    u32 rttl = ntohl(GET_U32_AT_P(p));
+    p += 4;
+    u16 rdatasize = ntohs(GET_U16_AT_P(p));
+    p += 2;
+    const u8 *rdata = p;
+
+    switch(rtype)
+    {
+        case TYPE_OPT:
+        {
+            osprintln(mv->os, ";; OPT PSEUDOSECTION:");
+            if(*name != 0)
+            {
+                // wrong
+                osformatln(mv->os, "; WARNING: wrong OPT record name %{dnsname}", name);
+            }
+            //u8 extended_rcode = (u8)((rttl >> 24) & 0xff);
+            u8 version = (u8)((rttl >> 16) & 0xff);
+            bool do_bit = rttl & MESSAGE_EDNS0_DNSSEC;
+            osformat(mv->os, "; EDNS: version %u, flags:", version);
+            if(do_bit)
+            {
+                output_stream_write(mv->os, " do", 3);
+            }
+            osformatln(mv->os, "; udp: %u", ntohs(rclass));
+
+            const u8 *rdata_limit = &rdata[rdatasize];
+
+            while(rdata < rdata_limit)
+            {
+                if(rdata_limit - rdata < 4)
+                {
+                    osformatln(mv->os, "; WARNING: OPT rdata format error", name);
+                    break;
+                }
+
+                u16 option_code = GET_U16_AT_P(rdata);
+                rdata += 2;
+                u16 option_length = ntohs(GET_U16_AT_P(rdata));
+                rdata += 2;
+
+                if(rdata_limit - rdata < option_length)
+                {
+                    osformatln(mv->os, "; WARNING: OPT rdata format error", name);
+                    break;
+                }
+
+                switch(option_code)
+                {
+                    default:
+                    {
+                        osformat(mv->os, "; CODE: %u DATA: ", ntohs(option_code));
+                        osprint_base16(mv->os, rdata, option_length);
+                        output_stream_write_u8(mv->os, '\n');
+                        break;
+                    }
+                }
+
+                rdata += option_length;
+            }
+            break;
+        }
+        case TYPE_TSIG:
+        {
+            osprintln(mv->os, ";; TSIG PSEUDOSECTION:");
+            message_viewer_dig_section_record(mv, record_wire, 3);
+            output_stream_write_u8(mv->os, '\n');
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    return SUCCESS;
+}
 
 static const message_viewer_vtbl dig_viewer_vtbl = {
        message_viewer_dig_header,
@@ -375,6 +461,7 @@ static const message_viewer_vtbl dig_viewer_vtbl = {
        message_viewer_dig_section_footer,
        message_viewer_dig_question_record,
        message_viewer_dig_section_record,
+       message_viewer_dig_pseudosection_record,
        "message_viewer_dig",
 };
 

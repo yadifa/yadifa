@@ -1683,10 +1683,19 @@ static void
 notify_service_context_send_notifications(struct notify_service_context *ctx)
 {
 #if DEBUG
-    log_debug("notify: sending notifications");
+    if(ptr_set_isempty(&ctx->notifications_being_sent))
+    {
+        log_debug("notify: no notification to send");
+        return;
+    }
+    else
+    {
+        log_debug("notify: sending notifications");
+    }
 #endif
 
     time_t now = time(NULL);
+    int total_sent = 0;
 
     ptr_set_iterator notifications_being_sent_iter;
     ptr_set_iterator_init(&ctx->notifications_being_sent, &notifications_being_sent_iter);
@@ -1731,11 +1740,12 @@ notify_service_context_send_notifications(struct notify_service_context *ctx)
 
             ya_result ret = notify_send(ha, ctx->mesg, id, notifymsg->origin, notifymsg->payload.notify.ztype, notifymsg->payload.notify.zclass);
 
-
             host_address *ha_next = ha->next;
 
             if(ISOK(ret))
             {
+                ++total_sent;
+
                 message_query_summary* mqs;
                 ZALLOC_OBJECT_OR_DIE( mqs, message_query_summary, MSGQSUMR_TAG);
                 message_query_summary_init(mqs, id, ha, ctx->mesg);
@@ -1837,7 +1847,10 @@ notify_service_context_send_notifications(struct notify_service_context *ctx)
     ptr_vector_clear(&ctx->todelete);
 
 #if DEBUG
-    log_debug("notify: notifications sent");
+    if(total_sent > 0)
+    {
+        log_debug("notify: %i notifications sent", total_sent);
+    }
 #endif
 }
 
@@ -2195,7 +2208,17 @@ notify_slaves_alarm(void *args_, bool cancel)
 static bool
 notify_slaves_convert_domain_to_notify(notify_message *message)
 {
+    if(message->payload.type == NOTIFY_MESSAGE_TYPE_NOTIFY)
+    {
+        return TRUE;
+    }
+
     if(!notify_service_initialised)
+    {
+        return FALSE;
+    }
+
+    if(message->payload.type != NOTIFY_MESSAGE_TYPE_DOMAIN)
     {
         return FALSE;
     }
@@ -2265,12 +2288,7 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 
             u8 *soa_mname = ZDB_PACKEDRECORD_PTR_RDATAPTR(soa);
             u32 soa_mname_size = dnsname_len(soa_mname);
-            /*
-            u8 *soa_rname = soa_mname + soa_mname_size;
-            u8 *serial_ptr = soa_rname + dnsname_len(soa_rname);
-            u32 serial = *((u32*)serial_ptr);
-            serial = ntohl(serial);
-            */
+
             for(zdb_packed_ttlrdata *nsp = ns; nsp != NULL; nsp = nsp->next)
             {
                 u32 ns_dname_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(nsp);
@@ -2284,7 +2302,7 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
                     }
                 }
 
-                /* valid candidate : get its IP, later */
+                // valid candidate : append IP addresses
             
                 if(zdb_append_ip_records(db, ns_dname, &list) <= 0) // zone is locked
                 {
@@ -2406,8 +2424,6 @@ notify_clear(const u8 *origin)
     async->handler_args = NULL;
     async_message_call(&notify_handler_queue, async);
 }
-
-
 
 ya_result
 notify_service_init()

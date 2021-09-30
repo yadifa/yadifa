@@ -34,7 +34,7 @@
 
 #pragma once
 
-#include "dnsdb/zdb-config-features.h"
+#include <dnsdb/zdb-config-features.h>
 
 #if ZDB_HAS_LOCK_DEBUG_SUPPORT
 

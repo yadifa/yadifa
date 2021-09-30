@@ -147,10 +147,11 @@ dnscore_fingerprint dnscore_getfingerprint();
 
 #define DNSCORE_SOCKET_SERVER               0x00000040
 #define DNSCORE_SHARED_HEAP                 0x00000080
+#define DNSCORE_TCP_MANAGER                 0x00000100
 
 #define DNSCORE_MOST (DNSCORE_TIMER_THREAD|DNSCORE_TIMER_PERIOD(5)|DNSCORE_LOGGER|DNSCORE_CRYPTO|DNSCORE_DNS|DNSCORE_ZALLOC|DNSCORE_ALARM|DNSCORE_TTY_BUFFERED|DNSCORE_SHARED_HEAP)
 #define DNSCORE_TINYRUN (DNSCORE_DNS|DNSCORE_ZALLOC)
-#define DNSCORE_ALL (DNSCORE_MOST|DNSCORE_SOCKET_SERVER)
+#define DNSCORE_ALL (DNSCORE_MOST|DNSCORE_SOCKET_SERVER|DNSCORE_TCP_MANAGER)
 
 /**
  *
@@ -194,6 +195,20 @@ bool stdstream_is_tty(output_stream *os);
 #define DNSCORE_API_CHECK() dnscore_signature_check(sizeof(mutex_t), sizeof(group_mutex_t))
 
 void dnscore_hookme(); // debugging tool : this function can be used as a single breakpoint
+
+struct dnscore_meminfo_s
+{
+    s64 page_size;
+    s64 page_count;
+    s64 total_memory;
+    s64 rss_current;
+    s64 rss_max;
+    s64 program_memory_limit;
+};
+
+typedef struct dnscore_meminfo_s dnscore_meminfo_t;
+
+const dnscore_meminfo_t* dnscore_meminfo_get(dnscore_meminfo_t *mi);
 
 #ifdef	__cplusplus
 }

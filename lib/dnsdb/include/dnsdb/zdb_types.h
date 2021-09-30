@@ -137,7 +137,7 @@ struct zdb_packed_ttlrdata_soa
 #define ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size_) (sizeof(zdb_packed_ttlrdata)-1+(rdata_size_))
 #define ZDB_RECORD_SIZE(record_)                    ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size)
 
-#if !DNSCORE_HAS_ZALLOC
+#if !DNSCORE_HAS_ZALLOC_SUPPORT
 
 #define ZDB_RECORD_ZALLOC(record,ttl_,len_,rdata_)                   \
     {                                                                \
@@ -167,14 +167,16 @@ struct zdb_packed_ttlrdata_soa
 
 #define ZDB_RECORD_SAFE_ZFREE(record) free(record)
 
-#else
+#else // DNSCORE_HAS_ZALLOC_SUPPORT
+
+#if !(HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG)
 
 #define ZDB_RECORD_ZALLOC(record_,ttl_,len_,rdata_)                     \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
-        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
         {                                                               \
-            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);      \
+            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);     \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -189,9 +191,9 @@ struct zdb_packed_ttlrdata_soa
 #define ZDB_RECORD_ZALLOC_EMPTY(record_,ttl_,len_)                      \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
-        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
         {                                                               \
-            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);      \
+            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);     \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -205,9 +207,9 @@ struct zdb_packed_ttlrdata_soa
 #define ZDB_RECORD_CLONE(record_s_,record_d_)                           \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_s_)->rdata_size);\
-        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
         {                                                               \
-            record_d_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3); \
+            record_d_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3);   \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -218,13 +220,66 @@ struct zdb_packed_ttlrdata_soa
         MEMCOPY(&(record_d_)->rdata_start[0],&(record_s_)->rdata_start[0],record_s_->rdata_size); \
     }
 
+#else // HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+
+#define ZDB_RECORD_ZALLOC(record_,ttl_,len_,rdata_)                     \
+    {                                                                   \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
+        {                                                               \
+            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3,ZDB_RECORD_TAG);     \
+        }                                                               \
+        else                                                            \
+        {                                                               \
+            MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record_),sizeof(zdb_packed_ttlrdata)-1+len_,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
+        }                                                               \
+                                                                        \
+        (record_)->ttl=ttl_;                                            \
+        (record_)->rdata_size=len_;                                     \
+        MEMCOPY(&(record_)->rdata_start[0],rdata_,len_);                \
+    }
+
+#define ZDB_RECORD_ZALLOC_EMPTY(record_,ttl_,len_)                      \
+    {                                                                   \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE(len_);                  \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
+        {                                                               \
+            record_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3,ZDB_RECORD_TAG);     \
+        }                                                               \
+        else                                                            \
+        {                                                               \
+            MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record_),sizeof(zdb_packed_ttlrdata)-1+len_,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
+        }                                                               \
+                                                                        \
+        (record_)->ttl=ttl_;                                            \
+        (record_)->rdata_size=len_;                                     \
+    }
+
+#define ZDB_RECORD_CLONE(record_s_,record_d_)                           \
+    {                                                                   \
+        u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_s_)->rdata_size);\
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
+        {                                                               \
+            record_d_=(zdb_packed_ttlrdata*)zalloc_line((size-1)>>3,ZDB_RECORD_TAG);   \
+        }                                                               \
+        else                                                            \
+        {                                                               \
+            MALLOC_OR_DIE(zdb_packed_ttlrdata*,(record_d_),size,ZDB_RECORD_TAG); /* ZALLOC IMPOSSIBLE */ \
+        }                                                               \
+        record_d_->ttl=record_s_->ttl;                                  \
+        record_d_->rdata_size=record_s_->rdata_size;                    \
+        MEMCOPY(&(record_d_)->rdata_start[0],&(record_s_)->rdata_start[0],record_s_->rdata_size); \
+    }
+
+#endif // HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+
 /* DOES NOT CHECKS FOR NULL */
 #define ZDB_RECORD_ZFREE(record_)                                       \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size); \
-        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
         {                                                               \
-            zfree_line(record_,(size-1)>>3);                             \
+            zfree_line(record_,(size-1)>>3);                            \
         }                                                               \
         else                                                            \
         {                                                               \
@@ -237,16 +292,17 @@ struct zdb_packed_ttlrdata_soa
     if(record_ != NULL)                                                 \
     {                                                                   \
         u32 size=ZDB_RECORD_SIZE_FROM_RDATASIZE((record_)->rdata_size); \
-        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                         \
+        if(size<=ZALLOC_PG_PAGEABLE_MAXSIZE)                            \
         {                                                               \
-            zfree_line(record_,(size-1)>>3);                             \
+            zfree_line(record_,(size-1)>>3);                            \
         }                                                               \
         else                                                            \
         {                                                               \
             free(record_);                                              \
         }                                                               \
     }
-#endif
+
+#endif // DNSCORE_HAS_ZALLOC_SUPPORT
 
 #define ZDB_RECORD_MALLOC_EMPTY(record_,ttl_,rdata_size_)               \
     {                                                                   \

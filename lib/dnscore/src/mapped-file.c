@@ -496,7 +496,7 @@ mapped_file_open_ex(file_t *fp, const char *filename, int flags)
     }
     
     mapped_file_t mf;
-    ZALLOC_OBJECT_OR_DIE(mf,struct mapped_file_t_, FILESYSTEM_FILE_TAG);
+    ZALLOC_OBJECT_OR_DIE(mf,struct mapped_file_t_, MAPPED_FILE_TAG);
     mf->vtbl = &mapped_file_vtbl;
     mf->address = address;
     mf->size = st.st_size;
@@ -573,7 +573,7 @@ mapped_file_create_ex(file_t *fp, const char *filename, int flags, mode_t mode)
     }
     
     mapped_file_t mf;
-    ZALLOC_OBJECT_OR_DIE(mf,struct mapped_file_t_, FILESYSTEM_FILE_TAG);
+    ZALLOC_OBJECT_OR_DIE(mf,struct mapped_file_t_, MAPPED_FILE_TAG);
     mf->vtbl = &mapped_file_vtbl;
     mf->address = address;
     mf->size = st.st_size;
@@ -624,7 +624,7 @@ mapped_file_create_volatile(file_t *fp, const char *filename, size_t base_size)
     }
     
     mapped_file_t mf;
-    ZALLOC_OBJECT_OR_DIE(mf,struct mapped_file_t_, FILESYSTEM_FILE_TAG);
+    ZALLOC_OBJECT_OR_DIE(mf,struct mapped_file_t_, MAPPED_FILE_TAG);
     mf->vtbl = &mapped_file_vtbl;
     mf->address = address;
     mf->size = 0;

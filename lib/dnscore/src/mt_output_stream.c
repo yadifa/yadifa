@@ -50,6 +50,7 @@
 #include "dnscore/bytearray_output_stream.h"
 
 #define MT_OUTPUT_STREAM_TAG 0x534F544D /* MTOS */
+#define MTOSSTRM_TAG 0x4d525453534f544d
 
 #define MT_OUTPUT_STREAM_BUFFER_INITIAL_SIZE 128U
 
@@ -78,7 +79,7 @@ mt_write(output_stream *stream, const u8 *buffer, u32 len)
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(osp, output_stream, GENERIC_TAG);
+        MALLOC_OBJECT_OR_DIE(osp, output_stream, MTOSSTRM_TAG);
         bytearray_output_stream_init_ex(osp, NULL, MT_OUTPUT_STREAM_BUFFER_INITIAL_SIZE, BYTEARRAY_DYNAMIC);
         writer_node->value = osp;
     }

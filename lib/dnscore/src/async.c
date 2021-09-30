@@ -62,7 +62,8 @@
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-#define ASYNCMSG_TAG 0x47534d434e595341
+#define ASYNCMSG_TAG  0x47534d434e595341
+#define ASYNCWAIT_TAG 0x5457434e595341
 
 struct async_message_wait_args
 {
@@ -251,7 +252,7 @@ async_wait_s *
 async_wait_new_instance(s32 count)
 {
     async_wait_s *ret;
-    ZALLOC_OBJECT_OR_DIE(ret, async_wait_s, GENERIC_TAG);
+    ZALLOC_OBJECT_OR_DIE(ret, async_wait_s, ASYNCWAIT_TAG);
     async_wait_init(ret, count);
     return ret;
 }

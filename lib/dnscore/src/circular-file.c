@@ -873,7 +873,7 @@ circular_file_get_write_available(circular_file_t cf)
 
         s64 abs_position = cf->begin + cf->position;
 
-        assert(abs_position <= cf->maximum_size);
+        assert(abs_position <= (s64)cf->maximum_size);
 
         s64 end_avail = cf->maximum_size - abs_position;
 
@@ -889,7 +889,7 @@ circular_file_get_write_available(circular_file_t cf)
 
         // abs_end is the position of the end of the data relatively to position 0
 
-        if((cf->position > 0) && (abs_position <= cf->begin))
+        if((cf->position > 0) && (abs_position <= (s64)cf->begin))
         {
             // if the absolute position is before the end, we will have to read from position to end
             // then if more has to be read, from 0 to whatever remains to be read

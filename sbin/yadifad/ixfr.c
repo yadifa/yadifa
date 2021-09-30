@@ -262,7 +262,7 @@ ixfr_process(message_data *mesg, int sockfd)
     }
     else
     {
-        log_err("ixfr: %{dnsname}: could not send error message: %r (%{sockaddr})", send_ret, message_get_sender(mesg));
+        log_err("ixfr: %{dnsname}: could not send error message: %r (%{sockaddr})", message_get_canonised_fqdn(mesg), send_ret, message_get_sender(mesg));
     }
     
     yassert((sockfd < 0)||(sockfd >2));

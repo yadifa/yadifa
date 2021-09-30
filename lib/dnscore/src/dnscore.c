@@ -85,6 +85,8 @@
 #include <openssl/ssl.h>
 #include <openssl/engine.h>
 #include <openssl/conf.h>
+#include <sys/resource.h>
+
 #endif
 
 #define TERM_BUFFER_SIZE 4096
@@ -320,6 +322,40 @@ u32 dnscore_fingerprint_mask()
 
 /*****************************************************************************/
 
+static dnscore_meminfo_t dnscore_meminfo = {0, 0, 0, 0, 0, 0};
+
+const dnscore_meminfo_t*
+dnscore_meminfo_get(dnscore_meminfo_t *mi)
+{
+    if(mi == NULL)
+    {
+        mi = &dnscore_meminfo;
+        if(mi->page_size != 0)
+        {
+            return mi;
+        }
+    }
+
+    s64 page_size = sysconf(_SC_PAGE_SIZE);
+    s64 page_count = sysconf(_SC_PHYS_PAGES);
+    s64 total_memory = page_size * page_count;
+
+    struct rlimit limits;
+    getrlimit(RLIMIT_RSS, &limits);
+
+    s64 program_memory_limit = MIN(total_memory, limits.rlim_cur);
+
+    mi->page_size = page_size;
+    mi->page_count = page_count;
+    mi->rss_current = limits.rlim_cur;
+    mi->rss_max = limits.rlim_max;
+    mi->program_memory_limit = program_memory_limit;
+
+    return mi;
+}
+
+/*****************************************************************************/
+
 output_stream __termout__ = {NULL, NULL};
 output_stream __termerr__ = {NULL, NULL};
 
@@ -541,7 +577,8 @@ dnscore_timer_thread(void * unused0)
     thread_set_name("timer", 0, 0);
 
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("timer");
+    static char dnscore_timer_thread_tag[9] = "timer";
+    logger_handle_set_thread_tag(dnscore_timer_thread_tag);
 #endif
     
     log_debug5("dnscore_timer_thread started");
@@ -664,11 +701,14 @@ dnscore_init_ex(u32 features, int argc, char **argv)
         dnscore_arch_checked = TRUE;
     }
 
+    dnscore_meminfo_get(NULL);
+
     g_pid = getpid();
-    
+
+#if DEBUG
     debug_bench_init();
-    
     debug_malloc_hooks_init();
+#endif
 
     /* Init the hash tables */
 
@@ -753,7 +793,28 @@ dnscore_init_ex(u32 features, int argc, char **argv)
         dnsformat_class_init();
         dnscore_features |= DNSCORE_DNS;
     }
-    
+
+#if 0
+#if DEBUG
+    osformatln(&__termerr__, "dnscore debug features list begin");
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+    osformatln(&__termerr__, "dnscore: DNSCORE_HAS_MALLOC_DEBUG_SUPPORT");
+#endif
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
+    osformatln(&__termerr__, "dnscore: DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT");
+#endif
+#if DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT
+    osformatln(&__termerr__, "dnscore: DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT");
+#endif
+#if DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+    osformatln(&__termerr__, "dnscore: DNSCORE_HAS_MMAP_DEBUG_SUPPORT");
+#endif
+    osformatln(&__termerr__, "dnscore debug features list end");
+    output_stream_flush(&__termerr__);
+#endif
+#endif
+
     if((features & DNSCORE_LOGGER) && !(dnscore_features & DNSCORE_LOGGER))
     {
         features |= DNSCORE_TIMER_THREAD;
@@ -781,7 +842,8 @@ dnscore_init_ex(u32 features, int argc, char **argv)
     }
     
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("main");
+    static char dnscore_main_thread_tag[9] = "main";
+    logger_handle_set_thread_tag(dnscore_main_thread_tag);
 #endif
 
     dnscore_register_errors();
@@ -844,7 +906,11 @@ dnscore_init_ex(u32 features, int argc, char **argv)
     }
 
 #if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_init();
+    if(features & DNSCORE_TCP_MANAGER)
+    {
+        dnscore_features |= DNSCORE_TCP_MANAGER;
+        tcp_manager_init();
+    }
 #endif
 }
 
@@ -969,7 +1035,7 @@ dnscore_finalize()
     
     dnscore_shutdown();
     
-#if DEBUG
+#if 0 // DEBUG
     debug_bench_logdump_all();
 #endif
     
@@ -1046,15 +1112,15 @@ dnscore_finalize()
     error_unregister_all();
     rfc_finalize();
     format_class_finalize();
-    
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-    debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS|DEBUG_STAT_DUMP);
-    zalloc_print_stats(&__termout__);
-#endif
-    
+
     stdstream_flush_both_terms();
-    
     dnskey_finalize();
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+    debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS|DEBUG_STAT_DUMP|DEBUG_STAT_WALK|DEBUG_STAT_MMAP);
+    zalloc_print_stats(&__termout__);
+    stdstream_flush_both_terms();
+#endif
     
 #endif // DNSCORE_TIDY_UP_MEMORY
 

@@ -191,7 +191,8 @@ dist_noinst_DATA += contributions/20170225-libressl-detection-and-fix.patch \
  contributions/20190323-yadifa-2.3.9-pmtudisc_omit.patch \
  contributions/20190911-sighup-crash-fix.patch \
  contributions/20201106-musl-support.patch \
- contributions/20210301-dynupdate-error-code.patch
+ contributions/20210301-dynupdate-error-code.patch \
+ contributions/20210810-null-tsig-crash-fix.patch
 
 
 

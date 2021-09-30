@@ -263,15 +263,15 @@ static char *rcode[32] =
     "RCODE14",
     "RCODE15",
 
-    "BADVERS",                //   16      /* Bad OPT Version         rfc 2671 / rfc 6891 */
+    "BADVERS", // or BADSIG   //   16      /* Bad OPT Version         rfc 2671 / rfc 6891 */
 
-    "RCODE17",
-    "RCODE18",
-    "RCODE19",
+    "BADKEY",
+    "BADTIME",
+    "BADMODE",
 
-    "RCODE20",
-    "RCODE21",
-    "RCODE22",
+    "BADNAME",
+    "BADALG",
+    "BADTRUNC",
 
     "RCODE23",
     

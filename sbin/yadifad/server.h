@@ -69,6 +69,8 @@ extern volatile int program_mode;
 #define TPROCPRM_TAG 0x4d5250434f525054
 #define POLLFDBF_TAG 0x464244464c4c4f50
 
+#define SERVER_POOL_BUFFER_SIZE 0x20000
+
 /*    ------------------------------------------------------------
  *
  *      PROTOTYPES
@@ -167,6 +169,10 @@ int server_process_message_udp(network_thread_context_base_t *ctx, message_data 
 
 #define TCPSTATS(__field__) mutex_lock(&server_statistics.mtx);server_statistics. __field__ ;mutex_unlock(&server_statistics.mtx)
 
+#define TCPSTATS_LOCK() mutex_lock(&server_statistics.mtx)
+#define TCPSTATS_FIELD(__field__) server_statistics. __field__
+#define TCPSTATS_UNLOCK() mutex_unlock(&server_statistics.mtx)
+
 #ifndef SERVER_C_
 extern server_statistics_t server_statistics;
 #endif
@@ -253,5 +259,8 @@ ya_result server_service_stop();
  */
 
 ya_result server_service_finalize();
+
+void server_tcp_client_register(const struct sockaddr_storage* sa, s64 connections_max);
+s64 server_tcp_client_connections_max(const struct sockaddr_storage* sa, s64 default_value);
 
 /** @} */

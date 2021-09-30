@@ -100,8 +100,6 @@ struct threaded_queue_task
     const char* categoryname;           /* so it's easy to know what thread is running*/
 };
 
-typedef struct thread_descriptor_s thread_descriptor_s;
-
 struct thread_descriptor_s
 {
     struct thread_pool_s *pool; //  8
@@ -113,10 +111,15 @@ struct thread_descriptor_s
     char info[16];              // 16
 };
 
+typedef struct thread_descriptor_s thread_descriptor_s;
+
 /* The array of thread descriptors*/
 
 static thread_key_t thread_pool_random_key = ~0;
 static thread_once_t thread_pool_random_key_once = PTHREAD_ONCE_INIT;
+
+static thread_key_t thread_pool_thread_index_key = ~0;
+static thread_once_t thread_pool_thread_index_key_once = PTHREAD_ONCE_INIT;
 
 static mutex_t thread_pool_set_mutex = MUTEX_INITIALIZER;
 static u32_set thread_pool_set = U32_SET_EMPTY;
@@ -303,6 +306,22 @@ thread_pool_random_key_init()
     }
 }
 
+static void
+thread_pool_thread_index_init()
+{
+#if VERBOSE_THREAD_LOG >= 2
+    log_debug("thread: random thread-local key init");
+#endif
+
+    ya_result ret;
+
+    if((ret = thread_key_create(&thread_pool_thread_index_key, NULL)) < 0)
+    {
+        log_quit("thread_key_create = %r", ret);
+    }
+}
+
+
 int
 thread_pool_queue_size(thread_pool_s *tp)
 {
@@ -314,6 +333,21 @@ void
 thread_pool_wait_queue_empty(struct thread_pool_s *tp)
 {
     threaded_queue_wait_empty(&tp->queue);
+}
+
+u32
+thread_pool_thread_index_get()
+{
+    u32 *idp = (u32*)thread_key_get(thread_pool_thread_index_key);
+    
+    if(idp != NULL)
+    {
+        return *idp;
+    }
+    else
+    {
+        return MAX_U32;
+    }
 }
 
 static noreturn void*
@@ -358,9 +392,17 @@ thread_pool_thread(void *args)
         
         if(FAIL(ret = thread_key_set(thread_pool_random_key, rndctx)))
         {
-            log_quit("thread_key_set = %r", ret);
+            log_quit("thread_key_set(thread_pool_random_key) = %r", ret);
         }
-    }   
+    }
+
+    if(thread_key_get(thread_pool_thread_index_key) == NULL)
+    {
+        if(FAIL(ret = thread_key_set(thread_pool_thread_index_key, &desc->index)))
+        {
+            log_quit("thread_key_set(thread_pool_thread_index_key) = %r", ret);
+        }
+    }
 
 #if VERBOSE_THREAD_LOG >= 2
     log_debug("thread: %x random thread-local variable ready", desc->id);
@@ -568,6 +610,8 @@ thread_pool_init_ex(u32 thread_count, u32 queue_size, const char *pool_name)
     {
         return NULL;
     }
+
+    thread_once(&thread_pool_thread_index_key_once, thread_pool_thread_index_init);
     
     if(queue_size == 0)
     {
@@ -580,7 +624,7 @@ thread_pool_init_ex(u32 thread_count, u32 queue_size, const char *pool_name)
     }
         
     thread_pool_setup_random_ctx();
-    
+
     thread_pool_s *tp;
     MALLOC_OBJECT_OR_DIE(tp, thread_pool_s, THRDPOOL_TAG);
     ZEROMEMORY(tp, sizeof(thread_pool_s));
@@ -852,8 +896,17 @@ thread_pool_stop(struct thread_pool_s* tp)
      * I have to launch one for each thread.
      */
 
+    s64 thread_pool_stop_report_time = timeus();
+
     for(i = 0; i < tps; i++)
     {
+        s64 now = timeus();
+        if(now - thread_pool_stop_report_time > ONE_SECOND_US)
+        {
+            log_info("thread-pool: %s, busy stopping thread %i/%i", STRNULL(tp->pool_name), i + 1, tps);
+            thread_pool_stop_report_time = now;
+        }
+
         switch(td[i]->status) /* Unimportant W -> R race */
         {
             case THREAD_STATUS_TERMINATING:
@@ -967,6 +1020,8 @@ thread_pool_start(struct thread_pool_s* tp)
 #endif
         return SERVICE_NOT_RUNNING;
     }
+
+    s64 thread_pool_start_report_time = timeus();
     
     for(i = 0; i < tps; i++)
     {
@@ -977,6 +1032,13 @@ thread_pool_start(struct thread_pool_s* tp)
          *
          * @note  by default, threads are PTHREAD_CREATE_JOINABLE
          */
+
+        s64 now = timeus();
+        if(now - thread_pool_start_report_time > ONE_SECOND_US)
+        {
+            log_info("thread-pool: %s, busy starting thread %i/%i", STRNULL(tp->pool_name), i + 1, tps);
+            thread_pool_start_report_time = now;
+        }
 
         u8 status = thread_descriptors[i]->status;
         
@@ -1245,6 +1307,8 @@ thread_pool_destroy(struct thread_pool_s* tp)
 
     tp->thread_pool_size = 0;
 
+    s64 thread_pool_destroy_report_time = timeus();
+
     /*
      * Sending a node with data == NULL will kill one thread-pool thread
      *
@@ -1253,7 +1317,14 @@ thread_pool_destroy(struct thread_pool_s* tp)
 
     for(i = 0; i < tps; i++)
     {
-        threaded_queue_wait_empty(&tp->queue);
+        s64 now = timeus();
+        if(now - thread_pool_destroy_report_time > ONE_SECOND_US)
+        {
+            log_info("thread-pool: %s, busy destroying thread %i/%i", STRNULL(tp->pool_name), i + 1, tps);
+            thread_pool_destroy_report_time = now;
+        }
+
+        threaded_queue_wait_empty(&tp->queue);  // the queue needs to be empty before it's cleared
 
         switch(td[i]->status) /* Unimportant W -> R race */
         {

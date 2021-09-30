@@ -412,6 +412,7 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
     packet_unpack_reader_data purd;
     purd.packet = buffer;        
     purd.packet_size = message_size;
+    u16 ar_sub = 0;
 
     if(mesg->_ar_start == NULL)
     {
@@ -481,7 +482,7 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
                 {
                     if(tsigname[0] == '\0')
                     {
-                        message_sub_additional_count(mesg, 1);
+                        ++ar_sub;
 
                         mesg->_edns = TRUE;
                         mesg->_rcode_ext = tctr.ttl;
@@ -611,6 +612,8 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
             }
         }
     } /* While there are AR to process */
+
+    //message_sub_additional_count(mesg, 1);
 
     message_set_additional_count_ne(mesg, 0);
     message_set_size(mesg, message_size);
@@ -1195,7 +1198,6 @@ message_process(message_data *mesg)
 #if DNSCORE_HAS_NSID_SUPPORT
             mesg->_nsid       = FALSE;
 #endif
-            
             u8 *s = message_process_copy_fqdn(mesg);
 
             if(s == NULL)
@@ -1981,6 +1983,17 @@ message_transform_to_error(message_data *mesg)
 }
 
 void
+message_transform_to_signed_error(message_data *mesg)
+{
+    message_transform_to_error(mesg);
+
+    if(message_has_tsig(mesg))
+    {
+        tsig_sign_answer(mesg);
+    }
+}
+
+void
 message_make_query(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 qclass)
 {
 #ifdef WORDS_BIGENDIAN
@@ -2045,7 +2058,7 @@ message_make_query_ex(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u1
     message_tsig_clear_key(mesg);
 #endif
     
-    if(flags != 0)
+    if(mesg->_edns || (flags != 0))
     {
         message_set_additional_count_ne(mesg, NETWORK_ONE_16);
         
@@ -2189,6 +2202,14 @@ message_sign_query_by_name(message_data *mesg, const u8 *tsig_name)
 }
 
 ya_result
+message_sign_query_by_name_with_epoch_and_fudge(message_data *mesg, const u8 *tsig_name, s64 epoch, u16 fudge)
+{
+    const tsig_item *key = tsig_get(tsig_name);
+
+    return message_sign_query_with_epoch_and_fudge(mesg, key, epoch, fudge);
+}
+
+ya_result
 message_sign_answer(message_data *mesg, const tsig_item *key)
 {
     if(key != NULL)
@@ -2208,7 +2229,8 @@ message_sign_answer(message_data *mesg, const tsig_item *key)
 
         mesg->_tsig.original_id = message_get_id(mesg);
         
-        return tsig_sign_answer(mesg);
+        ya_result ret = tsig_sign_answer(mesg);
+        return ret;
     }
 
     return TSIG_BADKEY;
@@ -2242,6 +2264,35 @@ message_sign_query(message_data *mesg, const tsig_item *key)
 
     return TSIG_BADKEY;
 }
+
+ya_result
+message_sign_query_with_epoch_and_fudge(message_data *mesg, const tsig_item *key, s64 epoch, u16 fudge)
+{
+    if(key != NULL)
+    {
+        ZEROMEMORY(&mesg->_tsig, sizeof(message_tsig));
+
+        mesg->_tsig.tsig = key;
+        mesg->_tsig.mac_size = mesg->_tsig.tsig->mac_size;
+
+        mesg->_tsig.timehi = htons((u16)(epoch >> 32));
+        mesg->_tsig.timelo = htonl((u32)epoch);
+
+        mesg->_tsig.fudge  = htons(fudge);    /* 5m */
+
+        mesg->_tsig.mac_algorithm = key->mac_algorithm;
+
+        mesg->_tsig.original_id = message_get_id(mesg);
+
+        // mesg->tsig.error = 0;     zeromem
+        // mesg->tsig.other_len = 0; zeromem
+
+        return tsig_sign_query(mesg);
+    }
+
+    return TSIG_BADKEY;
+}
+
 
 #endif
 
@@ -3245,7 +3296,7 @@ message_new_instance_ex(void *ptr, u32 message_size)        // should be size of
     {
         u8 *tmp;
         size_t message_data_size = ((sizeof(message_data) + 7) & ~7) + message_size;
-        MALLOC_OBJECT_ARRAY_OR_DIE(tmp, u8, message_data_size, GENERIC_TAG);
+        MALLOC_OBJECT_ARRAY_OR_DIE(tmp, u8, message_data_size, MESGDATA_TAG);
         ptr = &tmp[(sizeof(message_data) + 7) & ~7];
         mesg = (message_data*)tmp;
         message_init_ex(mesg, message_data_size, ptr, message_size);

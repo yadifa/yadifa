@@ -198,7 +198,7 @@ void concat_input_stream_init(input_stream *cis)
 {
     concat_input_stream_data* data;
 
-    ZALLOC_OBJECT_OR_DIE( data, concat_input_stream_data, CONCAT_INPUT_STREAM_TAG);
+    ZALLOC_OBJECT_OR_DIE(data, concat_input_stream_data, CONCAT_INPUT_STREAM_TAG);
     data->current = NULL;
     data->lastlink = &data->current;
 

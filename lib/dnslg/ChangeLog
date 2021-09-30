@@ -29,6 +29,19 @@
 # 
 ################################################################################
 
+20210924:
+    YADIFA 2.5.1-public
+
+    Fixes a critical issue that could cause yadifad to crash handling certain DNS packet.
+
+    Fixes an issue where yadifad would sometimes reply with an AXFR instead of an IXFR if the journal is under maintenance.
+
+    Increased the pid column in the logger to 6 characters
+
+    Drastically increased the limit for TCP queries.
+	Note that using a high enough number compared to the available memory will cause yadifad to warn about limits and OOM kill risks.
+	In practice a few hundred TCP queries should be enough.
+
 20210602:
     YADIFA 2.5.0-public
 
@@ -52,7 +65,6 @@
     Fixes atomic usage for older C compilers.
     Fixes an issue where some RRSIG records may not be updated in time if they happened to have their update bundled with NSEC3 records updates while the incremental change could not be immediately written in the journal.
     Fixes the yadifa keygen module to understand "help" as a command and not as a domain.
-
 
 20210223:
     YADIFA 2.4.2-public

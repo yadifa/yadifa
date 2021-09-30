@@ -47,7 +47,7 @@
 
 #include "dnscore/threaded_ringbuffer.h"
 
-#define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
+#define THREADED_QUEUE_RINGBUFFFER_TAG 0x4646554247525154	/* TQRGBUFF */
 
 /*
  * The maximum number of nodes I should ever require is the queue size + 1
@@ -92,7 +92,7 @@ struct threaded_ringbuffer_node
 void
 threaded_ringbuffer_init(threaded_ringbuffer *queue, int max_size)
 {
-    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*)* max_size, THREADED_QUEUE_TAG);
+    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*)* max_size, THREADED_QUEUE_RINGBUFFFER_TAG);
     queue->buffer_limit = &queue->buffer[max_size];
     queue->write_slot = queue->buffer;
     queue->read_slot = queue->buffer;
@@ -574,7 +574,7 @@ threaded_ringbuffer_set_maxsize(threaded_ringbuffer *queue, int max_size)
     if(max_size >= (int)queue->size)
     {
         void** tmp;
-        MALLOC_OR_DIE(void**, tmp, sizeof(void*)* max_size, THREADED_QUEUE_TAG);
+        MALLOC_OR_DIE(void**, tmp, sizeof(void*)* max_size, THREADED_QUEUE_RINGBUFFFER_TAG);
 
         /*
          * Copy from the read to the write position

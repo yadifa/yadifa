@@ -64,9 +64,8 @@ extern "C" {
 
 #define     PREPROCESSOR_INT2STR(x) #x
 
-#define     THREAD_POOL_SIZE_MAX        255 /* 8 bits ! */
 #define     TCP_QUERIES_MIN             0
-#define     TCP_QUERIES_MAX             255
+#define     TCP_QUERIES_MAX             0x20000
 #define     AXFR_PACKET_SIZE_MIN        512
 #define     AXFR_PACKET_SIZE_MAX        65535
 #define     AXFR_RECORD_BY_PACKET_MIN   0
@@ -157,7 +156,8 @@ extern "C" {
 #define     MAX_INTERFACES              256
     
 #define     S_TOTALINTERFACES           1
-#define     S_MAX_TCP_QUERIES           "128"   /* max 255 */
+#define     S_MAX_TCP_QUERIES           "128"   /* max : 65536 */
+#define     S_MAX_TCP_QUERIES_PER_ADDRESS "2"
 #define     S_MAX_SECONDARY_TCP_QUERIES "16"
 #define     S_TCP_QUERY_MIN_RATE        "512"   /* bytes per second minimum rate */
     
@@ -425,6 +425,7 @@ struct config_data
     int                                        zone_unload_thread_count;
     int                                      zone_download_thread_count;
     int                                                 max_tcp_queries;
+    int                                     max_tcp_queries_per_address;
     int                                       max_secondary_tcp_queries;
     int                                              tcp_query_min_rate;
     int                                                  tcp_queue_size;
@@ -439,6 +440,7 @@ struct config_data
     int                                                  edns0_max_size;
     int                                                   network_model; // 0: default MT, 1: experimental RqW
     u32                                       worker_backlog_queue_size;
+    s32                                                      set_nofile;
     bool                                          axfr_compress_packets;
     bool                                          axfr_strict_authority; // if the AA bit isn't set, AXFR is rejected
 

@@ -69,8 +69,6 @@
 
 #define MODULE_MSG_HANDLE g_server_logger
 
-#define DBLOADQ_TAG 0x5144414f4c4244
-
 void
 database_service_zone_mount(zone_desc_s *zone_desc)
 {

@@ -46,7 +46,7 @@
 
 #include "dnscore/threaded_ringbuffer_cw.h"
 
-#define THREADED_QUEUE_TAG	    0x455545555154	/* TQUEUE */
+#define THREADED_QUEUE_RINGBUFFERCW_TAG 0x5743464247525154 /* TQRGBFCW */
 
 /*
  * Note:
@@ -68,7 +68,7 @@ threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size)
     memset(queue, 0xff, sizeof(threaded_ringbuffer_cw));
 #endif  
     
-    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*) * max_size, THREADED_QUEUE_TAG);
+    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*) * max_size, THREADED_QUEUE_RINGBUFFERCW_TAG);
  
     queue->buffer_limit = &queue->buffer[max_size];
     queue->write_slot = queue->buffer;
@@ -562,7 +562,7 @@ threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
     if(max_size >= (int)queue->size)
     {
         void** tmp;
-        MALLOC_OR_DIE(void**, tmp, sizeof(void*) * max_size, THREADED_QUEUE_TAG);
+        MALLOC_OR_DIE(void**, tmp, sizeof(void*) * max_size, THREADED_QUEUE_RINGBUFFERCW_TAG);
 
         /*
          * Copy from the read to the write position

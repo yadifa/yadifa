@@ -1266,7 +1266,7 @@ program_mode_play_all(bool does_loop, bool daemonise)
         {
             ret = thread_pool_counter_wait_equal_with_timeout(&counter, 0, ONE_SECOND_US * 30);
 
-            log_debug("keyroll: waiting for the threads to stop");
+            log_debug("keyroll: waiting for the threads to stop (%r)", ret);
 
             if(dnscore_shuttingdown())
             {

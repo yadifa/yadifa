@@ -681,8 +681,8 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                 {
                     double dt = now - start_time;
                     dt /= ONE_SECOND_US_F;
-                    log_debug("maintenance: %{dnsname}: %{digest32h}.%{dnsname} has no owner (rc=%i, sc=%i)",
-                              zone->origin, item->digest, zone->origin, item->rc, item->sc);
+                    log_debug("maintenance: %{dnsname}: time elapsed (%fs): %{digest32h}.%{dnsname} has no owner (rc=%i, sc=%i)",
+                              zone->origin, dt, item->digest, zone->origin, item->rc, item->sc);
                 }
 
                 --labels_to_process_count;
@@ -1290,7 +1290,7 @@ zdb_zone_maintenance(zdb_zone* zone)
                 zone->progressive_signature_update.current_fqdn = prev_fqdn;
                 zone->progressive_signature_update.chain_index = prev_chain_index;
                 prev_fqdn = NULL;
-                prev_chain_index = -1;
+                // prev_chain_index = -1;
                 log_debug("maintenance: %{dnsname}: pausing at %{dnsname} (%r) (may try again)", zone->origin, zone->progressive_signature_update.current_fqdn, ret);
             }
             else

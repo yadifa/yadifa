@@ -173,7 +173,11 @@ void zalloc_finalize();
  * @return a pointer to the allocated memory
  */
 
-void* zalloc_line(u32 page_index);
+void* zalloc_line(u32 page_index
+#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    ,u64 tag
+#endif
+);
 
 /**
  * @brief Frees one slot in a memory set
@@ -203,14 +207,22 @@ u64 zheap_line_avail(u32 page);
 
 static inline void zalloc_set_owner_thread(thread_t owner) {(void)owner;}
 
-static inline void* zalloc(s32 size)
+static inline void* zalloc(s32 size
+#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    ,u64 tag
+#endif
+)
 {
     u32 page = ZALLOC_SIZE_TO_PAGE(size);
     void* ptr;
 
     if(page < ZALLOC_PG_SIZE_COUNT)
     {
-        ptr = zalloc_line(ZALLOC_SIZE_TO_PAGE(size));
+        ptr = zalloc_line(ZALLOC_SIZE_TO_PAGE(size)
+#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+            ,tag
+#endif
+            );
     }
     else
     {
@@ -253,7 +265,11 @@ s64 zallocatedtotal();
  * @return a pointer to the allocated memory
  */
 
-void* zalloc_unaligned(u32 size);
+void* zalloc_unaligned(u32 size
+#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    ,u64 tag
+#endif
+);
 
 /**
  * @brief Frees unaligned memory of an arbitrary size using zfree_line and free
@@ -275,17 +291,37 @@ static inline size_t zalloc_memory_block_size(size_t size)
     return (size + 7) & ~7;
 }
 
-void* zalloc_line(u32 page_index);
+#define ZALLOC_SIZE_TO_LINE(size__) ((((size__) + 7) >> 3)-1)
+#define ZALLOC_TYPE_TO_LINE(object__) ZALLOC_SIZE_TO_LINE(sizeof(object__))
+#define ZALLOC_TYPE_HAS_LINE(object__) (ZALLOC_TYPE_TO_LINE(object__) < ZALLOC_PG_SIZE_COUNT)
+#define ZALLOC_SIZE_HAS_LINE(size__) (ZALLOC_SIZE_TO_LINE((size__)) < ZALLOC_PG_SIZE_COUNT)
 
-#define ZALLOC_OBJECT(object__) ((((sizeof(object__) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zalloc_line(((sizeof(object__) + 7) >> 3)-1):malloc(sizeof(object__))
-#define ZFREE(ptr,object__) ((((sizeof(object__) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zfree_line(ptr,(((sizeof(object__) + 7) >> 3)-1)):free(ptr)
+#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
 
-#define ZALLOC_BYTES(size__) ((((((size__) + 7) >> 3)-1) < ZALLOC_PG_SIZE_COUNT)?zalloc_line((((size__) + 7) >> 3)-1):malloc((size__)))
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+void* debug_malloc(size_t size_,const char* file, int line, u64 tag);
+#define ZALLOC_OBJECT(object__,tag__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__), (tag__)):debug_malloc(sizeof(object__), __FILE__, __LINE__, (tag__))
+#define ZALLOC_BYTES(size__,tag__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__), (tag__)):debug_malloc((size__), __FILE__, __LINE__, (tag__)))
+#else
+#define ZALLOC_OBJECT(object__,tag__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__), (tag__)):malloc(sizeof(object__))
+#define ZALLOC_BYTES(size__,tag__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__), (tag__)):malloc((size__)))
+#endif
+
+#define ZALLOC_ARRAY_OR_DIE(cast__,label__,size__,tag__) if((label__ = (cast__)zalloc((size__),(tag__))) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+// preferred way of allocating one instance of a type (struct, ...)
+#define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC_OBJECT(object__,(tag__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC_BYTES(sizeof(object__)*(count__), (tag__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#else
+#define ZALLOC_OBJECT(object__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__)):malloc(sizeof(object__))
+#define ZALLOC_BYTES(size__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__)):malloc((size__)))
 #define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
-#define ZFREE_ARRAY(ptr,size_) zfree(ptr,size_)
 // preferred way of allocating one instance of a type (struct, ...)
 #define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC_OBJECT(object__))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
 #define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC_BYTES(sizeof(object__)*(count__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#endif
+
+#define ZFREE(ptr,object__) ZALLOC_TYPE_HAS_LINE(object__)?zfree_line(ptr,ZALLOC_TYPE_TO_LINE(object__)):free(ptr)
+#define ZFREE_ARRAY(ptr,size_) zfree(ptr,size_)
 #define ZFREE_OBJECT(label__) zfree((label__), sizeof(*(label__)))
 #define ZFREE_OBJECT_OF_TYPE(label__,type__) zfree((label__), sizeof(type__))
 /**

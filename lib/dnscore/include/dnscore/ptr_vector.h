@@ -52,7 +52,7 @@ extern "C" {
 
 #include <dnscore/sys_types.h>
 
-#define PTR_VECTOR_TAG 0x524f544345565252 /** "RRVECTOR" */
+#define PTR_VECTOR_TAG 0x52544356525450 // PTRVCTR
 
 #define PTR_VECTOR_DEFAULT_SIZE  32
 

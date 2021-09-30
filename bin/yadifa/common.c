@@ -61,3 +61,26 @@ filename_from_path(const char *s)       // base_of_path sounds like beginning of
     return (ptr ? ++ptr : s);           // if a '/' was found, return the word starting after, else return the original word
 }
 
+static  char **module_argv = NULL;
+static int module_argc = 0;
+
+void module_arg_set(char **argv, int argc)
+{
+    module_argv = argv;
+    module_argc = argc;
+}
+
+int module_arg_count()
+{
+    return module_argc;
+}
+
+const char *module_arg_get(int index)
+{
+    if((index >= 0) && (index < module_argc))
+    {
+        return module_argv[index];
+    }
+
+    return NULL;
+}

@@ -217,4 +217,59 @@ int socketaddress_compare_ip(const void *a, const void *b)
     }
 }
 
+int sockaddr_storage_compare_ip(const void *key_a, const void *key_b)
+{
+    const struct sockaddr_storage *ssap = (const struct sockaddr_storage *)key_a;
+    const struct sockaddr_storage *ssbp = (const struct sockaddr_storage *)key_b;
+    int d = ssap->ss_family - ssbp->ss_family;
+    if(d == 0)
+    {
+        switch(ssap->ss_family)
+        {
+            case AF_INET:
+            {
+                struct sockaddr_in *ina = (struct sockaddr_in*)ssap;
+                struct sockaddr_in *inb = (struct sockaddr_in*)ssbp;
+                d = memcmp(&ina->sin_addr, &inb->sin_addr, sizeof(ina->sin_addr));
+                break;
+            }
+            case AF_INET6:
+            {
+                struct sockaddr_in6 *ina = (struct sockaddr_in6*)ssap;
+                struct sockaddr_in6 *inb = (struct sockaddr_in6*)ssbp;
+                d = memcmp(&ina->sin6_addr, &inb->sin6_addr, sizeof(ina->sin6_addr));
+                break;
+            }
+            default:
+            {
+                d = memcmp(ssap, ssbp, sizeof(struct sockaddr_storage));
+                break;
+            }
+        }
+    }
+    return d;
+}
+
+void sockaddr_storage_copy(struct sockaddr_storage *dest, const struct sockaddr_storage *src)
+{
+    switch(src->ss_family)
+    {
+        case AF_INET:
+        {
+            memcpy(dest, src, sizeof(struct sockaddr_in));
+            break;
+        }
+        case AF_INET6:
+        {
+            memcpy(dest, src, sizeof(struct sockaddr_in6));
+            break;
+        }
+        default:
+        {
+            memcpy(dest, src, sizeof(struct sockaddr_storage));
+            break;
+        }
+    }
+}
+
 /** @} */

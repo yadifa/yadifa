@@ -566,8 +566,8 @@ HAS_CTRL = @HAS_CTRL@
 HAS_DNSSEC_TOOLS = @HAS_DNSSEC_TOOLS@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
+HAS_EDDSA = @HAS_EDDSA@
 HAS_EVENT_DYNAMIC_MODULE = @HAS_EVENT_DYNAMIC_MODULE@
-HAS_FILEPOOL_CACHE = @HAS_FILEPOOL_CACHE@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_KEYGEN = @HAS_KEYGEN@
 HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
@@ -589,7 +589,6 @@ HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
 HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
 HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
-HAS_TCP_MANAGER = @HAS_TCP_MANAGER@
 HAS_TESTS = @HAS_TESTS@
 HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
@@ -755,7 +754,8 @@ dist_noinst_DATA = VERSION \
 	contributions/20190323-yadifa-2.3.9-pmtudisc_omit.patch \
 	contributions/20190911-sighup-crash-fix.patch \
 	contributions/20201106-musl-support.patch \
-	contributions/20210301-dynupdate-error-code.patch
+	contributions/20210301-dynupdate-error-code.patch \
+	contributions/20210810-null-tsig-crash-fix.patch
 yadifad_LDADD = $(abs_top_builddir)/lib/dnsdb/libdnsdb.la \
 	$(abs_top_builddir)/lib/dnscore/libdnscore.la
 yadifad_SOURCES = main.c axfr.c config_main.c config_zone.c confs.c \

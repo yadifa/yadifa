@@ -39,6 +39,8 @@
 #include <dnscore/format.h>
 #include "input.h"
 
+#define ISINPTDT_TAG 0x544454504e495349
+
 #define RECORD_SIZE_MAX (256 + 10 + 65535)
 
 static ya_result input_stream_input_read(input_stream *stream,void *in_buffer,u32 count)
@@ -117,7 +119,7 @@ ya_result
 input_stream_input_init(input_stream *is, input_t *input, input_stream_input_data_feed_method *feed_callback)
 {
     input_stream_input_data_t *data;
-    MALLOC_OBJECT_OR_DIE(data, input_stream_input_data_t, GENERIC_TAG);
+    MALLOC_OBJECT_OR_DIE(data, input_stream_input_data_t, ISINPTDT_TAG);
     ZEROMEMORY(data, sizeof(input_stream_input_data_t));
     data->input = input;
     data->feed = feed_callback;
@@ -164,9 +166,9 @@ record_input_data_feed_serial_set(u32 serial)
 }
 
 ya_result
-record_input_data_feed(struct input_stream_input_data_s *input_data, const u16 *script, size_t script_count, const u8 *fqdn, size_t *index)
+record_input_data_feed(struct input_stream_input_data_s *input_data, const u16 *script, size_t script_count, const u8 *fqdn, s64 *index)
 {
-    if(*index >= script_count)
+    if(*index >= (s64)script_count)
     {
         return BUFFER_WOULD_OVERFLOW;
     }
@@ -211,7 +213,7 @@ record_input_data_feed(struct input_stream_input_data_s *input_data, const u16 *
         case TYPE_NS:
         {
             int ns_count = 1;
-            for(size_t i = 0; i < *index; ++i)
+            for(s64 i = 0; i < *index; ++i)
             {
                 if(script[i] == TYPE_NS)
                 {
@@ -229,7 +231,7 @@ record_input_data_feed(struct input_stream_input_data_s *input_data, const u16 *
         case TYPE_MX:
         {
             int mx_count = 1;
-            for(size_t i = 0; i < *index; ++i)
+            for(s64 i = 0; i < *index; ++i)
             {
                 if(script[*index] == TYPE_MX)
                 {

@@ -79,9 +79,9 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                 {
                     case CLASS_IN:
                     {
-                        local_statistics->udp_queries_count++;
-
                         log_query(ctx->sockfd, mesg);
+
+                        local_statistics->udp_queries_count++;
 
                         switch(message_get_query_type(mesg))
                         {
@@ -252,7 +252,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
                 if((ret == UNPROCESSABLE_MESSAGE) && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
                 {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
                 }
 
                 /*
@@ -264,7 +264,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                 {
                     message_edns0_clear_undefined_flags(mesg);
 
-                    if(!message_has_tsig(mesg))
+                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                     {
                         message_transform_to_error(mesg);
                     }
@@ -417,7 +417,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
                 if(ret == UNPROCESSABLE_MESSAGE && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
                 {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
                 }
 
                 /*
@@ -429,7 +429,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                 {
                     message_edns0_clear_undefined_flags(mesg);
 
-                    if(!message_has_tsig(mesg))
+                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                     {
                         message_transform_to_error(mesg);
                     }
@@ -568,7 +568,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
                 if((ret == UNPROCESSABLE_MESSAGE) && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
                 {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
                 }
 
                 /*
@@ -580,7 +580,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                 {
                     message_edns0_clear_undefined_flags(mesg);
 
-                    if(!message_has_tsig(mesg))
+                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                     {
                         message_transform_to_error(mesg);
                     }
@@ -604,16 +604,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
         }
         default:
         {
-            ret = MAKE_DNSMSG_ERROR(FP_RCODE_NOTIMP);
-            /*ret = */ message_process_query(mesg);
-            message_set_status(mesg, FP_RCODE_NOTIMP);
-
-            if(ctx->must_stop)
-            {
-                return STOPPED_BY_APPLICATION_SHUTDOWN; // shutdown
-            }
-
-            log_notice("opcode-%i (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu : %r (%r) (%{sockaddrip}) size=%hu",
+            log_notice("opcode-%i (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu (%{sockaddrip}) size=%hu",
                        (u32)(message_get_opcode(mesg) >> OPCODE_SHIFT),
                        ntohs(message_get_id(mesg)),
                        message_get_flags_hi(mesg),message_get_flags_lo(mesg),
@@ -621,22 +612,41 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                        message_get_answer_count(mesg), // AC
                        message_get_authority_count(mesg), // NS
                        message_get_additional_count(mesg), // AR
-                       MAKE_DNSMSG_ERROR(message_get_status(mesg)),
-                       ret,
                        message_get_sender_sa(mesg),
                        message_get_size_u16(mesg));
 
+            message_process_lenient(mesg);
+
+            if(message_get_status(mesg) == RCODE_OK) // else a TSIG may have some complain
+            {
+                message_set_status(mesg, FP_RCODE_NOTIMP);
+                message_update_answer_status(mesg);
+
+#if DNSCORE_HAS_TSIG_SUPPORT
+                if(message_has_tsig(mesg))
+                {
+                    tsig_sign_answer(mesg);
+                }
+#endif
+            }
+
+            local_statistics->udp_undefined_count++;
+
+            if(ctx->must_stop)
+            {
+                return STOPPED_BY_APPLICATION_SHUTDOWN; // shutdown
+            }
+
             if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
             {
-                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_ALL);
+                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
             }
 
             if((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
             {
-                message_edns0_clear_undefined_flags(mesg);
-
-                if(!message_has_tsig(mesg))
+                if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
                 {
+                    message_edns0_clear_undefined_flags(mesg);
                     message_transform_to_error(mesg);
                 }
             }

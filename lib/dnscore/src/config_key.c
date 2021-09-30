@@ -43,7 +43,7 @@ struct config_section_key_s
 {
     char name[256];
     char algorithm[32];
-    char secret[512];
+    char secret[BASE64_ENCODED_SIZE(64) + 1];
 };
 
 typedef struct config_section_key_s config_section_key_s;

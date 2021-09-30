@@ -81,7 +81,7 @@ static inline bool ctrl_has_dedicated_listen() { return ctrl_get_listen() != NUL
 void ctrl_set_enabled(bool b);
 bool ctrl_get_enabled();
 
-ya_result  ctrl_message_process(message_data *mesg, int sockfd);
+ya_result  ctrl_message_process(message_data *mesg);
 
 
 

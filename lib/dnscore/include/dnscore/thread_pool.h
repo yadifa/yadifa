@@ -214,6 +214,12 @@ int thread_pool_queue_size(struct thread_pool_s *tp);
 
 void thread_pool_wait_queue_empty(struct thread_pool_s *tp);
 
+/**
+ * Returns the index of the thread in the thread-pool.
+ */
+
+u32 thread_pool_thread_index_get();
+
 // before and after a fork
 
 ya_result thread_pool_stop_all();

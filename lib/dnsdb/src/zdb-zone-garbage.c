@@ -129,9 +129,8 @@ zdb_zone_garbage_collect(zdb_zone *zone)
 {
     yassert(zdb_rr_label_is_apex(zone->apex));
     yassert(zone->rc == 0);
-
-#pragma message("add a zone freed callback")
-
+    /** @note consider adding a zone freed callback
+     */
     zdb_rr_label_flag_and(zone->apex, ~ZDB_RR_LABEL_APEX);
 
 #if ZDB_ZONE_HAS_JNL_REFERENCE

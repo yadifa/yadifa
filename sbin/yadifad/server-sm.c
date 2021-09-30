@@ -123,6 +123,7 @@ typedef cpuset_t cpu_set_t;
 
 #define SVRPLBIN_TAG 0x4e49424c50525653
 #define SVRPLBOT_TAG 0x544f424c50525653
+#define SSMPOOLB_TAG 0x424c4f4f504d5353
 
 // allow an external definition of the backlog queue size and L1 parameters
 
@@ -356,7 +357,7 @@ server_sm_udp_worker_thread(void *parms)
 
     u8 *pool_buffer;
     size_t pool_buffer_size = 65536;
-    MALLOC_OBJECT_ARRAY_OR_DIE(pool_buffer, u8, pool_buffer_size, GENERIC_TAG);
+    MALLOC_OBJECT_ARRAY_OR_DIE(pool_buffer, u8, pool_buffer_size, SSMPOOLB_TAG);
 
     message_data *mesg;
     mesg = message_new_instance();
@@ -807,8 +808,8 @@ server_sm_query_loop(struct service_worker_s *worker)
 #if HAS_ZALLOC_STATISTICS_SUPPORT
                         zalloc_print_stats(termout);
 #endif
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-                        debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS); // do NOT enable the dump
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+                        debug_stat(DEBUG_STAT_TAGS|DEBUG_STAT_MMAP); // do NOT enable the dump
 #endif
                         journal_log_status();
 

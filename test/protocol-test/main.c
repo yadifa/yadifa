@@ -1185,7 +1185,7 @@ query_z_opt_test(const host_address *server, const u8* fqdn)
         message_set_flags_hi(mesg, 0);
         message_set_flags_lo(mesg, 0);
 
-        message_set_opcode(mesg, OPCODE_QUERY << OPCODE_SHIFT);
+        message_set_opcode(mesg, OPCODE_QUERY); // note: OPCODE_QUERY is already shifted
         message_set_authenticated_data(mesg);
 
         message_set_query_answer_authority_additional_counts(mesg, 1, 0, 0, 1);

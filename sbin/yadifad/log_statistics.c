@@ -221,7 +221,5 @@ log_statistics(server_statistics_t *server_statistics)
             );
 }
 
-/*    ------------------------------------------------------------    */
-
 /** @} */
 

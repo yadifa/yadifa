@@ -57,8 +57,10 @@ typedef void message_viewer_end_method(message_viewer *mv, long time_duration);
 typedef void message_viewer_section_header_method(message_viewer *mv, u32 section_idx, u16 count);
 typedef void message_viewer_section_footer_method(message_viewer *mv, u32 section_idx, u16 count);
 
-typedef void message_viewer_question_record_method(message_viewer *mv, u8 *record_wire, u16 rclass, u16 rtype);
-typedef void message_viewer_section_record_method(message_viewer *mv, u8 *record_wire, u8 sectionidx);
+typedef void message_viewer_question_record_method(message_viewer *mv, const u8 *record_wire, u16 rclass, u16 rtype);
+typedef void message_viewer_section_record_method(message_viewer *mv, const u8 *record_wire, u8 sectionidx);
+
+typedef ya_result message_viewer_pseudosection_record_method(message_viewer *mv, const u8 *record_wire);
 
 typedef struct message_viewer_vtbl message_viewer_vtbl;
 
@@ -71,6 +73,8 @@ struct message_viewer_vtbl
     message_viewer_section_footer_method   *seven;
     message_viewer_question_record_method  *eight;
     message_viewer_section_record_method    *nine;
+
+    message_viewer_pseudosection_record_method *print_pseudosection_record;
 
     const char    *__class__;           /* MUST BE A UNIQUE POINTER, ie: One defined in the class's .c file
                                            The name should be unique in order to avoid compiler tricks
@@ -91,7 +95,7 @@ struct message_viewer
     const message_viewer_vtbl       *vtbl;
 
     char                   **section_name;
-    host_address                    *host; // if set, will be used to count the servers found and in some messages. (default is NULL)
+    const host_address              *host; // if set, will be used to count the servers found and in some messages. (default is NULL)
 
     u16                    view_mode_with;
 };
@@ -110,7 +114,10 @@ struct message_viewer
 #define message_viewer_question_record(mv_,record_wire_,rclass_,rtype_) (mv_)->vtbl->eight((mv_),(record_wire_),(rclass_),(rtype_))
 #define message_viewer_section_record(mv_,record_wire_,sectionidx_) (mv_)->vtbl->nine((mv_),(record_wire_),(sectionidx_))
 
+#define message_viewer_pseudosection_record(mv_,record_wire_) (mv_)->vtbl->print_pseudosection_record((mv_),(record_wire_))
+
 #define message_viewer_bytes_and_message_update(mv_,bytes_, messages_) {(mv_)->bytes+=(bytes_);(mv_)->messages+=(messages_);};
+
 #define message_viewer_resource_record_total_update(mv_,count_) {     \
                           mv->resource_records_total[0]+=count_[0];   \
                           mv->resource_records_total[1]+=count_[1];   \

@@ -69,7 +69,7 @@ static main_settings_s g_main_settings;
 
 #define CONFIG_TYPE main_settings_s
 CONFIG_BEGIN(main_settings_desc)
-CONFIG_U32(value_s32, 0 )
+CONFIG_S32(value_s32, 0 )
 CONFIG_BOOL(value_bool, "off" )
 CONFIG_STRING(password, "")
 CONFIG_END(main_settings_desc)

@@ -54,12 +54,15 @@
 
 #include <sys/mman.h>
 #include <dnscore/mutex.h>
+#include <dnscore/format.h>
 
 #define L1_DATA_LINE_SIZE 0x40
 #define L1_DATA_LINE_MASK (L1_DATA_LINE_SIZE - 1)
 
 #define MUTEX_PROCESS_SHARED_SUPPORTED 1
 //#define MUTEX_PROCESS_SHARED_SUPPORTED 0 // experimental, not enough resources to make this work
+#define SHARED_HEAP_ALLOC_DEBUG 0
+#define SHARED_HEAP_ALLOC_PRINT 0
 
 struct shared_heap_bloc
 {
@@ -95,6 +98,11 @@ struct shared_heap_ctx
     cond_t cond;
 #else
     semaphore_t sem;
+#endif
+#if DEBUG
+#if SHARED_HEAP_ALLOC_DEBUG
+    debug_memory_by_tag_context_t *mem_ctx;
+#endif
 #endif
     struct shared_heap_bloc *base;
     struct shared_heap_free_bloc free;
@@ -208,6 +216,21 @@ shared_heap_check_bloc(u8 id, void *bloc_, u8 allocated)
     if(allocated <= 1)
     {
         assert(bloc->allocated == allocated);
+
+        if(bloc->allocated != allocated)
+        {
+            if(allocated == 1)
+            {
+                osformatln(termerr, "%i: shared-heap[%i] : double free at %p", getpid(), id, bloc_);flusherr();
+            }
+            else
+            {
+                osformatln(termerr, "%i: shared-heap[%i] : corruption at %p", id, bloc_);flusherr();
+            }
+
+            osprint_dump(termerr, bloc, bloc->size, 16, OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT);
+            flusherr();
+        }
     }
     
     if(bloc->allocated == 1)
@@ -282,7 +305,7 @@ shared_heap_create(size_t size)
     }
     
     size = (size + 4093) & ~4093;
-    
+
     void *ptr = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
     
     if(ptr == MAP_FAILED)
@@ -316,6 +339,12 @@ shared_heap_create(size_t size)
     ctx->free.next->size = 0;
     ctx->free.next->next = &ctx->free;
     ctx->free.next->prev = &ctx->free;
+
+#if DEBUG
+#if SHARED_HEAP_ALLOC_DEBUG
+    ctx->mem_ctx = debug_memory_by_tag_new_instance("shared-heap");
+#endif
+#endif
     
     struct shared_heap_bloc *header = (struct shared_heap_bloc *)&(((u8*)ptr)[0]);
     header->real_size = L1_DATA_LINE_SIZE;
@@ -381,6 +410,12 @@ shared_heap_destroy(u8 id)
         shared_heaps[id].free.next = NULL;
         shared_heaps[id].free.prev = NULL;
         shared_heaps[id].size = 0;
+#if DEBUG
+#if SHARED_HEAP_ALLOC_DEBUG
+        debug_memory_by_tag_delete(shared_heaps[id].mem_ctx);
+        shared_heaps[id].mem_ctx = NULL;
+#endif
+#endif
     }
     if(shared_heap_next < 0)
     {
@@ -421,6 +456,9 @@ shared_heap_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
                 {
                     bloc->_reserved0 = 0x4141;
                 }
+#if SHARED_HEAP_ALLOC_DEBUG
+                debug_memory_by_tag_alloc_notify(ctx->mem_ctx, GENERIC_TAG, size);
+#endif
 #endif
                 bloc->size = size;
                 
@@ -461,6 +499,9 @@ shared_heap_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
                 shared_heap_check_bloc(bloc->heap_index, bloc, 1);
                 shared_heap_check_bloc(bloc->heap_index, next_bloc, 0);
                 shared_heap_check_bloc(bloc->heap_index, next_next_bloc, 2);
+#if SHARED_HEAP_ALLOC_DEBUG
+                debug_memory_by_tag_alloc_notify(ctx->mem_ctx, GENERIC_TAG, size);
+#endif
 #endif
                 
                 shared_heap_unlock(ctx);
@@ -512,6 +553,9 @@ shared_heap_try_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
                     {
                         bloc->_reserved0 = 0x4141;
                     }
+#if SHARED_HEAP_ALLOC_DEBUG
+                    debug_memory_by_tag_alloc_notify(ctx->mem_ctx, GENERIC_TAG, size);
+#endif
 #endif
                     bloc->size = size;
 
@@ -552,6 +596,9 @@ shared_heap_try_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
                     shared_heap_check_bloc(bloc->heap_index, bloc, 1);
                     shared_heap_check_bloc(bloc->heap_index, next_bloc, 0);
                     shared_heap_check_bloc(bloc->heap_index, next_next_bloc, 2);
+#if SHARED_HEAP_ALLOC_DEBUG
+                    debug_memory_by_tag_alloc_notify(ctx->mem_ctx, GENERIC_TAG, size);
+#endif
 #endif
 
                     shared_heap_unlock(ctx);
@@ -608,6 +655,9 @@ shared_heap_wait_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
                     {
                         bloc->_reserved0 = 0x4141;
                     }
+#if SHARED_HEAP_ALLOC_DEBUG
+                    debug_memory_by_tag_alloc_notify(ctx->mem_ctx, GENERIC_TAG, size);
+#endif
 #endif
                     bloc->size = size;
 #if DEBUG
@@ -649,6 +699,9 @@ shared_heap_wait_alloc_from_ctx(struct shared_heap_ctx *ctx, size_t size)
                     shared_heap_check_bloc(bloc->heap_index, bloc, 1);
                     shared_heap_check_bloc(bloc->heap_index, next_bloc, 0);
                     shared_heap_check_bloc(bloc->heap_index, next_next_bloc, 2);
+#if SHARED_HEAP_ALLOC_DEBUG
+                    debug_memory_by_tag_alloc_notify(ctx->mem_ctx, GENERIC_TAG, size);
+#endif
 #endif
                     shared_heap_unlock(ctx);
 #if DEBUG
@@ -794,6 +847,9 @@ shared_heap_free_from_ctx(struct shared_heap_ctx *ctx, void *ptr)
     
 #if DEBUG
     shared_heap_check_bloc(bloc->heap_index, bloc, 1);
+#if SHARED_HEAP_ALLOC_DEBUG
+    debug_memory_by_tag_free_notify(ctx->mem_ctx, GENERIC_TAG, bloc->size);
+#endif
 #endif
     
     struct shared_heap_free_bloc *next_bloc = (struct shared_heap_free_bloc*)&(((u8*)bloc)[bloc->real_size]);
@@ -805,11 +861,9 @@ shared_heap_free_from_ctx(struct shared_heap_ctx *ctx, void *ptr)
     if(next_bloc->allocated == 0)
     {
         struct shared_heap_free_bloc *prev_bloc = (struct shared_heap_free_bloc*)&(((u8*)bloc)[-bloc->prev_size]);
-        
 #if DEBUG
         shared_heap_check_bloc(bloc->heap_index, prev_bloc, 2);
 #endif
-        
         if(prev_bloc->allocated == 0)
         {
             // merge 3
@@ -818,7 +872,6 @@ shared_heap_free_from_ctx(struct shared_heap_ctx *ctx, void *ptr)
             bloc->_reserved0 = 0xfe13;
             next_bloc->_reserved0 = 0xfe23;
 #endif
-            
             shared_heap_merge_allocated_with_surrounding_free_blocs(prev_bloc, bloc, next_bloc);
             bloc = prev_bloc;
         }
@@ -848,7 +901,6 @@ shared_heap_free_from_ctx(struct shared_heap_ctx *ctx, void *ptr)
             prev_bloc->_reserved0 = 0xfe01;
             bloc->_reserved0 = 0xfe11;
 #endif
-            
             shared_heap_merge_free_with_following_allocated_bloc(prev_bloc, bloc);
             bloc = prev_bloc;
         }
@@ -951,19 +1003,52 @@ shared_heap_realloc_from_ctx(struct shared_heap_ctx *ctx, void *ptr, size_t new_
 void*
 shared_heap_alloc(u8 id, size_t size)
 {
-    return shared_heap_alloc_from_ctx(&shared_heaps[id], size);
+    void *ptr = shared_heap_alloc_from_ctx(&shared_heaps[id], size);
+#if DEBUG && SHARED_HEAP_ALLOC_DEBUG
+#if SHARED_HEAP_ALLOC_PRINT
+    osformatln(termout, "%i : shared_heap_alloc(%i, %lli) = %p", getpid(), id, size, ptr);
+#endif
+    if(ptr != NULL)
+    {
+        shared_heap_ctx *ctx = &shared_heaps[id];
+        debug_memory_by_tag_alloc_notify(ctx->mem_ctx, 0, size);
+    }
+#endif
+    return ptr;
 }
 
 void*
 shared_heap_wait_alloc(u8 id, size_t size)
 {
-    return shared_heap_wait_alloc_from_ctx(&shared_heaps[id], size);
+    void *ptr = shared_heap_wait_alloc_from_ctx(&shared_heaps[id], size);
+#if DEBUG && SHARED_HEAP_ALLOC_DEBUG
+#if SHARED_HEAP_ALLOC_PRINT
+    osformatln(termout, "%i : shared_heap_wait_alloc(%i, %lli) = %p", getpid(), id, size, ptr);
+#endif
+    if(ptr != NULL)
+    {
+        shared_heap_ctx *ctx = &shared_heaps[id];
+        debug_memory_by_tag_alloc_notify(ctx->mem_ctx, 0, size);
+    }
+#endif
+    return ptr;
 }
 
 void*
 shared_heap_try_alloc(u8 id, size_t size)
 {
-    return shared_heap_wait_alloc_from_ctx(&shared_heaps[id], size);
+    void *ptr = shared_heap_try_alloc_from_ctx(&shared_heaps[id], size);
+#if DEBUG && SHARED_HEAP_ALLOC_DEBUG
+#if SHARED_HEAP_ALLOC_PRINT
+    osformatln(termout, "%i : shared_heap_try_alloc(%i, %lli) = %p", getpid(), id, size, ptr);
+#endif
+    if(ptr != NULL)
+    {
+        shared_heap_ctx *ctx = &shared_heaps[id];
+        debug_memory_by_tag_alloc_notify(ctx->mem_ctx, 0, size);
+    }
+#endif
+    return ptr;
 }
 
 void
@@ -971,7 +1056,15 @@ shared_heap_free(void *ptr)
 {
     assert(ptr != NULL);
     struct shared_heap_free_bloc *bloc = (struct shared_heap_free_bloc *)&(((u8*)ptr)[-SHARED_HEAP_BLOC_SIZE]);
-    
+
+#if DEBUG && SHARED_HEAP_ALLOC_DEBUG
+    shared_heap_ctx *ctx = &shared_heaps[bloc->heap_index];
+#if SHARED_HEAP_ALLOC_PRINT
+    osformatln(termout, "%i : shared_heap_free(%p) of size=%i", getpid(), ptr, bloc->size);
+#endif
+    debug_memory_by_tag_free_notify(ctx->mem_ctx, 0, bloc->size);
+#endif
+
     shared_heap_free_from_ctx(&shared_heaps[bloc->heap_index], ptr);
 }
 
@@ -1097,6 +1190,77 @@ shared_heap_count_allocated(u8 id, size_t* totalp, size_t* countp)
     {
         *countp = count;
     }
+}
+
+void
+shared_heap_print_map(u8 id, size_t* totalp, size_t* countp)
+{
+#if DEBUG
+    struct shared_heap_ctx *ctx = &shared_heaps[id];
+
+    shared_heap_lock(ctx);
+
+    const void *ptr = ctx->base;
+    size_t size = ctx->size;
+
+    const struct shared_heap_bloc *header = (const struct shared_heap_bloc *)&(((u8*)ptr)[L1_DATA_LINE_SIZE]);
+    const struct shared_heap_bloc *footer = (const struct shared_heap_bloc *)&(((u8*)ptr)[size - L1_DATA_LINE_SIZE]);
+
+    size_t total = 0;
+    size_t count = 0;
+
+    u8 allocated = 255;
+    const u8 *range_start = NULL;
+
+    const struct shared_heap_bloc *bloc = header;
+
+    for(;;)
+    {
+        if(bloc >= footer)
+        {
+            if(range_start != NULL)
+            {
+                formatln("shared-heap[%i] [%p ; %p] %8x allocated=%i", id, range_start, ((u8*)bloc) - 1, (u8*)bloc - range_start, allocated);
+            }
+
+            break;
+        }
+
+        if(bloc->allocated != allocated)
+        {
+            if(range_start != NULL)
+            {
+                formatln("shared-heap[%i] [%p ; %p] %8x allocated=%i", id, range_start, ((u8*)bloc) - 1, (u8*)bloc - range_start, allocated);
+            }
+
+            range_start = (const u8*)bloc;
+            allocated = bloc->allocated;
+        }
+
+        if(bloc->allocated == 1)
+        {
+            total += bloc->real_size;
+            ++count;
+        }
+
+        const struct shared_heap_bloc *next_bloc = (const struct shared_heap_bloc*)&(((u8*)bloc)[bloc->real_size]);
+        bloc = next_bloc;
+    }
+
+    shared_heap_unlock(ctx);
+
+    if(totalp != NULL)
+    {
+        *totalp = total;
+    }
+
+    if(countp != NULL)
+    {
+        *countp = count;
+    }
+
+    formatln("shared-heap[%i] total=%llu count=%llu", id, total, count);
+#endif
 }
 
 /** @} */

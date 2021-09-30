@@ -285,6 +285,14 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
 }
 
 static void
+ctrl_query_server_shutdown_call()
+{
+    program_mode = SA_SHUTDOWN;
+    server_service_stop_nowait();
+    dnscore_shutdown();
+}
+
+static void
 ctrl_query_server_shutdown(message_data *mesg)
 {
     packet_unpack_reader_data pr;
@@ -314,10 +322,7 @@ ctrl_query_server_shutdown(message_data *mesg)
                 {
                     log_debug("ctrl: shutdown: in progress");
 
-                    program_mode = SA_SHUTDOWN;
-                    server_service_stop_nowait();
-
-                    dnscore_shutdown();
+                    ctrl_query_server_shutdown_call();
                 }
                 else
                 {

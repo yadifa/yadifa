@@ -58,6 +58,10 @@
 #include "module/zonesign.h"
 #endif
 
+#if HAS_YADIG
+#include "module/yadig.h"
+#endif
+
 #include <dnscore/logger_handle.h>
 #include <dnscore/config-cmdline.h>
 #include <dnscore/config_settings.h>
@@ -88,6 +92,10 @@ static const module_s *module_list[] =
 
 #if HAS_ZONESIGN
     &zonesign_program,
+#endif
+
+#if HAS_YADIG
+    &yadig_program,
 #endif
 
     NULL
@@ -133,7 +141,7 @@ module_program_print_help(const char *program_name, int help_count, int version_
 const module_s *
 module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
 {
-    const char *executable_name = filename_from_path(argv[0]);
+    // const char *executable_name = filename_from_path(argv[0]); // note: not used
 
     *is_executable_ptr = -1;
 
@@ -193,6 +201,12 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
                         return NULL;
                     }
                 }
+
+                formatln("'%s' isn't a command.\n", argv[2]);
+
+                module_program_print_help(argv[0], 1, 0);
+
+                return NULL;
             }
             else
             {
@@ -259,9 +273,11 @@ module_run_from_args(int *argcp, char *argv[])
     
     int argc = *argcp;
     int is_executable = -2;
-    
+
     const module_s *module = module_get_from_args(&argc, argv, &is_executable);
-    
+
+    module_arg_set(argv, argc);
+
     *argcp = argc;
     
     // at this point, the program to execute is known

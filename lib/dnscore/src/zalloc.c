@@ -98,7 +98,7 @@ extern logger_handle* g_system_logger;
 
 #if DNSCORE_HAS_ZALLOC_SUPPORT
 
-#define ZMALLOC_TAG 0x434f4c4c414d5a
+#define ZMALLOC_TAG 0x434f4c4c414d5a // ZMALLOC
 
 //#define ZALLOC_MMAP_BLOC_SIZE  0x20000  // 128K : for small usages
 //#define ZALLOC_MMAP_BLOC_SIZE  0x300000 //   3M : not enough to be in a 4M page, still a lot
@@ -199,6 +199,7 @@ static inline void* zalloc_line_head_get(u32 page_index)
 static inline void zalloc_line_head_set(u32 page_index, void *ptr)
 {
     yassert(ptr != NULL);
+    yassert((((intptr)ptr) & 7) == 0);
     line_sll[page_index] = ptr;
 }
 
@@ -230,6 +231,11 @@ zalloc_ptr_set_debug_range_compare(const void *node_a, const void *node_b)
 
 ptr_set_debug zalloc_pages_set = { NULL, zalloc_ptr_set_debug_range_compare};
 mutex_t zalloc_pages_set_mtx = MUTEX_INITIALIZER;
+
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+debug_memory_by_tag_context_t *zalloc_memory_by_tag_ctx = NULL;
+#endif
+
 #endif
 
 int
@@ -239,6 +245,12 @@ zalloc_init()
     {
         return SUCCESS;
     }
+
+#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    zalloc_memory_by_tag_ctx = debug_memory_by_tag_new_instance("zalloc");
+#endif
+#endif
     
     zalloc_init_done = TRUE;
     
@@ -283,6 +295,12 @@ zalloc_init()
 void
 zalloc_finalize()
 {
+#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_delete(zalloc_memory_by_tag_ctx);
+    zalloc_memory_by_tag_ctx = NULL;
+#endif
+#endif
 }
 
 /**
@@ -401,7 +419,7 @@ zalloc_lines(u32 page_index)
         header = (void**)data;
     }
 
-    *header = (void*)(~0); // the last header points to an impossible address    
+    *header = (void*)(~7); // the last header points to an impossible address
 
     zalloc_line_head_set(page_index, map_pointer);
 }
@@ -419,12 +437,22 @@ zalloc_lines(u32 page_index)
  */
 
 void*
-zalloc_line(u32 page_index)
+zalloc_line(u32 page_index
+#if ZALLOC_DEBUG && DNSCORE_DEBUG_HAS_BLOCK_TAG
+, u64 tag
+#endif
+)
 {
-    yassert(page_index < ZALLOC_PG_SIZE_COUNT);
-
 #if ZALLOC_DEBUG
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    yassert(page_index < ZALLOC_PG_SIZE_COUNT - 2);
+    page_index += 2;               // debug requires 16 more bytes
+#else
+    yassert(page_index < ZALLOC_PG_SIZE_COUNT - 1);
     page_index++;               // debug requires 8 more bytes
+#endif
+#else
+    yassert(page_index < ZALLOC_PG_SIZE_COUNT);
 #endif
     
     mutex_lock(&line_mutex[page_index]);
@@ -450,14 +478,30 @@ zalloc_line(u32 page_index)
 
 #if ZALLOC_DEBUG
     u64* hdr = (u64*)ret;       // the allocated memory is at hdr
-    *hdr = (page_index - 1) | 0x2a110c0000000000LL;      // the allocated slot number (offset by DEBUG)
-    
-    ret = (void**)(hdr + 1);    // the address returned (without the DEBUG header)
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    hdr[0] = (page_index - 2) | 0x2a110c0000000000LL;      // the allocated slot number (offset by DEBUG)
+    hdr[1] = tag; // TAG
+
+    debug_memory_by_tag_alloc_notify(zalloc_memory_by_tag_ctx, tag, (page_index - 2) << 3);
+
+    ret = (void**)(hdr + 2);    // the address returned (without the DEBUG header)
+#if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
+    memset(ret, 0xac, ((page_index - 1) << 3));
 #endif
+#else
+    *hdr = (page_index - 1) | 0x2a110c0000000000LL;      // the allocated slot number (offset by DEBUG)
+    ret = (void**)(hdr + 1);    // the address returned (without the DEBUG header)
 
 #if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
-    memset(ret, 0xac, ((page_index + 1) << 3) - sizeof(u64));
+    memset(ret, 0xac, ((page_index) << 3));
 #endif
+#endif // DNSCORE_DEBUG_HAS_BLOCK_TAG
+#else
+#if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
+    memset(ret, 0xac, ((page_index + 1) << 3));
+#endif
+#endif // ZALLOC_DEBUG
+
 
 #if ZALLOC_STATISTICS
     mutex_lock(&zalloc_statistics_mtx);
@@ -520,21 +564,34 @@ zfree_line_report(int page_index)
 void
 zfree_line(void* ptr, u32 page_index)
 {
-    yassert(page_index < ZALLOC_PG_SIZE_COUNT);
-    
     if(ptr != NULL)
     {
 #if ZALLOC_DEBUG
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+        yassert(page_index < ZALLOC_PG_SIZE_COUNT - 2);
+        page_index += 2;
+#else
+        yassert(page_index < ZALLOC_PG_SIZE_COUNT - 1);
         page_index++;
+#endif
+#else
+        yassert(page_index < ZALLOC_PG_SIZE_COUNT);
 #endif
         
         mutex_lock(&line_mutex[page_index]);
         
-#if ZALLOC_DEBUG
+#if HAS_ZALLOC_DEBUG_SUPPORT
+
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+        u64* hdr = (u64*)ptr;
+        hdr -= 2;
+        u64 tag = hdr[1];
+
+        debug_memory_by_tag_free_notify(zalloc_memory_by_tag_ctx, tag, (page_index - 2) << 3);
+#else
         u64* hdr = (u64*)ptr;
         hdr--;
-        
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#endif
         zalloc_range_s range = {(intptr)hdr,(intptr)hdr};
         ptr_node_debug *node;
         mutex_lock(&zalloc_pages_set_mtx);
@@ -560,8 +617,7 @@ zfree_line(void* ptr, u32 page_index)
             fflush(stderr);
             abort(); // memory not of the right size
         }
-#endif
-        
+
         u64 magic = *hdr;
         
         if((magic & 0xffffffff00000000LL) != 0x2a110c0000000000LL)
@@ -572,9 +628,15 @@ zfree_line(void* ptr, u32 page_index)
         }
         magic &= 0xffffffffLL;
 
-        if(magic != page_index - 1)
+        u32 expected_page_index;
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+        expected_page_index = page_index - 2;
+#else
+        expected_page_index = page_index - 1;
+#endif
+        if(magic != expected_page_index)
         {
-            fprintf(stderr, "address %p was tagged with the wrong index (buffer overrun symptom)",ptr);
+            fprintf(stderr, "address %p was tagged with the wrong index %i != %i (buffer overrun symptom)",ptr, (u32)magic, expected_page_index);
             fflush(stderr);
             abort();
         }
@@ -583,7 +645,7 @@ zfree_line(void* ptr, u32 page_index)
 #endif
 
 #if DNSCORE_DEBUG_ZALLOC_TRASHMEMORY
-        memset(ptr, 0xfe, (page_index + 1) << 3);
+        memset(((u8*)ptr) + 8, 0xfe, page_index << 3);
 #endif
 
 #if ZALLOC_STATISTICS
@@ -674,7 +736,11 @@ zallocatedtotal()
  */
 
 void*
-zalloc_unaligned(u32 size)
+zalloc_unaligned(u32 size
+#if ZALLOC_DEBUG && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    , u64 tag
+#endif
+)
 {
     yassert(size > 0);
 
@@ -683,7 +749,11 @@ zalloc_unaligned(u32 size)
     if(size <= 254)
     {
         u8 page_index = (size - 1) >> 3;
-        p = (u8*) zalloc_line(page_index);
+        p = (u8*) zalloc_line(page_index
+#if ZALLOC_DEBUG && DNSCORE_DEBUG_HAS_BLOCK_TAG
+            , tag
+#endif
+            );
         *p = page_index;
     }
     else

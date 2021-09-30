@@ -299,7 +299,7 @@ message_viewer_json_section_footer(message_viewer *mv, u32 section_idx, u16 coun
 
 
 static void
-message_viewer_json_question_record(message_viewer *mv, u8 *record_wire, u16 rclass, u16 rtype)
+message_viewer_json_question_record(message_viewer *mv, const u8 *record_wire, u16 rclass, u16 rtype)
 {
     if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
@@ -344,7 +344,7 @@ message_viewer_json_question_record(message_viewer *mv, u8 *record_wire, u16 rcl
 
 
 static void
-message_viewer_json_section_record(message_viewer *mv, u8 *record_wire, u8 section_idx)
+message_viewer_json_section_record(message_viewer *mv, const u8 *record_wire, u8 section_idx)
 {
     (void)section_idx;
 
@@ -415,6 +415,11 @@ message_viewer_json_section_record(message_viewer *mv, u8 *record_wire, u8 secti
     flushout();
 }
 
+static ya_result
+message_viewer_json_pseudosection_record_method(message_viewer *mv, const u8 *record_wire)
+{
+    return 0;
+}
 
 static const message_viewer_vtbl json_viewer_vtbl = {
         message_viewer_json_header,
@@ -424,6 +429,7 @@ static const message_viewer_vtbl json_viewer_vtbl = {
         message_viewer_json_section_footer,
         message_viewer_json_question_record,
         message_viewer_json_section_record,
+        message_viewer_json_pseudosection_record_method,
         "message_viewer_json",
 };
 

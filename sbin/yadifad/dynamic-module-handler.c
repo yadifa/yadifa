@@ -68,6 +68,12 @@ struct dynamic_module_statistics_interface_chain *g_dynamic_module_statistics_in
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
+#define YDYNMOD_TAG 0x444f4d4e594459
+#define YDYNMODA_TAG 0x41444f4d4e594459
+#define YDYNMODI_TAG 0x49444f4d4e594459
+#define YDYNMODK_TAG 0x4b444f4d4e594459
+#define YDYNMODS_TAG 0x53444f4d4e594459
+
 logger_handle *g_module_logger = LOGGER_HANDLE_SINK;
 #define CALLER_NAME "yadifad"
 
@@ -208,10 +214,10 @@ dynamic_module_handler_load(int argc, const char **argv)
             }
             
             log_debug("module: '%s': got the entry point", shared_object_path);
-            
+
             struct dynamic_module *module;
-            MALLOC_OBJECT_OR_DIE(module, struct dynamic_module, GENERIC_TAG);
-            MALLOC_OBJECT_ARRAY_OR_DIE(module->args.argv, char*, argc, GENERIC_TAG);
+            MALLOC_OBJECT_OR_DIE(module, struct dynamic_module, YDYNMOD_TAG);
+            MALLOC_OBJECT_ARRAY_OR_DIE(module->args.argv, char*, argc, YDYNMODA_TAG);
             module->so = so;
             module->entry_point = (dynamic_module_interface_init*)f;
             module->path = strdup(shared_object_path);
@@ -250,7 +256,7 @@ dynamic_module_handler_load(int argc, const char **argv)
                     }
                     
                     struct dynamic_module_interface_chain *ic;
-                    MALLOC_OBJECT_OR_DIE(ic, struct dynamic_module_interface_chain, GENERIC_TAG);
+                    MALLOC_OBJECT_OR_DIE(ic, struct dynamic_module_interface_chain, YDYNMODI_TAG);
                     ic->next = g_dynamic_module_interface_chain;
                     ic->module = module;
                     ++module->rc;
@@ -303,7 +309,7 @@ dynamic_module_handler_load(int argc, const char **argv)
                     }
                     
                     struct dynamic_module_dnskey_interface_chain *ic;
-                    MALLOC_OBJECT_OR_DIE(ic, struct dynamic_module_dnskey_interface_chain, GENERIC_TAG);
+                    MALLOC_OBJECT_OR_DIE(ic, struct dynamic_module_dnskey_interface_chain, YDYNMODK_TAG);
                     ic->next = g_dynamic_module_dnskey_interface_chain;
                     ic->module = module;
                     ++module->rc;
@@ -331,7 +337,7 @@ dynamic_module_handler_load(int argc, const char **argv)
                     }
                     
                     struct dynamic_module_statistics_interface_chain *ic;
-                    MALLOC_OBJECT_OR_DIE(ic, struct dynamic_module_statistics_interface_chain, GENERIC_TAG);
+                    MALLOC_OBJECT_OR_DIE(ic, struct dynamic_module_statistics_interface_chain, YDYNMODS_TAG);
                     ic->next = g_dynamic_module_statistics_interface_chain;
                     ic->module = module;
                     ++module->rc;

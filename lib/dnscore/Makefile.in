@@ -334,12 +334,13 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/acl.c \
 	src/cmdline.c src/concat_input_stream.c src/config-cmdline.c \
 	src/config_file_reader.c src/config_key.c src/config_logger.c \
 	src/config_settings.c src/config_struct.c \
-	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
-	src/digest_sha256.c src/digest_sha384.c src/digest_sha512.c \
-	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
-	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
-	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
-	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
+	src/counter_output_stream.c src/debug.c src/digest_rawdata.c \
+	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
+	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
+	src/dnscore.c src/dnsformat.c src/dnskey.c \
+	src/dnskey-keyring.c src/dnskey_dsa.c src/dnskey_ecdsa.c \
+	src/dnskey_eddsa.c src/dnskey_rsa.c src/dnskey-signature.c \
+	src/dnsname.c src/empty-input-stream.c src/error_state.c \
 	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
 	src/file-pool.c src/filesystem-file.c src/format.c src/hash.c \
 	src/hash-table-values.c src/hmac-openssl.c src/host_address.c \
@@ -389,12 +390,13 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/acl.lo src/acl-config.lo \
 	src/config_file_reader.lo src/config_key.lo \
 	src/config_logger.lo src/config_settings.lo \
 	src/config_struct.lo src/counter_output_stream.lo src/debug.lo \
-	src/digest_sha1.lo src/digest_sha256.lo src/digest_sha384.lo \
-	src/digest_sha512.lo src/dns-udp.lo src/dns_resource_record.lo \
-	src/dnscore.lo src/dnsformat.lo src/dnskey.lo \
-	src/dnskey-keyring.lo src/dnskey_dsa.lo src/dnskey_ecdsa.lo \
-	src/dnskey_rsa.lo src/dnskey-signature.lo src/dnsname.lo \
-	src/empty-input-stream.lo src/fdtools.lo \
+	src/digest_rawdata.lo src/digest_sha1.lo src/digest_sha256.lo \
+	src/digest_sha384.lo src/digest_sha512.lo src/dns-udp.lo \
+	src/dns_resource_record.lo src/dnscore.lo src/dnsformat.lo \
+	src/dnskey.lo src/dnskey-keyring.lo src/dnskey_dsa.lo \
+	src/dnskey_ecdsa.lo src/dnskey_eddsa.lo src/dnskey_rsa.lo \
+	src/dnskey-signature.lo src/dnsname.lo \
+	src/empty-input-stream.lo src/error_state.lo src/fdtools.lo \
 	src/file_input_stream.lo src/file_output_stream.lo \
 	src/file-pool.lo src/filesystem-file.lo src/format.lo \
 	src/hash.lo src/hash-table-values.lo src/hmac-openssl.lo \
@@ -497,10 +499,10 @@ am__pkginclude_HEADERS_DIST = $(I)/alarm.h $(I)/acl.h \
 	$(I)/dns_resource_record.h $(I)/dnscore.h \
 	$(I)/dnscore-release-date.h $(I)/dnsformat.h $(I)/dnskey.h \
 	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
-	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
-	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
-	$(I)/empty-input-stream.h $(I)/fdtools.h $(I)/file.h \
-	$(I)/file_input_stream.h $(I)/file_output_stream.h \
+	$(I)/dnskey_eddsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
+	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/empty-input-stream.h $(I)/error_state.h $(I)/fdtools.h \
+	$(I)/file.h $(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/file-pool.h $(I)/filesystem-file.h $(I)/fingerprint.h \
 	$(I)/format.h $(I)/hash.h $(I)/hmac.h $(I)/host_address.h \
 	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
@@ -632,8 +634,8 @@ HAS_CTRL = @HAS_CTRL@
 HAS_DNSSEC_TOOLS = @HAS_DNSSEC_TOOLS@
 HAS_DYNUPDATE_SUPPORT = @HAS_DYNUPDATE_SUPPORT@
 HAS_ECDSA_SUPPORT = @HAS_ECDSA_SUPPORT@
+HAS_EDDSA = @HAS_EDDSA@
 HAS_EVENT_DYNAMIC_MODULE = @HAS_EVENT_DYNAMIC_MODULE@
-HAS_FILEPOOL_CACHE = @HAS_FILEPOOL_CACHE@
 HAS_FULL_ASCII7 = @HAS_FULL_ASCII7@
 HAS_KEYGEN = @HAS_KEYGEN@
 HAS_LIBC_MALLOC_DEBUG_SUPPORT = @HAS_LIBC_MALLOC_DEBUG_SUPPORT@
@@ -655,7 +657,6 @@ HAS_RRL_SUPPORT = @HAS_RRL_SUPPORT@
 HAS_RRSIG_MANAGEMENT_SUPPORT = @HAS_RRSIG_MANAGEMENT_SUPPORT@
 HAS_SYNC_BUILTINS = @HAS_SYNC_BUILTINS@
 HAS_SYSTEMD_RESOLVED_AVOIDANCE = @HAS_SYSTEMD_RESOLVED_AVOIDANCE@
-HAS_TCP_MANAGER = @HAS_TCP_MANAGER@
 HAS_TESTS = @HAS_TESTS@
 HAS_TOOLS = @HAS_TOOLS@
 HAS_TRACK_ZONES_DEBUG_SUPPORT = @HAS_TRACK_ZONES_DEBUG_SUPPORT@
@@ -833,12 +834,13 @@ libdnscore_la_SOURCES = src/alarm.c src/acl.c src/acl-config.c \
 	src/concat_input_stream.c src/config-cmdline.c \
 	src/config_file_reader.c src/config_key.c src/config_logger.c \
 	src/config_settings.c src/config_struct.c \
-	src/counter_output_stream.c src/debug.c src/digest_sha1.c \
-	src/digest_sha256.c src/digest_sha384.c src/digest_sha512.c \
-	src/dns-udp.c src/dns_resource_record.c src/dnscore.c \
-	src/dnsformat.c src/dnskey.c src/dnskey-keyring.c \
-	src/dnskey_dsa.c src/dnskey_ecdsa.c src/dnskey_rsa.c \
-	src/dnskey-signature.c src/dnsname.c src/empty-input-stream.c \
+	src/counter_output_stream.c src/debug.c src/digest_rawdata.c \
+	src/digest_sha1.c src/digest_sha256.c src/digest_sha384.c \
+	src/digest_sha512.c src/dns-udp.c src/dns_resource_record.c \
+	src/dnscore.c src/dnsformat.c src/dnskey.c \
+	src/dnskey-keyring.c src/dnskey_dsa.c src/dnskey_ecdsa.c \
+	src/dnskey_eddsa.c src/dnskey_rsa.c src/dnskey-signature.c \
+	src/dnsname.c src/empty-input-stream.c src/error_state.c \
 	src/fdtools.c src/file_input_stream.c src/file_output_stream.c \
 	src/file-pool.c src/filesystem-file.c src/format.c src/hash.c \
 	src/hash-table-values.c src/hmac-openssl.c src/host_address.c \
@@ -891,10 +893,10 @@ pkginclude_HEADERS = $(I)/alarm.h $(I)/acl.h $(I)/acl-config.h \
 	$(I)/dns-udp.h $(I)/dns_resource_record.h $(I)/dnscore.h \
 	$(I)/dnscore-release-date.h $(I)/dnsformat.h $(I)/dnskey.h \
 	$(I)/dnskey-keyring.h $(I)/dnskey_dsa.h $(I)/dnskey_ecdsa.h \
-	$(I)/dnskey_rsa.h $(I)/dnskey-signature.h $(I)/dnsname.h \
-	$(I)/dnsname_set.h $(I)/dnssec_errors.h \
-	$(I)/empty-input-stream.h $(I)/fdtools.h $(I)/file.h \
-	$(I)/file_input_stream.h $(I)/file_output_stream.h \
+	$(I)/dnskey_eddsa.h $(I)/dnskey_rsa.h $(I)/dnskey-signature.h \
+	$(I)/dnsname.h $(I)/dnsname_set.h $(I)/dnssec_errors.h \
+	$(I)/empty-input-stream.h $(I)/error_state.h $(I)/fdtools.h \
+	$(I)/file.h $(I)/file_input_stream.h $(I)/file_output_stream.h \
 	$(I)/file-pool.h $(I)/filesystem-file.h $(I)/fingerprint.h \
 	$(I)/format.h $(I)/hash.h $(I)/hmac.h $(I)/host_address.h \
 	$(I)/hsdllist.h $(I)/identity.h $(I)/input_stream.h \
@@ -1055,6 +1057,8 @@ src/config_struct.lo: src/$(am__dirstamp) \
 src/counter_output_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/debug.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/digest_rawdata.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 src/digest_sha1.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/digest_sha256.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1072,12 +1076,14 @@ src/dnskey-keyring.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_dsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_ecdsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+src/dnskey_eddsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey_rsa.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/dnskey-signature.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/dnsname.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/empty-input-stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/error_state.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/fdtools.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/file_input_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
@@ -1258,6 +1264,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/config_struct.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/counter_output_stream.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/debug.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_rawdata.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha1.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha256.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/digest_sha384.Plo@am__quote@
@@ -1271,9 +1278,11 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_dsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_ecdsa.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_eddsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnskey_rsa.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/dnsname.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/empty-input-stream.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/error_state.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/fdtools.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file-pool.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/file_input_stream.Plo@am__quote@

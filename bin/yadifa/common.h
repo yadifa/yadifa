@@ -148,6 +148,10 @@ const char *filename_from_path(const char *fullpath);
 
 int module_verbosity_level();
 
+void module_arg_set(char **argv, int argc);
+int module_arg_count();
+const char *module_arg_get(int index);
+
 #ifdef __cplusplus
 }
 #endif

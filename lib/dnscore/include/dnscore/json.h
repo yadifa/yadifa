@@ -44,8 +44,6 @@
 
 #pragma once
 
-#include "dnscore/dnscore-config.h"
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>

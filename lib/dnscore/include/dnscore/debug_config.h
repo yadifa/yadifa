@@ -41,6 +41,8 @@
 #ifndef _DEBUG_CONFIG_H
 #define	_DEBUG_CONFIG_H
 
+#if DEBUG
+
 #ifdef	__cplusplus
 extern "C"
 {
@@ -140,14 +142,16 @@ extern "C"
 #define DNSCORE_DEBUG_KEEP_STACKTRACE 1
     
 #define DEBUG_BENCH_FD 1
-#if !DEBUG
-#undef  DEBUG_BENCH_FD
-#define DEBUG_BENCH_FD 0
-#endif
-    
+
 #ifdef	__cplusplus
 }
 #endif
+
+#else // !DEBUG
+
+#define DEBUG_BENCH_FD 0
+
+#endif // DEBUG
 
 #endif	/* _DEBUG_CONFIG_H */
 

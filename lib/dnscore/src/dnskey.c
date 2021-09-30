@@ -86,6 +86,7 @@ extern logger_handle* g_system_logger;
 #define ZDB_DNSKEY_NAME_TAG     0x454d414e59454b
 
 #define ORIGNDUP_TAG 0x5055444e4749524f
+#define DNSKRAWB_TAG 0x425741524b534e44
 
 // dumps key acquisition/release
 #define DUMP_ACQUIRE_RELEASE_STACK_TRACE 0
@@ -424,7 +425,7 @@ dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, pars
                         return n;
                     }
 
-                    ZALLOC_OBJECT_ARRAY_OR_DIE(raw->buffer, u8, n, GENERIC_TAG);
+                    ZALLOC_OBJECT_ARRAY_OR_DIE(raw->buffer, u8, n, DNSKRAWB_TAG);
                     memcpy(raw->buffer, tmp_out, n);
                     raw->size = n;
 

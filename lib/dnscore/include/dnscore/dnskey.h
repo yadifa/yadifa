@@ -50,7 +50,7 @@
 #include <dnscore/digest.h>
 #include <dnscore/mutex.h>
 #include <dnscore/output_stream.h>
-#include "dns_resource_record.h"
+#include <dnscore/dns_resource_record.h>
 
 #define DNSSEC_MINIMUM_KEY_SIZE     512             // bits
 #define DNSSEC_MAXIMUM_KEY_SIZE     (8192 + 128)    // bits

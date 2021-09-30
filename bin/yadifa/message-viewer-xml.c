@@ -298,7 +298,7 @@ message_viewer_xml_section_footer(message_viewer *mv, u32 section_idx, u16 count
 
 
 static void
-message_viewer_xml_question_record(message_viewer *mv, u8 *record_wire, u16 rclass, u16 rtype)
+message_viewer_xml_question_record(message_viewer *mv, const u8 *record_wire, u16 rclass, u16 rtype)
 {
     if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
@@ -343,7 +343,7 @@ message_viewer_xml_question_record(message_viewer *mv, u8 *record_wire, u16 rcla
 
 
 static void
-message_viewer_xml_section_record(message_viewer *mv, u8 *record_wire, u8 section_idx)
+message_viewer_xml_section_record(message_viewer *mv, const u8 *record_wire, u8 section_idx)
 {
     (void)section_idx;
 
@@ -363,8 +363,8 @@ message_viewer_xml_section_record(message_viewer *mv, u8 *record_wire, u8 sectio
 
 
     /* 1. get the needed parameters: FQDN, TYPE, CLASS, TTL, RDATA size */
-    u8 *rname = record_wire;
-    u8 *rdata = rname + dnsname_len(rname);
+    const u8 *rname = record_wire;
+    const u8 *rdata = rname + dnsname_len(rname);
     u16 rtype = GET_U16_AT(rdata[0]);
     u16 rclass = GET_U16_AT(rdata[2]);
     u32 rttl = ntohl(GET_U32_AT(rdata[4]));
@@ -414,6 +414,13 @@ message_viewer_xml_section_record(message_viewer *mv, u8 *record_wire, u8 sectio
     flushout();
 }
 
+static ya_result
+message_viewer_xml_pseudosection_record(message_viewer *mv, const u8 *record_wire)
+{
+    (void)mv;
+    (void)record_wire;
+    return SUCCESS;
+}
 
 static const message_viewer_vtbl xml_viewer_vtbl = {
         message_viewer_xml_header,
@@ -423,6 +430,7 @@ static const message_viewer_vtbl xml_viewer_vtbl = {
         message_viewer_xml_section_footer,
         message_viewer_xml_question_record,
         message_viewer_xml_section_record,
+        message_viewer_xml_pseudosection_record,
         "message_viewer_xml",
 };
 

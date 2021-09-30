@@ -72,6 +72,7 @@
 #include <dnscore/buffer_input_stream.h>
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/rfc.h>
+#include <dnscore/serial.h>
 
 #include "dnsdb/journal.h"
 //#include "dnsdb/journal_ix.h"

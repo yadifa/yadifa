@@ -537,7 +537,7 @@ dnskey_dsa_public_store(DSA* dsa, u8* output_buffer, u32 output_buffer_size)
 }
 
 static u32
-dnskey_dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata, u32 rdata_size)
+dnskey_dsa_dnskey_public_store(const dnssec_key* key, u8 *rdata, size_t rdata_size)
 {
     u32 len;
     

@@ -55,7 +55,7 @@ extern "C"
 {
 #endif
 
-#define AVL_NODE_TAG 0x0045444F4E4c5641 /* "AVLNODE" */
+#define DATABASE_AVL_NODE_TAG 0x0045444F4E4c5641 /* "AVLNODE" */
 
 /*
  * In the worst case, AVL is Fibonacci-balanced.

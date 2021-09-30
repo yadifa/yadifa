@@ -74,4 +74,6 @@ struct shared_heap_ctx *shared_heap_context_from_id(u8 id);
 void* shared_heap_wait_alloc(u8 id, size_t size);
 void shared_heap_count_allocated(u8 id, size_t* totalp, size_t* countp);
 
+void shared_heap_print_map(u8 id, size_t* totalp, size_t* countp);
+
 /** @} */

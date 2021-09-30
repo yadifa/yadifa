@@ -91,7 +91,7 @@ log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, ssize_
     
     while(size > line_size)
     {
-        osprint_dump(&os, data_pointer, line_size, line_size, flags);        
+        osprint_dump_with_base(&os, data_pointer, line_size, line_size, flags, data_pointer_);
         
         u32 buffer_size = bytearray_output_stream_size(&os);
         
@@ -129,7 +129,7 @@ void log_msghdr(logger_handle* hndl, u32 level, struct msghdr *hdr)
     if(hdr->msg_name != NULL )
     {
         logger_handle_msg(hndl, level, "msg_name: %{sockaddr}", hdr->msg_name);
-        log_memdump_ex(hndl, level, hdr->msg_name, hdr->msg_namelen, 32, OSPRINT_DUMP_ALL);
+        log_memdump_ex(hndl, level, hdr->msg_name, hdr->msg_namelen, 32, OSPRINT_DUMP_BUFFER);
         
     }
     else
@@ -145,7 +145,7 @@ void log_msghdr(logger_handle* hndl, u32 level, struct msghdr *hdr)
             if(msg_iov->iov_base != NULL)
             {
                 logger_handle_msg(hndl, level, "msg_iov[%i]:", i);
-                log_memdump_ex(hndl, level, msg_iov->iov_base, msg_iov->iov_len, 32, OSPRINT_DUMP_ALL);
+                log_memdump_ex(hndl, level, msg_iov->iov_base, msg_iov->iov_len, 32, OSPRINT_DUMP_BUFFER);
             }
             else
             {
@@ -161,7 +161,7 @@ void log_msghdr(logger_handle* hndl, u32 level, struct msghdr *hdr)
     if(hdr->msg_control != NULL)
     {
         logger_handle_msg(hndl, level, "msg_control:");
-        log_memdump_ex(hndl, level, hdr->msg_control, hdr->msg_controllen, 32, OSPRINT_DUMP_ALL);
+        log_memdump_ex(hndl, level, hdr->msg_control, hdr->msg_controllen, 32, OSPRINT_DUMP_BUFFER);
     }
     else
     {

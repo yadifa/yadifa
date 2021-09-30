@@ -220,6 +220,22 @@ packet_reader_read_u16(packet_unpack_reader_data* reader, u16 *val)
 }
 
 ya_result
+packet_reader_skip_bytes(packet_unpack_reader_data* reader, u16 count)
+{
+    u32 remaining = reader->packet_size - reader->offset;
+
+    if(remaining >= count)
+    {
+        reader->offset += count;
+        return count;
+    }
+    else
+    {
+        return UNEXPECTED_EOF;
+    }
+}
+
+ya_result
 packet_reader_read_dnstype(packet_unpack_reader_data* reader)
 {
     u32 remaining = reader->packet_size - reader->offset;

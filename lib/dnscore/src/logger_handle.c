@@ -107,6 +107,7 @@ void thread_tag_push_tags();
 
 #define DEBUG_LOG_HANDLER 0     // can be: 0 1 2, don't use for production
 #define DEBUG_LOG_MESSAGES 0
+#define DEBUG_LOG_REGISTRATIONS 0
 
 #if DEBUG_LOG_MESSAGES
 # pragma message("DEBUG_LOG_MESSAGES") // the space after the '#' is to ignore it on #pragma search
@@ -1359,7 +1360,8 @@ static void*
 logger_client_dispatcher_thread(void* context)
 {
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("loggercl");
+    static char loggercl_thread_tag[9] = "loggercl";
+    logger_handle_set_thread_tag(loggercl_thread_tag);
 #endif
     
     int sockfd;
@@ -1579,7 +1581,8 @@ static void*
 logger_server_dispatcher_thread(void* context)
 {
 #if DNSCORE_HAS_LOG_THREAD_TAG
-    logger_handle_set_thread_tag("loggersr");
+    static char loggersr_thread_tag[9] = "loggersr";
+    logger_handle_set_thread_tag(loggersr_thread_tag);
 #endif
     int sockfd = ipc_server_listen("logger");
     int ret;
@@ -1811,11 +1814,11 @@ logger_dispatcher_thread(void* context)
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 
 #if HAS_SHARED_QUEUE_SUPPORT
-                    osprint_u16(&baos, message->pid);
+                    format_dec_u64(message->pid, &baos, 6, ' ', FALSE);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 #else
 #if DEBUG || HAS_LOG_PID
-                    osprint_u16(&baos, message->text.pid);
+                    format_dec_u64(message->text.pid, &baos, 6, ' ', FALSE);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 #endif
 #endif
@@ -2453,6 +2456,7 @@ logger_dispatcher_thread(void* context)
             {
                 async_wait_s *awp = message->thread_set_tag.aw;
 #if DEBUG
+#if DEBUG_LOG_REGISTRATIONS
                 printf("logger: registering: pid=%i thread=%p tag=%c%c%c%c%c%c%c%c (printf)\n",
                               message->pid, (void*)(intptr_t)message->thread_set_tag.tid,
                               message->thread_set_tag.tag[0],message->thread_set_tag.tag[1],message->thread_set_tag.tag[2],message->thread_set_tag.tag[3],
@@ -2462,11 +2466,14 @@ logger_dispatcher_thread(void* context)
                        message->thread_set_tag.tag[0],message->thread_set_tag.tag[1],message->thread_set_tag.tag[2],message->thread_set_tag.tag[3],
                        message->thread_set_tag.tag[4],message->thread_set_tag.tag[5],message->thread_set_tag.tag[6],message->thread_set_tag.tag[7]);
 #endif
+#endif
 #if DEBUG
+#if DEBUG_LOG_REGISTRATIONS
                 log_try_debug("logger: registering: pid=%i thread=%p tag=%c%c%c%c%c%c%c%c (log_try_debug)",
                               message->pid, message->thread_set_tag.tid,
                               message->thread_set_tag.tag[0],message->thread_set_tag.tag[1],message->thread_set_tag.tag[2],message->thread_set_tag.tag[3],
                               message->thread_set_tag.tag[4],message->thread_set_tag.tag[5],message->thread_set_tag.tag[6],message->thread_set_tag.tag[7]);
+#endif
 #endif
                 thread_set_tag_with_pid_and_tid(message->pid, message->thread_set_tag.tid, message->thread_set_tag.tag);
                 

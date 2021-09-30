@@ -58,7 +58,9 @@
 
 #if defined(__GLIBC__) || defined(__APPLE__)
     #include <execinfo.h>
-    #if HAS_BFD_DEBUG_SUPPORT
+#include <dnscore/shared-heap.h>
+
+#if HAS_BFD_DEBUG_SUPPORT
         #include <bfd.h>
         #ifndef DMGL_PARAMS
             #define DMGL_PARAMS      (1 << 0)       /* Include function args */
@@ -90,6 +92,10 @@
 #define DNSCORE_DEBUG_STACKTRACE 0
 #endif
 
+#if defined(__linux__)
+#define DNSCORE_DEBUG_MMAP 1
+#endif
+
 #ifdef    __cplusplus
 extern "C" output_stream __termout__;
 extern "C" output_stream __termerr__;
@@ -100,6 +106,24 @@ extern output_stream __termerr__;
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
+
+struct debug_mmap_s
+{
+    void *addr;
+    size_t len;
+    int prot;
+    int flags;
+    int fildes;
+    off_t off;
+    s64 ts;
+    stacktrace trace;
+    void *mapped;
+};
+
+typedef struct debug_mmap_s debug_mmap_t;
+
+static ptr_set_debug debug_mmap_set = PTR_SET_DEBUG_EMPTY;
+static pthread_mutex_t debug_mmap_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 #if HAS_LIBC_MALLOC_DEBUG_SUPPORT
 
@@ -159,6 +183,262 @@ void debug_malloc_hook_caller_dump();
 
 #define MALLOC_PADDING  8
 #define MALLOC_REALSIZE(mr_size_) ((mr_size_+(MALLOC_PADDING-1))&(-MALLOC_PADDING))
+
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+struct debug_memory_by_tag_info_s
+{
+    s64 allocated_bytes_peak;
+    s64 allocated_count_total;
+    s64 freed_count_total;
+
+    s64 allocated_count_peak;
+    s64 allocated_bytes_total;
+    s64 freed_bytes_total;
+
+    s64 size;
+};
+
+typedef struct debug_memory_by_tag_info_s debug_memory_by_tag_info_t;
+
+struct debug_memory_by_tag_context_s
+{
+    u64_set_debug info_set;
+    pthread_mutex_t mtx;
+
+    s64 allocated_bytes_peak;
+    s64 allocated_count_total;
+    s64 freed_count_total;
+
+    s64 allocated_count_peak;
+    s64 allocated_bytes_total;
+    s64 freed_bytes_total;
+
+    const char *name;
+};
+
+typedef struct debug_memory_by_tag_context_s debug_memory_by_tag_context_t;
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+static debug_memory_by_tag_context_t malloc_debug_memory_by_tag_ctx;
+#endif
+
+static debug_memory_by_tag_context_t *debug_memory_by_tag_contexts[8] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+static pthread_mutex_t debug_memory_by_tag_contexts_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+static void
+debug_memory_by_tag_context_register(debug_memory_by_tag_context_t* ctx)
+{
+    pthread_mutex_lock(&debug_memory_by_tag_contexts_mtx);
+    for(int i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)); ++i)
+    {
+        if(debug_memory_by_tag_contexts[i] == NULL)
+        {
+            debug_memory_by_tag_contexts[i] = ctx;
+            break;
+        }
+
+        if(debug_memory_by_tag_contexts[i] == ctx)
+        {
+            break;
+        }
+    }
+    pthread_mutex_unlock(&debug_memory_by_tag_contexts_mtx);
+}
+
+static void
+debug_memory_by_tag_context_unregister(debug_memory_by_tag_context_t* ctx)
+{
+    pthread_mutex_lock(&debug_memory_by_tag_contexts_mtx);
+    for(int i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)); ++i)
+    {
+        if(debug_memory_by_tag_contexts[i] == ctx)
+        {
+            for(;i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)) - 1; ++i)
+            {
+                debug_memory_by_tag_contexts[i] = debug_memory_by_tag_contexts[i + 1];
+            }
+            debug_memory_by_tag_contexts[sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*) - 1] = NULL;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&debug_memory_by_tag_contexts_mtx);
+}
+
+debug_memory_by_tag_context_t*
+debug_memory_by_tag_new_instance(const char* name)
+{
+    debug_memory_by_tag_context_t *ctx = (debug_memory_by_tag_context_t*)malloc(sizeof(debug_memory_by_tag_context_t));
+    if(ctx != NULL)
+    {
+        debug_memory_by_tag_init(ctx, name);
+    }
+    return ctx;
+}
+
+void
+debug_memory_by_tag_delete(debug_memory_by_tag_context_t *ctx)
+{
+    if(ctx != NULL)
+    {
+        debug_memory_by_tag_finalize(ctx);
+        free(ctx);
+    }
+}
+
+void
+debug_memory_by_tag_init(debug_memory_by_tag_context_t *ctx, const char* name)
+{
+    ZEROMEMORY(ctx, sizeof(debug_memory_by_tag_context_t));
+    u64_set_debug_init(&ctx->info_set);
+    pthread_mutex_init(&ctx->mtx, NULL);
+    ctx->name = name;
+    debug_memory_by_tag_context_register(ctx);
+}
+
+static void
+debug_memory_by_tag_finalize_cb(u64_node_debug *node)
+{
+    free(node->value);
+    node->value = NULL;
+}
+
+void
+debug_memory_by_tag_finalize(debug_memory_by_tag_context_t *ctx)
+{
+    debug_memory_by_tag_context_unregister(ctx);
+    pthread_mutex_lock(&ctx->mtx);
+    u64_set_debug_callback_and_destroy(&ctx->info_set, debug_memory_by_tag_finalize_cb);
+    pthread_mutex_unlock(&ctx->mtx);
+    pthread_mutex_destroy(&ctx->mtx);
+}
+#define ZDB_RECORD_TAG      0x4443455242445a    /** "ZDBRECD" */
+
+void break_here()
+{
+
+}
+
+void
+debug_memory_by_tag_alloc_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s64 size)
+{
+    if(tag == ZDB_RECORD_TAG)
+    {
+        break_here();
+    }
+
+    pthread_mutex_lock(&ctx->mtx);
+    debug_memory_by_tag_info_t *info;
+    u64_node_debug *node = u64_set_debug_insert(&ctx->info_set, tag);
+    if(node->value != NULL)
+    {
+        info = (debug_memory_by_tag_info_t *)node->value;
+    }
+    else
+    {
+        info = (debug_memory_by_tag_info_t*)malloc(sizeof(debug_memory_by_tag_info_t));
+        ZEROMEMORY(info, sizeof(debug_memory_by_tag_info_t));
+        info->size = size;
+        node->value = info;
+    }
+
+    ++info->allocated_count_total;
+    info->allocated_bytes_total += (s64)size;
+    info->allocated_count_peak = MAX(info->allocated_count_peak, info->allocated_count_total - info->freed_count_total);
+    info->allocated_bytes_peak = MAX(info->allocated_bytes_peak, info->allocated_bytes_total - info->freed_bytes_total);
+
+    ++ctx->allocated_count_total;
+    ctx->allocated_bytes_total += (s64)size;
+    ctx->allocated_count_peak = MAX(ctx->allocated_count_peak, ctx->allocated_count_total - ctx->freed_count_total);
+    ctx->allocated_bytes_peak = MAX(ctx->allocated_bytes_peak, ctx->allocated_bytes_total - ctx->freed_bytes_total);
+    
+    
+    pthread_mutex_unlock(&ctx->mtx);
+}
+
+void
+debug_memory_by_tag_free_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s64 size)
+{
+    pthread_mutex_lock(&ctx->mtx);
+    debug_memory_by_tag_info_t *info;
+    u64_node_debug *node = u64_set_debug_insert(&ctx->info_set, tag);
+    if(node->value != NULL)
+    {
+        info = (debug_memory_by_tag_info_t *)node->value;
+    }
+    else
+    {
+        info = (debug_memory_by_tag_info_t*)malloc(sizeof(debug_memory_by_tag_info_t));
+        ZEROMEMORY(info, sizeof(debug_memory_by_tag_info_t));
+        node->value = info;
+    }
+
+    ++info->freed_count_total;
+    info->freed_bytes_total += size;
+
+    ++ctx->freed_count_total;
+    ctx->freed_bytes_total += size;
+
+    pthread_mutex_unlock(&ctx->mtx);
+}
+
+void
+debug_memory_by_tag_print(debug_memory_by_tag_context_t *ctx, output_stream *os)
+{
+    pthread_mutex_lock(&ctx->mtx);
+    s64 now = timeus();
+
+    osformatln(os,"debug_memory: %s set: %llT %lli", ctx->name, now, now);
+
+    u64_set_debug_iterator iter;
+    u64_set_debug_iterator_init(&ctx->info_set, &iter);
+
+    osprintln(os,"    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| peak c   |");
+    while(u64_set_debug_iterator_hasnext(&iter))
+    {
+        u64_node_debug *node = u64_set_debug_iterator_next_node(&iter);
+        debug_memory_by_tag_info_t *info = (debug_memory_by_tag_info_t*)node->value;
+        char tag_name[sizeof(node->key)];
+        u64 *tag_namep = (u64*)&tag_name[0];
+        *tag_namep = node->key;
+        for(int i = 0; i < (int)sizeof(node->key); ++i)
+        {
+            if(tag_name[i] == '\0') // scan-build false positive: tag_name has been fully initialised 4 lines above.
+            {
+                tag_name[i] = 32;
+            }
+        }
+
+        output_stream_write(os, "TAG ", 4);
+        output_stream_write(os, tag_name, sizeof(tag_name));
+        osformatln(os, " | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli",
+                 info->allocated_bytes_total,
+                 info->freed_bytes_total,
+                 info->allocated_bytes_total - info->freed_bytes_total,
+                 info->allocated_bytes_peak,
+
+                 info->allocated_count_total,
+                 info->freed_count_total,
+                 info->allocated_count_total - info->freed_count_total,
+                 info->allocated_count_peak);
+    }
+    //                  TAG XXXXXXXX
+    osformatln(os, "    TOTAL    | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli",
+               ctx->allocated_bytes_total,
+               ctx->freed_bytes_total,
+               ctx->allocated_bytes_total - ctx->freed_bytes_total,
+               ctx->allocated_bytes_peak,
+
+               ctx->allocated_count_total,
+               ctx->freed_count_total,
+               ctx->allocated_count_total - ctx->freed_count_total,
+               ctx->allocated_count_peak);
+
+    osprintln(os,"    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| peak c   |");
+
+    pthread_mutex_unlock(&ctx->mtx);
+}
+
+#endif // DNSCORE_DEBUG_HAS_BLOCK_TAG
 
 typedef struct db_header db_header;
 
@@ -911,7 +1191,7 @@ debug_stacktrace_print(output_stream *os, stacktrace trace)
 
 #define REAL_SIZE(rs_size_) MALLOC_REALSIZE((rs_size_)+HEADER_SIZE)
 
-#if DNSCORE_DEBUG_ENHANCED_STATISTICS
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_ENHANCED_STATISTICS
 
 
 /* [  0]   1..  8
@@ -939,21 +1219,22 @@ static u64 db_alloc_peak_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORE
     0
 };
 
-#endif
-
 static u64 db_total_allocated = 0;
 static u64 db_total_freed = 0;
 static u64 db_current_allocated = 0;
 static u64 db_current_blocks = 0;
 static u64 db_peak_allocated = 0;
 
-#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
+#endif
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
 static u64 db_next_block_serial = 0;
 #endif
 
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 static bool db_showallocs = DNSCORE_DEBUG_SHOW_ALLOCS;
-
 static pthread_mutex_t alloc_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 /****************************************************************************/
 
@@ -1065,7 +1346,7 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
 
 #endif
 
-
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 
 void*
 debug_malloc(
@@ -1086,8 +1367,11 @@ debug_malloc(
 
     u64 current_allocated = db_current_allocated;
 
-    pthread_mutex_unlock(&alloc_mutex);
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_alloc_notify(&malloc_debug_memory_by_tag_ctx, tag, size);
+#endif
 
+    pthread_mutex_unlock(&alloc_mutex);
 
     if(current_allocated + size > DNSCORE_DEBUG_ALLOC_MAX)
     {
@@ -1276,6 +1560,10 @@ debug_free(void* ptr_, const char* file, int line)
 
     pthread_mutex_lock(&alloc_mutex);
 
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_free_notify(&malloc_debug_memory_by_tag_ctx, ptr->tag, size);
+#endif
+
 #if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
     ptr->previous->next = ptr->next;
     ptr->next->previous = ptr->previous;
@@ -1350,6 +1638,8 @@ debug_realloc(void* ptr, size_t size, const char* file, int line)
     return newptr;
 }
 
+#endif
+
 char*
 debug_strdup(const char* str)
 {
@@ -1397,8 +1687,13 @@ debug_mtest(void* ptr_)
 u32
 debug_get_block_count()
 {
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_ENHANCED_STATISTICS
     return db_current_blocks;
+#else
+    return 0;
+#endif
 }
+
 void
 debug_stat(int mask)
 {
@@ -1406,7 +1701,8 @@ debug_stat(int mask)
     {
         return;
     }
-    
+
+#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
     pthread_mutex_lock(&alloc_mutex);
     
     formatln("%16llx | DB: MEM: Total Allocated=%llu", timeus(), db_total_allocated);
@@ -1416,7 +1712,6 @@ debug_stat(int mask)
     formatln("%16llx | DB: MEM: Blocks=%llu", timeus(), db_current_blocks);
     formatln("%16llx | DB: MEM: Monitoring Overhead=%llu (%i)", timeus(), (u64)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
 
-#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
     formatln("%16llx | C ALLOC: total: %llu malloc=%llu free=%llu realloc=%llu memalign=%llu",
         timeus(),
         malloc_hook_total,
@@ -1424,9 +1719,21 @@ debug_stat(int mask)
         malloc_hook_free,
         malloc_hook_realloc,
         malloc_hook_memalign);
+#else
+    if(mask == 0)
+    {
+        return;
+    }
 #endif
 
-#if DNSCORE_DEBUG_ENHANCED_STATISTICS
+#if DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+    if(mask & DEBUG_STAT_MMAP)
+    {
+        debug_mmap_stat();
+    }
+#endif
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_ENHANCED_STATISTICS
     if(mask & DEBUG_STAT_SIZES)
     {
         formatln("%16llx | DB: MEM: Block sizes: ([size/8]={current / peak}", timeus());
@@ -1453,8 +1760,53 @@ debug_stat(int mask)
     }
 #endif
 
-#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
     if(mask & DEBUG_STAT_TAGS)
+    {
+        output_stream *os = termout;
+        s64 allocated_bytes_peak = 0;
+        s64 allocated_count_total = 0;
+        s64 freed_count_total = 0;
+
+        s64 allocated_count_peak = 0;
+        s64 allocated_bytes_total = 0;
+        s64 freed_bytes_total = 0;
+
+        for(int i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)); ++i)
+        {
+            debug_memory_by_tag_context_t *ctx = debug_memory_by_tag_contexts[i];
+            if(ctx == NULL)
+            {
+                break;
+            }
+
+            debug_memory_by_tag_print(ctx, os);
+
+            allocated_bytes_peak += ctx->allocated_bytes_peak;
+            allocated_count_total += ctx->allocated_count_total;
+            freed_count_total += ctx->freed_count_total;
+            allocated_count_peak += ctx->allocated_count_peak;
+            allocated_bytes_total += ctx->allocated_bytes_total;
+            freed_bytes_total += ctx->freed_bytes_total;
+        }
+
+        osformatln(os, " GRAND TOTAL | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli",
+                   allocated_bytes_total,
+                   freed_bytes_total,
+                   allocated_bytes_total - freed_bytes_total,
+                   allocated_bytes_peak,
+
+                   allocated_count_total,
+                   freed_count_total,
+                   allocated_count_total - freed_count_total,
+                   allocated_count_peak);
+
+        osprintln(os,"    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| peak c   |");
+    }
+#endif
+
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
+    if(mask & DEBUG_STAT_WALK)
     {
         db_header *ptr;
         
@@ -1539,7 +1891,7 @@ debug_stat(int mask)
         
         while(ptr != &db_mem_first)
         {
-            formatln("block #%04x %16p [%08x]", index, (void*)& ptr[1], ptr->size);
+            formatln("block #%04x %16p [%08x]\nBLOCK ", index, (void*)& ptr[1], ptr->size);
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
             debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
@@ -1580,8 +1932,16 @@ debug_stat(int mask)
         //malloc_info(0, stdout);
     }
 #endif
-    
+
+#if DEBUG
+    debug_bench_print_all(termout);
+#endif
+
+    shared_heap_print_map(0, NULL, NULL);
+
+#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
     pthread_mutex_unlock(&alloc_mutex);
+#endif
 }
 
 void
@@ -2041,7 +2401,21 @@ debug_bench_init()
     {
         return;
     }
-    
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
+    {
+        pthread_mutexattr_t   mta;
+        pthread_mutexattr_init(&mta);
+        pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+        pthread_mutex_init(&alloc_mutex, &mta);
+    }
+
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_init(&malloc_debug_memory_by_tag_ctx, "malloc");
+#endif
+
+#endif
+
     pthread_mutexattr_t mta;
     int err;
     
@@ -2080,6 +2454,11 @@ debug_bench_init()
 void
 debug_bench_register(debug_bench_s *bench, const char *name)
 {
+    if((bench == NULL) || (name == NULL))
+    {
+        return;
+    }
+
     pthread_mutex_lock(&debug_bench_mtx);
     
     debug_bench_s *b = debug_bench_first;
@@ -2142,6 +2521,25 @@ void debug_bench_logdump_all()
     pthread_mutex_unlock(&debug_bench_mtx);
 }
 
+void debug_bench_print_all(output_stream *os)
+{
+    pthread_mutex_lock(&debug_bench_mtx);
+    debug_bench_s *p = debug_bench_first;
+    while(p != NULL)
+    {
+        double min = p->time_min;
+        min /= ONE_SECOND_US_F;
+        double max = p->time_max;
+        max /= ONE_SECOND_US_F;
+        double total = p->time_total;
+        total /= ONE_SECOND_US_F;
+        u32 count = p->time_count;
+        osformatln(os, "bench: %12s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%-12.3f/s calls=%9u", p->name, min, max, total, total / count, count / total, count);
+        p = p->next;
+    }
+    pthread_mutex_unlock(&debug_bench_mtx);
+}
+
 void debug_bench_unregister_all()
 {
     pthread_mutex_lock(&debug_bench_mtx);
@@ -2197,5 +2595,79 @@ debug_nop_hook()
     // this function does nothing but help putting a breakpoint
     puts("HOOK");fflush(NULL);
 }
+
+#if DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+
+#undef mmap
+#undef munmap
+
+void*
+debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
+{
+    // DO NOT: formatln("debug_mmap(%p, %llx, %i, %i, %i, %lli)", addr, len, prot, flags, fildes, off);
+
+    void *ret = mmap(addr, len, prot, flags, fildes, off);
+    if(ret != MAP_FAILED)
+    {
+        debug_mmap_t *debug_mmap = (debug_mmap_t*)malloc(sizeof(debug_mmap_t));
+        debug_mmap->addr = addr;
+        debug_mmap->len = len;
+        debug_mmap->prot = prot;
+        debug_mmap->flags = flags;
+        debug_mmap->fildes = fildes;
+        debug_mmap->off = off;
+        debug_mmap->trace = debug_stacktrace_get();
+        debug_mmap->ts = timeus();
+        debug_mmap->mapped = ret;
+        pthread_mutex_lock(&debug_mmap_mtx);
+        ptr_node_debug *node = ptr_set_debug_insert(&debug_mmap_set, ret);
+        node->value = debug_mmap;
+        pthread_mutex_unlock(&debug_mmap_mtx);
+    }
+    return ret;
+}
+
+int debug_munmap(void *addr, size_t len)
+{
+    pthread_mutex_lock(&debug_mmap_mtx);
+    ptr_node_debug *node = ptr_set_debug_find(&debug_mmap_set, addr);
+    if(node != NULL)
+    {
+        debug_mmap_t *debug_mmap = (debug_mmap_t *)node->value;
+        free(debug_mmap);
+        ptr_set_debug_delete(&debug_mmap_set, addr);
+    }
+    pthread_mutex_unlock(&debug_mmap_mtx);
+    int ret = munmap(addr, len);
+    return ret;
+}
+
+void
+debug_mmap_stat()
+{
+    u32 count = 0;
+    u64 total = 0;
+
+    formatln("MMAP statistics:");
+
+    pthread_mutex_lock(&debug_mmap_mtx);
+    ptr_set_debug_iterator iter;
+    ptr_set_debug_iterator_init(&debug_mmap_set, &iter);
+    while(ptr_set_debug_iterator_hasnext(&iter))
+    {
+        const ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
+        const debug_mmap_t *debug_mmap = (const debug_mmap_t *)node->value;
+        formatln("MMAP %p %016llx %04x %04x %5i %08x (%lli)", debug_mmap->mapped, debug_mmap->len, debug_mmap->prot, debug_mmap->flags, debug_mmap->fildes, debug_mmap->off, debug_mmap->ts);
+        debug_stacktrace_print(termout, debug_mmap->trace);
+        output_stream_write_u8(termout, (u8)'\n');
+        ++count;
+        total += debug_mmap->len;
+    }
+    pthread_mutex_unlock(&debug_mmap_mtx);
+
+    formatln("MMAP count: %u total: %llx (%llu)", count, total, total);
+}
+
+#endif
 
 /** @} */

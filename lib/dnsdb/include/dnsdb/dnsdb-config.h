@@ -116,16 +116,16 @@
 /* dynamic update support disabled. */
 #define HAS_DYNUPDATE_SUPPORT 1
 
-/* Elliptic Curve (ECDSA) support (ie: the available OpenSSL does not support
-   it) disabled. */
+/* Elliptic Curve (ECDSA) support (Use this if the available SSL library does
+   not support it properly) disabled. */
 #define HAS_ECDSA_SUPPORT 1
+
+/* EDDSA support disabled */
+#define HAS_EDDSA_SUPPORT 0
 
 /* Adds support for dynamically loaded module that gets events from yadifad
    and is allowed to fetch some information disabled. */
 #define HAS_EVENT_DYNAMIC_MODULE 0
-
-/* file pool uses cache (dev) disabled. */
-#define HAS_FILEPOOL_CACHE 0
 
 /* acceptance of ASCII7 characters in DNS names (not recommended) disabled. */
 #define HAS_FULL_ASCII7 0
@@ -214,9 +214,6 @@
 /* to set do-not-listen to "127.0.0.53 port 53" by default (otherwise the list
    is empty by default) disabled. */
 #define HAS_SYSTEMD_RESOLVED_AVOIDANCE 0
-
-/* Enables the TCP manager disabled. */
-#define HAS_TCP_MANAGER 0
 
 /* Without various internal test programs. */
 #define HAS_TESTS 1
@@ -687,7 +684,7 @@
 #define PACKAGE_NAME "yadifa"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "yadifa 2.5.0-10188"
+#define PACKAGE_STRING "yadifa 2.5.1-10306"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "yadifa"
@@ -696,7 +693,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.5.0-10188"
+#define PACKAGE_VERSION "2.5.1-10306"
 
 /* Define to the type of arg 1 for `select'. */
 #define SELECT_TYPE_ARG1 int
@@ -717,7 +714,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* Version number of package */
-#define VERSION "2.5.0-10188"
+#define VERSION "2.5.1-10306"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

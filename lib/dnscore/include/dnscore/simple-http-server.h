@@ -44,15 +44,15 @@
 
 #pragma once
 
-#include "dnscore/dnscore-config.h"
+#include <dnscore/dnscore-config-features.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 
-#include "dnscore/ptr_set.h"
-#include "dnscore/service.h"
-#include "dnscore/thread_pool.h"
+#include <dnscore/ptr_set.h>
+#include <dnscore/service.h>
+#include <dnscore/thread_pool.h>
 
 /**
  * Callback for uri_decode.

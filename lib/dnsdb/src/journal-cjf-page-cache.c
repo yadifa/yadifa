@@ -120,8 +120,6 @@
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-#define JRNLCJF_TAG 0x58494c4e524a
-
 /*
  * Contains the journal (almost: not the matching start and end SOA)
  */

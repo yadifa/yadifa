@@ -55,8 +55,6 @@
 #include "dnscore/ptr_set.h"
 #include "dnscore/zalloc.h"
 
-#define AVL_NODE_TAG 0x0045444F4E4c5641 /* "AVLNODE" */
-
 /*
  * The following macros are defining relevant fields in the node
  */
@@ -104,7 +102,7 @@
  */
 
 #define AVL_ALLOC_NODE(node,reference)                                  \
-	ZALLOC_OBJECT_OR_DIE( node, AVL_NODE_TYPE, AVL_NODE_TAG);   \
+	ZALLOC_OBJECT_OR_DIE( node, AVL_NODE_TYPE, PTR_NODE_TAG);   \
 	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE));
 /*
  * A macro to free a node

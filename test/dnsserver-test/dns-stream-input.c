@@ -35,6 +35,8 @@
 #include <dnscore/format.h>
 #include "dns-stream-input.h"
 
+#define DNSISDT_TAG 0x54445359534e44
+
 struct dns_stream_input_data_s
 {
     u8 *domain;
@@ -55,7 +57,7 @@ axfr_record_input_data_feed(struct input_stream_input_data_s *input_data)
                 static const size_t apex_size = sizeof(apex) / sizeof(u16);
                 record_input_data_feed_serial_set(1);
 
-                if(input_data->indexes[1] < apex_size)
+                if(input_data->indexes[1] < (s64)apex_size)
                 {
                     ret = record_input_data_feed(input_data, apex, apex_size, input_domain_get(input_data->input), &input_data->indexes[1]);
                     return ret;
@@ -75,7 +77,7 @@ axfr_record_input_data_feed(struct input_stream_input_data_s *input_data)
                 static const u16 delegation[] = {TYPE_NS, TYPE_NS};
                 static const size_t delegation_size = sizeof(delegation) / sizeof(u16);
 
-                if(input_data->indexes[1] < delegation_size)
+                if(input_data->indexes[1] < (s64)delegation_size)
                 {
 
                     char fqdn[256];
@@ -97,7 +99,7 @@ axfr_record_input_data_feed(struct input_stream_input_data_s *input_data)
                 static const u16 end_soa[] = {TYPE_SOA};
                 static const size_t end_soa_size = sizeof(end_soa) / sizeof(u16);
 
-                if(input_data->indexes[1] < end_soa_size)
+                if(input_data->indexes[1] < (s64)end_soa_size)
                 {
                     ret = record_input_data_feed(input_data, end_soa, end_soa_size, input_domain_get(input_data->input), &input_data->indexes[1]);
                     return ret;
@@ -159,7 +161,7 @@ cve_2021_25214_ixfr_record_input_data_feed(struct input_stream_input_data_s *inp
                 static const size_t apex_size = sizeof(remove_soa) / sizeof(u16);
                 record_input_data_feed_serial_set(1);
 
-                ret = record_input_data_feed(input_data, remove_soa, apex_size, "\005other", &input_data->indexes[1]);
+                ret = record_input_data_feed(input_data, remove_soa, apex_size, (const u8*)"\005other", &input_data->indexes[1]);
 
                 ++input_data->indexes[0];
                 input_data->indexes[1]= 0;
@@ -172,7 +174,7 @@ cve_2021_25214_ixfr_record_input_data_feed(struct input_stream_input_data_s *inp
 
                 ret = record_input_data_feed(input_data, remove_records_soa, apex_size, input_domain_get(input_data->input), &input_data->indexes[1]);
 
-                if(input_data->indexes[1] >= apex_size)
+                if(input_data->indexes[1] >= (s64)apex_size)
                 {
                     ++input_data->indexes[0];
                     input_data->indexes[1]= 0;
@@ -198,7 +200,7 @@ cve_2021_25214_ixfr_record_input_data_feed(struct input_stream_input_data_s *inp
 
                 ret = record_input_data_feed(input_data, add_records_soa, apex_size, input_domain_get(input_data->input), &input_data->indexes[1]);
 
-                if(input_data->indexes[1] >= apex_size)
+                if(input_data->indexes[1] >= (s64)apex_size)
                 {
                     ++input_data->indexes[0];
                     input_data->indexes[1]= 0;
@@ -266,7 +268,7 @@ ixfr_record_input_data_feed(struct input_stream_input_data_s *input_data)
 
                 ret = record_input_data_feed(input_data, remove_records_soa, apex_size, input_domain_get(input_data->input), &input_data->indexes[1]);
 
-                if(input_data->indexes[1] >= apex_size)
+                if(input_data->indexes[1] >= (s64)apex_size)
                 {
                     ++input_data->indexes[0];
                     input_data->indexes[1]= 0;
@@ -292,7 +294,7 @@ ixfr_record_input_data_feed(struct input_stream_input_data_s *input_data)
 
                 ret = record_input_data_feed(input_data, add_records_soa, apex_size, input_domain_get(input_data->input), &input_data->indexes[1]);
 
-                if(input_data->indexes[1] >= apex_size)
+                if(input_data->indexes[1] >= (s64)apex_size)
                 {
                     ++input_data->indexes[0];
                     input_data->indexes[1]= 0;
@@ -334,12 +336,14 @@ static ya_result dns_stream_input_axfr_input_stream_init(struct input_s *input, 
 
 static ya_result dns_stream_input_ixfr_input_stream_init(struct input_s *input, u32 serial_value, input_stream *is)
 {
+    (void)serial_value;
     ya_result ret = input_stream_input_init(is, input, ixfr_record_input_data_feed);
     return ret;
 }
 
 static ya_result dns_stream_input_cve_2021_25214_ixfr_input_stream_init(struct input_s *input, u32 serial_value, input_stream *is)
 {
+    (void)serial_value;
     ya_result ret = input_stream_input_init(is, input, cve_2021_25214_ixfr_record_input_data_feed);
     return ret;
 }
@@ -365,10 +369,11 @@ ya_result
 dns_stream_input_init(struct input_s *input, const u8 *fqdn)
 {
     struct dns_stream_input_data_s *data;
-    MALLOC_OBJECT_OR_DIE(data, struct dns_stream_input_data_s, GENERIC_TAG);
+    MALLOC_OBJECT_OR_DIE(data, struct dns_stream_input_data_s, DNSISDT_TAG);
     data->domain = dnsname_dup(fqdn);
     input->data = data;
     input->vtbl = &dns_stream_input_vtbl;
+    return SUCCESS;
 }
 
 static input_vtbl_t dns_stream_cve_2021_25214_input_vtbl =
@@ -383,8 +388,9 @@ ya_result
 dns_stream_cve_2021_25214_input_init(struct input_s *input, const u8 *fqdn)
 {
     struct dns_stream_input_data_s *data;
-    MALLOC_OBJECT_OR_DIE(data, struct dns_stream_input_data_s, GENERIC_TAG);
+    MALLOC_OBJECT_OR_DIE(data, struct dns_stream_input_data_s, DNSISDT_TAG);
     data->domain = dnsname_dup(fqdn);
     input->data = data;
     input->vtbl = &dns_stream_cve_2021_25214_input_vtbl;
+    return SUCCESS;
 }

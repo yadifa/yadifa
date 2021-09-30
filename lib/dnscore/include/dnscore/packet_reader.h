@@ -144,11 +144,18 @@ static inline const void *packet_reader_get_current_ptr_const(const packet_unpac
     }
 }
 
+ 
+static inline u32 packet_reader_position(packet_unpack_reader_data *reader)
+{
+    return reader->offset;
+}
+
 ya_result packet_reader_read_u16(packet_unpack_reader_data* reader, u16 *val);
 
 ya_result packet_reader_read_dnstype(packet_unpack_reader_data* reader);
 ya_result packet_reader_read_dnsclass(packet_unpack_reader_data* reader);
 ya_result packet_reader_skip_query(packet_unpack_reader_data* reader, const u8 *domain, u16 dnstype, u16 dnsclass);
+ya_result packet_reader_skip_bytes(packet_unpack_reader_data* reader, u16 count);
 
 ya_result packet_reader_read_u32(packet_unpack_reader_data* reader, u32 *val);
 

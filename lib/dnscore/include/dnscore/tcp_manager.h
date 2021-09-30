@@ -125,12 +125,19 @@ ya_result tcp_manager_close(tcp_manager_socket_context_t *sctx);
 /**
  * Retrieves the address of an acquired connection.
  */
-socketaddress *tcp_manager_socketaddress(tcp_manager_socket_context_t *sctx);
+
+struct sockaddr* tcp_manager_sockaddr(tcp_manager_socket_context_t *sctx);
 
 /**
  * Retrieves the address length of an acquired connection.
  */
 socklen_t tcp_manager_socklen(tcp_manager_socket_context_t *sctx);
+
+/**
+ * Retrieves a pointer to the address length of an acquired connection.
+ * Sounds like a bad idea to use.
+ */
+socklen_t *tcp_manager_socklenp(tcp_manager_socket_context_t *sctx);
 
 /**
  * Gets the socket file descriptor of an acquired connection.

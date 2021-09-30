@@ -47,6 +47,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <dnscore/format.h>
 
 #include "dnscore/dnscore.h"
 #include "dnscore/fdtools.h"
@@ -55,6 +56,9 @@
 
 #define L1_DATA_LINE_SIZE 0x40
 #define L1_DATA_LINE_MASK (L1_DATA_LINE_SIZE - 1)
+
+#define DEBUG_SHARED_CIRCULAR_BUFFER_MEM_USAGE 0
+#define DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT 0
 
 struct shared_circular_buffer
 {
@@ -65,6 +69,13 @@ struct shared_circular_buffer
     size_t total_size;
     size_t additional_buffer_size;
     u8 *additional_buffer_ptr;
+#if DEBUG_SHARED_CIRCULAR_BUFFER_MEM_USAGE && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_context_t *memctx;
+#endif
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+    s64 last_report_time;
+    s64 peak_usage;
+#endif
 #ifndef WIN32
     volatile s64 enqueue_index __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
     volatile s64 dequeue_index __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
@@ -75,6 +86,31 @@ struct shared_circular_buffer
     struct shared_circular_buffer_slot base[];
 #endif
 };
+
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+static void
+shared_circular_buffer_stats(struct shared_circular_buffer* buffer)
+{
+    s64 now = timeus();
+    if(now - buffer->last_report_time > 60 * ONE_SECOND_US)
+    {
+        buffer->last_report_time = now;
+        s64 size = buffer->mask + 1;
+        s64 used = buffer->enqueue_index - buffer->dequeue_index;
+        if(used < 0)
+        {
+            used = size - used;
+        }
+        if(buffer->peak_usage < used)
+        {
+            buffer->peak_usage = used;
+        }
+
+        formatln("shared_circular_buffer@%p: free=%lli, used=%lli, peak=%lli, enqueue=%lli, dequeue=%lli",
+                 buffer, size - used, used, buffer->peak_usage, buffer->enqueue_index, buffer->dequeue_index);
+    }
+}
+#endif
 
 u8 *shared_circular_buffer_additional_space_ptr(struct shared_circular_buffer* buffer)
 {
@@ -100,7 +136,7 @@ shared_circular_buffer_create_ex(u8 log_2_buffer_size, u32 additional_space_byte
 
     buffer = (struct shared_circular_buffer*)mmap(NULL, total_buffer_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
 
-     if(buffer != ((struct shared_circular_buffer*)MAP_FAILED))
+    if(buffer != ((struct shared_circular_buffer*)MAP_FAILED))
     {
         memset(buffer, 0, header_size);
 
@@ -131,6 +167,14 @@ shared_circular_buffer_create_ex(u8 log_2_buffer_size, u32 additional_space_byte
         buffer->additional_buffer_size = additional_space_real_bytes;
         buffer->additional_buffer_ptr = &((u8*)buffer)[total_buffer_size - additional_space_real_bytes];
 
+#if DEBUG_SHARED_CIRCULAR_BUFFER_MEM_USAGE && DNSCORE_DEBUG_HAS_BLOCK_TAG
+        buffer->memctx = debug_memory_by_tag_new_instance("shrqueue");
+#endif
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+        buffer->last_report_time = 0;
+        buffer->peak_usage = 0;
+#endif
+
         return buffer;
     }
     else
@@ -151,6 +195,9 @@ shared_circular_buffer_destroy(struct shared_circular_buffer* buffer)
 {
     if(buffer != NULL)
     {
+#if DEBUG_SHARED_CIRCULAR_BUFFER_MEM_USAGE && DNSCORE_DEBUG_HAS_BLOCK_TAG
+        debug_memory_by_tag_delete(buffer->memctx);
+#endif
         cond_finalize(&buffer->cond_w);
         cond_finalize(&buffer->cond_r);
         mutex_destroy(&buffer->mtx);
@@ -179,7 +226,10 @@ shared_circular_buffer_prepare_enqueue(struct shared_circular_buffer* buffer)
             memset(ret->data, 'E', sizeof(ret->data));
 #endif
             buffer->enqueue_index = ei + 1;
-                
+
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+            shared_circular_buffer_stats(buffer);
+#endif
             break;
         }
 
@@ -207,18 +257,19 @@ shared_circular_buffer_try_prepare_enqueue(struct shared_circular_buffer* buffer
         {
             ret = (struct shared_circular_buffer_slot*)&buffer->base[ei & buffer->mask];
             ret->state = 0;
-
 #if DEBUG
             memset(ret->data, 'e', sizeof(ret->data));
 #endif
-
             buffer->enqueue_index = ei + 1;
+
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+            shared_circular_buffer_stats(buffer);
+#endif
         }
         else
         {
             ret = NULL;
         }
-
 
         mutex_unlock(&buffer->mtx);
     
@@ -233,6 +284,15 @@ shared_circular_buffer_commit_enqueue(struct shared_circular_buffer* buffer, str
 {
     mutex_lock(&buffer->mtx);
     slot->state = 1;
+#if DEBUG
+#if DEBUG_SHARED_CIRCULAR_BUFFER_MEM_USAGE && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_alloc_notify(buffer->memctx, GENERIC_TAG, sizeof(*slot));
+#endif
+#endif
+
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+    shared_circular_buffer_stats(buffer);
+#endif
     cond_notify(&buffer->cond_r);
     mutex_unlock(&buffer->mtx);
 }
@@ -305,6 +365,9 @@ shared_circular_buffer_prepare_dequeue(struct shared_circular_buffer* buffer)
 #if DEBUG
             *state = 2;
 #endif
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+            shared_circular_buffer_stats(buffer);
+#endif
             break;
         }
 
@@ -344,6 +407,9 @@ shared_circular_buffer_prepare_dequeue_with_timeout(struct shared_circular_buffe
 #if DEBUG
             *state = 2;
 #endif
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+            shared_circular_buffer_stats(buffer);
+#endif
             break;
         }
 
@@ -368,12 +434,33 @@ shared_circular_buffer_commit_dequeue(struct shared_circular_buffer* buffer)
     struct shared_circular_buffer_slot *ret;
     ret = (struct shared_circular_buffer_slot*)&buffer->base[buffer->dequeue_index & buffer->mask];
     memset(ret->data, 'D', sizeof(ret->data));
+
+#if DEBUG_SHARED_CIRCULAR_BUFFER_MEM_USAGE && DNSCORE_DEBUG_HAS_BLOCK_TAG
+    debug_memory_by_tag_free_notify(buffer->memctx, GENERIC_TAG, sizeof(*ret));
+#endif
 #endif
     
     if(++buffer->dequeue_index == buffer->enqueue_index)
     {
+        if(buffer->enqueue_index > 65535) // don't advise for less than a few pages
+        {
+            intptr ptr = (intptr)&buffer->base[0];
+            ptr += 4095;
+            ptr &=~4095;
+            size_t size = buffer->total_size - buffer->additional_buffer_size;
+            if(size > 8192)
+            {
+                size -= 8192;
+                madvise((void*)ptr, size, MADV_DONTNEED);
+            }
+        }
+
         buffer->enqueue_index = 0;
         buffer->dequeue_index = 0;
+
+#if DEBUG_SHARED_CIRCULAR_BUFFER_SELF_REPORT
+        shared_circular_buffer_stats(buffer);
+#endif
     }
 
     cond_notify(&buffer->cond_w); // notify writers

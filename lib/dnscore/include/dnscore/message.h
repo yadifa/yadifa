@@ -202,7 +202,7 @@ struct message_tsig
     u16 error;      /* NETWORK */
     
     u16 other_len;  /* NETWORK */
-    u16 reserved_1; /* ALIGN32 */
+    u16 tsig_offset;// keeps the tsig_offset in the message for internal processing, do not use directly
     
     u32 reserved_2; /* ALIGN64 */    
 
@@ -246,7 +246,6 @@ struct message_data
     u16 _query_class;
     bool _edns;
     bool _nsid;
-    char _protocol;         // will probably be removed
     u8 _referral;
     u8 _control_buffer_size;
     u8 _tcp_serial;
@@ -417,9 +416,9 @@ static inline u8 message_get_opcode(const message_data *mesg)
     return MESSAGE_OP(mesg->_buffer);
 }
 
-static inline void message_set_opcode(message_data *mesg, u8 op)
+static inline void message_set_opcode(message_data *mesg, u8 opcode)
 {
-    MESSAGE_SET_OP(mesg->_buffer, op);
+    MESSAGE_SET_OP(mesg->_buffer, opcode);
 }
 
 static inline void message_set_referral(message_data *mesg, u8 referral)
@@ -653,6 +652,11 @@ static inline void message_set_authoritative_answer(message_data *mesg)
 static inline void message_set_truncated_answer(message_data *mesg)
 {
     MESSAGE_HIFLAGS(mesg->_buffer) |= TC_BITS|QR_BITS;
+}
+
+static inline bool message_is_truncated(message_data *mesg)
+{
+    return (MESSAGE_HIFLAGS(mesg->_buffer) & TC_BITS) != 0;
 }
 
 static inline void message_set_authoritative(message_data *mesg)
@@ -1067,6 +1071,7 @@ int message_process(message_data *);
 int message_process_lenient(message_data *mesg);
 
 void message_transform_to_error(message_data *mesg);
+void message_transform_to_signed_error(message_data *mesg);
 
 /* global */
 
@@ -1122,9 +1127,13 @@ void message_make_ixfr_query(message_data *mesg, u16 id, const u8 *qname, u32 so
 
 ya_result message_sign_query_by_name(message_data *mesg, const u8 *tsig_name);
 
+ya_result message_sign_query_by_name_with_epoch_and_fudge(message_data *mesg, const u8 *tsig_name, s64 epoch, u16 fudge);
+
 ya_result message_sign_answer_by_name(message_data *mesg, const u8 *tsig_name);
 
 ya_result message_sign_query(message_data *mesg, const tsig_item *key);
+
+ya_result message_sign_query_with_epoch_and_fudge(message_data *mesg, const tsig_item *key, s64 epoch, u16 fudge);
 
 ya_result message_sign_answer(message_data *mesg, const tsig_item *key);
 
@@ -1461,6 +1470,11 @@ static inline void message_set_status_from_result(message_data *mesg, ya_result 
     }
 
     message_set_status(mesg, fp);
+}
+
+static inline void message_clear_status(message_data *mesg)
+{
+    MESSAGE_FLAGS_AND(mesg->_buffer, 0xff, 0xf0);
 }
 
 static inline void message_update_answer_status(message_data *mesg)

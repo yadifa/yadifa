@@ -180,6 +180,10 @@ wait_read_activity(int sockfd)
     }
 }
 
+#if DEBUG_BENCH_FD
+static debug_bench_s debug_accept;
+#endif
+
 static void *
 server_tcp_thread(void* args)
 {
@@ -205,8 +209,20 @@ server_tcp_thread(void* args)
 
         socklen_t sa_len = sizeof(socketaddress);
 
-        while((sockfd = accept(g_sockfd, &sa.sa, &sa_len)) < 0)
+        for(;;)
         {
+#if DEBUG_BENCH_FD
+            u64 bench = debug_bench_start(&debug_accept);
+#endif
+            sockfd = accept(g_sockfd, &sa.sa, &sa_len);
+#if DEBUG_BENCH_FD
+            debug_bench_stop(&debug_accept, bench);
+#endif
+            if(sockfd >= 0)
+            {
+                break;
+            }
+
             int err = errno;
 
             if(err != EINTR)

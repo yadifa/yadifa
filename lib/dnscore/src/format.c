@@ -2532,14 +2532,14 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             epoch <<= 32;
             epoch |= time_lo;
             
-            osformat(os, " %T +-%hus ", epoch, fudge);
-            
-            for(u16 i = 0; i < mac_size; ++i)
+            osformat(os, " %u %hu %hu", epoch, fudge, mac_size);
+
+            if(mac_size > 0)
             {
-                osformat(os, "%02x", rdata_pointer[i]);
+                osprint_char(os, ' ');
+                osprint_base64(os, rdata_pointer, mac_size);
+                rdata_pointer += mac_size;
             }
-            
-            rdata_pointer += mac_size;
             
             u16 oid = ntohs(GET_U16_AT(rdata_pointer[0]));
             u16 error = ntohs(GET_U16_AT(rdata_pointer[2]));
@@ -2552,7 +2552,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 return ERROR;
             }            
             
-            osformat(os, " %i %s %i ", oid, dns_message_rcode_get_name(error), olen);
+            osformat(os, " %i %s %i ", ntohs(oid), dns_message_rcode_get_name(error), olen);
             
             for(; rdata_pointer < limit; ++rdata_pointer)
             {
@@ -2880,11 +2880,12 @@ print_rdata(u16 type, u8* rdata_pointer, u16 rdata_size)
 }
 
 void
-osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
+osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags, const void* base_pointer_)
 {
     const u8* data_pointer = (const u8*)data_pointer_;
     size_t size = size_;
-    
+
+    bool offset = (flags & OSPRINT_DUMP_OFFSET) != 0;
     bool address = (flags & OSPRINT_DUMP_ADDRESS) != 0;
     bool hex = (flags & OSPRINT_DUMP_HEX) != 0;
     bool text = (flags & OSPRINT_DUMP_TEXT) != 0;
@@ -2893,6 +2894,23 @@ osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t 
     group >>= OSPRINT_DUMP_LAYOUT_GROUP_SHIFT;
     size_t separator = flags & OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK;
     separator >>= OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT;
+
+    s32 offset_width = 2 * 2;
+
+    if(offset)
+    {
+        if(size_ > MAX_U16)
+        {
+            if(size_ <= MAX_U32)
+            {
+                offset_width = 4 * 2;
+            }
+            else
+            {
+                offset_width = 8 * 2;
+            }
+        }
+    }
 
     size_t dump_size;
     size_t i;
@@ -2915,6 +2933,12 @@ osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t 
         if(address)
         {
             format_hex_u64_hi((intptr)data_pointer, os, __SIZEOF_POINTER__ * 2, '0', FALSE);
+            output_stream_write(os, (const u8*)" | ", 3);
+        }
+
+        if(offset)
+        {
+            format_hex_u64_hi((intptr)data_pointer - (intptr)base_pointer_, os, offset_width, '0', FALSE);
             output_stream_write(os, (const u8*)" | ", 3);
         }
 
@@ -2986,6 +3010,12 @@ osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t 
         }
     }
     while(size > 0);
+}
+
+void
+osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
+{
+    osprint_dump_with_base(os, data_pointer_, size_, line_size, flags, data_pointer_);
 }
 
 void

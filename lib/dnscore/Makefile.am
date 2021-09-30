@@ -89,6 +89,7 @@ libdnscore_la_SOURCES = \
 	src/config_struct.c \
 	src/counter_output_stream.c \
 	src/debug.c \
+	src/digest_rawdata.c \
 	src/digest_sha1.c \
 	src/digest_sha256.c \
 	src/digest_sha384.c \
@@ -101,10 +102,12 @@ libdnscore_la_SOURCES = \
 	src/dnskey-keyring.c \
 	src/dnskey_dsa.c \
 	src/dnskey_ecdsa.c \
+	src/dnskey_eddsa.c \
 	src/dnskey_rsa.c \
 	src/dnskey-signature.c \
 	src/dnsname.c \
 	src/empty-input-stream.c \
+        src/error_state.c \
 	src/fdtools.c \
 	src/file_input_stream.c \
 	src/file_output_stream.c \
@@ -175,7 +178,7 @@ libdnscore_la_SOURCES = \
 	src/sys_get_cpu_count.c \
 	src/tcp_io_stream.c \
 	src/tcp_manager.c \
-    src/thread.c \
+	src/thread.c \
 	src/thread_pool.c \
 	src/thread-tag.c \
 	src/threaded-qsl-cw.c \
@@ -241,12 +244,14 @@ pkginclude_HEADERS = \
 	$(I)/dnskey-keyring.h \
 	$(I)/dnskey_dsa.h \
 	$(I)/dnskey_ecdsa.h \
+	$(I)/dnskey_eddsa.h \
 	$(I)/dnskey_rsa.h \
 	$(I)/dnskey-signature.h \
 	$(I)/dnsname.h \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h \
+        $(I)/error_state.h \
 	$(I)/fdtools.h \
 	$(I)/file.h \
 	$(I)/file_input_stream.h \

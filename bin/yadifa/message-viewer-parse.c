@@ -217,7 +217,7 @@ message_viewer_parse_section_footer(message_viewer *mv, u32 section_idx, u16 cou
 
 
 static void
-message_viewer_parse_question_record(message_viewer *mv, u8 *record_wire, u16 rclass, u16 rtype)
+message_viewer_parse_question_record(message_viewer *mv, const u8 *record_wire, u16 rclass, u16 rtype)
 {
     if(mv->view_mode_with & MESSAGE_VIEWER_WITH_XFR)
     {
@@ -267,7 +267,7 @@ message_viewer_parse_question_record(message_viewer *mv, u8 *record_wire, u16 rc
 
 
 static void
-message_viewer_parse_section_record(message_viewer *mv, u8 *record_wire, u8 section_idx)
+message_viewer_parse_section_record(message_viewer *mv, const u8 *record_wire, u8 section_idx)
 {
     (void)section_idx;
 
@@ -352,6 +352,11 @@ message_viewer_parse_section_record(message_viewer *mv, u8 *record_wire, u8 sect
     flushout();
 }
 
+static ya_result
+message_viewer_parse_pseudosection_record_method(message_viewer *mv, const u8 *record_wire)
+{
+    return 0;
+}
 
 static const message_viewer_vtbl parse_viewer_vtbl = {
        message_viewer_parse_header,
@@ -361,6 +366,7 @@ static const message_viewer_vtbl parse_viewer_vtbl = {
        message_viewer_parse_section_footer,
        message_viewer_parse_question_record,
        message_viewer_parse_section_record,
+       message_viewer_parse_pseudosection_record_method,
        "message_viewer_parse",
 };
 

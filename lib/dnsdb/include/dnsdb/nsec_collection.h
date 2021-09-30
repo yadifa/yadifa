@@ -93,6 +93,8 @@ union nsec_label_pointer_array
  * This means that the digest size is a constant in the whole tree
  */
 
+#define NSECNODE_TAG 0x45444f4e4345534e
+
 struct nsec_node
 {
     union nsec_children_union children;

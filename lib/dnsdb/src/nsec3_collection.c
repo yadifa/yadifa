@@ -114,7 +114,7 @@ extern logger_handle *g_dnssec_logger;
  */
 #define AVL_ALLOC_NODE(node,reference)				\
 	yassert((reference)[0]!=0);					    \
-	ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE*, node, (sizeof(AVL_NODE_TYPE)+(reference)[0]), AVL_NODE_TAG); \
+	ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE*, node, (sizeof(AVL_NODE_TYPE)+(reference)[0]), N3NODE_TAG); \
 	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE)+(reference)[0])
 
 /*
