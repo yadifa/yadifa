@@ -1011,7 +1011,7 @@ zdb_zone_update_zone_remove_add_dnskeys(zdb_zone *zone, ptr_vector *removed_keys
 
             if(FAIL(ret = dynupdate_message_add_dnskey(&dmsg, zone->min_ttl, key)))
             {
-                log_debug("dnskey: %{dnsname}: +%03d+%05d/%d key cannot be sent with this update, postponing", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)), ret);
+                log_debug("dnskey: %{dnsname}: +%03d+%05d/%d key cannot be sent with this update, postponing",dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
                 work_to_do = TRUE;
                 break;
             }
@@ -1026,7 +1026,7 @@ zdb_zone_update_zone_remove_add_dnskeys(zdb_zone *zone, ptr_vector *removed_keys
                 dnssec_key *key = (dnssec_key*)ptr_vector_get(removed_keys, del_index);
                 if(FAIL(ret = dynupdate_message_del_dnskey(&dmsg, key)))
                 {
-                    log_debug("dnskey: %{dnsname}: +%03d+%05d/%d key cannot be sent with this update, postponing", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)), ret);
+                    log_debug("dnskey: %{dnsname}: +%03d+%05d/%d key cannot be sent with this update, postponing", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
                     work_to_do = TRUE;
                     break;
                 }
@@ -1038,29 +1038,38 @@ zdb_zone_update_zone_remove_add_dnskeys(zdb_zone *zone, ptr_vector *removed_keys
         dynupdate_message_set_reader(&dmsg, &reader);
         u16 count = dynupdate_message_get_count(&dmsg);
 
-        packet_reader_skip(&reader, DNS_HEADER_LENGTH);
-        packet_reader_skip_fqdn(&reader);
-        packet_reader_skip(&reader, 4);
+        packet_reader_skip(&reader, DNS_HEADER_LENGTH); // checked below
+        packet_reader_skip_fqdn(&reader);               // checked below
+        packet_reader_skip(&reader, 4);             // checked below
 
-        // the update is ready : push it
-
-        if(ISOK(ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN)))
+        if(!packet_reader_eof(&reader))
         {
-            // done
-            log_info("dnskey: %{dnsname}: keys update successful", fqdn);
-        }
+            // the update is ready : push it
 
-        if(FAIL(ret))
-        {
-            if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+            if(ISOK(ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN)))
             {
-                // trigger a background store of the zone
-                
-                zdb_zone_info_background_store_zone(fqdn);
+                // done
+                log_info("dnskey: %{dnsname}: keys update successful", fqdn);
             }
-            
-            log_err("dnskey: %{dnsname}: keys update failed", fqdn);
-            break;
+
+            if(FAIL(ret))
+            {
+                if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+                {
+                    // trigger a background store of the zone
+
+                    zdb_zone_info_background_store_zone(fqdn);
+                }
+
+                dynupdate_message_finalize(&dmsg);
+
+                log_err("dnskey: %{dnsname}: keys update failed", fqdn);
+                break;
+            }
+        }
+        else
+        {
+            log_err("dnskey: %{dnsname}: keys update failed: FORMERR", fqdn);
         }
 
         dynupdate_message_finalize(&dmsg);

@@ -2559,7 +2559,7 @@ static ya_result test_message_reader(test_message *m)
 
             if((rdata_size == 0) && (rclass != CLASS_ANY))
             {
-                log_err("update: next record has empty rdata with non-ANY class: %r", ret, RCODE_ERROR_CODE(RCODE_FORMERR));
+                log_err("update: next record has empty rdata with non-ANY class: %r", RCODE_ERROR_CODE(RCODE_FORMERR));
 
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }

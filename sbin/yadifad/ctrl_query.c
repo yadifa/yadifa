@@ -122,15 +122,25 @@ static ya_result
 ctrl_query_parse_bytes(packet_unpack_reader_data *pr, void *out, u32 out_size)
 {
     struct type_class_ttl_rdlen cmd_tctr;
-    packet_reader_skip_fqdn(pr);
-    packet_reader_read(pr, &cmd_tctr, 10); // exact
+
+    ya_result ret;
+    if(FAIL(ret = packet_reader_skip_fqdn(pr)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = packet_reader_read(pr, &cmd_tctr, 10))) // exact
+    {
+        return ret;
+    }
+
     cmd_tctr.rdlen = ntohs(cmd_tctr.rdlen);
     
     if(cmd_tctr.rdlen <= out_size)
     {
         cmd_tctr.rdlen -= out_size;
-        ya_result return_code = packet_reader_read(pr, out, out_size); // exact
-        return return_code;
+        ret = packet_reader_read(pr, out, out_size); // exact
+        return ret;
     }
     else
     {
@@ -150,20 +160,28 @@ static ya_result
 ctrl_query_parse_fqdn_class_view(packet_unpack_reader_data *pr, u8 *fqdn, u32 fqdn_size, u16 *rclass, char *view, u32 view_size)
 {
     struct type_class_ttl_rdlen cmd_tctr;
-    packet_reader_skip_fqdn(pr);
-    packet_reader_read(pr, &cmd_tctr, 10); // exact
+    ya_result ret = 0;
+
+    if(FAIL(ret = packet_reader_skip_fqdn(pr)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = packet_reader_read(pr, &cmd_tctr, 10))) // exact
+    {
+        return ret;
+    }
+
     cmd_tctr.rdlen = ntohs(cmd_tctr.rdlen);
     
     fqdn[0] = '\0';
     *rclass = CLASS_IN;
     view[0] = '\0';
 
-    ya_result return_code = 0;
-
     if(cmd_tctr.rdlen != 0)
     {
         u32 from = pr->offset;
-        if(ISOK(return_code = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
+        if(ISOK(ret = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
         {
             cmd_tctr.rdlen -= pr->offset -from;
 
@@ -171,7 +189,7 @@ ctrl_query_parse_fqdn_class_view(packet_unpack_reader_data *pr, u8 *fqdn, u32 fq
             
             if(cmd_tctr.rdlen > 2)
             {
-                if(ISOK(return_code = packet_reader_read(pr, rclass, 2))) // exact
+                if(ISOK(ret = packet_reader_read(pr, rclass, 2))) // exact
                 {
                     ++parameters;
 
@@ -180,58 +198,67 @@ ctrl_query_parse_fqdn_class_view(packet_unpack_reader_data *pr, u8 *fqdn, u32 fq
                     if(cmd_tctr.rdlen > 0)
                     {
                         u32 n = MIN(cmd_tctr.rdlen, view_size - 1);
-                        if(ISOK(return_code = packet_reader_read(pr, view, n))) // exact
+                        if(ISOK(ret = packet_reader_read(pr, view, n))) // exact
                         {
                             ++parameters;
                             view[n] = '\0';
 
-                            cmd_tctr.rdlen -= return_code;
+                            cmd_tctr.rdlen -= ret;
                         }
                     }
                 }
             }
 
-            if(ISOK(return_code))
+            if(ISOK(ret))
             {
                 if(cmd_tctr.rdlen == 0)
                 {
-                    return_code = parameters;
+                    ret = parameters;
                 }
                 else
                 {
-                    return_code = MAKE_DNSMSG_ERROR(RCODE_FORMERR); // must end on an exact match
+                    ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR); // must end on an exact match
                 }
             }
         }
     }
 
-    return return_code;
+    return ret;
 }
 
 static ya_result
 ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byte, u8 *fqdn, u32 fqdn_size, u16 *rclass, char *view, u32 view_size)
 {
     struct type_class_ttl_rdlen cmd_tctr;
-    packet_reader_skip_fqdn(pr);
-    packet_reader_read(pr, &cmd_tctr, 10);
+    ya_result ret = 0;
+
+    if(FAIL(ret = packet_reader_skip_fqdn(pr)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = packet_reader_read(pr, &cmd_tctr, 10))) // exact
+    {
+        return ret;
+    }
+
     cmd_tctr.rdlen = ntohs(cmd_tctr.rdlen);
-    
+
     fqdn[0] = '\0';
     *rclass = CLASS_IN;
     view[0] = '\0';
     
     if(cmd_tctr.rdlen != 0)
     {
-        ya_result return_code;
         u32 from = pr->offset;
 
         // read the byte
 
-        if(ISOK(return_code = packet_reader_read(pr, one_byte, 1)))
+        if(ISOK(ret = packet_reader_read(pr, one_byte, 1)))
         {
             // read the fqdn
 
-            if(ISOK(return_code = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
+            if(ISOK(ret = packet_reader_read_fqdn(pr, fqdn, fqdn_size)))
             {
                 // adjust the remaining bytes to process
 
@@ -243,7 +270,7 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
                 {
                     // read the class
 
-                    if(ISOK(return_code = packet_reader_read(pr, rclass, 2)))
+                    if(ISOK(ret = packet_reader_read(pr, rclass, 2)))
                     {
                         cmd_tctr.rdlen -= 2;
 
@@ -252,7 +279,7 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
                         if(cmd_tctr.rdlen > 0)
                         {
                             u32 n = MIN(cmd_tctr.rdlen, view_size - 1);
-                            if(ISOK(return_code = packet_reader_read(pr, view, n)))
+                            if(ISOK(ret = packet_reader_read(pr, view, n)))
                             {
                                 view[n] = '\0';
                             }
@@ -263,7 +290,7 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
                 {
                     if(cmd_tctr.rdlen != 0)
                     {
-                        return DNS_ERROR_CODE(RCODE_FORMERR); // the one forbidden value is 1 byte available
+                        return MAKE_DNSMSG_ERROR(RCODE_FORMERR); // the one forbidden value is 1 byte available
                     }
                 }
             }
@@ -296,15 +323,25 @@ static void
 ctrl_query_server_shutdown(message_data *mesg)
 {
     packet_unpack_reader_data pr;
+    ya_result return_code;
     u16 cmd_type;
     u16 cmd_class;
     
     packet_reader_init_from_message(&pr, mesg);
     
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
-    ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    return_code = packet_reader_read_u16(&pr, &cmd_class);
     
     u16 qc = message_get_query_count(mesg);
     u16 pc = message_get_answer_count(mesg);
@@ -356,10 +393,19 @@ ctrl_query_logger_reopen(message_data *mesg)
     u16 cmd_class;
     
     packet_reader_init_from_message(&pr, mesg);
-    
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
+
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
     u16 qc = message_get_query_count(mesg);
@@ -403,10 +449,19 @@ ctrl_query_config_reload(message_data *mesg)
     u16 cmd_class;
     
     packet_reader_init_from_message(&pr, mesg);
-    
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
+
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
     u16 qc = message_get_query_count(mesg);
@@ -464,8 +519,18 @@ ctrl_query_log_query_enable(message_data *mesg)
     u16 cmd_class;
     
     packet_reader_init_from_message(&pr, mesg);
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
+
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
 
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
 
@@ -526,9 +591,18 @@ ctrl_query_log_level(message_data *mesg)
     u16 cmd_class;
     
     packet_reader_init_from_message(&pr, mesg);
-    
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
+
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
@@ -663,8 +737,17 @@ ctrl_query_zone_with_fqdn_class_view(message_data *mesg,
 
     packet_reader_init_from_message(&pr, mesg);
 
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
 
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
 
@@ -797,8 +880,18 @@ ctrl_query_zone_sync(message_data *mesg)
     char view[32];
     
     packet_reader_init_from_message(&pr, mesg);
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
+
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
     
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
@@ -891,9 +984,19 @@ ctrl_query_zonecfgreload(message_data *mesg)
     char view[32];
     
     packet_reader_init_from_message(&pr, mesg);
-    packet_reader_skip_fqdn(&pr);
-    packet_reader_read_u16(&pr, &cmd_type);
-    
+
+    if(FAIL(packet_reader_skip_fqdn(&pr))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
+    if(FAIL(packet_reader_read_u16(&pr, &cmd_type))) // shouldn't fail
+    {
+        log_info("ctrl: shutdown FORMERR");
+        return;
+    }
+
     ya_result return_code = packet_reader_read_u16(&pr, &cmd_class);
     
     u16 qc = message_get_query_count(mesg);

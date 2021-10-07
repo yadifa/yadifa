@@ -995,6 +995,12 @@ static inline void message_tsig_set_error(message_data *mesg, u16 err)
     mesg->_tsig.error = err;
 }
 
+static inline u16 message_tsig_get_error(message_data *mesg)
+{
+    return mesg->_tsig.error;
+}
+
+
 static inline void message_tsig_mac_copy(const message_data *mesg, u8 *to)
 {
     memcpy(to, mesg->_tsig.mac, message_tsig_mac_get_size(mesg));
@@ -1011,7 +1017,15 @@ static inline void message_tsig_copy_from(message_data *mesg, const message_data
     const message_tsig *s = &source->_tsig;
     memcpy(d, s, offsetof(message_tsig, mac));
     memcpy(d->mac, s->mac, s->mac_size);
-    d->other = s->other;
+    if((s->other != NULL) && (s->other_len > 0))
+    {
+        MALLOC_OR_DIE(u8*, d->other, s->other_len, TSIGOTHR_TAG);
+        memcpy(d->other, s->other, s->other_len);
+    }
+    else
+    {
+        d->other = NULL;
+    }
     d->hmac = s->hmac;
     d->tcp_tsig_countdown = s->tcp_tsig_countdown;
     d->mac_algorithm = s->mac_algorithm;
@@ -1094,6 +1108,8 @@ static inline void message_edns0_clear_undefined_flags(message_data *mesg) // al
 void message_make_query(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 qclass);
 
 void message_make_query_ex(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 qclass, u16 flags);
+
+void message_make_query_ex_with_edns0(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 qclass, u32 edns0_ttl);
 
 struct packet_writer;
 

@@ -111,7 +111,11 @@ static ya_result filepool_test()
     formatln("deleteing files from a previous test");
     for(int i = 0; i < N; ++i)
     {
-        unlink(DIR_PREFIX "myfile-%06i.txt");
+        int l = snformat(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt", i);
+        if(l > 0)
+        {
+            unlink(tmp);
+        }
     }
     formatln("starting test");
 
@@ -165,7 +169,7 @@ static ya_result filepool_test()
         ssize_t p = file_pool_seek(file_array[i], 0, SEEK_SET);
         if(p != 0)
         {
-            formatln("file_pool_seek(#%i, 0, SEEK_SET) failed with %r", (ya_result)p);
+            formatln("file_pool_seek(#%i, 0, SEEK_SET) failed with %r", i, (ya_result)p);
             return (ya_result)p;
         }
 

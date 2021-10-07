@@ -504,7 +504,7 @@ yadifad_config_cmdline(int argc, char **argv)
             {
                 // should never happen
                 
-                formatln("error: %r",  cfgerr.file, return_code);
+                formatln("error: %r", return_code);
                 flushout();
             }
         }

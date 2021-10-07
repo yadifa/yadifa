@@ -80,6 +80,8 @@
 #define NOTIFY_DETAILED_LOG 0
 #define NOTIFY_CLEANUP_DUMP 0
 
+#define NOTIFY_RECEIVE_TIMEOUT_SECONDS 2
+
 #ifndef NOTIFY_DETAILED_LOG
 #if DEBUG
 #define NOTIFY_DETAILED_LOG 1
@@ -317,6 +319,19 @@ notify_slaveanswer(const message_data *mesg)
 
     if(notify_service_initialised)
     {
+#if DNSCORE_HAS_TSIG_SUPPORT
+        const struct tsig_item *mesg_tsig_key = message_tsig_get_key(mesg);  // pointer to the structure used for TSIG, to be used in relevant cases
+        message_data *clone = NULL;
+        if(mesg_tsig_key != NULL)
+        {
+            clone = message_dup(mesg);
+            if(clone == NULL)
+            {
+                return; // BUFFER_WOULD_OVERFLOW;
+            }
+        }
+#endif
+
         const u8 *origin = message_get_canonised_fqdn(mesg);
         const socketaddress *sa = message_get_sender(mesg);
         u8 rcode = message_get_rcode(mesg);
@@ -326,6 +341,7 @@ notify_slaveanswer(const message_data *mesg)
 
         notifymsg->payload.answer.rcode = rcode;
         notifymsg->payload.answer.aa = aa;
+
         ZALLOC_OBJECT_OR_DIE(notifymsg->payload.answer.host, host_address, HOSTADDR_TAG);
         host_address_set_with_sockaddr(notifymsg->payload.answer.host, sa);
         
@@ -335,8 +351,8 @@ notify_slaveanswer(const message_data *mesg)
         
         if(message_tsig_get_key(mesg) != NULL)
         {
-            notifymsg->payload.answer.message = message_dup(mesg);
-            notifymsg->payload.answer.host->tsig = message_tsig_get_key(mesg);
+            notifymsg->payload.answer.message = clone;
+            notifymsg->payload.answer.host->tsig = mesg_tsig_key;
         }
         else
         {
@@ -367,25 +383,26 @@ notify_masterquery_read_soa(const u8 *origin, packet_unpack_reader_data *reader,
     
     /* read and expect an SOA */
     
-    packet_reader_read_fqdn(reader, tmp, sizeof(tmp));
-
-    if(dnsname_equals(tmp, origin))
+    if(ISOK(packet_reader_read_fqdn(reader, tmp, sizeof(tmp))))
     {
-        struct type_class_ttl_rdlen tctr;
-
-        if(packet_reader_read(reader, &tctr, 10) == 10) // exact
+        if(dnsname_equals(tmp, origin))
         {
-            if((tctr.qtype == TYPE_SOA) && (tctr.qclass == CLASS_IN))
+            struct type_class_ttl_rdlen tctr;
+
+            if(packet_reader_read(reader, &tctr, 10) == 10) // exact
             {
-                if(ISOK(return_value = packet_reader_skip_fqdn(reader)))
+                if((tctr.qtype == TYPE_SOA) && (tctr.qclass == CLASS_IN))
                 {
                     if(ISOK(return_value = packet_reader_skip_fqdn(reader)))
                     {
-                        if(packet_reader_read(reader, tmp, 4) == 4) // exact
+                        if(ISOK(return_value = packet_reader_skip_fqdn(reader)))
                         {
-                            *serial = ntohl(GET_U32_AT_P(tmp));
-                            
-                            return TRUE;
+                            if(packet_reader_read(reader, tmp, 4) == 4) // exact
+                            {
+                                *serial = ntohl(GET_U32_AT_P(tmp));
+
+                                return TRUE;
+                            }
                         }
                     }
                 }
@@ -979,7 +996,7 @@ notify_message_free(notify_message *notifymsg)
             host_address_delete(notifymsg->payload.answer.host);
             if(notifymsg->payload.answer.message != NULL)
             {
-                free(notifymsg->payload.answer.message); // message_data (free, not ZFREE)
+                message_free(notifymsg->payload.answer.message); // message_data => message_free
             }
             break;
         }
@@ -1020,7 +1037,7 @@ notify_ipv4_receiver_service(struct service_worker_s *worker)
     log_info("notify: notification service IPv4 receiver started (socket %i)", send_socket4);
 
     message_data *mesg = message_new_instance();
-    tcp_set_recvtimeout(send_socket4, 2, 0); /* half a second for UDP is a lot ... */
+    tcp_set_recvtimeout(send_socket4, NOTIFY_RECEIVE_TIMEOUT_SECONDS, 0); /* half a second for UDP is a lot ... */
 
     while(service_should_run(worker))
     {
@@ -1070,7 +1087,7 @@ notify_ipv6_receiver_service(struct service_worker_s *worker)
     log_info("notify: notification service IPv6 receiver started (socket %i)", send_socket6);
 
     message_data *mesg = message_new_instance();
-    tcp_set_recvtimeout(send_socket6, 2, 0); /* half a second for UDP is a lot ... */
+    tcp_set_recvtimeout(send_socket6, NOTIFY_RECEIVE_TIMEOUT_SECONDS, 0); /* half a second for UDP is a lot ... */
 
     while(service_should_run(worker))
     {
@@ -1576,28 +1593,33 @@ notify_service_context_process_next_message(struct notify_service_context *ctx, 
 
                             message_query_summary *mqs = (message_query_summary*)node->value;
 
-                            yassert(mqs != NULL);
-
-                            // verify the signature
-
-                            ya_result return_value;
-
-                            if(FAIL(return_value = tsig_verify_answer(notifymsg->payload.answer.message, mqs->mac, mqs->mac_size)))
+                            if(mqs != NULL)
                             {
-                                // if everything is good, then proceed
+                                // verify the signature
 
-                                log_notice("notify: %{dnsname}: %{hostaddr}: TSIG signature verification failed: %r",
-                                        notifymsg->origin, notifymsg->payload.answer.host, return_value);
-                                // delete notifymsg
-                                notify_message_free(notifymsg);
+                                ya_result return_value;
 
-                                break;
+                                if(FAIL(return_value = tsig_verify_answer(notifymsg->payload.answer.message, mqs->mac, mqs->mac_size)))
+                                {
+                                    // if everything is good, then proceed
+
+                                    log_notice("notify: %{dnsname}: %{hostaddr}: TSIG signature verification failed: %r",
+                                            notifymsg->origin, notifymsg->payload.answer.host, return_value);
+                                    // delete notifymsg
+                                    notify_message_free(notifymsg);
+                                    break;
+                                }
+
+                                message_free(notifymsg->payload.answer.message); // message_data => message_free
+                                notifymsg->payload.answer.message = NULL;
+                                ptr_set_delete(&ctx->notify_queries_not_answered_yet, mqs);
+                                message_query_summary_delete(mqs);
                             }
-
-                            free(notifymsg->payload.answer.message); // message_data, free, not ZFREE
-                            notifymsg->payload.answer.message = NULL;
-                            ptr_set_delete(&ctx->notify_queries_not_answered_yet, mqs);
-                            message_query_summary_delete(mqs);
+                            else // this should never happen
+                            {
+                                log_err("notify: %{dnsname}: %{hostaddr}: invalid internal state", notifymsg->origin, notifymsg->payload.answer.host);
+                                ptr_set_delete(&ctx->notify_queries_not_answered_yet, &tmp);
+                            }
                         } /* end of TSIG verification, with success*/
 #endif
                         ha = host_address_remove_host_address(&notify_zones_notifymsg->payload.notify.hosts_list, notifymsg->payload.answer.host);
@@ -2465,7 +2487,7 @@ notify_service_init()
 
         if(ISOK(err = service_init_ex(&notify_handler, notify_service, "yadifad-notify", workers )))
         {
-            async_queue_init(&notify_handler_queue, 10000000, 1, 1, "notify");
+            async_queue_init(&notify_handler_queue, 10000000, 1, 1, "notify"); // note: it's implemented as a linked list
             
             notify_service_initialised = TRUE;
         }
@@ -2535,9 +2557,19 @@ notify_service_finalize()
     if(notify_service_initialised)
     {
         notify_service_initialised = FALSE;
+
+        if(send_socket4 >= 0)
+        {
+            shutdown(send_socket4, SHUT_RDWR);
+        }
+
+        if(send_socket6 >= 0)
+        {
+            shutdown(send_socket6, SHUT_RDWR);
+        }
         
         err = notify_service_stop();
-        
+
         service_finalize(&notify_handler);
         
         /* once the tree has been scanned, destroy every node listed */

@@ -587,7 +587,7 @@ service_start_and_wait(struct service_s *desc)
             worker->return_code = SERVICE_ALREADY_RUNNING;
             mutex_unlock(&worker->lock);
 
-            log_warn("service_start: %s worker #%u already up and running", desc->name);
+            log_warn("service_start: %s worker #%u already up and running", desc->name, 0);
 
             // service worker already up : cannot main-thread run it
             ret = service_wait(desc);
@@ -747,11 +747,11 @@ service_wait(struct service_s *desc)
                             {
                                 if(tries <= 2)
                                 {
-                                    log_warn("service: %s thread %p hasn't stopped yet ...", desc->name, tid);
+                                    log_info("service: %s thread %p hasn't stopped yet ...", desc->name, tid);
 #if DEBUG
                                     logger_flush();
 #endif
-                                    usleep_ex(500000);
+                                    usleep_ex(500000); // 0.5 seconds
                                 }
                                 else
                                 {

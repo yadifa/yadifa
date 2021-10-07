@@ -200,36 +200,67 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
                         if(dnsname_verify_charspace(canonized_fqdn))
                         {
-                            log_notice("query (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       canonized_fqdn,
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg),
-                                       message_tsig_get_name(mesg),
-                                       epoch,
-                                       epoch,
-                                       fudge);
+                            if(message_has_tsig(mesg))
+                            {
+                                log_notice("query (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           canonized_fqdn,
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg),
+                                           message_tsig_get_name(mesg),
+                                           epoch,
+                                           epoch,
+                                           fudge);
+                            }
+                            else
+                            {
+                                log_notice("query (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           canonized_fqdn,
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg));
+                            }
                         }
                         else
                         {
-                            log_notice("query (%04hx) [%02x|%02x] <INVALID> %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg),
-                                       message_tsig_get_name(mesg),
-                                       epoch,
-                                       epoch,
-                                       fudge);
+                            if(message_has_tsig(mesg))
+                            {
+                                log_notice("query (%04hx) [%02x|%02x] <INVALID> %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg),
+                                           message_tsig_get_name(mesg),
+                                           epoch,
+                                           epoch,
+                                           fudge);
+                            }
+                            else
+                            {
+                                log_notice("query (%04hx) [%02x|%02x] <INVALID> %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg));
+                            }
                         }
                     }
                 }
@@ -369,20 +400,36 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                             s64 epoch = message_tsig_get_epoch(mesg);
                             s64 fudge = message_tsig_get_fudge(mesg);
 
-                            log_notice("notify (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       canonized_fqdn,
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg),
-                                       message_tsig_get_name(mesg),
-                                       epoch,
-                                       epoch,
-                                       fudge);
+                            if(message_has_tsig(mesg))
+                            {
+                                log_notice("notify (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           canonized_fqdn,
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg),
+                                           message_tsig_get_name(mesg),
+                                           epoch,
+                                           epoch,
+                                           fudge);
+                            }
+                            else
+                            {
+                                log_notice("notify (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           canonized_fqdn,
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg));
+                            }
                         }
                     }
                     else
@@ -520,20 +567,36 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                             s64 epoch = message_tsig_get_epoch(mesg);
                             s64 fudge = message_tsig_get_fudge(mesg);
 
-                            log_notice("update (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       canonized_fqdn,
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg),
-                                       message_tsig_get_name(mesg),
-                                       epoch,
-                                       epoch,
-                                       fudge);
+                            if(message_has_tsig(mesg))
+                            {
+                                log_notice("update (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           canonized_fqdn,
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg),
+                                           message_tsig_get_name(mesg),
+                                           epoch,
+                                           epoch,
+                                           fudge);
+                            }
+                            else
+                            {
+                                log_notice("update (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
+                                           ntohs(message_get_id(mesg)),
+                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
+                                           canonized_fqdn,
+                                           message_get_query_type_ptr(mesg),
+                                           message_get_query_class_ptr(mesg),
+                                           RCODE_ERROR_CODE(message_get_status(mesg)),
+                                           ret,
+                                           message_get_sender_sa(mesg),
+                                           message_get_size_u16(mesg));
+                            }
                         }
                     }
                     else

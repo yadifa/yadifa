@@ -62,6 +62,11 @@
 #include "module/yadig.h"
 #endif
 
+#if HAS_CRAFT
+#pragma message("THIS MODULE CANNOT BE PUBLISHED, EVER")
+#include "module/craft.h"
+#endif
+
 #include <dnscore/logger_handle.h>
 #include <dnscore/config-cmdline.h>
 #include <dnscore/config_settings.h>
@@ -98,6 +103,9 @@ static const module_s *module_list[] =
     &yadig_program,
 #endif
 
+#if HAS_CRAFT
+    &craft_program,
+#endif
     NULL
 };
 

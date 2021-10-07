@@ -57,6 +57,7 @@
 #define OSPRINT_DUMP_ADDRESS                0x40000000U
 #define OSPRINT_DUMP_HEX                    0x20000000U
 #define OSPRINT_DUMP_TEXT                   0x10000000U
+#define OSPRINT_DUMP_SQUEEZE_ZEROES         0x08000000U
     
 // predefined layouts
 #define OSPRINT_DUMP_LAYOUT_DENSE           0x0000ffffU

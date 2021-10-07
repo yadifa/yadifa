@@ -183,59 +183,65 @@ database_service_zone_add_dnskey(dnssec_key *key)
         dynupdate_message_set_reader(&dmsg, &reader);
         u16 count = dynupdate_message_get_count(&dmsg);
 
-        packet_reader_skip(&reader, DNS_HEADER_LENGTH);
-        packet_reader_skip_fqdn(&reader);
-        packet_reader_skip(&reader, 4);
+        packet_reader_skip(&reader, DNS_HEADER_LENGTH); // eof checked below
+        packet_reader_skip_fqdn(&reader);               // eof checked below
+        packet_reader_skip(&reader, 4);             // eof checked below
 
-        // the update is ready : push it
-
-        zdb_zone *zone = zdb_acquire_zone_read_double_lock_from_fqdn(g_config->database, dnskey_get_domain(key), ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-        if(zone != NULL)
+        if(!packet_reader_eof(&reader))
         {
-            for(;;)
+            // the update is ready : push it
+
+            zdb_zone *zone = zdb_acquire_zone_read_double_lock_from_fqdn(g_config->database, dnskey_get_domain(key), ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+            if(zone != NULL)
             {
-                u32 reader_offset = reader.offset;
-
-                ret = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN);
-
-                if(ISOK(ret))
+                for(;;)
                 {
-                    // done
-                    log_info("dnskey: %{dnsname}: +%03d+%05d/%d key added",
-                            dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
-                            //args->domain, args->algorithm, args->tag, ntohs(args->flags));
-                
-#if HAS_EVENT_DYNAMIC_MODULE
-                    if(dynamic_module_dnskey_interface_chain_available())
+                    u32 reader_offset = reader.offset;
+
+                    ret = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN);
+
+                    if(ISOK(ret))
                     {
-                        dynamic_module_on_dnskey_publish(key);
+                        // done
+                        log_info("dnskey: %{dnsname}: +%03d+%05d/%d key added",
+                                dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
+                                //args->domain, args->algorithm, args->tag, ntohs(args->flags));
+#if HAS_EVENT_DYNAMIC_MODULE
+                        if(dynamic_module_dnskey_interface_chain_available())
+                        {
+                            dynamic_module_on_dnskey_publish(key);
+                        }
+#endif
+                        notify_slaves(zone->origin);
+
+                        zdb_zone_set_maintained(zone, TRUE);
                     }
-#endif          
-                    notify_slaves(zone->origin);
+                    else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+                    {
+                        log_warn("dnskey: %{dnsname}: +%03d+%05d/%d could not add key as the journal is full",
+                                 dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
 
-                    zdb_zone_set_maintained(zone, TRUE);
-                }
-                else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
-                {
-                    log_warn("dnskey: %{dnsname}: +%03d+%05d/%d could not add key as the journal is full",
-                             dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)), ret);
+                        // trigger a background store of the zone
 
-                    // trigger a background store of the zone
+                        //zdb_zone_info_background_store_zone(dnskey_get_domain(key));
+                        zdb_zone_info_store_locked_zone(dnskey_get_domain(key));
 
-                    //zdb_zone_info_background_store_zone(dnskey_get_domain(key));
-                    zdb_zone_info_store_locked_zone(dnskey_get_domain(key));
+                        reader.offset = reader_offset;
 
-                    reader.offset = reader_offset;
+                        continue;
+                    }
 
-                    continue;
+                    break;
                 }
 
-                break;
+                zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+
+                zdb_zone_release(zone);
             }
-
-            zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-
-            zdb_zone_release(zone);
+        }
+        else
+        {
+            ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
         }
     }
     
@@ -259,55 +265,62 @@ database_service_zone_update_published_keys_flush(const u8 *fqdn, dynupdate_mess
     dynupdate_message_set_reader(dmsg, &reader);
     u16 count = dynupdate_message_get_count(dmsg);
 
-    packet_reader_skip(&reader, DNS_HEADER_LENGTH);
-    packet_reader_skip_fqdn(&reader);
-    packet_reader_skip(&reader, 4);
+    packet_reader_skip(&reader, DNS_HEADER_LENGTH); // eof checked below
+    packet_reader_skip_fqdn(&reader);               // eof checked below
+    packet_reader_skip(&reader, 4);             // eof checked below
 
-    // the update is ready : push it
-
-    zdb_zone *zone = zdb_acquire_zone_read_double_lock_from_fqdn(g_config->database, fqdn, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-    if(zone != NULL)
+    if(!packet_reader_eof(&reader))
     {
-        for(;;)
+        // the update is ready : push it
+
+        zdb_zone *zone = zdb_acquire_zone_read_double_lock_from_fqdn(g_config->database, fqdn, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+        if(zone != NULL)
         {
-            u32 reader_offset = reader.offset;
-
-            ret = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN);
-
-            if(ISOK(ret))
+            for(;;)
             {
-                // done
+                u32 reader_offset = reader.offset;
+
+                ret = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN);
+
+                if(ISOK(ret))
+                {
+                    // done
 
 #if HAS_EVENT_DYNAMIC_MODULE
-                if(dynamic_module_dnskey_interface_chain_available())
-                    {
-                        dynamic_module_on_dnskey_publish(key);
-                    }
+                    if(dynamic_module_dnskey_interface_chain_available())
+                        {
+                            dynamic_module_on_dnskey_publish(key);
+                        }
 #endif
+                }
+                else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+                {
+                    log_warn("dnskey: %{dnsname}: the journal is full", fqdn);
+
+                    // trigger a background store of the zone
+
+                    zdb_zone_info_store_locked_zone(fqdn);
+
+                    reader.offset = reader_offset;
+
+                    continue; // try again
+                }
+
+                break;
             }
-            else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
-            {
-                log_warn("dnskey: %{dnsname}: the journal is full", fqdn);
 
-                // trigger a background store of the zone
+            zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 
-                zdb_zone_info_store_locked_zone(fqdn);
-
-                reader.offset = reader_offset;
-
-                continue; // try again
-            }
-
-            break;
+            zdb_zone_release(zone);
         }
-
-        zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-
-        zdb_zone_release(zone);
+        else
+        {
+            ret = ZDB_ERROR_ZONE_NOT_IN_DATABASE;
+        }
     }
     else
     {
-        ret = ZDB_ERROR_ZONE_NOT_IN_DATABASE;
+        ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
     }
 
     return ret;
@@ -471,57 +484,65 @@ database_service_zone_remove_dnskey(dnssec_key *key)
         dynupdate_message_set_reader(&dmsg, &reader);
         u16 count = dynupdate_message_get_count(&dmsg);
 
-        packet_reader_skip(&reader, DNS_HEADER_LENGTH);
-        packet_reader_skip_fqdn(&reader);
-        packet_reader_skip(&reader, 4);
+        packet_reader_skip(&reader, DNS_HEADER_LENGTH); // eof checked below
+        packet_reader_skip_fqdn(&reader);               // eof checked below
+        packet_reader_skip(&reader, 4);             // eof checked below
 
         // the update is ready : push it
 
-        zdb_zone *zone = zdb_acquire_zone_read_double_lock_from_fqdn(g_config->database, dnskey_get_domain(key), ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-        if(zone != NULL)
+        if(!packet_reader_eof(&reader))
         {
-            for(;;)
+            zdb_zone *zone = zdb_acquire_zone_read_double_lock_from_fqdn(g_config->database, dnskey_get_domain(key), ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+            if(zone != NULL)
             {
-                u32 reader_offset = reader.offset;
-                ret = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN);
-
-                if(ISOK(ret))
+                for(;;)
                 {
-                    // done
-                    log_info("dnskey: %{dnsname}: +%03d+%05d/%d key removed",
-                            dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
-                
-#if HAS_EVENT_DYNAMIC_MODULE
-                    if(dynamic_module_dnskey_interface_chain_available())
+                    u32 reader_offset = reader.offset;
+                    ret = dynupdate_diff(zone, &reader, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN);
+
+                    if(ISOK(ret))
                     {
-                        dynamic_module_on_dnskey_delete(key);
-                    }
+                        // done
+                        log_info("dnskey: %{dnsname}: +%03d+%05d/%d key removed",
+                                 dnskey_get_domain(key),
+                                 dnskey_get_algorithm(key),
+                                 dnskey_get_tag_const(key),
+                                 ntohs(dnskey_get_flags(key)));
+#if HAS_EVENT_DYNAMIC_MODULE
+                        if(dynamic_module_dnskey_interface_chain_available())
+                        {
+                            dynamic_module_on_dnskey_delete(key);
+                        }
 #endif
-                
-                    notify_slaves(zone->origin);
+                        notify_slaves(zone->origin);
+                    }
+                    else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+                    {
+                        log_warn("dnskey: %{dnsname}: +%03d+%05d/%d could not remove key as the journal is full",
+                                 dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
+
+                        // trigger a background store of the zone
+
+                        //zdb_zone_info_background_store_zone(dnskey_get_domain(key));
+
+                        zdb_zone_info_store_locked_zone(dnskey_get_domain(key));
+
+                        reader.offset = reader_offset;
+
+                        continue;
+                    }
+
+                    break;
                 }
-                else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
-                {
-                    log_warn("dnskey: %{dnsname}: +%03d+%05d/%d could not remove key as the journal is full",
-                             dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)), ret);
 
-                    // trigger a background store of the zone
+                zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 
-                    //zdb_zone_info_background_store_zone(dnskey_get_domain(key));
-
-                    zdb_zone_info_store_locked_zone(dnskey_get_domain(key));
-
-                    reader.offset = reader_offset;
-
-                    continue;
-                }
-
-                break;
+                zdb_zone_release(zone);
             }
-
-            zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
-
-            zdb_zone_release(zone);
+        }
+        else
+        {
+            ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
         }
     }
 
@@ -582,7 +603,7 @@ database_service_zone_resignature_publish_dnskey_thread(void *args_)
                 }
                 else
                 {
-                    log_err("dnskey: %{dnsname}: +%03d+%05d/%d: publish: key not published as there is no usable KSK at this time", args->domain, args->algorithm, args->tag, ntohs(args->flags), ret);
+                    log_err("dnskey: %{dnsname}: +%03d+%05d/%d: publish: key not published as there is no usable KSK at this time", args->domain, args->algorithm, args->tag, ntohs(args->flags));
 
                     ret = DNSSEC_ERROR_RRSIG_NOUSABLEKEYS;
                 }
@@ -723,7 +744,7 @@ database_service_zone_resignature_unpublish_dnskey_thread(void *args_)
                 }
                 else
                 {
-                    log_warn("dnskey: %{dnsname}: +%03d+%05d/%d: unpublish: key should not be unpublished (ever)", args->domain, args->algorithm, args->tag, ntohs(args->flags), key->epoch_delete);
+                    log_warn("dnskey: %{dnsname}: +%03d+%05d/%d: unpublish: key should not be unpublished (ever)", args->domain, args->algorithm, args->tag, ntohs(args->flags));
                 }
             }
 

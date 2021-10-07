@@ -582,7 +582,10 @@ xfr_input_stream_fill(input_stream *is, u32 len)
                 break;
             }
 
-            packet_reader_skip(pr, 4);
+            if(FAIL(ret = packet_reader_skip(pr, 4)))
+            {
+                break;
+            }
 
             n--;
         }
@@ -918,12 +921,16 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
     if(message_get_rcode(mesg) != RCODE_NOERROR)
     {
         pool_release(&xfr_pool, pool);
-
-        return DNS_ERROR_CODE(message_get_rcode(mesg));
+        return MAKE_DNSMSG_ERROR(message_get_rcode(mesg));
     }
 
     packet_reader_init_from_message(&pr, mesg);
-    packet_reader_read_fqdn(&pr, record, RDATA_MAX_LENGTH + 1);
+
+    if(FAIL(packet_reader_read_fqdn(&pr, record, RDATA_MAX_LENGTH + 1)))
+    {
+        pool_release(&xfr_pool, pool);
+        return INVALID_PROTOCOL;
+    }
 
     if(!dnsname_equals(record, origin))
     {

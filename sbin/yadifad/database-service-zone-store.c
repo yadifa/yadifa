@@ -262,7 +262,7 @@ database_service_zone_store_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zone
                 }
                 else
                 {
-                    log_debug("zone store: %{dnsname}: cancelled by shutdown", zone_origin(zone_desc), file_name, ret);
+                    log_debug("zone store: %{dnsname}: cancelled by shutdown", zone_origin(zone_desc));
                 }
             }
         }

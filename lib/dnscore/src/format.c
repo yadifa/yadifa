@@ -2889,6 +2889,7 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
     bool address = (flags & OSPRINT_DUMP_ADDRESS) != 0;
     bool hex = (flags & OSPRINT_DUMP_HEX) != 0;
     bool text = (flags & OSPRINT_DUMP_TEXT) != 0;
+    bool squeeze_zeroes = (flags & OSPRINT_DUMP_SQUEEZE_ZEROES) != 0;
     
     size_t group = flags & OSPRINT_DUMP_LAYOUT_GROUP_MASK;
     group >>= OSPRINT_DUMP_LAYOUT_GROUP_SHIFT;
@@ -2914,6 +2915,7 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
 
     size_t dump_size;
     size_t i;
+    s64 zeroes_count = 0;
     
     char hexbyte[2];
 
@@ -2929,6 +2931,35 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
         }
 
         const u8* data;
+
+        if(squeeze_zeroes && (dump_size == line_size))
+        {
+            if(base_pointer_ < (const void*)data_pointer)
+            {
+                bool zeroes = TRUE;
+                for(int i = 0; i < (int)line_size; ++i)
+                {
+                    if(data_pointer[i] != 0)
+                    {
+                        zeroes = FALSE;
+                        break;
+                    }
+                }
+
+                if(zeroes)
+                {
+                    zeroes_count += line_size;
+                    data_pointer += dump_size;
+                    size -= dump_size;
+                    continue;
+                }
+                else if(zeroes_count > 0)
+                {
+                    osformatln(os,"\t\t... %lli zeroes ...", zeroes_count);
+                    zeroes_count = 0;
+                }
+            }
+        }
 
         if(address)
         {

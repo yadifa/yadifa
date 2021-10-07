@@ -1075,8 +1075,8 @@ program_mode_play(const u8 *domain, bool does_loop)
                     case MAKE_ERRNO_ERROR(ETIMEDOUT):
                     case MAKE_ERRNO_ERROR(EADDRNOTAVAIL):
                     case MAKE_ERRNO_ERROR(EAGAIN):
-                    case DNS_ERROR_CODE(RCODE_SERVFAIL):
-                    case DNS_ERROR_CODE(RCODE_REFUSED):
+                    case MAKE_DNSMSG_ERROR(RCODE_SERVFAIL):
+                    case MAKE_DNSMSG_ERROR(RCODE_REFUSED):
                     case UNABLE_TO_COMPLETE_FULL_READ:
                     {
                         ++consecutive_errors;

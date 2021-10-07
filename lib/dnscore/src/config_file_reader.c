@@ -84,7 +84,7 @@ struct config_file_reader
  * Prepends the path of the base file to the file path
  * file_path should be in a buffer of at least PATH_MAX chars
  * 
- * @param file_path
+ * @param file_path of size PATH_MAX
  * @param base_file_path
  * @return 
  */
@@ -255,6 +255,12 @@ config_file_reader_read(config_file_reader *cfr, config_error_s *cfgerr) /// con
                                 cfr->section_descriptor->vtbl->start(cfr->section_descriptor);
                                 
                                 cfr->expected_container = TRUE;
+                            }
+
+                            if(text_len - 2 > sizeof(cfr->current_container_name))
+                            {
+                                return_code = CONFIG_PARSE_SECTION_TAG_NOT_CLOSED; // because it's too big
+                                return return_code;
                             }
 
                             memcpy(cfr->current_container_name, &text[1], text_len - 2); // copy between < > 
@@ -428,11 +434,16 @@ config_file_reader_read(config_file_reader *cfr, config_error_s *cfgerr) /// con
                             return return_code;
                         }
                     }
-                    else // in container
-                    if(cfr->expected_container)
+                    else if(cfr->expected_container) // in container
                     {
                         // we are in a container : the current token is the key
-                        
+
+                        if(text_len - 1 > sizeof(cfr->key))
+                        {
+                            return_code = CONFIG_KEY_PARSE_ERROR;
+                            return return_code;
+                        }
+
                         memcpy(cfr->key, text, text_len);
 
                         cfr->key_length = text_len;
@@ -443,7 +454,6 @@ config_file_reader_read(config_file_reader *cfr, config_error_s *cfgerr) /// con
                         if(FAIL(return_code = parser_concat_next_tokens(p)))
                         {
                             return_code = CONFIG_PARSE_EXPECTED_VALUE;
-
                             return return_code;
                         }
                         
@@ -521,7 +531,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
     file_mtime_set_t *file_mtime_set = file_mtime_set_get_for_file(stream_name);
 
     // allocates and initialises a config file reader structure
-    
+
     MALLOC_OBJECT_OR_DIE(cfr, config_file_reader, CFREADER_TAG);
     ZEROMEMORY(cfr, sizeof(config_file_reader));
 
@@ -604,7 +614,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
 #if DEBUG
     memset(cfr, 0xfe, sizeof(config_file_reader));
 #endif
-    
+
     free(cfr);
 
     return return_code;

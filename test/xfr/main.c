@@ -189,7 +189,7 @@ main(int argc, char *argv[])
         
         if(FAIL(ret = base64_decode(argv[4], b64len, hmac)))
         {
-            formatln("%s cannot be decoded as base64: %r", ret);
+            formatln("%s cannot be decoded as base64: %r", argv[4], ret);
             help();
             return EXIT_FAILURE;
         }
@@ -201,7 +201,7 @@ main(int argc, char *argv[])
         {
             if(FAIL(ret = value_name_table_get_value_from_casename(hmac_digest_enum, argv[5], &hmac_algorithm)))
             {
-                formatln("%s is not a known hmac algorithm: %r", ret);
+                formatln("%s is not a known hmac algorithm: %r", argv[5], ret);
                 help();
                 return EXIT_FAILURE;
             }

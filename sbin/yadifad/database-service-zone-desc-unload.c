@@ -150,7 +150,7 @@ database_service_zone_desc_unload(zone_desc_s *zone_desc)
             }
             else
             {
-                log_err("zone: %{dnsname}: %p: config: not registered at all", zone_origin(zone_desc), zone_desc, zone_unregistered_desc);
+                log_err("zone: %{dnsname}: %p: config: not registered at all", zone_origin(zone_desc), zone_desc);
             }
         }
         

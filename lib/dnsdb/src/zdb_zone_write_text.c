@@ -283,6 +283,11 @@ zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, boo
     u32 dot_origin_len;
 #endif
     u32 stored_serial = 0;
+
+    if((zone == NULL) || (fos == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
     
     yassert(zdb_zone_islocked_weak(zone));
 
@@ -306,7 +311,7 @@ zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, boo
         }
         else
         {
-            log_err("%{dnsname}: no SOA record found at apex.");
+            log_err("%{dnsname}: no SOA record found at apex.", zone->origin);
         }
     }
     
@@ -874,7 +879,7 @@ zdb_zone_write_text_file(zdb_zone* zone, const char* output_file, u8 flags)
                 }
                 else
                 {
-                    log_err("%{dnsname}: could not move temporary file '%s' to overwrite '%s': %r", zone->origin, output_file, ERRNO_ERROR);
+                    log_err("%{dnsname}: could not move temporary file '%s' to overwrite '%s': %r", zone->origin, tmp, output_file, ERRNO_ERROR);
                     return ERROR;
                 }
             }

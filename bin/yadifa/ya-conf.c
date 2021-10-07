@@ -229,7 +229,7 @@ ya_conf_read(const cmdline_desc_s *cmdline_table, int argc, char **argv, cmdline
         {
             // should never happen
 
-            osformatln(termerr, "error: %r",  cfgerr.file, return_code);
+            osformatln(termerr, "error: %r",  return_code);
             flusherr();
         }
 

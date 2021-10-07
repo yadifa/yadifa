@@ -415,7 +415,7 @@ server_setup_env(pid_t *pid, char ** pid_file_pathp, uid_t uid, gid_t gid, u32 s
 
         if(FAIL(return_code = chroot_jail()))  /* Chroot to new path */
         {
-            log_err("failed to jail: %r");
+            log_err("failed to jail: %r", return_code);
             return return_code;
         }
     }

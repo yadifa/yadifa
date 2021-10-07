@@ -71,6 +71,7 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
 
     if(p >= p_limit)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF; /* EOF */
     }
 
@@ -82,6 +83,7 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
         {
             if(p >= p_limit)
             {
+                reader->offset = reader->packet_size;
                 return UNEXPECTED_EOF; /* EOF */
             }
 
@@ -109,6 +111,7 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
 
         if(p + len >= p_limit)
         {
+            reader->offset = reader->packet_size;
             return UNEXPECTED_EOF;
         }
 
@@ -162,6 +165,7 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
 
         if(p + len >= p_limit)
         {
+            reader->offset = reader->packet_size;
             return UNEXPECTED_EOF;
         }
 
@@ -196,6 +200,7 @@ packet_reader_read(packet_unpack_reader_data* reader, void *output_buffer, u32 l
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -215,6 +220,7 @@ packet_reader_read_u16(packet_unpack_reader_data* reader, u16 *val)
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -231,6 +237,7 @@ packet_reader_skip_bytes(packet_unpack_reader_data* reader, u16 count)
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -248,6 +255,7 @@ packet_reader_read_dnstype(packet_unpack_reader_data* reader)
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -265,6 +273,7 @@ packet_reader_read_dnsclass(packet_unpack_reader_data* reader)
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -322,6 +331,7 @@ packet_reader_read_u32(packet_unpack_reader_data* reader, u32 *val)
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -360,6 +370,7 @@ packet_reader_read_zone_record(packet_unpack_reader_data* reader, u8* output_buf
     }
     else
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 }
@@ -444,7 +455,7 @@ packet_reader_skip_section(packet_unpack_reader_data* reader, int section)
 
 
 ya_result
-packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_size, u8 *buffer, u32 buffer_size)
+packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, s32 rdata_size, u8 *buffer, s32 buffer_size)
 {
     u8* rdata_start = buffer;
     const u32 rdata_limit = reader->offset + rdata_size; // without compression, this is where the rdata ends + 1 byte
@@ -452,6 +463,7 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
 
     if(packet_reader_available(reader) < rdata_size)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 
@@ -464,7 +476,7 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
         case TYPE_MX:
         case TYPE_AFSDB:
         {
-            packet_reader_read_unchecked(reader, buffer, 2); // exact
+            u8 *p = buffer;
             buffer += 2;
             buffer_size -= 2;
             rdata_size -= 2;
@@ -473,6 +485,8 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
             {
                 return INVALID_RECORD;      /* wrong size */
             }
+
+            packet_reader_read_unchecked(reader, p, 2); // exact
 
             if(FAIL(ret = packet_reader_read_fqdn(reader, buffer, buffer_size))) /* err = error code or bytes filled, not bytes read (compression) */
             {
@@ -614,7 +628,7 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
                 return UNSUPPORTED_RECORD;    /* key is too big */
             }
             
-            packet_reader_skip_unchecked(reader, rdata_size);
+            packet_reader_skip_unchecked(reader, rdata_size);   // checked
 
             return UNSUPPORTED_TYPE;
         }
@@ -625,7 +639,7 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
                 return UNSUPPORTED_RECORD;    /* key is too big */
             }
             
-            packet_reader_skip_unchecked(reader, rdata_size);
+            packet_reader_skip_unchecked(reader, rdata_size);   // checked
 
             return UNSUPPORTED_TYPE;
         }
@@ -671,7 +685,7 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
         */
         default:
         {
-            packet_reader_read_unchecked(reader, buffer, rdata_size); // exact
+            packet_reader_read_unchecked(reader, buffer, rdata_size); // exact // rdata_size has been checked for overflow already
             buffer += rdata_size;
             break;
         }
@@ -679,6 +693,7 @@ packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_
     
     if(rdata_limit != reader->offset)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
     
@@ -723,6 +738,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
  *  ret always return either what was asked, either unexpected eof
  *  if(ret != 10)
  *  {
+ *       reader->offset = reader->packet_size;
  *       return UNEXPECTED_EOF;
  *  }
  */
@@ -740,6 +756,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
     if(packet_reader_available(reader) < rdata_size)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 
@@ -764,7 +781,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
         case TYPE_MX:
         case TYPE_AFSDB:
         {
-            packet_reader_read_unchecked(reader, buffer, 2); // exact
+            u8 *p = buffer;
 
             buffer += 2;
             len -= 2;
@@ -774,6 +791,8 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
             {
                 return INVALID_RECORD;      /* wrong rdata_size */
             }
+
+            packet_reader_read_unchecked(reader, p, 2); // exact
 
             if(FAIL(ret = packet_reader_read_fqdn(reader, buffer, len))) /* err = error code or bytes filled, not bytes read (compression) */
             {
@@ -855,6 +874,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
 
             if(rdata_size < RRSIG_RDATA_HEADER_LEN)
             {
+                reader->offset = reader->packet_size;
                 return UNEXPECTED_EOF;
             }
 
@@ -915,7 +935,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return UNSUPPORTED_RECORD;    /* key is too big */
             }
             
-            packet_reader_skip_unchecked(reader, rdata_size);
+            packet_reader_skip_unchecked(reader, rdata_size);   // checked
 
             //buffer += err;
 
@@ -928,7 +948,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
                 return UNSUPPORTED_RECORD;    /* key is too big */
             }
             
-            packet_reader_skip_unchecked(reader, rdata_size);
+            packet_reader_skip_unchecked(reader, rdata_size);   // checked
 
             return UNSUPPORTED_TYPE;
         }
@@ -982,6 +1002,7 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
     
     if(rdata_limit != reader->offset)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
 
@@ -1039,13 +1060,12 @@ packet_reader_skip_fqdn(packet_unpack_reader_data* reader)
     /* Testing for a minimum len size is pointless */
 
     u32 from = reader->offset;
-
     const u8* p_limit = &reader->packet[reader->packet_size];
-
     const u8* p = &reader->packet[reader->offset];
 
     if(p >= p_limit)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF; /* EOF */
     }
 
@@ -1068,6 +1088,7 @@ packet_reader_skip_fqdn(packet_unpack_reader_data* reader)
 
         if(p + len >= p_limit)
         {
+            reader->offset = reader->packet_size;
             return UNEXPECTED_EOF;
         }
 
@@ -1095,14 +1116,15 @@ packet_reader_skip_record(packet_unpack_reader_data* reader)
     /* read the TYPE CLASS TTL RDATASIZE (10 bytes) */
 
     u16 size = ntohs(GET_U16_AT(reader->packet[reader->offset + 8]));
+    u32 next_offset = reader->offset + 10 + size;
 
-    reader->offset += 10;
-    reader->offset += size;
-
-    if(reader->offset > reader->packet_size)
+    if(next_offset > reader->packet_size)
     {
+        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF;
     }
+
+    reader->offset = next_offset;
 
     /*
      * This len was the rdata_size but this was the packed size.
@@ -1176,36 +1198,42 @@ packet_reader_read_utf8(packet_unpack_reader_data *reader, u16 rdatasize, u16 rc
     else
     {
         MALLOC_OR_DIE(char *, tmp, rdatasize + 1, TMP00003_TAG);
-        packet_reader_read(reader, (u8*)tmp, rdatasize);
-        tmp[rdatasize] = '\0';
-
-        if(is_utf8(tmp, rdatasize))
+        if(ISOK(packet_reader_read(reader, (u8*)tmp, rdatasize)))
         {
-            return_value = SUCCESS;
+            tmp[rdatasize] = '\0';
 
-            if(!dryrun)
+            if(is_utf8(tmp, rdatasize))
             {
-                if(rclass != CLASS_NONE)
-                {
-                    if(*txt != NULL)
-                    {
-                        free(*txt);
-                    }
+                return_value = SUCCESS;
 
-                    *txt = tmp;
-                    tmp = NULL;
-                }
-                else
+                if(!dryrun)
                 {
-                    if(*txt != NULL)
+                    if(rclass != CLASS_NONE)
                     {
-                        if(strcmp(*txt, tmp) == 0)
+                        if(*txt != NULL)
                         {
                             free(*txt);
-                            *txt = NULL;
+                        }
+
+                        *txt = tmp;
+                        tmp = NULL;
+                    }
+                    else
+                    {
+                        if(*txt != NULL)
+                        {
+                            if(strcmp(*txt, tmp) == 0)
+                            {
+                                free(*txt);
+                                *txt = NULL;
+                            }
                         }
                     }
                 }
+            }
+            else
+            {
+                return_value = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
             }
         }
         else

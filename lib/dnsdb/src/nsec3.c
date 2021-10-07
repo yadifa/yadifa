@@ -1336,27 +1336,35 @@ nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout
     dynupdate_message_set_reader(&dmsg, &reader);
     u16 count = dynupdate_message_get_count(&dmsg);
 
-    packet_reader_skip(&reader, DNS_HEADER_LENGTH);
-    packet_reader_skip_fqdn(&reader);
-    packet_reader_skip(&reader, 4);
-#if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
-    if(zone_get_maintain_mode(zone) == 0)
-    {
-        zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
-    }
-#endif
+    packet_reader_skip(&reader, DNS_HEADER_LENGTH); // checked below
+    packet_reader_skip_fqdn(&reader);               // checked below
+    packet_reader_skip(&reader, 4);             // checked below
 
     ya_result ret;
-    
-    ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN);
-    
-    dynupdate_message_finalize(&dmsg);
-    
-    if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+
+    if(!packet_reader_eof(&reader))
     {
-        // trigger a background store of the zone
-        
-        zdb_zone_info_background_store_zone(zone->origin);
+#if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
+        if(zone_get_maintain_mode(zone) == 0)
+        {
+            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+        }
+#endif
+
+        ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN);
+
+        dynupdate_message_finalize(&dmsg);
+
+        if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+        {
+            // trigger a background store of the zone
+
+            zdb_zone_info_background_store_zone(zone->origin);
+        }
+    }
+    else
+    {
+        ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
     }
         
     return ret;

@@ -205,7 +205,7 @@ rrsig_test(const host_address *ip, const u8 *zone_fqdn, const u8 *fqdn, u16 qtyp
             }
             else
             {
-                formatln("%{dnsname}: keyring is empty", zone_fqdn, &qtype);
+                formatln("%{dnsname} %{dnstype}: keyring is empty", zone_fqdn, &qtype);
             }
         }
         else

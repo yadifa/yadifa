@@ -209,7 +209,7 @@ axfr_process(message_data *mesg, int sockfd)
     }
     else
     {
-        log_err("axfr: %{dnsname}: could not send error message: %r (%{sockaddr})", send_ret, message_get_sender(mesg));
+        log_err("axfr: %{dnsname}: could not send error message: %r (%{sockaddr})", message_get_canonised_fqdn(mesg), send_ret, message_get_sender(mesg));
     }
 
     yassert((sockfd < 0)||(sockfd >2));
@@ -288,7 +288,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
             tcp_set_sendtimeout(fd, 30, 0);
             tcp_set_recvtimeout(fd, 30, 0);
             
-            log_info("axfr: %{dnsname}: truncating journal", origin, data_path, return_value);
+            log_info("axfr: %{dnsname}: truncating journal", origin);
 
             /* delete ix files */
 

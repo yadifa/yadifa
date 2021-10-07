@@ -259,7 +259,7 @@ message_viewer_dig_question_record(message_viewer *mv, const u8 *record_wire, u1
     u64 next = counters.write_count + 24 + 8;
 
     /* write NAME + alignment for next item */
-    osformat(os, ";%{dnsname}", record_wire, ' ');
+    osformat(os, ";%{dnsname}", record_wire);
     while(counters.write_count < next)
     {
         output_stream_write_u8(os, (u8) ' ');

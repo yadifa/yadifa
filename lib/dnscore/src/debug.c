@@ -107,6 +107,7 @@ extern output_stream __termerr__;
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
+#if DNSCORE_HAS_MMAP_DEBUG_SUPPORT
 struct debug_mmap_s
 {
     void *addr;
@@ -124,6 +125,7 @@ typedef struct debug_mmap_s debug_mmap_t;
 
 static ptr_set_debug debug_mmap_set = PTR_SET_DEBUG_EMPTY;
 static pthread_mutex_t debug_mmap_mtx = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 #if HAS_LIBC_MALLOC_DEBUG_SUPPORT
 

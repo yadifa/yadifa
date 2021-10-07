@@ -135,7 +135,7 @@ nsec3_free_node(nsec3_zone_item* node)
 
     if(node->rrsig != NULL)
     {
-        log_warn("NSEC3 node %{digest32h} being deleted is still signed", node->digest, node->rc, node->sc);
+        log_warn("NSEC3 node %{digest32h} being deleted is still signed", node->digest);
 
         zdb_packed_ttlrdata *rrsig = node->rrsig;
 

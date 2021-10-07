@@ -1077,7 +1077,7 @@ zonesign_run()
 
         if(t < 0)
         {
-            formatln("error: could not parse '%s' as a date time: %r", g_yadifa_zonesign_settings.now_text);
+            formatln("error: could not parse '%s' as a date time: %r", g_yadifa_zonesign_settings.now_text, (ya_result)t);
             return (ya_result)t;
         }
 
@@ -1098,7 +1098,7 @@ zonesign_run()
 
         if(t < 0)
         {
-            formatln("error: could not parse '%s' as a date time: %r", g_yadifa_zonesign_settings.from_time_text);
+            formatln("error: could not parse '%s' as a date time: %r", g_yadifa_zonesign_settings.from_time_text, (ya_result)t);
             return (ya_result)t;
         }
 
@@ -1115,7 +1115,7 @@ zonesign_run()
 
         if(t < 0)
         {
-            formatln("error: could not parse '%s' as a date time: %r", g_yadifa_zonesign_settings.to_time_text);
+            formatln("error: could not parse '%s' as a date time: %r", g_yadifa_zonesign_settings.to_time_text, (ya_result)t);
             return (ya_result)t;
         }
 
@@ -1212,7 +1212,7 @@ zonesign_run()
 
     if(FAIL(ret = zone_reader_text_open(g_yadifa_zonesign_settings.input_file, &zr)))
     {
-        formatln("error: could not read '%s' zone file: %r", ret);
+        formatln("error: could not read '%s' zone file: %r", g_yadifa_zonesign_settings.input_file, ret);
         return ret;
     }
 

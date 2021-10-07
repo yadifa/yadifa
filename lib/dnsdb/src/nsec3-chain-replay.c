@@ -708,7 +708,7 @@ nsec3_chain_replay_execute(chain_replay *cr)
             if(FAIL(digest_len))
             {
                 log_err("nsec3-chain: %{dnsname}: failed to decode base32hex: %r", crd->zone->origin, digest_len);
-                log_err("nsec3-chain: %{dnsname}: there may be a corruption somewhere (file, disk, ram, network, master, ...)", crd->zone->origin, digest_len);
+                log_err("nsec3-chain: %{dnsname}: there may be a corruption somewhere (file, disk, ram, network, master, ...)", crd->zone->origin);
                 ret = DNSSEC_ERROR_NSEC3_LABELTODIGESTFAILED; // replay NSEC3 fqdn base32hex cannot be decoded
 
                 logger_flush();

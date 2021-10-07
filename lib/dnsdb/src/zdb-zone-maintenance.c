@@ -1295,7 +1295,7 @@ zdb_zone_maintenance(zdb_zone* zone)
             }
             else
             {
-                log_debug("maintenance: %{dnsname}: pausing (%r) (may try again)", zone->origin, zone->progressive_signature_update.current_fqdn, ret);
+                log_debug("maintenance: %{dnsname}: pausing (%r) (may try again)", zone->origin, ret);
             }
         }
     }

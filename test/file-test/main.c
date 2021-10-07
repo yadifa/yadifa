@@ -231,7 +231,7 @@ test_linear(file_t f, const char *name)
     
     if(memcmp_give_offset(raw_data, tmp_data, raw_size) != 0)
     {
-        formatln("test-linear: %s: read bytes do not match written bytes");
+        formatln("test-linear: %s: read bytes do not match written bytes", name);
         flushout(); return ERROR;
     }
     
@@ -360,7 +360,7 @@ test_linear_multipass(file_t f, const char *name)
     
     if(memcmp_give_offset(raw_data, tmp_data, raw_size) != 0)
     {
-        formatln("test-linear-multipass: %s: read bytes do not match written bytes");
+        formatln("test-linear-multipass: %s: read bytes do not match written bytes", name);
         flushout(); return ERROR;
     }
     
@@ -496,7 +496,7 @@ test_linear_multipass_readback(file_t f, const char *name)
     
     if(memcmp_give_offset(raw_data, tmp_data, raw_size) != 0)
     {
-        formatln("test-linear-multipass-readback: %s: read-back bytes do not match written bytes");
+        formatln("test-linear-multipass-readback: %s: read-back bytes do not match written bytes", name);
         flushout(); return ERROR;
     }
     
@@ -559,7 +559,7 @@ test_linear_multipass_readback(file_t f, const char *name)
     
     if(memcmp_give_offset(raw_data, tmp_data, raw_size) != 0)
     {
-        formatln("test-linear-multipass-readback: %s: read bytes do not match written bytes");
+        formatln("test-linear-multipass-readback: %s: read bytes do not match written bytes", name);
         flushout(); return ERROR;
     }
     
@@ -704,7 +704,7 @@ test_linear_multipass_multi_readback(file_t f, const char *name)
     
     if(memcmp_give_offset(raw_data, tmp_data, raw_size) != 0)
     {
-        formatln("test-linear-multipass-multi-readback: %s: read-back bytes do not match written bytes");
+        formatln("test-linear-multipass-multi-readback: %s: read-back bytes do not match written bytes", name);
         flushout(); return ERROR;
     }
     
@@ -767,7 +767,7 @@ test_linear_multipass_multi_readback(file_t f, const char *name)
     
     if(memcmp_give_offset(raw_data, tmp_data, raw_size) != 0)
     {
-        formatln("test-linear-multipass-multi-readback: %s: read bytes do not match written bytes");
+        formatln("test-linear-multipass-multi-readback: %s: read bytes do not match written bytes", name);
         flushout(); return ERROR;
     }
     
@@ -1182,7 +1182,7 @@ main(int argc, char *argv[])
             }
             else
             {
-                formatln("Invalid parameter %i: expects value in [ 0; %i [", TEST_COUNT);
+                formatln("Invalid parameter %i: expects value in [ 0; %i [", i, TEST_COUNT);
             }
         }
     }

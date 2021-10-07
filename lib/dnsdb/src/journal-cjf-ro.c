@@ -430,7 +430,7 @@ journal_cjf_ro_init_from_file(journal_cjf **jnlp, const u8 *origin, const char *
 {
     (void)create;
 
-    log_debug3("cjf-ro: %{dnsname}: opening%s %s", origin, filename);
+    log_debug3("cjf-ro: %{dnsname}: opening %s", origin, filename);
     
     int flags = O_RDWR|O_CLOEXEC;
 #ifdef O_NOATIME
@@ -713,7 +713,7 @@ journal_cjf_ro_page_cache_read(file_pool_file_t file, u64 file_offset, s16 offse
     file_pool_readfully(file, value, value_len);
     file_pool_seek(file, current_position, SEEK_SET);
 
-    log_debug("cjf: %s: %lli=%llx read {%08x,%9lld,%4d, %p,%08x}", file_pool_filename(file), file_offset, file_offset, offset, value, value_len);
+    log_debug("cjf: %s: %lli=%llx read {%4d, %p,%08x}", file_pool_filename(file), file_offset, file_offset, offset, value, value_len);
 }
 
 static void
@@ -1241,9 +1241,6 @@ journal_cjf_ro_close(journal *jh)
     
     if(jnl->file != NULL)
     {
-
-        log_debug3("cjf-ro: %s,%p: closing file", jnl->journal_file_name, jnl->file, jnl->journal_file_name);
-
         log_info("zone: %{dnsname}: closing journal file '%s'", jnl->origin, jnl->journal_file_name);
 
         file_pool_close(jnl->file);
@@ -1517,7 +1514,7 @@ journal_cjf_ro_idxt_verify(journal_cjf *jnl)
             // invalid position (as EBADF should not happen)
             ya_result ret = ERRNO_ERROR;
 
-            log_err("cjf: %{dnsname}: page[%i] seek at %u returned %r", jnl->origin, page, ret);
+            log_err("cjf: %{dnsname}: page[%i] seek at %u returned %r", jnl->origin, page, entry->file_offset, ret);
 
             return ret;
         }
@@ -1547,7 +1544,7 @@ journal_cjf_ro_idxt_verify(journal_cjf *jnl)
         if(page_hdr.count > page_hdr.size)
         {
             // page is corrupted
-            log_err("cjf: %{dnsname}: page[%i] says to contain more than allowed", jnl->origin, page, page_hdr.count, page_hdr.size);
+            log_err("cjf: %{dnsname}: page[%i] says to contain more than allowed", jnl->origin, page);
             return ERROR;
         }
 

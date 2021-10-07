@@ -1039,8 +1039,8 @@ journal_jnl_get_position_for_serial_nolock(journal_jnl *jnl, u32 serial)
 
             if(!found)
             {
-                log_err("jnl: %s,%p: failed to read page for serial %u: position was not found (serial range is [%u; %u]", circular_file_name(jnl->file), jnl->file, serial, position,
-                        jnl->hdr.serial_begin, jnl->hdr.serial_end);
+                log_err("jnl: %s,%p: failed to read page for serial %u: position was not found (serial range is [%u; %u]",
+                        circular_file_name(jnl->file), jnl->file, serial, jnl->hdr.serial_begin, jnl->hdr.serial_end);
 
                 return ERROR;
             }
@@ -1087,7 +1087,8 @@ journal_jnl_get_position_for_serial_nolock(journal_jnl *jnl, u32 serial)
                 {
                     if(prev_serial_from_ready && serial_ge(prev_serial_from, page.serial_from))
                     {
-                        log_err("jnl: %s,%p: looking for %u at position %u: page serial did not increment: previous was %u, current is %u", circular_file_name(jnl->file), jnl->file, serial, position, ret, prev_serial_from, page.serial_from);
+                        log_err("jnl: %s,%p: looking for %u at position %u: page serial did not increment: previous was %u, current is %u",
+                                circular_file_name(jnl->file), jnl->file, serial, position, prev_serial_from, page.serial_from);
 
                         ret = ZDB_JOURNAL_LOOKS_CORRUPTED; // something is fishy
                         break;
@@ -1101,7 +1102,8 @@ journal_jnl_get_position_for_serial_nolock(journal_jnl *jnl, u32 serial)
                     }
                     else if(serial_gt(page.serial_from, serial))
                     {
-                        log_err("jnl: %s,%p: looking for %u at position %u: serial not found, current is %u, which is after it", circular_file_name(jnl->file), jnl->file, serial, position, ret, page.serial_from);
+                        log_err("jnl: %s,%p: looking for %u at position %u: serial not found, current is %u, which is after it",
+                                circular_file_name(jnl->file), jnl->file, serial, position, page.serial_from);
 
                         ret = ZDB_JOURNAL_LOOKS_CORRUPTED; // serial jumping the wrong way: probable corruption
                         break;
@@ -1116,7 +1118,8 @@ journal_jnl_get_position_for_serial_nolock(journal_jnl *jnl, u32 serial)
                 }
                 else
                 {
-                    log_err("jnl: %s,%p: failed to read page for serial %u at position %u: bad magic: expected %08x, got %08x", circular_file_name(jnl->file), jnl->file, serial, position, ret, PAGE_MAGIC, page.magic);
+                    log_err("jnl: %s,%p: failed to read page for serial %u at position %u: bad magic: expected %08x, got %08x",
+                            circular_file_name(jnl->file), jnl->file, serial, position, PAGE_MAGIC, page.magic);
                     
                     ret = ZDB_JOURNAL_UNEXPECTED_MAGIC; // bad magic
                     
@@ -2800,7 +2803,7 @@ journal_jnl_open_file(journal **jhp, const char *filename, const u8* origin, boo
                     if(unlink(filename) < 0)
                     {
                         int err = ERRNO_ERROR;
-                        log_err("jnl: %{dnsname}: failed to delete the corrupted journal: %r", origin, filename, err);
+                        log_err("jnl: %{dnsname}: failed to delete the corrupted journal: %r", origin, err);
                         return err;
                     }
                 }

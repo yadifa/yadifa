@@ -1007,7 +1007,7 @@ journal_answer_ixfr(journal *jh, message_data* mesg, int tcpfd, s32 packet_recor
         {
             // this is technically possible with an RDATA of 64K
             log_err("journal ixfr: %{dnsname}: %{sockaddr}: ignoring record of size %u", origin, message_get_sender_sa(mesg), record_length);          
-            log_err("journal ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsrr}", origin, message_get_sender_sa(mesg), return_value, &rr);
+            log_err("journal ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsrr}", origin, message_get_sender_sa(mesg), &rr);
             continue;
         }
         

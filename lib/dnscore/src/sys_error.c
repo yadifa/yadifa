@@ -382,9 +382,6 @@ dnscore_register_errors()
     error_register(INVALID_CHARSET, "INVALID_CHARSET");
     error_register(ZONEFILE_INVALID_TYPE, "ZONEFILE_INVALID_TYPE");
     error_register(DOMAINNAME_INVALID, "DOMAINNAME_INVALID");
-    error_register(TSIG_BADKEY, "TSIG_BADKEY");
-    error_register(TSIG_BADTIME, "TSIG_BADTIME");
-    error_register(TSIG_BADSIG, "TSIG_BADSIG");
     error_register(TSIG_FORMERR, "TSIG_FORMERR");
     error_register(TSIG_SIZE_LIMIT_ERROR, "TSIG_SIZE_LIMIT_ERROR");
     error_register(UNPROCESSABLE_MESSAGE, "UNPROCESSABLE_MESSAGE");

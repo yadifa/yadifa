@@ -442,7 +442,7 @@ server_tcp(const host_address *ha, const host_address *client)
     if(listen(sockfd, 10) < 0)
     {
         ret = ERRNO_ERROR;
-        log_err("failed to listen: %r", addr->ai_addr, ret);
+        log_err("failed to listen to %{sockaddr}: %r", addr->ai_addr, ret);
         close(sockfd);
         free(addr);
         return ret;

@@ -131,7 +131,7 @@ struct zdb_zone_answer_ixfr_args
 };
 
 static void
-zdb_zone_answer_ixfr_thread_exit(zdb_zone_answer_ixfr_args* data)
+zdb_zone_answer_ixfr_thread_finalize(zdb_zone_answer_ixfr_args* data)
 {
     log_debug("zone write ixfr: ended with: %r", data->return_code);
 
@@ -285,6 +285,74 @@ zdb_zone_answer_ixfr_send_message(output_stream *tcpos, packet_writer *pw, messa
     return return_code;
 }
 
+static void
+zdb_zone_answer_ixfr_thread_close_finalize(zdb_zone_answer_ixfr_args* data, ya_result ret)
+{
+#if DNSCORE_HAS_TCP_MANAGER
+    tcp_manager_close(data->sctx);
+#else
+    shutdown(data->sockfd, SHUT_RDWR);
+    close_ex(data->sockfd);
+    data->sockfd = -1;
+#endif
+    data->return_code = ret;
+    zdb_zone_answer_ixfr_thread_finalize(data);
+}
+
+static ya_result
+zdb_zone_answer_ixfr_thread_read_SOA_serial(zdb_zone_answer_ixfr_args* data, packet_unpack_reader_data *purd, u32 *serialp)
+{
+    struct type_class_ttl_rdlen tctr;
+    u8 fqdn[MAX_DOMAIN_LENGTH];
+
+    if((data == NULL) || (purd == NULL) || (serialp == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+    if(FAIL(packet_reader_read_fqdn(purd, fqdn, sizeof(fqdn))))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(!dnsname_equals_ignorecase(fqdn, data->zone->origin))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(FAIL(packet_reader_read(purd, &tctr, 10)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(tctr.qtype != TYPE_SOA)
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(FAIL(packet_reader_skip_fqdn(purd)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(FAIL(packet_reader_skip_fqdn(purd)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(packet_reader_available(purd) != 20)
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(FAIL(packet_reader_read(purd, (u8*)serialp, 4)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    return SUCCESS;
+}
+
 /*
  * writes the filtered stream to a file, then adds it to the journal
  * the journal needs to give fast access to the last SOA in it ...
@@ -379,7 +447,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
         data->return_code = MAKE_ERRNO_ERROR(ENOTSOCK);
 
-        zdb_zone_answer_ixfr_thread_exit(data);
+        zdb_zone_answer_ixfr_thread_finalize(data);
         
         return NULL;
     }
@@ -421,8 +489,8 @@ zdb_zone_answer_ixfr_thread(void* data_)
         data->return_code = ZDB_ERROR_NOSOAATAPEX;
 
         log_crit("zone write ixfr: %{dnsname}: no SOA in zone", data->zone->origin); /* will ultimately lead to the end of the program */
-        
-        zdb_zone_answer_ixfr_thread_exit(data);
+
+        zdb_zone_answer_ixfr_thread_finalize(data);
                 
         return NULL;        
     }
@@ -450,20 +518,33 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     /* Keep only the query */
 
-    packet_reader_skip_fqdn(&purd);
-    purd.offset += 4;
+    if(FAIL( packet_reader_skip_fqdn(&purd)))
+    {
+        log_crit("zone write ixfr: %{dnsname}: format error", data->zone->origin); /* will ultimately lead to the end of the program */
+        zdb_zone_answer_ixfr_thread_close_finalize(data, MAKE_DNSMSG_ERROR(RCODE_FORMERR));
+        return NULL;
+    }
 
-    message_set_size(mesg, purd.offset);
+    if(packet_reader_available(&purd) < 4 + 10)
+    {
+        log_crit("zone write ixfr: %{dnsname}: format error", data->zone->origin); /* will ultimately lead to the end of the program */
+        zdb_zone_answer_ixfr_thread_close_finalize(data, MAKE_DNSMSG_ERROR(RCODE_FORMERR));
+        return NULL;
+    }
 
-    /* Get the queried serial */
+    purd.offset += 4; // type & class
 
-    packet_reader_skip_fqdn(&purd);
-    
-    purd.offset += 2 + 2 + 4 + 2;
+    message_set_size(mesg, purd.offset); // the part after this will be overwritten later
 
-    packet_reader_skip_fqdn(&purd);
-    packet_reader_skip_fqdn(&purd);
-    packet_reader_read(&purd, (u8*)&serial, 4);
+    /* Get the queried serial from the expected SOA record */
+
+    if(FAIL(zdb_zone_answer_ixfr_thread_read_SOA_serial(data, &purd, &serial)))
+    {
+        log_crit("zone write ixfr: %{dnsname}: format error", data->zone->origin); /* will ultimately lead to the end of the program */
+        zdb_zone_answer_ixfr_thread_close_finalize(data, MAKE_DNSMSG_ERROR(RCODE_FORMERR));
+        return NULL;
+    }
+
     serial = ntohl(serial);
     
     log_debug("zone write ixfr: %{dnsname}: %{sockaddr}: client requested changes from serial %08x (%d)", data->zone->origin, message_get_sender_sa(mesg), serial, serial);
@@ -511,18 +592,6 @@ zdb_zone_answer_ixfr_thread(void* data_)
         }
     }
 
-#if 0
-    if((rand() & 3) == 3)
-    {
-        if(ISOK(return_value))
-        {
-            dns_resource_record_clear(&rr);
-            input_stream_close(&fis);
-            return_value = ZDB_JOURNAL_IS_BUSY;
-        }
-    }
-#endif
-
     if(FAIL(return_value))
     {
         dns_resource_record_clear(&rr);
@@ -558,8 +627,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
         }
 
         data->return_code = return_value;
-
-        zdb_zone_answer_ixfr_thread_exit(data);
+        zdb_zone_answer_ixfr_thread_finalize(data);
         
         return NULL;
     }
@@ -589,8 +657,8 @@ zdb_zone_answer_ixfr_thread(void* data_)
 #endif
 
         data->return_code = BUFFER_WOULD_OVERFLOW;
-        
-        zdb_zone_answer_ixfr_thread_exit(data);
+
+        zdb_zone_answer_ixfr_thread_finalize(data);
         
         return NULL;
     }
@@ -640,8 +708,8 @@ zdb_zone_answer_ixfr_thread(void* data_)
 
     data->mesg = NULL; // still need the message.  do not destroy it
     data->return_code = SUCCESS;
-    
-    zdb_zone_answer_ixfr_thread_exit(data);
+
+    zdb_zone_answer_ixfr_thread_finalize(data);
 
     /* WARNING: From this point forward, 'data' cannot be used anymore */
 
@@ -773,7 +841,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
             // this is technically possible with an RDATA of 64K
             log_err("zone write ixfr: %{dnsname}: %{sockaddr}: ignoring record of size %u", origin, message_get_sender_sa(mesg), record_length);
             rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
-            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsname} %{typerdatadesc}", origin, message_get_sender_sa(mesg), return_value, fqdn, &rr_desc);
+            log_err("zone write ixfr: %{dnsname}: %{sockaddr}: record is: %{dnsname} %{typerdatadesc}", origin, message_get_sender_sa(mesg), fqdn, &rr_desc);
             continue;
         }
         
@@ -907,14 +975,22 @@ zdb_zone_answer_ixfr(
     bool compress_dname_rdata)
 {
     zdb_zone_answer_ixfr_args* args;
-        
+
+    message_data *clone = message_dup(mesg);
+    if(clone == NULL)
+    {
+        log_warn("zone write axfr: %{dnsname}: %{sockaddr}: cannot answer, message cannot be processed", zone->origin, message_get_sender_sa(mesg));
+        close_ex(sockfd);
+        return; // BUFFER_WOULD_OVERFLOW;
+    }
+
     log_info("zone write ixfr: %{dnsname}: %{sockaddr}: queueing answer", zone->origin, message_get_sender_sa(mesg));
     
     MALLOC_OBJECT_OR_DIE(args, zdb_zone_answer_ixfr_args, ZAIXFRA_TAG);
     zdb_zone_acquire(zone);
     args->zone = zone;
 
-    args->mesg = message_dup(mesg);
+    args->mesg = clone;
     args->disk_tp = disk_tp;
 #if DNSCORE_HAS_TCP_MANAGER
     args->sctx = sctx;

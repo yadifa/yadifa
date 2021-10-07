@@ -677,7 +677,7 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_
             }
             else
             {
-                log_debug("zone load: '%s' load cancelled by shutdown", zone_domain(zone_desc), return_value, load_time);
+                log_debug("zone load: '%s' load cancelled by shutdown", zone_domain(zone_desc));
             }
         }
     }
@@ -847,7 +847,7 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
             
             if(error_code != RCODE_OK)
             {
-                return_value = MAKE_DNSMSG_ERROR(error_code);
+                return_value = MAKE_DNSMSG_ERROR(error_code); // error_code is an rcode
                 
                 log_err("zone load: %{dnsname}: %{hostaddr}: master answered with error code: %r", zone_desc_origin, zone_desc_masters, return_value);
                 
@@ -1283,7 +1283,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_p
             }
             else if(ZDB_JOURNAL_SHOULD_NOT_BE_USED(ret))
             {
-                log_err("zone load: %{dnsname}: journal wasn't usable", zone_desc_origin, serial_from, serial_to);
+                log_err("zone load: %{dnsname}: journal wasn't usable", zone_desc_origin);
             }
         
             // compare the db (the loaded zone) with the best source

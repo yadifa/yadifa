@@ -793,7 +793,7 @@ server_rw_udp_sender_thread(void *parms)
                             else if(dest_port < 0)
                             {
                                 log_err("server-rw: error replying to message %04hx %{dnsname} %{dnstype} invalid IP family",
-                                        ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), mesg->_msghdr.msg_name);
+                                        ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg));
                             }
                             else
                             {

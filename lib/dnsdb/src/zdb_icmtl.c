@@ -765,7 +765,7 @@ zdb_icmtl_replay_commit_ex(zdb_zone *zone, input_stream *is, zdb_icmtl_replay_co
             has_nsec3 = zdb_zone_is_nsec3(zone);
             has_nsec = zdb_zone_is_nsec(zone);
             
-            log_debug("journal: %{dnsname}: has NSEC3: %i, has NSEC: %i", has_nsec3, has_nsec);
+            log_debug("journal: %{dnsname}: has NSEC3: %i, has NSEC: %i", zone->origin, has_nsec3, has_nsec);
         }        
 #endif
         

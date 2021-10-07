@@ -1919,7 +1919,7 @@ database_zone_update_signatures_at(zdb_zone *zone, u32 at)
 void
 database_zone_unload(zdb_zone *zone)
 { 
-    log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_ZONE_UNLOAD", zone->origin, zone);
+    log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_ZONE_UNLOAD", zone->origin);
     
     zdb_zone_acquire(zone);
     
@@ -2543,7 +2543,7 @@ database_fire_zone_mounted(zone_desc_s *zone_desc, zdb_zone *zone, ya_result res
 void
 database_fire_zone_unloaded(zdb_zone *zone, ya_result result_code)
 {
-    log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_ZONE_UNLOADED_EVENT (%r)", zone->origin, zone, result_code);
+    log_debug("database: %{dnsname}: enqueue operation DATABASE_SERVICE_ZONE_UNLOADED_EVENT (%r)", zone->origin, result_code);
     database_message *message = database_load_message_alloc(zone->origin, DATABASE_SERVICE_ZONE_UNLOADED_EVENT);
     
     zdb_zone_acquire(zone);

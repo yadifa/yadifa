@@ -161,7 +161,7 @@ jnl_speed_test(const char *filepath)
 
     if((serial_to + 1) == serial_from)
     {
-        formatln("; jnl: '%s' serial range looks funny", filepath, serial_from, serial_to);
+        formatln("; jnl: '%s' serial range looks funny (%u to %u)", filepath, serial_from, serial_to);
         return;
     }
 

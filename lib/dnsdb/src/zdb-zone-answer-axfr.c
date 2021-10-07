@@ -620,7 +620,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 zdb_zone_unlock(data_zone, ZDB_ZONE_MUTEX_SIMPLEREADER); // RC decremented
                 
-                log_err("zone write axfr: %{dnsname}: file create error for '%s': %r", data_zone_origin, buffer, serial, ret);
+                log_err("zone write axfr: %{dnsname}: file create error for '%s': %r", data_zone_origin, buffer, ret);
                 
                 data->return_code = ret;
 
@@ -1151,8 +1151,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                     }
                     if(len + 2 != rdata_len)
                     {
-                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, n,
-                                rdata_len, len + 2);
+                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, rdata_len, len + 2);
                         
                         /*
                          * GOTO !!! (thread carefully)
@@ -1203,8 +1202,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                     }
                     if(len != rdata_len)
                     {
-                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, n,
-                                rdata_len, len);
+                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, rdata_len, len);
                         
                         /*
                          * GOTO !!! (thread carefully)
@@ -1263,8 +1261,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                     if(mlen + rlen + 20 != rdata_len)
                     {
-                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, n,
-                                rdata_len, mlen + rlen + 20);
+                        log_err("zone write axfr: %{dnsname}: expected rdata of %i bytes but got %i", data_zone_origin, rdata_len, mlen + rlen + 20);
                         
                         /*
                          * GOTO !!! (thread carefully)
@@ -1438,9 +1435,15 @@ zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, int sockfd, struct thre
     
     if(message_get_size(mesg) >= max_packet_size)
     {
-        log_err("zone write axfr: %{dnsname}: received message is already bigger than maximum message size in answer: cancelled",
-                zone->origin);
+        log_err("zone write axfr: %{dnsname}: received message is already bigger than maximum message size in answer: cancelled", zone->origin);
         return;
+    }
+
+    message_data *clone = message_dup(mesg);
+    if(clone == NULL)
+    {
+        log_err("zone write axfr: %{dnsname}: received message : cancelled", zone->origin);
+        return; // BUFFER_WOULD_OVERFLOW;
     }
         
     MALLOC_OBJECT_OR_DIE(args, zdb_zone_answer_axfr_thread_args, SHDQZWAA_TAG);
@@ -1462,7 +1465,7 @@ zdb_zone_answer_axfr(zdb_zone *zone, message_data *mesg, int sockfd, struct thre
 #else
     args->sockfd = sockfd;
 #endif
-    args->mesg = message_dup(mesg);
+    args->mesg = clone;
     args->packet_size_limit = max_packet_size;
     args->packet_records_limit = max_record_by_packet;
     args->compress_dname_rdata = compress_packets;

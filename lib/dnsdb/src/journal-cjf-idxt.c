@@ -268,7 +268,7 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
             // invalid position (as EBADF should not happen)
             ya_result ret = ERRNO_ERROR;
             
-            log_err("cjf: %{dnsname}: page[%i] seek at %u returned %r", jnl->origin, page, ret);
+            log_err("cjf: %{dnsname}: page[%i] seek at %u returned %r", jnl->origin, page, entry->file_offset, ret);
             
             return ret;
         }
@@ -298,7 +298,7 @@ journal_cjf_idxt_verify(journal_cjf *jnl)
         if(page_hdr.count > page_hdr.size)
         {
             // page is corrupted
-            log_err("cjf: %{dnsname}: page[%i] says to contain more than allowed", jnl->origin, page, page_hdr.count, page_hdr.size);
+            log_err("cjf: %{dnsname}: page[%i] says to contain more than allowed", jnl->origin, page);
             return ERROR;
         }
         

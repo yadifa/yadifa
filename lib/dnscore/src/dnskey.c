@@ -2015,7 +2015,7 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
     }
     else
     {
-        log_err("dnssec: expected .private or .key extension for the file: '%s': %r", filename);
+        log_err("dnssec: expected .private or .key extension for the file: '%s'", filename);
         return INVALID_STATE_ERROR;
     }
     

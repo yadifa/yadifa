@@ -463,7 +463,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
 {
     (void)csd;
 
-    dnscore_meminfo_t *mi = dnscore_meminfo_get(NULL);
+    const dnscore_meminfo_t *mi = dnscore_meminfo_get(NULL);
 
     u32 port = 0;
     u32 cpu_per_core = (sys_has_hyperthreading())?2:1;

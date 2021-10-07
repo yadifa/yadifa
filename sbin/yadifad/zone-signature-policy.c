@@ -2739,7 +2739,7 @@ dnssec_policy_key_release(dnssec_policy_key *dpk)
 dnssec_policy_key_suite *
 dnssec_policy_key_suite_create(const char *id, dnssec_policy_key *dpk, dnssec_policy_roll *dpr)
 {
-    log_debug("dnssec-policy-key-suite: %s: policy-key=%s, policy-roll=%s", id, dpk->name, dpk->name, dpr->name);
+    log_debug("dnssec-policy-key-suite: %s: policy-key=%s, policy-roll=%s", id, dpk->name, dpr->name);
     
     dnssec_policy_key_suite *dpks = NULL;
 

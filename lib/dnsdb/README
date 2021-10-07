@@ -29,16 +29,9 @@
 # 
 ################################################################################
 
-20210924:
-    YADIFA 2.5.1-public
+20210929:
+    YADIFA 2.5.2-public
 
-    Fixes a critical issue that could cause yadifad to crash handling certain DNS packet.
+    Fixes a critical issue that could cause yadifad to crash handling certain DNS packet with privileged access.
 
-    Fixes an issue where yadifad would sometimes reply with an AXFR instead of an IXFR if the journal is under maintenance.
-
-    Increased the pid column in the logger to 6 characters
-
-    Drastically increased the limit for TCP queries.
-	Note that using a high enough number compared to the available memory will cause yadifad to warn about limits and OOM kill risks.
-	In practice a few hundred TCP queries should be enough.
-
+    Fixes an issue where a corrupted configuration file could lead to a crash while starting-up.

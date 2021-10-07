@@ -136,79 +136,106 @@ dnskey_keyring_add_from_nameserver(dnskey_keyring *ks, const host_address *ha, c
                     packet_unpack_reader_data purd;
                     packet_reader_init_from_message(&purd, query);
 
-                    packet_reader_skip_fqdn(&purd);
-                    packet_reader_skip(&purd, 4);
+                    packet_reader_skip_fqdn(&purd);     // checked below
+                    packet_reader_skip(&purd, 4);   // checked below
 
-                    int keys_added = 0;
-                    
-                    for(u16 i = 0; i < answers; ++i)
+                    if(!packet_reader_eof(&purd))
                     {
-                        dnssec_key *key = NULL;
-                        u16 rtype;
-                        u16 rclass;
-                        s32 rttl;
-                        u16 rdata_size;
-                        u8 rdata[1024];
-
-                        packet_reader_read_fqdn(&purd, rdata, sizeof(rdata));
-                        
-                        if(dnslabel_equals_ignorecase_left(domain, rdata))
+                        int keys_added = 0;
+                    
+                        for(u16 i = 0; i < answers; ++i)
                         {
-                            packet_reader_read_u16(&purd, &rtype);
-                            packet_reader_read_u16(&purd, &rclass);
-                            packet_reader_read_s32(&purd, &rttl);
-                            packet_reader_read_u16(&purd, &rdata_size);
-                            rdata_size = ntohs(rdata_size);
+                            dnssec_key *key = NULL;
+                            u16 rtype;
+                            u16 rclass;
+                            s32 rttl;
+                            u16 rdata_size;
+                            u8 rdata[1024];
 
-                            if(rtype == TYPE_DNSKEY)
+                            if(FAIL(packet_reader_read_fqdn(&purd, rdata, sizeof(rdata))))
                             {
-                                if(ISOK(ret = packet_reader_read_rdata(&purd, rtype, rdata_size, rdata, rdata_size)))
-                                {                        
-                                    if(ISOK(ret = dnskey_new_from_rdata(rdata, rdata_size, domain, &key)))
+                                log_info("%{dnsname}: %{hostaddr} message FORMERR)", domain, ha);
+                                keys_added = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+                                break;
+                            }
+
+                            if(dnslabel_equals_ignorecase_left(domain, rdata))
+                            {
+                                if(packet_reader_available(&purd) <= 10)
+                                {
+                                    log_info("%{dnsname}: %{hostaddr} message FORMERR)", domain, ha);
+                                    keys_added = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+                                    break;
+                                }
+
+                                // unchecked because we did just that
+
+                                packet_reader_read_u16_unchecked(&purd, &rtype);            // checked
+                                packet_reader_read_u16_unchecked(&purd, &rclass);           // checked
+                                packet_reader_read_s32_unchecked(&purd, &rttl);             // checked
+                                packet_reader_read_u16_unchecked(&purd, &rdata_size);       // checked
+
+                                rdata_size = ntohs(rdata_size);
+
+                                if(rtype == TYPE_DNSKEY)
+                                {
+                                    if(ISOK(ret = packet_reader_read_rdata(&purd, rtype, rdata_size, rdata, rdata_size)))
                                     {
-                                        if(ISOK(ret = dnskey_keyring_add(ks, key)))
+                                        if(ISOK(ret = dnskey_new_from_rdata(rdata, rdata_size, domain, &key)))
                                         {
-                                            log_info("%{dnsname}: %{hostaddr} added dnskey %{dnsname}: +%03d+%05d/%d added",
-                                                    domain, ha,
-                                                    dnskey_get_domain(key), dnskey_get_algorithm(key),
-                                                    dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
-                                            
-                                            ++keys_added;
+                                            if(ISOK(ret = dnskey_keyring_add(ks, key)))
+                                            {
+                                                log_info("%{dnsname}: %{hostaddr} added dnskey %{dnsname}: +%03d+%05d/%d added",
+                                                        domain, ha,
+                                                        dnskey_get_domain(key), dnskey_get_algorithm(key),
+                                                        dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
+
+                                                ++keys_added;
+                                            }
+                                            else
+                                            {
+                                                log_warn("%{dnsname}: %{hostaddr} failed to add dnskey %{dnsname}: +%03d+%05d/%d: %r",
+                                                        domain, ha,
+                                                        dnskey_get_domain(key), dnskey_get_algorithm(key),
+                                                        dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)), ret);
+                                            }
+
+                                            dnskey_release(key);
                                         }
                                         else
                                         {
-                                            log_warn("%{dnsname}: %{hostaddr} failed to add dnskey %{dnsname}: +%03d+%05d/%d: %r",
-                                                    domain, ha,
-                                                    dnskey_get_domain(key), dnskey_get_algorithm(key),
-                                                    dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)), ret);
+                                            log_warn("%{dnsname}: %{hostaddr} cannot convert rdata to a dnskey: %r", domain, ha, ret);
                                         }
-
-                                        dnskey_release(key);
                                     }
                                     else
                                     {
-                                        log_warn("%{dnsname}: %{hostaddr} cannot convert rdata to a dnskey: %r", domain, ha, ret);
+                                        log_warn("%{dnsname}: %{hostaddr} cannot parse rdata: %r", domain, ha, ret);
                                     }
                                 }
                                 else
                                 {
-                                    log_warn("%{dnsname}: %{hostaddr} cannot parse rdata: %r", domain, ha, ret);
+                                    // not a DNSKEY: skip
+
+                                    if(FAIL(packet_reader_skip(&purd, rdata_size)))
+                                    {
+                                        log_info("%{dnsname}: %{hostaddr} message FORMERR)", domain, ha);
+                                        keys_added = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+                                        break;
+                                    }
                                 }
                             }
                             else
                             {
-                                // not a DNSKEY: skip
-
-                                packet_reader_skip(&purd, rdata_size);
+                                log_warn("%{dnsname}: %{hostaddr} wrong domain for key: %{dnsname}", domain, ha, rdata);
                             }
-                        }
-                        else
-                        {
-                            log_warn("%{dnsname}: %{hostaddr} wrong domain for key: %{dnsname}", domain, ha, rdata);
-                        }
-                    } // for all records in answer
+                        } // for all records in answer
                     
-                    ret = keys_added;
+                        ret = keys_added;
+                    }
+                    else
+                    {
+                        ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+                    }
                 }
                 else
                 {
@@ -229,7 +256,7 @@ dnskey_keyring_add_from_nameserver(dnskey_keyring *ks, const host_address *ha, c
     {
         log_err("%{dnsname}: %{hostaddr} query error: %r", domain, ha, ret);
     }
-    
+
     message_free(query);
     
     return ret;

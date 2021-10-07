@@ -350,11 +350,17 @@ dynupdate_query_service_enqueue(zdb *db, message_data *mesg, int sockfd)
         return MAKE_DNSMSG_ERROR(RCODE_SERVFAIL); // it will not be used as is, but that's what needs to be said
     }
 
+    message_data *clone = message_dup(mesg);
+    if(clone == NULL)
+    {
+        return BUFFER_WOULD_OVERFLOW;
+    }
+
     // ensure the original message cannot be used anymore
     struct dynupdate_query_service_args *parms;
     MALLOC_OBJECT_OR_DIE(parms, dynupdate_query_service_args, DYNUPQSA_TAG);
     parms->db = db;
-    parms->mesg = message_dup(mesg);
+    parms->mesg = clone;
     parms->timestamp = timeus();
     parms->sockfd = sockfd;
 

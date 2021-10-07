@@ -187,6 +187,7 @@ signal_task_shutdown()
         program_mode = SA_SHUTDOWN;
 
         socket_server_finalize();
+        //notify_service_stop();
         server_service_stop();
         server_context_close();
 #if DEBUG

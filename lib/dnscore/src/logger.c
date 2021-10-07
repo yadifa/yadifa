@@ -105,7 +105,7 @@ log_memdump_ex(logger_handle* hndl, u32 level, const void* data_pointer_, ssize_
     
     if(size > 0)
     {
-        osprint_dump(&os, data_pointer, size, line_size, flags);        
+        osprint_dump(&os, data_pointer, size, line_size, flags);
         
         u32 buffer_size = bytearray_output_stream_size(&os);
         

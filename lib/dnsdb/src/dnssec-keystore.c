@@ -612,7 +612,7 @@ dnssec_keystore_delete_key(dnssec_key *key)
                     if(rename(path, path_new) < 0)
                     {
                         ret = ERRNO_ERROR;
-                        log_err("dnskey-keystore: %{dnsname}: delete: could not rename file '%s' to '%s': ret",
+                        log_err("dnskey-keystore: %{dnsname}: delete: could not rename file '%s' to '%s': %r",
                                 fqdn, path, path_new, ret);
                     }
                 }
@@ -637,7 +637,7 @@ dnssec_keystore_delete_key(dnssec_key *key)
     }
     else
     {
-        log_err("dnskey-keystore: %{dnsname}: delete: K%s+03d+%05d private key file path size would be too big", fqdn, clean_origin, algorithm, tag);
+        log_err("dnskey-keystore: %{dnsname}: delete: K%s+%03d+%05d private key file path size would be too big", fqdn, clean_origin, algorithm, tag);
     }
     
     // PUBLIC
@@ -680,7 +680,7 @@ dnssec_keystore_delete_key(dnssec_key *key)
                     if(rename(path, path_new) < 0)
                     {
                         ret = ERRNO_ERROR;
-                        log_err("dnskey-keystore: %{dnsname}: delete: could not rename file '%s' to '%s': ret", fqdn, path, path_new, ret);
+                        log_err("dnskey-keystore: %{dnsname}: delete: could not rename file '%s' to '%s': %r", fqdn, path, path_new, ret);
                     }
                 }
                 else
@@ -703,7 +703,7 @@ dnssec_keystore_delete_key(dnssec_key *key)
     }
     else
     {
-        log_err("dnskey-keystore: %{dnsname}: delete: K%s+03d+%05d public key file path size would be too big", fqdn, clean_origin, algorithm, tag);
+        log_err("dnskey-keystore: %{dnsname}: delete: K%s+%03d+%05d public key file path size would be too big", fqdn, clean_origin, algorithm, tag);
     }
     
     dnssec_key *keystore_key =  dnssec_keystore_remove_key(key);

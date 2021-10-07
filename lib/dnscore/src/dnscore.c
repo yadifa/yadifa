@@ -343,7 +343,7 @@ dnscore_meminfo_get(dnscore_meminfo_t *mi)
     struct rlimit limits;
     getrlimit(RLIMIT_RSS, &limits);
 
-    s64 program_memory_limit = MIN(total_memory, limits.rlim_cur);
+    s64 program_memory_limit = MIN((u64)total_memory, limits.rlim_cur);
 
     mi->page_size = page_size;
     mi->page_count = page_count;

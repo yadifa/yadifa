@@ -606,7 +606,7 @@ int main(int argc, char *argv[])
     }
     
     dnscore_init();    
-    println("usage: %s [writer-count [insert-count-per-writer [thread-type-mask [message-size] ] ] ]");
+    formatln("usage: %s [writer-count [insert-count-per-writer [thread-type-mask [message-size] ] ] ]", argv[0]);
     formatln("running with %i %i %i %i", w, n, mask, msg_buffer_size);
 
     formatln("benching with %i items", n);

@@ -1733,25 +1733,26 @@ keyroll_dnskey_state_query(const keyroll_t *keyroll, ptr_vector *current_dnskey_
             int total = an;
             total += ns;
 
-            packet_reader_skip_query_section(&purd);
-
-            for(int i = 0 ; i < total; ++i)
+            if(ISOK(ret = packet_reader_skip_query_section(&purd)))
             {
-                dns_resource_record *rr = dns_resource_record_new_instance();
+                for(int i = 0 ; i < total; ++i)
+                {
+                    dns_resource_record *rr = dns_resource_record_new_instance();
 
-                if(FAIL(ret = packet_reader_read_dns_resource_record(&purd, rr)))
-                {
-                    dns_resource_record_free(rr);
-                    break;
-                }
+                    if(FAIL(ret = packet_reader_read_dns_resource_record(&purd, rr)))
+                    {
+                        dns_resource_record_free(rr);
+                        break;
+                    }
 
-                if(rr->tctr.qtype == TYPE_DNSKEY)
-                {
-                    ptr_vector_append(current_dnskey_rrsig_rr, rr);
-                }
-                else if((rr->tctr.qtype == TYPE_RRSIG) && (rrsig_get_type_covered_from_rdata(rr->rdata, rr->rdata_size) == TYPE_DNSKEY))
-                {
-                    ptr_vector_append(current_dnskey_rrsig_rr, rr);
+                    if(rr->tctr.qtype == TYPE_DNSKEY)
+                    {
+                        ptr_vector_append(current_dnskey_rrsig_rr, rr);
+                    }
+                    else if((rr->tctr.qtype == TYPE_RRSIG) && (rrsig_get_type_covered_from_rdata(rr->rdata, rr->rdata_size) == TYPE_DNSKEY))
+                    {
+                        ptr_vector_append(current_dnskey_rrsig_rr, rr);
+                    }
                 }
             }
 
@@ -2523,7 +2524,7 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
             dnssec_key *previous_key_with_same_tag = dnssec_keystore_acquire_key_from_fqdn_with_tag(dnskey_get_domain(key), dnskey_get_tag(key));
             if(previous_key_with_same_tag != NULL)
             {
-                log_notice("%{dnsname}: a tag collision happened creating a %cSK key. Discarding and trying again.", keyroll->domain, ksk?'K':'Z', keyroll->domain);
+                log_notice("%{dnsname}: a tag collision happened creating a %cSK key. Discarding and trying again.", keyroll->domain, ksk?'K':'Z');
                 dnskey_release(previous_key_with_same_tag);
                 dnskey_release(key);
 

@@ -145,7 +145,16 @@ bool dnscore_monitored_fail(ya_result ret);
 #define RCODE_ERROR_BASE                        0x80010000
 #define RCODE_ERROR_CODE(code_)                 ((s32)(RCODE_ERROR_BASE+(code_)))
 #define RCODE_ERROR_GETCODE(error_)             ((error_)&0xffff)
-#define MAKE_DNSMSG_ERROR(err_)                 RCODE_ERROR_CODE(err_)
+#define MAKE_DNSMSG_ERROR(err_)                 RCODE_ERROR_CODE(err_) // obsolete
+#define MAKE_RCODE_ERROR(err_)                  RCODE_ERROR_CODE(err_)
+
+#define TSIG_BADSIG                             MAKE_RCODE_ERROR(16)      /* TSIG timestamp outisde of the time window    */
+#define TSIG_BADKEY                             MAKE_RCODE_ERROR(17)      /* Unknown key name in TSIG record              */
+#define TSIG_BADTIME                            MAKE_RCODE_ERROR(18)      /* TSIG timestamp outisde of the time window    */
+#define TSIG_BADMODE                            MAKE_RCODE_ERROR(19)
+#define TSIG_BADNAME                            MAKE_RCODE_ERROR(20)
+#define TSIG_BADALG                             MAKE_RCODE_ERROR(21)
+#define TSIG_BADTRUNC                           MAKE_RCODE_ERROR(22)
 
 #define CORE_ERROR_BASE                         0x80020000
 #define CORE_ERROR_CODE(code_)                  ((s32)(CORE_ERROR_BASE+(code_)))
@@ -269,13 +278,6 @@ bool dnscore_monitored_fail(ya_result ret);
 #define TSIG_FORMERR                            DNS_ERROR_CODE(14)
 #define TSIG_SIZE_LIMIT_ERROR                   DNS_ERROR_CODE(15)
 
-#define TSIG_BADSIG                             DNS_ERROR_CODE(16)      /* TSIG timestamp outisde of the time window    */
-#define TSIG_BADKEY                             DNS_ERROR_CODE(17)      /* Unknown key name in TSIG record              */
-#define TSIG_BADTIME                            DNS_ERROR_CODE(18)      /* TSIG timestamp outisde of the time window    */
-#define TSIG_BADMODE                            DNS_ERROR_CODE(19)
-#define TSIG_BADNAME                            DNS_ERROR_CODE(20)
-#define TSIG_BADALG                             DNS_ERROR_CODE(21)
-#define TSIG_BADTRUNC                           DNS_ERROR_CODE(22)
 #define UNPROCESSABLE_MESSAGE                   DNS_ERROR_CODE(23)
 #define INVALID_PROTOCOL                        DNS_ERROR_CODE(24)
 #define INVALID_RECORD                          DNS_ERROR_CODE(25)

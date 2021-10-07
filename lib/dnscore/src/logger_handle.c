@@ -3545,8 +3545,15 @@ logger_finalize()
         debug_osformatln(termout, "logger_finalize() : queue is not empty : starting & flushing");
         flushout();
 #endif
-        logger_start();
-        if(logger_wait_started())
+        if(!logger_started())
+        {
+            logger_start();
+            if(logger_wait_started())
+            {
+                logger_flush();
+            }
+        }
+        else
         {
             logger_flush();
         }

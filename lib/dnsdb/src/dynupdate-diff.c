@@ -5436,7 +5436,7 @@ dynupdate_diff_write_to_journal_and_replay(zdb_zone *zone, u8 secondary_lock, pt
                 }
                 else
                 {
-                    log_err("update: %{dnsname}: could not apply changes: %r", zone->origin, total_size_in_bytes, ret);
+                    log_err("update: %{dnsname}: could not apply changes: %r", zone->origin, ret);
                 }
             }
             else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
@@ -5695,7 +5695,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
         if((rdata_size == 0) && (rclass != CLASS_ANY))
         {
-            log_err("update: %{dnsname}: next record has empty rdata with non-ANY class: %r", zone->origin, ret, RCODE_ERROR_CODE(RCODE_FORMERR));
+            log_err("update: %{dnsname}: next record has empty rdata with non-ANY class: %r", zone->origin, RCODE_ERROR_CODE(RCODE_FORMERR));
 
             zone_diff_finalize(&diff);
 
@@ -5893,7 +5893,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 {
                     // refused
 
-                    log_err("update: %{dnsname}: refused", zone->origin, rname);
+                    log_err("update: %{dnsname}: refused", zone->origin);
                     
                     zone_diff_finalize(&diff);
 
@@ -5996,7 +5996,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
         {
             if((rttl != 0) || (rdata_size != 0))
             {
-                log_err("update: %{dnsname}: format error", zone->origin, rname);
+                log_err("update: %{dnsname}: format error", zone->origin);
 
                 zone_diff_finalize(&diff);
 #if DEBUG
@@ -6014,7 +6014,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 {
                     // refused
 
-                    log_err("update: %{dnsname}: refused", zone->origin, rname);
+                    log_err("update: %{dnsname}: refused", zone->origin);
                     zone_diff_finalize(&diff);
 #if DEBUG
                     log_err("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i) failed with %r",
@@ -6147,7 +6147,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     {
                         // apex
 
-                        log_err("update: %{dnsname}: removing all records from the apex is forbidden", zone->origin, rname);
+                        log_err("update: %{dnsname}: removing all records from the apex is forbidden", zone->origin);
 
                         zone_diff_finalize(&diff);
 
@@ -6395,7 +6395,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
                         if(ISOK(ret))
                         {
-                            log_debug("update: %{dnsname}: applied journal changes", zone->origin, total);
+                            log_debug("update: %{dnsname}: applied journal changes", zone->origin);
 
                             if(ret_status & (DYNUPDATE_DIFF_RETURN_DNSKEY_ADDED|DYNUPDATE_DIFF_RETURN_DNSKEY_REMOVED))
                             {
@@ -6404,7 +6404,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                         }
                         else
                         {
-                            log_err("update: %{dnsname}: could not apply journal changes: %r", zone->origin, total, ret);
+                            log_err("update: %{dnsname}: could not apply journal changes: %r", zone->origin, ret);
                         }
                     }
                     else

@@ -104,6 +104,11 @@ static inline ya_result packet_reader_opcode(packet_unpack_reader_data* reader)
     }
 }
 
+static inline bool packet_reader_eof(packet_unpack_reader_data* reader)
+{
+    return reader->offset >= reader->packet_size;
+}
+
 /* fqdn + type + class */
 ya_result packet_reader_read_zone_record(packet_unpack_reader_data* reader, u8* output_buffer, u32 len);
 ya_result packet_reader_skip_zone_record(packet_unpack_reader_data* reader);
@@ -120,7 +125,7 @@ ya_result packet_reader_read_dns_resource_record(packet_unpack_reader_data* read
  * Note that the last parameter is the buffer size and the data size to be read is right after the type.
  */
 
-ya_result packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, u32 rdata_size, u8 *buffer, u32 buffer_size);
+ya_result packet_reader_read_rdata(packet_unpack_reader_data* reader, u16 type, s32 rdata_size, u8 *buffer, s32 buffer_size);
 
 ya_result packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u32 len);
 
@@ -178,7 +183,7 @@ static inline ya_result packet_reader_read_s32(packet_unpack_reader_data* reader
 
 static inline void packet_reader_read_s32_unchecked(packet_unpack_reader_data* reader, s32 *val)
 {
-    packet_reader_read_u32_unchecked(reader, (u32*)val);
+    packet_reader_read_u32_unchecked(reader, (u32*)val); // wrapped
 }
 
 static inline ya_result packet_reader_skip(packet_unpack_reader_data* reader, u32 len)
@@ -186,7 +191,6 @@ static inline ya_result packet_reader_skip(packet_unpack_reader_data* reader, u3
     if((reader->offset += len) > reader->packet_size)
     {
         reader->offset = reader->packet_size;
-	
         return UNEXPECTED_EOF;	/* unexpected EOF */
     }
 
@@ -198,9 +202,9 @@ static inline void packet_reader_skip_unchecked(packet_unpack_reader_data* reade
     reader->offset += len;
 }
 
-static inline size_t packet_reader_available(packet_unpack_reader_data* reader)
+static inline s32 packet_reader_available(packet_unpack_reader_data* reader)
 {
-    return reader->packet_size - reader->offset;
+    return (s32)reader->packet_size - (s32)reader->offset;
 }
 
 void packet_reader_rewind(packet_unpack_reader_data* reader);

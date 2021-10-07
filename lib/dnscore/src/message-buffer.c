@@ -73,7 +73,10 @@ message_buffer_processor(message_viewer *mv, const u8 *buffer, u16 length)
 
     for(u32 n = count[0]; n > 0; --n)
     {
-        packet_reader_skip_zone_record(&purd);
+        if(FAIL(return_value = packet_reader_skip_zone_record(&purd)))
+        {
+            return return_value;
+        }
     }
 
     for(u32 section_idx = 1; section_idx < 4; section_idx++)
@@ -191,13 +194,19 @@ message_buffer_processor(message_viewer *mv, const u8 *buffer, u16 length)
     if(opt_record)
     {
         --count[3];
-        packet_reader_read_record(&purd, record_wire, sizeof(record_wire));
+        if(FAIL(return_value = packet_reader_read_record(&purd, record_wire, sizeof(record_wire))))
+        {
+            return return_value;
+        }
     }
 
     if(tsig_record)
     {
         --count[3];
-        packet_reader_read_record(&purd, record_wire, sizeof(record_wire));
+        if(FAIL(return_value = packet_reader_read_record(&purd, record_wire, sizeof(record_wire))))
+        {
+            return return_value;
+        }
         message_viewer_pseudosection_record(mv, record_wire);
     }
 

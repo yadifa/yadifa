@@ -647,15 +647,23 @@ database_add_key_parameters_from_zone(zdb_zone *zone, ptr_vector *keys)
  * Adds key parameters from keys removed by the message to a vector, removes said keys from the "added" vector.
  */
 
-void
+ya_result
 database_add_key_parameters_from_message(zdb_zone *zone, message_data *mesg, ptr_vector *keys, ptr_vector *removed_keys)
 {
     packet_unpack_reader_data pr;
     ya_result ret = SUCCESS;
 
     packet_reader_init_from_message(&pr, mesg);
-    packet_reader_skip_section(&pr, 0);
-    packet_reader_skip_section(&pr, 1);
+
+    if(FAIL(packet_reader_skip_section(&pr, 0)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(FAIL(packet_reader_skip_section(&pr, 1)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
 
     // scan for added DNSKEY
 
@@ -740,6 +748,8 @@ database_add_key_parameters_from_message(zdb_zone *zone, message_data *mesg, ptr
             break;
         }
     }
+
+    return ret;
 }
 
 /**
@@ -936,8 +946,16 @@ database_zone_ensure_private_keys_from_message(message_data *mesg)
     bool all_keys_removed = FALSE;
 
     packet_reader_init_from_message(&pr, mesg);
-    packet_reader_skip_section(&pr, 0);
-    packet_reader_skip_section(&pr, 1);
+
+    if(FAIL(packet_reader_skip_section(&pr, 0)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
+
+    if(FAIL(packet_reader_skip_section(&pr, 1)))
+    {
+        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+    }
 
     // scan for added DNSKEY
 
@@ -1125,7 +1143,12 @@ database_update(zdb *database, message_data *mesg)
 #endif
                                 log_debug("database: update: %{dnsname}: looking for key(s) updates from the update", zone->origin);
 
-                                database_add_key_parameters_from_message(zone, mesg, &required_key_parameters, &deleted_key_parameters);
+                                ret = database_add_key_parameters_from_message(zone, mesg, &required_key_parameters, &deleted_key_parameters);
+
+                                if(FAIL(ret))
+                                {
+                                    log_info("database: update: %{dnsname}: couldn't get key parameters from message", zone->origin);
+                                }
 #if DEBUG
                                 for(int i = 0; i <= ptr_vector_last_index(&required_key_parameters); ++i)
                                 {

@@ -104,6 +104,21 @@ u16 message_edns0_getmaxsize()
 
 // Handles OPT and TSIG
 
+static inline void message_process_adjust_buffer_size(message_data *mesg, u16 edns0_size)
+{
+    u32 mesg_buffer_size = message_get_buffer_size_max(mesg);
+    u32 query_buffer_size = edns0_size;
+    if(mesg_buffer_size > query_buffer_size)
+    {
+        mesg_buffer_size = query_buffer_size;
+        if(mesg_buffer_size < EDNS0_MIN_LENGTH)
+        {
+            mesg_buffer_size = EDNS0_MIN_LENGTH;
+        }
+    }
+    message_set_buffer_size(mesg, mesg_buffer_size);
+}
+
 static ya_result
 message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
 {
@@ -115,6 +130,7 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
     //yassert(ar_count != 0 && ar_count == message_get_additional_count(mesg));
 
     u8 *buffer = mesg->_buffer;
+    ya_result  ret;
 
     ar_count = ntohs(MESSAGE_AR(buffer));
 
@@ -151,9 +167,13 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
     {
         u32 ar_index = ntohs(MESSAGE_AN(buffer)) + ntohs(MESSAGE_NS(buffer));
 
-        purd.offset = DNS_HEADER_LENGTH; /* Header */
-        packet_reader_skip_fqdn(&purd); /* Query DNAME */
-        purd.offset += 4; /* TYPE CLASS */
+        purd.offset = DNS_HEADER_LENGTH;        // header
+        packet_reader_skip_fqdn(&purd);         // checked below
+        if(FAIL(packet_reader_skip(&purd, 4)))  // type class
+        {
+            message_set_status(mesg, FP_ERROR_READING_QUERY);
+            return UNPROCESSABLE_MESSAGE;
+        }
 
         while(ar_index > 0) /* Skip all until AR records */
         {
@@ -161,7 +181,11 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
              * It should be in this kind of processing that we read the EDNS0 flag
              */
 
-            packet_reader_skip_record(&purd);
+            if(FAIL(ret = packet_reader_skip_record(&purd)))
+            {
+                message_set_status(mesg, FP_ERROR_READING_QUERY);
+                return UNPROCESSABLE_MESSAGE;
+            }
 
             ar_index--;
         }
@@ -218,7 +242,7 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                     if(rdlen != 0)
                     {
                         u32 next = purd.offset + rdlen;
-                        for(u32 remain = rdlen; remain >= 4; remain -= 4)
+                        for(s32 remain = (s32)rdlen; remain >= 4; remain -= 4)
                         {
                             u32 opt_type_size;
                             
@@ -230,7 +254,15 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                                     mesg->_nsid = TRUE;
                                     break;
                                 }
-                                packet_reader_skip(&purd, ntohl(opt_type_size) & 0xffff);   // skip the data
+
+                                u32 opt_type_len = ntohl(opt_type_size) & 0xffff;
+
+                                if(FAIL(packet_reader_skip(&purd, opt_type_len)))   // skip the data
+                                {
+                                    return UNPROCESSABLE_MESSAGE;
+                                }
+
+                                remain -= opt_type_len;
                             }
                             else
                             {
@@ -238,23 +270,28 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                             }
                         }
                         
-                        packet_reader_skip(&purd, next - purd.offset);
+                        if(FAIL(packet_reader_skip(&purd, next - purd.offset)))
+                        {
+                            return UNPROCESSABLE_MESSAGE;
+                        }
                     }
 #else
-                    packet_reader_skip(&purd, rdlen);
+                    if(FAIL(packet_reader_skip(&purd, rdlen)))
+                    {
+                        return UNPROCESSABLE_MESSAGE;
+                    }
 #endif
                     if(tsigname[0] == '\0')
                     {
-                        message_set_buffer_size(mesg, MAX(EDNS0_MIN_LENGTH, ntohs(tctr.qclass))); /* our own limit, taken from the config file */
-                        mesg->_edns = TRUE;
+                        message_process_adjust_buffer_size(mesg, ntohs(tctr.qclass));
 
+                        mesg->_edns = TRUE;
                         mesg->_rcode_ext = tctr.ttl;
 #if DEBUG
                         log_debug("EDNS: udp-size=%d rcode-ext=%08x desc=%04x", message_get_size(mesg), tctr.ttl, rdlen);
 #endif
                         continue;
                     }
-
 #if DEBUG
                     log_debug("OPT record is not processable (broken)");
 #endif
@@ -262,20 +299,18 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                 }
                 else
                 {
-                   message_set_status(mesg, FP_EDNS_BAD_VERSION);
-                   message_set_size(mesg, MAX(EDNS0_MIN_LENGTH, ntohs(tctr.qclass)));
-                   mesg->_edns = TRUE;
-                   mesg->_rcode_ext = 0;
+                    message_set_status(mesg, FP_EDNS_BAD_VERSION);
+                    message_process_adjust_buffer_size(mesg, ntohs(tctr.qclass));
 
+                    mesg->_edns = TRUE;
+                    mesg->_rcode_ext = 0;
 #if DEBUG
-                    log_debug("OPT record is not processable (not supported)");
+                   log_debug("OPT record is not processable (not supported)");
 #endif
-
                    return MAKE_DNSMSG_ERROR(FP_EDNS_BAD_VERSION);
                 }
             }
 #if DNSCORE_HAS_TSIG_SUPPORT
-            
             /*
              * TSIG
              */
@@ -418,9 +453,12 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
     {
         u32 ar_index = ntohs(MESSAGE_AN(buffer)) + ntohs(MESSAGE_NS(buffer));
 
-        purd.offset = DNS_HEADER_LENGTH; /* Header */
-        packet_reader_skip_fqdn(&purd); /* Query DNAME */
-        purd.offset += 4; /* TYPE CLASS */
+        purd.offset = DNS_HEADER_LENGTH;    // header
+        packet_reader_skip_fqdn(&purd);     // checked below
+        if(FAIL(packet_reader_skip_bytes(&purd, 4))) // type class
+        {
+            return UNPROCESSABLE_MESSAGE;
+        }
 
         while(ar_index > 0) /* Skip all until AR records */
         {
@@ -428,7 +466,10 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
              * It should be in this kind of processing that we read the EDNS0 flag
              */
 
-            packet_reader_skip_record(&purd);
+            if(FAIL(packet_reader_skip_record(&purd)))
+            {
+                return UNPROCESSABLE_MESSAGE;
+            }
 
             ar_index--;
         }
@@ -456,7 +497,6 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
 #if DNSCORE_HAS_TSIG_SUPPORT
         record_offset = purd.offset;
 #endif
-
         if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
         {
             /* oops */
@@ -495,13 +535,6 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
                 {
                    mesg->_edns = TRUE;
                    mesg->_rcode_ext = tctr.ttl;
-                   
-                   /* we are after tctr in the packet : rewind by 6 */
-                   /*
-                   MESSAGE_FLAGS_OR(buffer, QR_BITS, FP_EDNS_BAD_VERSION & 15);
-                   buffer[purd.offset - 6] = (FP_EDNS_BAD_VERSION >> 4);
-                   buffer[purd.offset - 5] = 0;
-                   */
                 }
                 
                 log_debug("OPT record is not processable (broken or not supported)");
@@ -529,28 +562,6 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
                         if(FAIL(return_code = tsig_process_query(mesg, &purd, record_offset, tsigname, &tctr)))
                         {
                             log_err("%r query error from %{sockaddr}", return_code, message_get_sender_sa(mesg));
-
-                            switch(return_code)
-                            {
-                                case TSIG_BADKEY:
-                                case TSIG_BADTIME:
-                                case TSIG_BADSIG:
-                                    /* There is a TSIG and it's bad : NOTAUTH
-                                     *
-                                     * The query TSIG has been removed already.
-                                     * A new TSIG with no-mac one with the return_code set in the error field must be added to the result.
-                                     */
-
-                                    tsig_append_error(mesg);
-
-                                    break;
-                                default:
-                                    /*
-                                     * discard : FORMERR
-                                     */
-                                    break;
-                            }
-
                             return UNPROCESSABLE_MESSAGE;
                         }
                     }
@@ -563,7 +574,6 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
                                 if(FAIL(return_code = tsig_process_answer(mesg, &purd, record_offset, &tctr)))
                                 {
                                     log_err("%r answer error from %{sockaddr}", return_code, message_get_sender_sa(mesg));
-
                                     return UNPROCESSABLE_MESSAGE;
                                 }
                             }
@@ -620,263 +630,6 @@ message_process_answer_additionals(message_data *mesg, u16 ar_count /* network o
 
     return SUCCESS;
 }
-
-#if 0
-/**
- * Handles the OPT and TSIG records of an answer.
- *
- * @param mesg
- * @param ar_count
- * @return
- */
-
-static ya_result
-message_process_answer_additionals_and_keep(message_data *mesg, u16 ar_count /* network order */ )
-{
-    /*
-     * @note: I've moved this in the main function (the one calling this one)
-     */
-
-    yassert(ar_count != 0 && ar_count == message_get_additional_count_ne(mesg));
-
-    u8 *buffer = message_get_buffer(mesg);
-
-    ar_count = ntohs(ar_count);
-
-    /*
-     * rfc2845
-     *
-     * If there is a TSIG then
-     * _ It must be put aside, safely
-     * _ It must be removed from the query
-     * _ It must be processed
-     *
-     * rfc2671
-     *
-     * Handle OPT
-     *
-     */
-
-    /*
-     * Read DNS name (decompression on)
-     * Read type (TSIG = 250)
-     * Read class (ANY)
-     * Read TTL (0)
-     * Read RDLEN
-     *
-     */
-
-    u32 message_size = message_get_size(mesg);
-
-    packet_unpack_reader_data purd;
-    purd.packet = buffer;
-    purd.packet_size = message_size;
-
-    if(mesg->_ar_start == NULL)
-    {
-        u32 ar_index = ntohs(MESSAGE_AN(buffer)) + ntohs(MESSAGE_NS(buffer));
-
-        purd.offset = DNS_HEADER_LENGTH; /* Header */
-        packet_reader_skip_fqdn(&purd); /* Query DNAME */
-        purd.offset += 4; /* TYPE CLASS */
-
-        while(ar_index > 0) /* Skip all until AR records */
-        {
-            /*
-             * It should be in this kind of processing that we read the EDNS0 flag
-             */
-
-            packet_reader_skip_record(&purd);
-
-            ar_index--;
-        }
-
-        message_size = purd.offset;
-
-        mesg->_ar_start = &mesg->_buffer[purd.offset];
-    }
-    else
-    {
-        purd.offset = message_get_additional_section_ptr(mesg) - mesg->_buffer; // size up to additional sections
-    }
-
-    /* We are now at the start of the ar */
-
-    struct type_class_ttl_rdlen tctr;
-    u8 tsigname[MAX_DOMAIN_LENGTH];
-
-#if DNSCORE_HAS_TSIG_SUPPORT
-    u32 record_offset;
-#endif
-
-    while(ar_count-- > 0)
-    {
-#if DNSCORE_HAS_TSIG_SUPPORT
-        record_offset = purd.offset;
-#endif
-
-        if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
-        {
-            /* oops */
-
-            message_set_status(mesg, FP_ERROR_READING_QUERY);
-
-            return UNPROCESSABLE_MESSAGE;
-        }
-
-        if(packet_reader_read(&purd, &tctr, 10) == 10 ) // exact
-        {
-            /*
-             * EDNS (0)
-             */
-
-            if(tctr.qtype == TYPE_OPT)
-            {
-                /**
-                 * Handle EDNS
-                 */
-
-                if((tctr.ttl & NU32(0x00ff0000)) == 0) /* ensure version is 0 */
-                {
-                    if(tsigname[0] == '\0')
-                    {
-                        mesg->_edns = TRUE;
-                        mesg->_rcode_ext = tctr.ttl;
-
-                        log_debug("EDNS: udp-size=%d rcode-ext=%08x desc=%04x", message_get_buffer_size(mesg), tctr.ttl, ntohs(tctr.rdlen));
-                        continue;
-                    }
-                }
-                else
-                {
-                    message_set_status(mesg, FP_EDNS_BAD_VERSION);
-                    message_set_buffer_size(mesg, edns0_maxsize);
-                    mesg->_edns = TRUE;
-                    mesg->_rcode_ext = 0;
-
-                    /* we are after tctr in the packet : rewind by 6 */
-                    /*
-                    MESSAGE_FLAGS_OR(buffer, QR_BITS, FP_EDNS_BAD_VERSION & 15);
-                    buffer[purd.offset - 6] = (FP_EDNS_BAD_VERSION >> 4);
-                    buffer[purd.offset - 5] = 0;
-                    */
-                }
-
-                log_debug("OPT record is not processable (broken or not supported)");
-
-                return UNPROCESSABLE_MESSAGE;
-            }
-#if DNSCORE_HAS_TSIG_SUPPORT
-
-                /*
-                 * TSIG
-                 */
-
-            else if(tctr.qtype == TYPE_TSIG)
-            {
-                if(ar_count == 0)
-                {
-                    /*
-                     * It looks like a TSIG ...
-                     */
-
-                    ya_result return_code;
-
-                    if(message_isquery(mesg))
-                    {
-                        if(FAIL(return_code = tsig_process_query(mesg, &purd, record_offset, tsigname, &tctr)))
-                        {
-                            log_err("%r query error from %{sockaddr}", return_code, message_get_sender_sa(mesg));
-
-                            switch(return_code)
-                            {
-                                case TSIG_BADKEY:
-                                case TSIG_BADTIME:
-                                case TSIG_BADSIG:
-                                    /* There is a TSIG and it's bad : NOTAUTH
-                                     *
-                                     * The query TSIG has been removed already.
-                                     * A new TSIG with no-mac one with the return_code set in the error field must be added to the result.
-                                     */
-
-                                    tsig_append_error(mesg);
-
-                                    break;
-                                default:
-                                    /*
-                                     * discard : FORMERR
-                                     */
-                                    break;
-                            }
-
-                            return UNPROCESSABLE_MESSAGE;
-                        }
-                    }
-                    else // not a query (an answer)
-                    {
-                        if(message_has_tsig(mesg))
-                        {
-                            if(dnsname_equals(tsigname, message_tsig_get_name(mesg)))
-                            {
-                                if(FAIL(return_code = tsig_process_answer(mesg, &purd, record_offset, &tctr)))
-                                {
-                                    log_err("%r answer error from %{sockaddr}", return_code, message_get_sender_sa(mesg));
-
-                                    return UNPROCESSABLE_MESSAGE;
-                                }
-                            }
-                            else
-                            {
-                                log_err("TSIG name mismatch from %{sockaddr}", message_get_sender_sa(mesg));
-
-                                return UNPROCESSABLE_MESSAGE;
-                            }
-                        }
-                        else // no tsig
-                        {
-                            log_err("answer error from %{sockaddr}: TSIG when none expected", message_get_sender_sa(mesg));
-
-                            message_set_status(mesg, FP_TSIG_UNEXPECTED);
-
-                            return UNPROCESSABLE_MESSAGE;
-                        }
-                    }
-
-                    break;  /* we know there is no need to loop anymore */
-                }
-                else
-                {
-                    /*
-                     * Error: TSIG is not the last AR record
-                     */
-
-                    log_debug("TSIG record is not the last AR");
-
-                    message_set_status(mesg, FP_TSIG_IS_NOT_LAST);
-
-                    return UNPROCESSABLE_MESSAGE;
-                }
-            }
-#endif
-            else
-            {
-                /* Unhandled AR TYPE */
-#if DEBUG
-                log_debug("skipping AR type %{dnstype}", &tctr.qtype);
-#endif
-                purd.offset += ntohs(tctr.rdlen);
-
-                message_size = purd.offset;
-            }
-        }
-    } /* While there are AR to process */
-
-    message_set_additional_count_ne(mesg, 0);
-    message_set_size(mesg, message_size);
-
-    return SUCCESS;
-}
-#endif
 
 /** \brief Processing DNS packet
  *
@@ -1111,7 +864,7 @@ message_process_query(message_data *mesg)
 
     message_set_status(mesg, FP_MESG_OK);
 
-    return OK;
+    return SUCCESS;
 }
 
 int
@@ -1880,7 +1633,10 @@ message_answer_verify(message_data *mesg)
 
         for(int ar_index = message_get_answer_count(mesg) + message_get_authority_count(mesg); ar_index > 0; --ar_index)
         {
-            packet_reader_skip_record(&purd);
+            if(FAIL(packet_reader_skip_record(&purd)))
+            {
+                return UNPROCESSABLE_MESSAGE;
+            }
         }
 
         mesg->_ar_start = &mesg->_buffer[purd.offset];
@@ -2079,6 +1835,57 @@ message_make_query_ex(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u1
         
         message_increase_size(mesg, 11);
     }
+}
+
+void
+message_make_query_ex_with_edns0(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 qclass, u32 edns0_ttl)
+{
+#ifdef WORDS_BIGENDIAN
+    SET_U64_AT(mesg->_buffer[0], 0x0000000000010000LL);
+    SET_U32_AT(mesg->_buffer[8], 0);
+#else
+    SET_U64_AT(mesg->_buffer[0], 0x0000010000000000LL);
+    SET_U32_AT(mesg->_buffer[8], 0);
+#endif
+    message_set_id(mesg, id);
+
+    dnsname_canonize(qname, mesg->_canonised_fqdn);
+
+    ya_result qname_len      = dnsname_len(qname);
+    u8 *tc                   = message_get_query_section_ptr(mesg);
+    memcpy(tc, qname, qname_len);
+    tc += qname_len;
+    SET_U16_AT(tc[0], qtype);
+    tc += 2;
+    SET_U16_AT(tc[0], qclass);
+    tc += 2;
+
+    mesg->_ar_start = tc;
+    message_set_size(mesg, tc - message_get_buffer_const(mesg));
+    mesg->_rcode_ext = edns0_ttl;
+
+    message_set_status(mesg, FP_MESG_OK);
+#if DNSCORE_HAS_TSIG_SUPPORT
+    message_tsig_clear_key(mesg);
+#endif
+
+    message_set_additional_count_ne(mesg, NETWORK_ONE_16);
+    // mesg->_rcode_ext |= MESSAGE_EDNS0_DNSSEC;
+
+    u8 *buffer = message_get_buffer_limit(mesg);
+    buffer[ 0] = 0;
+    buffer[ 1] = 0;                     // TYPE
+    buffer[ 2] = 0x29;                  //
+    buffer[ 3] = edns0_maxsize >> 8;    // CLASS = SIZE
+    buffer[ 4] = edns0_maxsize;         //
+    buffer[ 5] = message_get_status(mesg) >> 4;   // extended RCODE & FLAGS
+    buffer[ 6] = edns0_ttl >> 16;
+    buffer[ 7] = edns0_ttl >> 8;
+    buffer[ 8] = edns0_ttl;
+    buffer[ 9] = 0;                     // RDATA descriptor
+    buffer[10] = 0;
+
+    message_increase_size(mesg, 11);
 }
 
 void message_make_message(message_data *mesg, u16 id, const u8 *qname, u16 qtype, u16 qclass, packet_writer *uninitialised_packet_writer)
@@ -3064,17 +2871,38 @@ message_ixfr_query_get_serial(const message_data *mesg, u32 *serial)
                 if(ISOK(return_value = packet_reader_read_u16(&purd, &soa_type)))
                 {
                     if(soa_type == TYPE_SOA)
-                    {        
-                        packet_reader_read_u16(&purd, &soa_class);
-                        packet_reader_read_u32(&purd, &soa_ttl);
-                        packet_reader_read_u16(&purd, &soa_rdata_size);
+                    {
+                        if(packet_reader_available(&purd) > 2 + 4 + 2)
+                        {
+                            packet_reader_read_u16_unchecked(&purd, &soa_class);        // checked
+                            packet_reader_read_u32_unchecked(&purd, &soa_ttl);          // checked
+                            packet_reader_read_u16_unchecked(&purd, &soa_rdata_size);   // checked
 
-                        packet_reader_skip_fqdn(&purd);
-                        packet_reader_skip_fqdn(&purd);
-                        packet_reader_read_u32(&purd, &soa_serial);
-                        *serial=ntohl(soa_serial);
+                            if(ISOK(return_value = packet_reader_skip_fqdn(&purd)))
+                            {
+                                if(ISOK(return_value = packet_reader_skip_fqdn(&purd)))
+                                {
+                                    if(ISOK(return_value = packet_reader_read_u32(&purd, &soa_serial)))
+                                    {
+                                        *serial=ntohl(soa_serial);
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            return_value = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+                        }
+                    }
+                    else
+                    {
+                        return_value = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
                     }
                 }
+            }
+            else
+            {
+                return_value = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
             }
         }
     }
@@ -3117,49 +2945,61 @@ message_query_serial(const u8 *origin, const host_address *server, u32 *serial_o
                         {
                             packet_unpack_reader_data pr;
                             packet_reader_init_from_message_at(&pr, soa_query_mesg, DNS_HEADER_LENGTH); // scan-build false positive: if message_query_udp returns no-error, then soa_query_mesg.received is set
-                            packet_reader_skip_fqdn(&pr);
-                            packet_reader_skip(&pr, 4);
+                            packet_reader_skip_fqdn(&pr);   // checked below
+                            packet_reader_skip(&pr, 4); // checked below
 
-                            u8 tmp[MAX_DOMAIN_LENGTH];
-
-                            /* read and expect an SOA */
-
-                            packet_reader_read_fqdn(&pr, tmp, sizeof(tmp));
-
-                            if(dnsname_equals(tmp, origin))
+                            if(!packet_reader_eof(&pr))
                             {
-                                struct type_class_ttl_rdlen tctr;
+                                u8 tmp[MAX_DOMAIN_LENGTH];
 
-                                if(packet_reader_read(&pr, &tctr, 10) == 10) // exact
+                                /* read and expect an SOA */
+
+                                if(ISOK(packet_reader_read_fqdn(&pr, tmp, sizeof(tmp))))
                                 {
-                                    if((tctr.qtype == TYPE_SOA) && (tctr.qclass == CLASS_IN))
+                                    if(dnsname_equals(tmp, origin))
                                     {
-                                        if(ISOK(ret = packet_reader_skip_fqdn(&pr)))
-                                        {
-                                            if(ISOK(ret = packet_reader_skip_fqdn(&pr)))
-                                            {
-                                                if(packet_reader_read(&pr, tmp, 4) == 4) // exact
-                                                {
-                                                    *serial_out = ntohl(GET_U32_AT(tmp[0]));
+                                        struct type_class_ttl_rdlen tctr;
 
-                                                    return SUCCESS;
+                                        if(packet_reader_read(&pr, &tctr, 10) == 10) // exact
+                                        {
+                                            if((tctr.qtype == TYPE_SOA) && (tctr.qclass == CLASS_IN))
+                                            {
+                                                if(ISOK(ret = packet_reader_skip_fqdn(&pr)))
+                                                {
+                                                    if(ISOK(ret = packet_reader_skip_fqdn(&pr)))
+                                                    {
+                                                        if(packet_reader_read(&pr, tmp, 4) == 4) // exact
+                                                        {
+                                                            *serial_out = ntohl(GET_U32_AT(tmp[0]));
+
+                                                            return SUCCESS;
+                                                        }
+                                                    }
                                                 }
                                             }
+                                            else
+                                            {
+                                                ret = MESSAGE_UNEXPECTED_ANSWER_TYPE_CLASS;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
                                         }
                                     }
                                     else
                                     {
-                                        ret = MESSAGE_UNEXPECTED_ANSWER_TYPE_CLASS;
+                                        ret = MESSAGE_UNEXPECTED_ANSWER_DOMAIN;
                                     }
                                 }
                                 else
                                 {
-                                    ret = RCODE_FORMERR;
+                                    ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
                                 }
                             }
                             else
                             {
-                                ret = MESSAGE_UNEXPECTED_ANSWER_DOMAIN;
+                                ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
                             }
                         }
                         else
@@ -3211,7 +3051,7 @@ message_query_serial(const u8 *origin, const host_address *server, u32 *serial_o
 
 void message_init_ex(message_data* mesg, u32 mesg_size, void *buffer, size_t buffer_size)
 {
-    ZEROMEMORY(mesg, offsetof(message_data, _msghdr_control_buffer));
+    ZEROMEMORY(mesg, offsetof(message_data, _msghdr_control_buffer)); // includes the tsig structure
     mesg->_msghdr.msg_name = &mesg->_sender;
     mesg->_msghdr.msg_namelen = sizeof(mesg->_sender);
     mesg->_msghdr.msg_iov = &mesg->_iovec;
@@ -3324,6 +3164,10 @@ void message_finalize(message_data *mesg)
         hmac_free(mesg->_tsig.hmac);
         mesg->_tsig.hmac = NULL;
     }
+    if(mesg->_tsig.other != NULL)
+    {
+       free(mesg->_tsig.other);
+    }
 }
 
 void message_free(message_data *mesg)
@@ -3342,6 +3186,12 @@ void message_free(message_data *mesg)
 message_data*
 message_dup(const message_data *mesg)
 {
+    size_t message_size = message_get_size(mesg);
+    if(message_size > mesg->_buffer_size_limit)
+    {
+        return NULL;
+    }
+
     message_data *clone = message_new_instance_ex(NULL, mesg->_buffer_size_limit + 8);
     if(message_get_additional_section_ptr_const(mesg) != NULL)
     {
@@ -3366,8 +3216,8 @@ message_dup(const message_data *mesg)
 #if !MESSAGE_PAYLOAD_IS_POINTER
     SET_U16_AT(clone->_buffer_tcp_len[0], GET_U16_AT(mesg->_buffer_tcp_len[0]));
 #endif
-    memcpy(message_get_buffer(clone), message_get_buffer_const(mesg), message_get_size(mesg));
-    message_set_size(clone, message_get_size(mesg));
+    memcpy(message_get_buffer(clone), message_get_buffer_const(mesg), message_size);
+    message_set_size(clone, message_size);
     
     return clone;
 }
@@ -3509,7 +3359,10 @@ message_get_ixfr_query_serial(message_data *mesg, u32 *serialp)
     
     packet_reader_init_from_message(&purd, mesg);
 
-    packet_reader_skip_fqdn(&purd);
+    if(FAIL(ret = packet_reader_skip_fqdn(&purd)))
+    {
+        return ret;
+    }
     
     if(FAIL(ret = packet_reader_read_u16(&purd, &qtype)))
     {
@@ -3521,7 +3374,10 @@ message_get_ixfr_query_serial(message_data *mesg, u32 *serialp)
         return ERROR; // not an IXFR
     }
     
-    packet_reader_skip(&purd, 2);
+    if(FAIL(ret = packet_reader_skip(&purd, 2)))
+    {
+        return ret;
+    }
 
     message_set_size(mesg, purd.offset);
 
@@ -3654,7 +3510,7 @@ message_map_init(message_map *map, const message_data *mesg)
     for(i = 0; i < qc; ++i)
     {
         ptr_vector_append(&map->records, (void*)packet_reader_get_next_u8_ptr_const(&purd));
-        packet_reader_skip_fqdn(&purd);
+        packet_reader_skip_fqdn(&purd); // checked below
         if(FAIL(ret = packet_reader_skip(&purd, 4)))
         {
             message_map_finalize(map);
