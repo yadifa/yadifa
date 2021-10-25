@@ -30,64 +30,135 @@
 #
 ################################################################################        
 
+if [ "x$DEBUG" = "x" ]; then
+    DEBUG=0
+fi
+
+debug()
+{
+    if [ $DEBUG -ne 0 ]; then
+        echo $*
+    fi
+}
+
 doe()
 {
     err=$?
-    if [ $err -ne 0 ]
-    then
+    if [ $err -ne 0 ]; then
       echo $*
       exit $err
     fi
 }
 
 OS=$(uname -s)
-SED=sed
-if [ ! "$OS" = "Darwin" ]
-then
-    libtoolize
-    doe "libtoolize failed"
+
+if [ ! "$OS" = "Darwin" ]; then
+    SED=sed
 else
-    glibtoolize
-    doe "glibtoolize failed"
     SED=gsed
 fi
+
+debug "autogen starting with OS='$OS'"
 
 AM_VER_HI=''
 AM_VER_LO=''
 AM_VER=$(automake --version|grep ^automake|$SED -e 's/.* //' -e 's/\./ /g')
 
-if [ "x$AM_VER" = "x" ]
-then
+if [ "x$AM_VER" = "x" ]; then
   echo "could not get automake version"
   exit 1
 fi
 
 for i in $AM_VER
 do
-    if [ "x$AM_VER_HI" = "x" ]
-    then
+    if [ "x$AM_VER_HI" = "x" ]; then
         AM_VER_HI=$i
     else
 	AM_VER_LO=$i
         break
+    fi
+done
+
+debug "automake version <$AM_VER_HI . $AM_VER_LO>"
+
+AC_VER_HI=''
+AC_VER_LO=''
+AC_VER=$(autoconf --version|grep ^autoconf|$SED -e 's/.* //' -e 's/\./ /g')
+
+if [ "x$AC_VER" = "x" ]; then
+  echo "could not get autoconf version"
+  exit 1
+fi
+
+for i in $AC_VER
+do
+    if [ "x$AC_VER_HI" = "x" ]
+    then
+        AC_VER_HI=$i
+    else
+	AC_VER_LO=$i
+        break
    fi
 done
 
-if [ $AM_VER_HI -eq 1 ]
-then
-	if [ $AM_VER_LO -lt 14 ]
-	then
+debug "autoconf version <$AC_VER_HI . $AC_VER_LO>"
+
+####
+
+if [ $AM_VER_HI -eq 1 ]; then
+	if [ $AM_VER_LO -lt 14 ]; then
 		echo 'patching configure.ac for automake < 1.14'
 		$SED -i 's/^#.*AM_PROG_CC_C_O/AM_PROG_CC_C_O/' configure.ac
 	fi
 fi
 
+if [ $AC_VER_HI -eq 2 ]
+then
+	echo "patching prerequisites"
+	$SED -i "s/^AC_PREREQ.*/AC_PREREQ([$AC_VER_HI.$AC_VER_LO])/" configure.ac
+
+	if [ $AC_VER_LO -lt 60 ]; then
+		for f in $(find -name \*.m4)
+		do
+			grep AS_HELP_STRING $f > /dev/null 2>&1
+			if [ $? -eq 0 ]; then debug "patching $f for AC_HELP_STRING usage";fi
+			$SED -i 's/AS_HELP_STRING/AC_HELP_STRING/' $f
+		done
+	else
+		for f in $(find -name \*.m4)
+		do
+			grep AC_HELP_STRING $f > /dev/null 2>&1
+			if [ $? -eq 0 ]; then debug "patching $f for AS_HELP_STRING usage";fi
+			$SED -i 's/AC_HELP_STRING/AS_HELP_STRING/' $f
+		done
+	fi
+fi
+
+if [ ! "$OS" = "Darwin" ]; then
+    debug "libtoolize"
+    libtoolize --force
+    doe "libtoolize failed"
+else
+    debug "glibtoolize (OSX)"
+    glibtoolize
+    doe "glibtoolize failed"
+fi
+
+debug "aclocal"
 aclocal
 doe "aclocal failed"
+
+debug "autoheader"
 autoheader -Wall
 doe "autoheader failed"
+
+debug "automake"
 automake --add-missing -Wall
 doe "automake failed"
+
+debug "autoconf"
 autoconf -i -Wall
 doe "autoconf failed"
-#echo "autogen done"
+
+debug "autogen done"
+

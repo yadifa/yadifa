@@ -748,7 +748,7 @@ zonesign_nsec3_chain_update(zdb_zone *zone, nsec3_zone* n3, ptr_vector *zsks, bo
 static ya_result
 zonesign_update_nsec3_chain(zdb_zone *zone, ptr_vector *zsks, bool opt_out)
 {
-    ya_result ret;
+    ya_result ret = SUCCESS;
     for(int chain_index = 0; ; ++chain_index)
     {
         nsec3_zone* n3 = zdb_zone_get_nsec3chain(zone, chain_index);
@@ -1290,7 +1290,7 @@ zonesign_run()
             if(FAIL(ret = dnssec_keystore_reload_domain(zone->origin)))
             {
                 formatln("error: failed to load keys for domain %{dnsname}: %r", zone->origin, ret);
-                return ret;
+                goto zonesign_run_exit;
             }
 
             bool remove_dnskey_rrsig = FALSE;
@@ -1363,7 +1363,7 @@ zonesign_run()
                 if(FAIL(ret))
                 {
                     formatln("%s key K%{dnsname}+%03i+%05i : failed to load public key: %r", flags_name, zone->origin, dnskey_get_algorithm_from_rdata(rdata), dnskey_get_tag_from_rdata(rdata, rdata_size), ret);
-                    return ret;
+                    goto zonesign_run_exit;
                 }
             }
             else
@@ -1427,14 +1427,16 @@ zonesign_run()
             else
             {
                 println("error: no KSK private key available");
-                return INVALID_STATE_ERROR;
+                ret = INVALID_STATE_ERROR;
+                goto zonesign_run_exit;
             }
         }
 
         if(!has_one_zsk)
         {
             println("error: no ZSK private key available");
-            return INVALID_STATE_ERROR;
+            ret = INVALID_STATE_ERROR;
+            goto zonesign_run_exit;
         }
 
         if(!auto_serial)
@@ -1578,10 +1580,22 @@ zonesign_run()
 
             ret = zonesign_update_signatures(zone, &ksks, &zsks);
 
+            if(FAIL(ret))
+            {
+                formatln("failed to update signatures: %r", ret);
+                goto zonesign_run_exit;
+            }
+
             if(g_yadifa_zonesign_settings.dnssec_mode >= ZDB_ZONE_MAINTAIN_NSEC3)
             {
                 ret = zonesign_update_nsec3_chain(zone, &zsks, optout);
                 nsec3_zone_update_chain0_links(zone);
+
+                if(FAIL(ret))
+                {
+                    formatln("failed to update nsec3 chains: %r", ret);
+                    goto zonesign_run_exit;
+                }
             }
 
             //ret = zdb_zone_sign(zone);
@@ -1613,6 +1627,7 @@ zonesign_run()
         formatln("failed to load zone file: %r", ret);
     }
 
+zonesign_run_exit:
     zdb_zone_load_parms_finalize(&parms);
     zone_reader_close(&zr);
 

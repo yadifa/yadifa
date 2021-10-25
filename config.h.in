@@ -242,9 +242,6 @@
 /* zalloc memory system disabled. */
 #undef HAS_ZALLOC_SUPPORT
 
-/* yadifa zonesign tool disabled. */
-#undef HAS_ZONESIGN
-
 /* Define to 1 if you have the `alarm' function. */
 #undef HAVE_ALARM
 

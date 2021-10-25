@@ -270,15 +270,15 @@ CMDLINE_HELP("<algorithm>","one of the supported key algorithms")
 CMDLINE_CALLBACK(keygen_print_algorithm_help, NULL)
 CMDLINE_OPT(      "key-flag",                'f', "key_flag"                   )
 CMDLINE_HELP("KSK", "flag(s) to apply to the key")
-CMDLINE_OPT(      "publication-date",        'P', "publication_date"           )
+CMDLINE_OPT(      "publication-date",        'P', "publication_date_text"      )
 CMDLINE_HELP("date/[+-]offset/none","set key publication date (default: now)")
-CMDLINE_OPT(      "activation-date",         'A', "activation_date"            )
+CMDLINE_OPT(      "activation-date",         'A', "activation_date_text"       )
 CMDLINE_HELP("date/[+-]offset/none","set key activation date (default: now)")
-CMDLINE_OPT(      "revocation-date",         'R', "revocation_date"            )
+CMDLINE_OPT(      "revocation-date",         'R', "revocation_date_text"       )
 CMDLINE_HELP("date/[+-]offset/none","set key revocation date")
-CMDLINE_OPT(      "inactivation-date",       'I', "inactivation_date"          )
+CMDLINE_OPT(      "inactivation-date",       'I', "inactivation_date_text"     )
 CMDLINE_HELP("date/[+-]offset/none","set key inactivation date")
-CMDLINE_OPT(      "deletion-date",           'D', "deletion_date"              )
+CMDLINE_OPT(      "deletion-date",           'D', "deletion_date_text"         )
 CMDLINE_HELP("date/[+-]offset/none","set key inactivation date")
 CMDLINE_OPT(      "key-size",                'b', "key_size"                   )
 CMDLINE_HELP("<key size in bits>","key size in bits, when applicable")
@@ -604,40 +604,71 @@ keygen_run(const module_s *m)
 
     dnskey_set_created_epoch(generated_key, time(NULL));
 
-    if(g_keygen_settings.publication_date_text != NULL)
+    if((g_keygen_settings.publication_date_text != NULL) && (strlen(g_keygen_settings.publication_date_text) > 0))
     {
         s64 epochus = timeus_from_smarttime(g_keygen_settings.publication_date_text);
         if(epochus >= 0)
         {
             dnskey_set_publish_epoch(generated_key, epochus / ONE_SECOND_US);
         }
+        else
+        {
+            osformatln(termerr, "failed to parse publication date '%s': %r", g_keygen_settings.publication_date_text, (ya_result)epochus);
+            return (ya_result)epochus;
+        }
     }
 
-    if(g_keygen_settings.activation_date_text != NULL)
+    if((g_keygen_settings.activation_date_text != NULL) && (strlen(g_keygen_settings.activation_date_text) > 0))
     {
         s64 epochus = timeus_from_smarttime(g_keygen_settings.activation_date_text);
         if(epochus >= 0)
         {
             dnskey_set_activate_epoch(generated_key, epochus / ONE_SECOND_US);
         }
+        else
+        {
+            osformatln(termerr, "failed to parse activation date '%s': %r", g_keygen_settings.activation_date_text, (ya_result)epochus);
+            return (ya_result)epochus;
+        }
     }
 
-    if(g_keygen_settings.inactivation_date_text != NULL)
+    if((g_keygen_settings.inactivation_date_text != NULL) && (strlen(g_keygen_settings.inactivation_date_text) > 0))
     {
         s64 epochus = timeus_from_smarttime(g_keygen_settings.inactivation_date_text);
         if(epochus >= 0)
         {
             dnskey_set_inactive_epoch(generated_key, epochus / ONE_SECOND_US);
         }
+        else
+        {
+            osformatln(termerr, "failed to parse inactivation date '%s': %r", g_keygen_settings.inactivation_date_text, (ya_result)epochus);
+            return (ya_result)epochus;
+        }
     }
 
-    if(g_keygen_settings.deletion_date_text != NULL)
+    if((g_keygen_settings.deletion_date_text != NULL) && (strlen(g_keygen_settings.deletion_date_text) > 0))
     {
         s64 epochus = timeus_from_smarttime(g_keygen_settings.deletion_date_text);
         if(epochus >= 0)
         {
             dnskey_set_delete_epoch(generated_key, epochus / ONE_SECOND_US);
         }
+        else
+        {
+            osformatln(termerr, "failed to parse deletion date '%s': %r", g_keygen_settings.deletion_date_text, (ya_result)epochus);
+            return (ya_result)epochus;
+        }
+    }
+
+    time_t epoch_publish = dnskey_get_publish_epoch(generated_key);
+    time_t epoch_activate = dnskey_get_activate_epoch(generated_key);
+    time_t epoch_inactive = dnskey_get_inactive_epoch(generated_key);
+    time_t epoch_delete = dnskey_get_delete_epoch(generated_key);
+
+    if((epoch_publish > epoch_activate) || (epoch_activate > epoch_inactive) || (epoch_inactive > epoch_delete))
+    {
+        osformatln(termerr, "times are out of order");
+        return INVALID_ARGUMENT_ERROR;
     }
 
     // 8. write the files *.key and *.private

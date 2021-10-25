@@ -94,7 +94,14 @@ packet_reader_read_fqdn(packet_unpack_reader_data* reader, u8 *output_buffer, u3
             new_offset <<= 8;
             new_offset |= *p;
 
-            p = &reader->packet[new_offset];
+            const u8* q = &reader->packet[new_offset];
+
+            if(q >= p)
+            {
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
+            }
+
+            p = q;
 
             reader->offset++;
 

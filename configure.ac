@@ -33,10 +33,9 @@ dnl ############################################################################
         
 configure_base_path="$0/"
 
-AC_PREREQ(2.61)
-AC_REVISION([$Revision: 10135 $])
-AC_INIT([yadifa],m4_esyscmd(
-    [
+AC_PREREQ([2.69])
+AC_REVISION([$Revision: 10331 $])
+define(YADIFA_VERSION, [m4_esyscmd(
         svn info 2> /dev/null |
         grep 'Last Changed Rev: ' |
         sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt ;
@@ -46,7 +45,9 @@ AC_INIT([yadifa],m4_esyscmd(
         /usr/bin/tail -1 |
         tr -d '\n') |
         tr -d '\n'
-    ]),[info@yadifa.eu])
+	)])
+
+AC_INIT([yadifa],YADIFA_VERSION,[info@yadifa.eu])
 
 echo
 echo
@@ -74,7 +75,7 @@ AM_PROG_CC_C_O
 LT_INIT([disable-shared])
 
 AC_DARWIN_LIBTOOL
-dnl obsolete: AC_PROG_LIBTOOL
+dnl obsolete: LT_INIT
 
 AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
@@ -88,7 +89,12 @@ AC_SEARCH_LIBS([clock_gettime],[rt],,[exit 1])
 
 dnl Checks for header files.
 
-dnl obsolete: AC_HEADER_STDC
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+dnl AC_CHECK_INCLUDES_DEFAULT
+dnl AC_PROG_EGREP
+#
+# 
 
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h sys/time.h syslog.h unistd.h stdatomic.h])
 
@@ -161,7 +167,6 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
 AC_FUNC_SELECT_ARGTYPES
-dnl obsolete: AC_TYPE_SIGNAL
 AC_FUNC_STAT
 
 AC_SYS_LARGEFILE

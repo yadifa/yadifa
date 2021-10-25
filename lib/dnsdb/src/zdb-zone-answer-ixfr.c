@@ -925,7 +925,6 @@ zdb_zone_answer_ixfr_thread(void* data_)
         }
     }
 
-
 #if DNSCORE_HAS_TCP_MANAGER
     output_stream_flush(&tcpos);
     output_stream *tcpos_filtered = buffer_output_stream_get_filtered(&tcpos);
@@ -980,7 +979,9 @@ zdb_zone_answer_ixfr(
     if(clone == NULL)
     {
         log_warn("zone write axfr: %{dnsname}: %{sockaddr}: cannot answer, message cannot be processed", zone->origin, message_get_sender_sa(mesg));
+#if !DNSCORE_HAS_TCP_MANAGER
         close_ex(sockfd);
+#endif
         return; // BUFFER_WOULD_OVERFLOW;
     }
 

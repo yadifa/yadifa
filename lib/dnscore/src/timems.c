@@ -763,25 +763,34 @@ timeus_from_smarttime_ex(const char *text, s64 now)
             {
                 text = parse_skip_nondigits(text);
 
-                if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &hours, 0, 23)))
+                if(*text != '\0')
                 {
-                    return ret;
+                    if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &hours, 0, 23)))
+                    {
+                        return ret;
+                    }
+                    text += 2;
+                    text = parse_skip_nondigits(text);
                 }
-                text += 2;
-                text = parse_skip_nondigits(text);
 
-                if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &minutes, 0, 59)))
+                if(*text != '\0')
                 {
-                    return ret;
+                    if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &minutes, 0, 59)))
+                    {
+                        return ret;
+                    }
+                    text += 2;
+                    text = parse_skip_nondigits(text);
                 }
-                text += 2;
-                text = parse_skip_nondigits(text);
 
-                if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &seconds, 0, 59)))
+                if(*text != '\0')
                 {
-                    return ret;
+                    if(FAIL(ret = parse_u32_check_range_len_base10(text, 2, &seconds, 0, 59)))
+                    {
+                        return ret;
+                    }
+                    text += 2;
                 }
-                text += 2;
 
                 // skip blanks
                 // if the end of the text hasn't been reached then start parsing fractional time

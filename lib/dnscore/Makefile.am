@@ -40,7 +40,7 @@ AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/i
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
 
-dist_noinst_DATA = VERSION include/dnscore/thirdparty/stdatomic.h
+dist_noinst_DATA = VERSION include/dnscore/thirdparty/stdatomic.h src/tcp_manager.c
 
 lib_LTLIBRARIES= libdnscore.la
 libdnscore_la_LDFLAGS = -version-info 7:4:0
@@ -177,7 +177,6 @@ libdnscore_la_SOURCES = \
 	src/sys_error.c \
 	src/sys_get_cpu_count.c \
 	src/tcp_io_stream.c \
-	src/tcp_manager.c \
 	src/thread.c \
 	src/thread_pool.c \
 	src/thread-tag.c \

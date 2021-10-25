@@ -29,6 +29,11 @@
 # 
 ################################################################################
 
+20211025:
+    YADIFA 2.5.3-public
+
+    Fixes a critical issue that could cause yadifad to crash handling certain DNS packet with privileged access.
+
 20210929:
     YADIFA 2.5.2-public
 

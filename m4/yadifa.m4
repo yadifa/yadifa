@@ -295,8 +295,8 @@ AC_HAS_DISABLE(ctrl,CTRL,[yadifa ctrl remote control tool])
 
 dnl ZONESIGN
 dnl ==========================================================================
-
-AC_HAS_ENABLE(zonesign,ZONESIGN,[yadifa zonesign tool])
+dnl AC_HAS_ENABLE(zonesign,ZONESIGN,[yadifa zonesign tool])
+AM_CONDITIONAL([HAS_ZONESIGN], [xno = xyes])
 
 dnl KEYGEN
 dnl ==========================================================================
@@ -441,7 +441,7 @@ dnl EDDSA
 dnl =====
 dnl AC_HAS_DISABLE(eddsa, EDDSA_SUPPORT,[Edward Curve (EDDSA) support (Use this if the available SSL library does not support it properly)])
 AC_MSG_CHECKING(if EDDSA has been disabled)
-AC_ARG_ENABLE(EDDSA, AC_HELP_STRING([--disable-eddsa]), [Disable EDDSA])
+AC_ARG_ENABLE(EDDSA, AS_HELP_STRING([--disable-eddsa]), [Disable EDDSA])
 case "y$enable_eddsa" in
     yyes|y)
         if test "x$ac_cv_func_EVP_PKEY_new_raw_public_key" == xyes; then

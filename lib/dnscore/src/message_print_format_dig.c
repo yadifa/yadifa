@@ -241,7 +241,7 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u32 length
                 {
                     continue;
                 }
-                else if(rtype == TYPE_OPT)
+                else if(rtype == TYPE_TSIG)
                 {
                     continue;
                 }

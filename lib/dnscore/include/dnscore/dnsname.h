@@ -434,6 +434,8 @@ bool dnsname_equals_ignorecase3(const u8* name_a, const u8* name_b);
 
 u32 dnsname_len(const u8* name);
 
+ya_result dnsname_len_checked(const u8 *name);
+
 /* ONE use */
 
 u32 dnsname_getdepth(const u8* name);
@@ -441,6 +443,8 @@ u32 dnsname_getdepth(const u8* name);
 /* ONE use */
 
 u32 dnsname_copy(u8* dst, const u8* src);
+
+ya_result dnsname_copy_checked(u8* dst, const u8* src);
 
 /* malloc & copies a dnsname */
 

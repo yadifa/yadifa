@@ -2320,6 +2320,29 @@ dnsname_len(const u8 *name)
     return name - start;
 }
 
+ya_result
+dnsname_len_checked(const u8 *name)
+{
+    yassert(name != NULL);
+
+    ya_result total = 0;
+
+    u8 c;
+
+    while((c = *name++) > 0)
+    {
+        name += c;
+        total += c;
+        if(total > MAX_DOMAIN_LENGTH)
+        {
+            return DOMAIN_TOO_LONG;
+        }
+    }
+
+    return total + 1;
+}
+
+
 s32
 dnsname_len_with_limit(const u8 *name, const u8 *name_limit)
 {
@@ -2401,6 +2424,17 @@ dnsname_copy(u8* dst, const u8* src)
 
     MEMCOPY(dst, src, len);
 
+    return len;
+}
+
+ya_result
+dnsname_copy_checked(u8* dst, const u8* src)
+{
+    ya_result len = dnsname_len_checked(src);
+    if(ISOK(len))
+    {
+        MEMCOPY(dst, src, len);
+    }
     return len;
 }
 

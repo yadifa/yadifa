@@ -1477,16 +1477,16 @@ journal_cjf_ro_idxt_verify(journal_cjf *jnl)
 
                 if(loops == 0)
                 {
-                    if(entry->file_offset > CJF_HEADER_SIZE)
-                    {
-                        // looped at an unexpected position
-                        log_err("cjf: %{dnsname}: page[%i] looped at an unexpected position (%u != expected %u)", jnl->origin, page, entry->file_offset, CJF_HEADER_SIZE);
-                        error = TRUE;
-                    }
-                    else if(entry->file_offset > CJF_HEADER_SIZE)
+                    if(entry->file_offset < CJF_HEADER_SIZE)
                     {
                         // looped at an unexpected position
                         log_err("cjf: %{dnsname}: page[%i] looped into the header position (%u < %u)", jnl->origin, page, entry->file_offset, CJF_HEADER_SIZE);
+                        error = TRUE;
+                    }
+                    else if(entry->file_offset != CJF_HEADER_SIZE)
+                    {
+                        // looped at an unexpected position
+                        log_err("cjf: %{dnsname}: page[%i] looped at an unexpected position (%u != expected %u)", jnl->origin, page, entry->file_offset, CJF_HEADER_SIZE);
                         error = TRUE;
                     }
 

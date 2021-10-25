@@ -365,8 +365,8 @@ am__libdnscore_la_SOURCES_DIST = src/alarm.c src/acl.c \
 	src/shared-heap-bytearray-output-stream.c src/signals.c \
 	src/simple-http-server.c src/socket-server.c src/string_set.c \
 	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
-	src/tcp_manager.c src/thread.c src/thread_pool.c \
-	src/thread-tag.c src/threaded-qsl-cw.c src/threaded_dll_cw.c \
+	src/thread.c src/thread_pool.c src/thread-tag.c \
+	src/threaded-qsl-cw.c src/threaded_dll_cw.c \
 	src/threaded_nb_mm.c src/threaded_nbrb.c \
 	src/threaded_queue_slg.c src/threaded_ringbuffer.c \
 	src/threaded_ringbuffer_cw.c src/threaded_ringlist.c \
@@ -422,8 +422,8 @@ am_libdnscore_la_OBJECTS = src/alarm.lo src/acl.lo src/acl-config.lo \
 	src/shared-heap-bytearray-output-stream.lo src/signals.lo \
 	src/simple-http-server.lo src/socket-server.lo \
 	src/string_set.lo src/sys_error.lo src/sys_get_cpu_count.lo \
-	src/tcp_io_stream.lo src/tcp_manager.lo src/thread.lo \
-	src/thread_pool.lo src/thread-tag.lo src/threaded-qsl-cw.lo \
+	src/tcp_io_stream.lo src/thread.lo src/thread_pool.lo \
+	src/thread-tag.lo src/threaded-qsl-cw.lo \
 	src/threaded_dll_cw.lo src/threaded_nb_mm.lo \
 	src/threaded_nbrb.lo src/threaded_queue_slg.lo \
 	src/threaded_ringbuffer.lo src/threaded_ringbuffer_cw.lo \
@@ -665,7 +665,6 @@ HAS_YADIFA = @HAS_YADIFA@
 HAS_ZALLOC_DEBUG_SUPPORT = @HAS_ZALLOC_DEBUG_SUPPORT@
 HAS_ZALLOC_STATISTICS_SUPPORT = @HAS_ZALLOC_STATISTICS_SUPPORT@
 HAS_ZALLOC_SUPPORT = @HAS_ZALLOC_SUPPORT@
-HAS_ZONESIGN = @HAS_ZONESIGN@
 HAVE_RECVMMSG = @HAVE_RECVMMSG@
 HAVE_SENDMMSG = @HAVE_SENDMMSG@
 INSTALL = @INSTALL@
@@ -814,7 +813,7 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
-dist_noinst_DATA = VERSION include/dnscore/thirdparty/stdatomic.h
+dist_noinst_DATA = VERSION include/dnscore/thirdparty/stdatomic.h src/tcp_manager.c
 lib_LTLIBRARIES = libdnscore.la
 libdnscore_la_LDFLAGS = -version-info 7:4:0
 #libdnscore_la_LIBADD=$(top_buildir)/lib/.../libsomething.la
@@ -865,8 +864,8 @@ libdnscore_la_SOURCES = src/alarm.c src/acl.c src/acl-config.c \
 	src/shared-heap-bytearray-output-stream.c src/signals.c \
 	src/simple-http-server.c src/socket-server.c src/string_set.c \
 	src/sys_error.c src/sys_get_cpu_count.c src/tcp_io_stream.c \
-	src/tcp_manager.c src/thread.c src/thread_pool.c \
-	src/thread-tag.c src/threaded-qsl-cw.c src/threaded_dll_cw.c \
+	src/thread.c src/thread_pool.c src/thread-tag.c \
+	src/threaded-qsl-cw.c src/threaded_dll_cw.c \
 	src/threaded_nb_mm.c src/threaded_nbrb.c \
 	src/threaded_queue_slg.c src/threaded_ringbuffer.c \
 	src/threaded_ringbuffer_cw.c src/threaded_ringlist.c \
@@ -1183,7 +1182,6 @@ src/sys_get_cpu_count.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/tcp_io_stream.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
-src/tcp_manager.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/thread.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/thread_pool.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 src/thread-tag.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
@@ -1354,7 +1352,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/sys_error.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/sys_get_cpu_count.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/tcp_io_stream.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/tcp_manager.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/thread-tag.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/thread.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/thread_pool.Plo@am__quote@
