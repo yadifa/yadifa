@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2022, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,6 @@ pkginclude_HEADERS = \
 	$(I)/btree.h \
 	$(I)/dictionary.h \
 	$(I)/dictionary-node.h \
-	$(I)/dnsdb-config.h \
 	$(I)/dnsrdata.h \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \

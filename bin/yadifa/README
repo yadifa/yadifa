@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2021, EURid. All rights reserved.
+#  Copyright (c) 2011-2022, EURid. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,7 +29,7 @@
 # 
 ################################################################################
 
-20211025:
-    YADIFA 2.5.3-public
+20220228:
+    YADIFA 2.5.4-public
 
-    Fixes a critical issue that could cause yadifad to crash handling certain DNS packet with privileged access.
+    Fixes an issue handling CNAME records.

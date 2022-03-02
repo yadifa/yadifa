@@ -16,7 +16,7 @@
 
 ################################################################################
 #
-#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2022, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@
 
 ################################################################################
 #
-#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2022, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,7 @@
 
 ################################################################################
 #
-#  Copyright (c) 2011-2021, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2022, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -466,30 +466,29 @@ am__can_run_installinfo = \
   esac
 DATA = $(dist_noinst_DATA)
 am__pkginclude_HEADERS_DIST = $(I)/avl.h $(I)/btree.h \
-	$(I)/dictionary.h $(I)/dictionary-node.h $(I)/dnsdb-config.h \
-	$(I)/dnsrdata.h $(I)/dnssec.h $(I)/dnssec_config.h \
-	$(I)/dnssec-keystore.h $(I)/htable.h $(I)/htbt.h \
-	$(I)/journal.h $(I)/journal_ix.h $(I)/journal-jnl.h \
-	$(I)/journal-cjf.h $(I)/journal-cjf-common.h \
-	$(I)/journal-cjf-idxt.h $(I)/journal-cjf-page-output-stream.h \
-	$(I)/journal-cjf-page.h $(I)/journal-cjf-page-cache.h \
-	$(I)/chain-replay.h $(I)/nsec.h $(I)/nsec-chain-replay.h \
-	$(I)/nsec3.h $(I)/nsec3_collection.h $(I)/nsec3-chain-replay.h \
-	$(I)/nsec3_item.h $(I)/nsec3_load.h $(I)/nsec3_name_error.h \
-	$(I)/nsec3_nodata_error.h $(I)/nsec3_owner.h \
-	$(I)/nsec3_types.h $(I)/nsec3_zone.h $(I)/nsec_collection.h \
-	$(I)/nsec_common.h $(I)/rrsig.h $(I)/xfr_copy.h $(I)/zdb.h \
-	$(I)/zdb_config.h $(I)/zdb_error.h $(I)/zdb_icmtl.h \
-	$(I)/zdb_record.h $(I)/zdb_rr_label.h $(I)/zdb_sanitize.h \
-	$(I)/zdb_types.h $(I)/zdb_utils.h $(I)/zdb_cache.h \
-	$(I)/zdb_zone.h $(I)/zdb-lock.h $(I)/zdb-zone-arc.h \
-	$(I)/zdb-zone-dnssec.h $(I)/zdb-zone-find.h \
-	$(I)/zdb-zone-garbage.h $(I)/zdb-zone-journal.h \
-	$(I)/zdb-zone-lock.h $(I)/zdb-zone-lock-monitor.h \
-	$(I)/zdb-zone-answer-axfr.h $(I)/zdb-zone-answer-ixfr.h \
-	$(I)/zdb-zone-maintenance.h $(I)/zdb-packed-ttlrdata.h \
-	$(I)/zdb_zone_axfr_input_stream.h $(I)/zdb_zone_label.h \
-	$(I)/zdb_zone_label_iterator.h \
+	$(I)/dictionary.h $(I)/dictionary-node.h $(I)/dnsrdata.h \
+	$(I)/dnssec.h $(I)/dnssec_config.h $(I)/dnssec-keystore.h \
+	$(I)/htable.h $(I)/htbt.h $(I)/journal.h $(I)/journal_ix.h \
+	$(I)/journal-jnl.h $(I)/journal-cjf.h \
+	$(I)/journal-cjf-common.h $(I)/journal-cjf-idxt.h \
+	$(I)/journal-cjf-page-output-stream.h $(I)/journal-cjf-page.h \
+	$(I)/journal-cjf-page-cache.h $(I)/chain-replay.h $(I)/nsec.h \
+	$(I)/nsec-chain-replay.h $(I)/nsec3.h $(I)/nsec3_collection.h \
+	$(I)/nsec3-chain-replay.h $(I)/nsec3_item.h $(I)/nsec3_load.h \
+	$(I)/nsec3_name_error.h $(I)/nsec3_nodata_error.h \
+	$(I)/nsec3_owner.h $(I)/nsec3_types.h $(I)/nsec3_zone.h \
+	$(I)/nsec_collection.h $(I)/nsec_common.h $(I)/rrsig.h \
+	$(I)/xfr_copy.h $(I)/zdb.h $(I)/zdb_config.h $(I)/zdb_error.h \
+	$(I)/zdb_icmtl.h $(I)/zdb_record.h $(I)/zdb_rr_label.h \
+	$(I)/zdb_sanitize.h $(I)/zdb_types.h $(I)/zdb_utils.h \
+	$(I)/zdb_cache.h $(I)/zdb_zone.h $(I)/zdb-lock.h \
+	$(I)/zdb-zone-arc.h $(I)/zdb-zone-dnssec.h \
+	$(I)/zdb-zone-find.h $(I)/zdb-zone-garbage.h \
+	$(I)/zdb-zone-journal.h $(I)/zdb-zone-lock.h \
+	$(I)/zdb-zone-lock-monitor.h $(I)/zdb-zone-answer-axfr.h \
+	$(I)/zdb-zone-answer-ixfr.h $(I)/zdb-zone-maintenance.h \
+	$(I)/zdb-packed-ttlrdata.h $(I)/zdb_zone_axfr_input_stream.h \
+	$(I)/zdb_zone_label.h $(I)/zdb_zone_label_iterator.h \
 	$(I)/zdb_zone_label_iterator_ex.h $(I)/zdb_zone_load.h \
 	$(I)/zdb-zone-path-provider.h $(I)/zdb_zone_process.h \
 	$(I)/zdb-zone-reader-filter.h $(I)/zdb_zone_write.h \
@@ -776,9 +775,9 @@ FEATURES = $(I)/$(FEATURESFILE)
 FEATURESDIR = lib/dnsdb/include/dnsdb
 FEATURESSRC = $(top_builddir)/$(FEATURESDIR)/dnsdb-config.h
 pkginclude_HEADERS = $(I)/avl.h $(I)/btree.h $(I)/dictionary.h \
-	$(I)/dictionary-node.h $(I)/dnsdb-config.h $(I)/dnsrdata.h \
-	$(I)/dnssec.h $(I)/dnssec_config.h $(I)/dnssec-keystore.h \
-	$(I)/htable.h $(I)/htbt.h $(I)/journal.h $(I)/journal_ix.h \
+	$(I)/dictionary-node.h $(I)/dnsrdata.h $(I)/dnssec.h \
+	$(I)/dnssec_config.h $(I)/dnssec-keystore.h $(I)/htable.h \
+	$(I)/htbt.h $(I)/journal.h $(I)/journal_ix.h \
 	$(I)/journal-jnl.h $(I)/journal-cjf.h \
 	$(I)/journal-cjf-common.h $(I)/journal-cjf-idxt.h \
 	$(I)/journal-cjf-page-output-stream.h $(I)/journal-cjf-page.h \

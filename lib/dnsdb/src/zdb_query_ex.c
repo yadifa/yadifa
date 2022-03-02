@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2021, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2305,6 +2305,8 @@ zdb_query_from_cname(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_
                                 log_warn("CNAME loop at %{dnsname}", qname);
 
                                 message_set_authoritative(mesg);
+
+                                UNLOCK(zone);
 #if HAS_DYNAMIC_PROVISIONING
                                 zdb_unlock(db, ZDB_MUTEX_READER);
 #endif
@@ -3033,6 +3035,7 @@ zdb_query_from_cname(zdb *db, message_data *mesg, zdb_query_ex_answer *ans_auth_
 
     if(outside_of_zone)
     {
+        zdb_unlock(db, ZDB_MUTEX_READER);
         return FP_RCODE_NOERROR;
     }
 

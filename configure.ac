@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl
-dnl Copyright (c) 2011-2021, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2022, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@ dnl ############################################################################
 configure_base_path="$0/"
 
 AC_PREREQ([2.69])
-AC_REVISION([$Revision: 10331 $])
+AC_REVISION([$Revision: 10432 $])
 define(YADIFA_VERSION, [m4_esyscmd(
         svn info 2> /dev/null |
         grep 'Last Changed Rev: ' |
