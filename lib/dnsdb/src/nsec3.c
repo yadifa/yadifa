@@ -1187,94 +1187,14 @@ nsec3_zone_update_chain0_links(zdb_zone *zone)
     
     zdb_zone_label_iterator label_iterator;
     u8 fqdn[MAX_DOMAIN_LENGTH + 1];
-#if 1
-#else
-    u8 digest[1 + MAX_DIGEST_LENGTH];
-#endif
-    
+
     zdb_zone_label_iterator_init(&label_iterator, zone);
 
     while(zdb_zone_label_iterator_hasnext(&label_iterator))
     {
         zdb_zone_label_iterator_nextname(&label_iterator, fqdn);
         zdb_rr_label* label = zdb_zone_label_iterator_next(&label_iterator);
-#if 1
-#else
-        nsec3_label_extension *n3le = label->nsec.nsec3;
-#endif
-#if 1
         nsec3_zone_label_update_chain_links(zone->nsec.nsec3, label, n3_count, coverage_mask, fqdn);
-#else
-        if(zdb_rr_label_flag_isset(label, coverage_mask))
-        {
-            if(n3le == NULL)
-            {
-                n3le = nsec3_label_extension_alloc();
-                ZEROMEMORY(n3le, sizeof(nsec3_label_extension));
-                label->nsec.nsec3 = n3le;
-                if(zdb_rr_label_flag_isset(label, ZDB_RR_LABEL_N3OCOVERED))
-                {
-                    zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT);
-                }
-                else
-                {
-                    zdb_rr_label_flag_or(label, ZDB_RR_LABEL_NSEC3);
-                }
-            }
-        
-            if(nsec3_label_extension_self(n3le) == NULL || nsec3_label_extension_star(n3le) == NULL)
-            {
-                s32 fqdn_len = dnsname_len(fqdn);
-                
-                if(nsec3_label_extension_self(n3le) == NULL)
-                {
-                    nsec3_zone_item *self = nsec3_label_link_seeknode(n3, fqdn, fqdn_len, digest);
-                    if(self != NULL)
-                    {
-                        nsec3_item_add_owner(self, label);
-                        nsec3_label_extension_set_self(n3le, self);
-#if HAS_SUPERDUMP
-                        nsec3_superdump_integrity_check_label_nsec3_self_points_back(label,0);
-                        nsec3_superdump_integrity_check_nsec3_owner_self_points_back(self,0);
-#endif
-                    }
-                }
-
-                if(nsec3_label_extension_star(n3le) == NULL)
-                {
-                    nsec3_zone_item *star = nsec3_label_link_seekstar(n3, fqdn, fqdn_len, digest);
-                    if(star != NULL)
-                    {
-                        //nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
-                        nsec3_item_add_star(star, label);
-                        nsec3_label_extension_set_star(n3le, star);
-#if HAS_SUPERDUMP
-                        nsec3_superdump_integrity_check_label_nsec3_star_points_back(label,0);
-                        nsec3_superdump_integrity_check_nsec3_owner_star_points_back(star,0);
-#endif
-                    }
-                }
-            }
-        }
-        else
-        {
-            if(n3le != NULL)
-            {
-                // remove
-                if(nsec3_label_extension_self(n3le) != NULL)
-                {
-                    nsec3_item_remove_owner(nsec3_label_extension_self(n3le), label);
-                }
-                if(nsec3_label_extension_star(n3le) != NULL)
-                {
-                    nsec3_item_remove_star(nsec3_label_extension_star(n3le), label);
-                }
-                nsec3_label_extension_free(n3le);
-                zdb_rr_label_flag_and(label->flags, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
-                label->nsec.nsec3 = NULL;
-            }
-        }
-#endif
     }
 }
 
@@ -1323,6 +1243,8 @@ nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout
         nsec3paramadd_rdata[5 + salt_len] = prev_status;
         if(prev_status == status)
         {
+            dynupdate_message_finalize(&dmsg);
+
             // already set
             
             return SUCCESS;
@@ -1353,8 +1275,6 @@ nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout
 
         ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN);
 
-        dynupdate_message_finalize(&dmsg);
-
         if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
         {
             // trigger a background store of the zone
@@ -1366,6 +1286,8 @@ nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout
     {
         ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
     }
+
+    dynupdate_message_finalize(&dmsg);
         
     return ret;
 }
@@ -1388,7 +1310,8 @@ nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm, u8 optout
  * @return 
  */
 
-ya_result nsec3_zone_get_status(zdb_zone *zone, u8 algorithm, u8 optout, u16 iterations, const u8 *salt, u8 salt_len, u8 *statusp)
+ya_result
+nsec3_zone_get_status(zdb_zone *zone, u8 algorithm, u8 optout, u16 iterations, const u8 *salt, u8 salt_len, u8 *statusp)
 {
     // get the TYPE_NSEC3PARAMADD record set
     // search for a record matching the chain
@@ -1405,7 +1328,7 @@ ya_result nsec3_zone_get_status(zdb_zone *zone, u8 algorithm, u8 optout, u16 ite
                     {
                         if(rrset->rdata_start[4] == salt_len)
                         {
-                            if(memcmp(&rrset->rdata_start[5], salt, salt_len) == 0)
+                            if((salt == NULL) || (memcmp(&rrset->rdata_start[5], salt, salt_len) == 0))
                             {
                                 *statusp = rrset->rdata_start[5 + salt_len];
                                 return 1;
@@ -1414,12 +1337,62 @@ ya_result nsec3_zone_get_status(zdb_zone *zone, u8 algorithm, u8 optout, u16 ite
                     }
                 }
             }
-            rrset = rrset->next;
         }
+
+        rrset = rrset->next;
     }
     
     return 0;
 }
+
+/**
+ * Gets a copy of the salt bytes from the first matching NSEC3PARAM record.
+ *
+ * The zone must be locked.
+ *
+ * @param zone
+ * @param algorithm
+ * @param optout
+ * @param salt_len
+ * @param iterations
+ * @param salt_buffer
+ * @return
+ */
+
+ya_result
+nsec3_zone_get_first_salt_matching(zdb_zone *zone, u8 algorithm, u8 optout, u16 iterations, u8 salt_len, u8 *salt_buffer)
+{
+    // get the TYPE_NSEC3PARAMADD record set
+    // search for a record matching the chain
+    zdb_packed_ttlrdata *rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3CHAINSTATE);
+    while(rrset != NULL)
+    {
+        if(rrset->rdata_size == 6 + salt_len)
+        {
+            if(rrset->rdata_start[0] == algorithm)
+            {
+                if(rrset->rdata_start[1] == optout)
+                {
+                    if(GET_U16_AT(rrset->rdata_start[2]) == htons(iterations))
+                    {
+                        if(rrset->rdata_start[4] == salt_len)
+                        {
+                            if(salt_buffer != NULL)
+                            {
+                                memcpy(salt_buffer, &rrset->rdata_start[5], salt_len);
+                            }
+                            return 1;
+                        }
+                    }
+                }
+            }
+            rrset = rrset->next;
+        }
+    }
+
+    return 0;
+}
+
 
 /**
  * Gets the NSEC3 maintenance status for a specific chain.

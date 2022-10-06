@@ -118,7 +118,7 @@ query_result_check(u16 id_sent, u16 protocol, u16 question_mode, message_data *m
     /* 2. check for QR bit */
     flags = message_get_flags(mesg);
 
-    if FAIL(((ntohs(flags) >> 8 ) & QR_BITS))
+    if((flags & QR_BITS) == 0) //if FAIL(((ntohs(flags) >> 8 ) & QR_BITS))
     {
         log_info(" NOANSWER: %x", ntohs(flags));
 

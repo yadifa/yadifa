@@ -55,7 +55,6 @@
 #define TSIGNODE_TAG 0x45444f4e47495354
 #define TSIGPAYL_TAG 0x4c59415047495354
 #define TSIGMAC_TAG 0x43414d47495354
-#define TSIGOTHR_TAG 0x5248544f47495354
 
 #define MODULE_MSG_HANDLE g_system_logger
 
@@ -267,6 +266,14 @@ tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname)
     {
         return ret;
     }
+}
+
+const char *
+tsig_get_friendly_name_from_hmac_algorithm(u32 algorithm)
+{
+    const char *name = "?";
+    value_name_table_get_name_from_value(hmac_digest_enum, algorithm, &name);
+    return name;
 }
 
 /**
@@ -524,6 +531,7 @@ tsig_verify_query(message_data *mesg)
     {
         hmac_free(hmac);
         return INVALID_STATE_ERROR;
+    
     }
 
     /* DNS message */

@@ -105,7 +105,7 @@ struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm
     const nsec3_zone_item *item;
     const u8* origin;
     u8 * restrict * pool; // memory pool
-    u32 ttl;
+    s32 ttl;
 };
 
 typedef struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm;

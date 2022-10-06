@@ -44,7 +44,7 @@
 
 #include "dnscore/dnscore-config.h"
 
-#ifndef WIN32
+#if __unix__
 
 #define _GNU_SOURCE 1
 
@@ -82,59 +82,7 @@
 #if HAVE_STDATOMIC_H
 #include <stdatomic.h>
 #else
-
-#if __GNUC__
-    #if (__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 9))
-    #pragma message("stdatomic.h not found: this is expected given the version of gcc: please use gcc >= 4.9 or clang >=?")
-    #else
-    #pragma message("stdatomic.h not found: this is not expected as your gcc has a version >= 4.9")
-    #endif
-#else
-    #pragma message("stdatomic.h not found: please a compiler that supports it (e.g.: gcc >= 4.9")
-#endif
-
-#if HAS_SYNC_BUILTINS
-
-#pragma message("stdatomic.h not found: using __sync builtins instead")
-
-#define ATOMIC_FLAG_INIT 0
-
-typedef int atomic_flag;
-
-static bool atomic_flag_test_and_set(atomic_flag* v)
-{
-    bool old = __sync_fetch_and_or(v, (atomic_flag)1);
-    return old;
-}
-
-static void atomic_flag_clear(atomic_flag* v)
-{
-    __sync_fetch_and_and(v, (atomic_flag)0);
-} 
-
-#else
-
-#pragma message("stdatomic.h not found: found no proper way to handle this")
-
-#define ATOMIC_FLAG_INIT 0
-
-typedef volatile int atomic_flag;
-
-static bool atomic_flag_test_and_set(atomic_flag* v)
-{
-    bool old = *v;
-    *v = 1;
-    return old;
-}
-
-static void atomic_flag_clear(atomic_flag* v)
-{
-    *v = 0;
-}
-
-#endif
-
-
+#include "dnscore/thirdparty/stdatomic.h"
 #endif // HAS_STDATOMIC_H
 
 #endif // SIGNAL_DONT_QUEUE_TWICE
@@ -392,6 +340,8 @@ signal_int2str(char *dest, int src)
     return p - dest;
 }
 
+#if defined(__GLIBC__) || defined(__gnu_hurd__)
+
 static const char __HEXA__[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 static int
@@ -449,6 +399,8 @@ signal_ptr2str(char *dest, const void* srcp)
 #error "unsupported pointer size"
 #endif
 }
+
+#endif
 
 //
 
@@ -824,6 +776,7 @@ signal_handler(int signo, siginfo_t* info, void* context)
                     }
 #else // not x86_64 nor i386
                     // cpu registers dump not supported
+		    (void)ucontext;
 #endif
                     
 #endif // linux
@@ -1027,6 +980,8 @@ signal_handler(int signo, siginfo_t* info, void* context)
                         log_err(filepath);
                     }
 #else
+                    (void)info;
+                    (void)context;
                     filepath[0] = '\0';
                     signal_strcat(filepath, "got signal ");
                     signal_int2str(number, signo);
@@ -1381,15 +1336,22 @@ signal_handler_finalize()
 int
 signal_handler_init()
 {
+    return 0;
 }
 
 signal_handler_cb
 signal_handler_get(u8 signum)
 {
+    return NULL;
 }
 
 void
 signal_handler_set(u8 signum, signal_handler_cb handler)
+{
+}
+
+void
+signal_handler_stop()
 {
 }
 

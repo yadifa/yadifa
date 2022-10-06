@@ -117,6 +117,19 @@ static const u8 jnl_magic[4] = {'J','N','L',0};
 
 #define JOURNAL_JNL_PAGE_FROM_SET_SIZE_MAX  16
 
+#define JOURNAL_JNL_LOCK_DEBUG 0
+#define JOURNAL_JNL_REOPEN_DEBUG 0
+#define JOURNAL_JNL_FLUSH_DEBUG 0
+
+#if !DEBUG
+#undef JOURNAL_JNL_LOCK_DEBUG
+#define JOURNAL_JNL_LOCK_DEBUG 0
+#undef JOURNAL_JNL_REOPEN_DEBUG
+#define JOURNAL_JNL_REOPEN_DEBUG 0
+#undef JOURNAL_JNL_FLUSH_DEBUG
+#define JOURNAL_JNL_FLUSH_DEBUG 0
+#endif
+
 struct journal_jnl_header
 {
     u32 serial_begin;
@@ -229,9 +242,9 @@ extern logger_handle* g_database_logger;
 #define VERSION_LO 1
 #define JOURNAL_CLASS_NAME "journal_jnl"
 
-#define LOCK_NONE   0
-#define LOCK_READ   1
-#define LOCK_WRITE  2
+#define JNL_LOCK_NONE   0
+#define JNL_LOCK_READ   1
+#define JNL_LOCK_WRITE  2
 
 #define JNL_EXT "cjf"
 #define JNL_EXT_STRLEN 3
@@ -263,7 +276,7 @@ static void journal_jnl_log_dump(journal *jh);
 static void
 journal_jnl_writelock(journal_jnl *jnl)
 {
-#if DEBUG
+#if JOURNAL_JNL_LOCK_DEBUG
     log_debug4("jnl: %s,%p: write lock", circular_file_name(jnl->file), jnl->file);
 #endif
     shared_group_mutex_lock(&jnl->mtx, GROUP_MUTEX_WRITE);
@@ -272,7 +285,7 @@ journal_jnl_writelock(journal_jnl *jnl)
 static void
 journal_jnl_writeunlock(journal_jnl *jnl)
 {
-#if DEBUG
+#if JOURNAL_JNL_LOCK_DEBUG
     log_debug4("jnl: %s,%p: write unlock", circular_file_name(jnl->file), jnl->file);
 #endif
     shared_group_mutex_unlock(&jnl->mtx, GROUP_MUTEX_WRITE);
@@ -290,7 +303,7 @@ journal_jnl_readlock(journal_jnl *jnl)
 static void
 journal_jnl_readunlock(journal_jnl *jnl)
 {
-#if DEBUG
+#if JOURNAL_JNL_LOCK_DEBUG
     log_debug4("jnl: %s,%p: read unlock", circular_file_name(jnl->file), jnl->file);
 #endif
     shared_group_mutex_unlock(&jnl->mtx, GROUP_MUTEX_READ);
@@ -1040,7 +1053,8 @@ journal_jnl_get_position_for_serial_nolock(journal_jnl *jnl, u32 serial)
             if(!found)
             {
                 log_err("jnl: %s,%p: failed to read page for serial %u: position was not found (serial range is [%u; %u]",
-                        circular_file_name(jnl->file), jnl->file, serial, jnl->hdr.serial_begin, jnl->hdr.serial_end);
+                        circular_file_name(jnl->file), jnl->file, serial,
+                        jnl->hdr.serial_begin, jnl->hdr.serial_end);
 
                 return ERROR;
             }
@@ -2494,7 +2508,7 @@ journal_jnl_truncate_to_serial(journal *jh, u32 serial_) // vtbl
 static ya_result
 journal_jnl_reopen(journal *jh) // vtbl
 {
-#if DEBUG
+#if JOURNAL_JNL_REOPEN_DEBUG
     journal_jnl *jnl = (journal_jnl*)jh;
     journal_jnl_writelock(jnl);
     log_debug("jnl: %s,%p: reopen (no operation)", circular_file_name(jnl->file), jnl->file);
@@ -2512,7 +2526,7 @@ journal_jnl_flush(journal *jh) // vtbl
     journal_jnl *jnl = (journal_jnl*)jh;
 
     journal_jnl_writelock(jnl);
-#if DEBUG
+#if JOURNAL_JNL_FLUSH_DEBUG
     log_debug("jnl: %s,%p: flush", circular_file_name(jnl->file), jnl->file);
 #endif    
     journal_jnl_header_flush_nolock(jnl);

@@ -56,8 +56,9 @@
 #include "dnscore/timems.h"
 #include "dnscore/logger.h"
 #include "dnscore/mutex.h"
+#include "dnscore/error_state.h"
 
- /* GLOBAL VARIABLES */
+/* GLOBAL VARIABLES */
 
 extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -96,12 +97,15 @@ admin_warn(const char *pathname)
 }
 #endif
 
+error_state_t nospace_error_state = ERROR_STATE_INITIALIZER;
+
 #if DEBUG_FD_OPEN_CLOSE_MONITOR
 
 // file descriptor track enabled
 
 #include "dnscore/u32_set.h"
 #include "dnscore/zalloc.h"
+#include "dnscore/error_state.h"
 
 static group_mutex_t fd_mtx = GROUP_MUTEX_INITIALIZER;
 
@@ -204,6 +208,7 @@ writefully(int fd, const void *buf, size_t count)
     const u8* start = (const u8*)buf;
     const u8* current = start;
     ssize_t n;
+    bool nospace = FALSE;
 
     while(count > 0)
     {
@@ -228,12 +233,22 @@ writefully(int fd, const void *buf, size_t count)
                     break;
                 }
 
+                if(nospace)
+                {
+                    error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
+                }
+
                 return MAKE_ERRNO_ERROR(ETIMEDOUT);
             }
             
             if(err == ENOSPC)
             {
                 // the disk is full : wait a bit, hope the admin catches it, try again later
+                if(error_state_log_locked(&nospace_error_state, MAKE_ERRNO_ERROR(ENOSPC)))
+                {
+                    log_err("filesystem full for file descriptor %i", fd);
+                }
+                nospace = TRUE;
                 sleep((rand()&7) + 1);
                 continue;
             }
@@ -243,11 +258,21 @@ writefully(int fd, const void *buf, size_t count)
                 break;
             }
 
+            if(nospace)
+            {
+                error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
+            }
+
             return MAKE_ERRNO_ERROR(err);
         }
 
         current += n;
         count -= n;
+    }
+
+    if(nospace)
+    {
+        error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
     }
 
     return current - start;
@@ -314,6 +339,7 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate_us
     const u8* start = (const u8*)buf;
     const u8* current = start;
     ssize_t n;
+    bool nospace = FALSE;
 
     u64 tstart = timeus();
 
@@ -360,6 +386,10 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate_us
 
                     if(bytes_written < expected_bytes_written)  /* bytes/time < minimum_rate */
                     {
+                        if(nospace)
+                        {
+                            error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
+                        }
 #if DEBUG
                         log_warn("writefully_limited: rate of %fBps < %fBps (%fµs)", bytes_written, expected_bytes_written, time_elapsed_us);
 #else
@@ -375,6 +405,11 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate_us
             if(err == ENOSPC)
             {
                 // the disk is full : wait a bit, hope the admin catches it, try again later
+                if(error_state_log_locked(&nospace_error_state, MAKE_ERRNO_ERROR(ENOSPC)))
+                {
+                    log_err("filesystem full for file descriptor %i", fd);
+                }
+                nospace = TRUE;
                 sleep((rand()&7) + 1);
                 continue;
             }
@@ -384,11 +419,21 @@ writefully_limited(int fd, const void *buf, size_t count, double minimum_rate_us
                 break;
             }
 
-            return -1;
+            if(nospace)
+            {
+                error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
+            }
+
+            return ERROR;
         }
 
         current += n;
         count -= n;
+    }
+
+    if(nospace)
+    {
+        error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
     }
 
     return current - start;
@@ -768,7 +813,7 @@ open_ex(const char *pathname, int flags)
     bool cloexec = (flags & O_CLOEXEC) != 0;
     flags &= ~O_CLOEXEC;
 #endif
-    
+
     while((fd = open(pathname, flags)) < 0)
     {
         int err = errno;
@@ -825,6 +870,8 @@ ya_result
 open_create_ex(const char *pathname, int flags, mode_t mode)
 {
     int fd;
+
+    /// @note do NOT : flags |= O_CREAT;
     
 #if DEBUG
     if(!logger_is_self() && logger_is_running())
@@ -879,7 +926,7 @@ open_create_ex(const char *pathname, int flags, mode_t mode)
 
 int mkstemp_ex(char * tmp_name_template)
 {
-#ifndef WIN32
+#if __unix__
     int fd = mkstemp(tmp_name_template);
 #if DEBUG
     if(!logger_is_self() && logger_is_running())
@@ -1052,7 +1099,7 @@ close_ex_nolog_ref(int* fdp)
 int
 fsync_ex(int fd)
 {
-#ifndef WIN32
+#if __unix__
     while(fsync(fd) < 0)
     {
         int err = errno;
@@ -1062,7 +1109,7 @@ fsync_ex(int fd)
         }
     }
 #else
-    FlushFileBuffers(fd);
+    FlushFileBuffers((HANDLE)_get_osfhandle(fd));
 #endif
     return SUCCESS;
 }
@@ -1070,7 +1117,7 @@ fsync_ex(int fd)
 int
 fdatasync_ex(int fd)
 {
-#ifndef WIN32
+#if __unix__
 #if defined(__linux__)
     while(fdatasync(fd) < 0)
 #else
@@ -1084,7 +1131,7 @@ fdatasync_ex(int fd)
         }
     }
 #else
-    FlushFileBuffers(fd);
+    FlushFileBuffers((HANDLE)_get_osfhandle(fd));
 #endif
     return SUCCESS;
 }
@@ -1199,7 +1246,7 @@ ya_result
 file_exists(const char *name)
 {
     struct stat s;
-#ifndef WIN32
+#if __unix__
     if(lstat(name, &s) >= 0)    // MUST be lstat
     {
         return 1;
@@ -1235,7 +1282,7 @@ file_exists(const char *name)
 ya_result
 file_is_link(const char *name)
 {
-#ifndef WIN32
+#if __unix__
     struct stat s;
     if(lstat(name, &s) >= 0)    // MUST be lstat
     {
@@ -1262,7 +1309,7 @@ file_is_link(const char *name)
 ya_result
 file_is_directory(const char *name)
 {
-#ifndef WIN32
+#if __unix__
     struct stat s;
     if(lstat(name, &s) >= 0)    // MUST be lstat
     {
@@ -1296,7 +1343,7 @@ int
 mkdir_ex(const char *pathname, mode_t mode, u32 flags)
 {
 #if DEBUG
-    log_debug("mkdir_ex(%s,%o)", pathname, mode);
+    log_debug("mkdir_ex(%s,%o,%x)", pathname, mode, flags);
 #endif
     
 #if DEBUG
@@ -1447,7 +1494,7 @@ fd_mtime(int fd, s64 *timestamp)
 ya_result
 fd_setcloseonexec(int fd)
 {
-#ifndef WIN32
+#if __unix__
     int ret = fcntl(fd, F_SETFD, FD_CLOEXEC);
     if(FAIL(ret))
     {
@@ -1462,7 +1509,7 @@ fd_setcloseonexec(int fd)
 ya_result
 fd_setnonblocking(int fd)
 {
-#ifndef WIN32
+#if __unix__
     int ret;
     if(ISOK(ret = fcntl(fd, F_GETFL, 0)))
     {
@@ -1576,7 +1623,7 @@ readdir_forall(const char *basedir, readdir_callback *func, void *args)
         
         // ignore names "." and ".."
 
-#ifndef WIN32
+#if __unix__
         const char* tmp_name = tmp->d_name;
 #else
         const char* tmp_name = tmp->name;
@@ -1762,6 +1809,18 @@ file_mtime_set_delete(file_mtime_set_t *ctx)
     free(ctx->name);
     file_mtime_set_clear(ctx);
     ZFREE_OBJECT(ctx);
+}
+
+ya_result
+access_check(const char* path, int mode)
+{
+    int ret;
+    ret = access(path, mode);
+    if(ret < 0)
+    {
+        ret = ERRNO_ERROR;
+    }
+    return ret;
 }
 
 /** @} */

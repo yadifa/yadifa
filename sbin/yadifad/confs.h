@@ -82,6 +82,10 @@ extern "C" {
 #define     PROGRAM_VERSION             PACKAGE_VERSION
 #define     RELEASEDATE                 YADIFA_DNSCORE_RELEASE_DATE
 
+#ifndef RUNSTATEDIR
+#define RUNSTATEDIR LOCALSTATEDIR "/run"
+#endif
+
     /* List of default values for the different configuration parameters */
 #define     S_CONFIGDIR                 SYSCONFDIR "/"
 #define     S_CONFIGFILE                PROGRAM_NAME ".conf"
@@ -90,7 +94,7 @@ extern "C" {
 #define     S_XFRPATH                   LOCALSTATEDIR "/zones/xfr/"
 #define     S_KEYSPATH                  LOCALSTATEDIR "/zones/keys/"        /** Keys should not be in "shared" */
 #define     S_LOGPATH                   LOGDIR
-#define     S_PIDFILE                   LOCALSTATEDIR "/run/" PROGRAM_NAME ".pid" /// @TODO 20200623 edf -- use RUNSTATEDIR instead
+#define     S_PIDFILE                   RUNSTATEDIR "/" PROGRAM_NAME ".pid"
 
 #define     S_VERSION_CHAOS             PACKAGE_VERSION                  /* limit the size */ 
 #define     S_HOSTNAME_CHAOS            NULL
@@ -122,19 +126,19 @@ extern "C" {
 
 #define     S_ZONE_LOAD_THREAD_COUNT    "1"     // disk
 #define     ZONE_LOAD_THREAD_COUNT_MIN 1
-#define     ZONE_LOAD_THREAD_COUNT_MAX 4
+#define     ZONE_LOAD_THREAD_COUNT_MAX 256
     
 #define     S_ZONE_SAVE_THREAD_COUNT    "1"     // disk
 #define     ZONE_SAVE_THREAD_COUNT_MIN 1
-#define     ZONE_SAVE_THREAD_COUNT_MAX 4
+#define     ZONE_SAVE_THREAD_COUNT_MAX 256
 
 #define     S_ZONE_UNLOAD_THREAD_COUNT    "1"     // cpu
 #define     ZONE_UNLOAD_THREAD_COUNT_MIN 1
-#define     ZONE_UNLOAD_THREAD_COUNT_MAX 4
+#define     ZONE_UNLOAD_THREAD_COUNT_MAX 256
 
 #define     S_ZONE_DOWNLOAD_THREAD_COUNT "4"    // network
 #define     ZONE_DOWNLOAD_THREAD_COUNT_MIN 1
-#define     ZONE_DOWNLOAD_THREAD_COUNT_MAX 16
+#define     ZONE_DOWNLOAD_THREAD_COUNT_MAX 256
     
     /* Chroot, uid and gid */
 #define     S_CHROOT                    "0"
@@ -146,6 +150,8 @@ extern "C" {
     /** \def S_LISTEN
      *       Listening to all interfaces */
 #define     S_LISTEN                    "0.0.0.0;::0"
+
+#define     S_TRANSFER_SOURCE           NULL
 
 #if HAS_SYSTEMD_RESOLVED_AVOIDANCE
 #define     S_DO_NOT_LISTEN             "127.0.0.53 port 53"
@@ -172,6 +178,9 @@ extern "C" {
 #define     S_AXFR_COMPRESS_PACKETS     "1"
 #define     S_AXFR_RETRY_DELAY          "600"
 #define     S_AXFR_RETRY_JITTER         "180"
+#define     S_AXFR_MEMORY_THREHOLD      "65536"
+#define     AXFR_MEMORY_THREHOLD_MIN    0x00000000 // 0MB
+#define     AXFR_MEMORY_THREHOLD_MAX    0x00100000 // 1MB
 
 #if HAS_NON_AA_AXFR_SUPPORT
 #define     S_AXFR_STRICT_AUTHORITY     "0"
@@ -205,7 +214,6 @@ extern "C" {
     /** \def S_SERVERPORT
      *       Standard port for listening udp and tcp */
 #define     S_SERVERPORT                "53" /* PREPROCESSOR_INT2STR(DNS_DEFAULT_PORT) */
-#define     S_TRANSFER_SOURCE           "0.0.0.0"
 
     /* IP FLAGS */
 #define     S_IPV4                      "1"
@@ -384,6 +392,8 @@ struct config_data
     host_address                                         *do_not_listen;
     // List of hosts registered by the TCP manager
     host_address                                           *known_hosts;
+    // List of hosts for default transfer sources, can be empty
+    host_address                                       *transfer_source;
 
     /* General variables */
     char                                                     *data_path; /* zones */
@@ -435,6 +445,7 @@ struct config_data
     int                                               axfr_retry_jitter;
     u32                             axfr_retry_failure_delay_multiplier;
     u32                                    axfr_retry_failure_delay_max;
+    u32                                           axfr_memory_threshold;
     int                                             xfr_connect_timeout;
     u32                                           statistics_max_period;
     int                                                  edns0_max_size;
@@ -466,7 +477,7 @@ struct config_data
 
     u32                                                  queries_log_type;
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
     u32                                             sig_validity_interval;
     u32                                         sig_validity_regeneration;
     u32                                               sig_validity_jitter;
@@ -483,6 +494,9 @@ struct config_data
     bool                                                    hidden_master;
 
     bool                                                   check_policies;
+#if DEBUG
+    bool                                                     print_config;
+#endif
 };
 
 /**

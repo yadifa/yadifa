@@ -95,7 +95,7 @@
 #define LOG_QUEUE_MAX_SIZE              0x01000000              // 16M
 #define LOG_QUEUE_DEFAULT_SIZE          0x00100000              //  1M
 
-#define HAS_SHARED_QUEUE_SUPPORT 1      // must be 1
+#define DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED 1      // must be 1
 
 #ifdef	__cplusplus
 extern "C"

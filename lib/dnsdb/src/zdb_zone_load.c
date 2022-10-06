@@ -545,6 +545,7 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
             zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); // verified
 
             // has_nsec3 ?
+            has_nsec3 = TRUE;
         }
         else if(entry.type == TYPE_NSEC3CHAINSTATE)
         {
@@ -1017,7 +1018,7 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
                     }
 
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
                     zdb_zone_set_maintained(zone, TRUE);
 #endif
 
@@ -1056,7 +1057,7 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
             {//DNSSEC_ERROR_NSEC_INVALIDZONESTATE
                 zdb_rr_label_flag_or(zone->apex, ZDB_RR_LABEL_NSEC);
                 zdb_rr_label_flag_and(zone->apex, ~(ZDB_RR_LABEL_NSEC3|ZDB_RR_LABEL_NSEC3_OPTOUT));
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
                 zdb_zone_set_maintained(zone, (flags & ZDB_ZONE_IS_SLAVE) == 0);
 #endif
             }

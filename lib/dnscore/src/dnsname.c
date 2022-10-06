@@ -2320,6 +2320,53 @@ dnsname_len(const u8 *name)
     return name - start;
 }
 
+s32
+dnsname_len_with_size(const u8 *name, size_t name_buffer_size)
+{
+    yassert(name != NULL);
+
+    const u8 *start = name;
+    const u8 *limit = name + name_buffer_size;
+    u8 c;
+    while((c = *name++) > 0)
+    {
+        name += c;
+        if(name >= limit)
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+    }
+
+    return name - start;
+}
+
+s32
+dnsname_len_checked_with_size(const u8 *name, size_t name_buffer_size)
+{
+    yassert(name != NULL);
+
+    const u8 *start = name;
+    const u8 *limit = name + name_buffer_size;
+    u8 c;
+    while((c = *name++) > 0)
+    {
+        name += c;
+        if(name >= limit)
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+    }
+
+    s32 len = name - start;
+
+    if(len > MAX_DOMAIN_LENGTH)
+    {
+        return DOMAIN_TOO_LONG;
+    }
+
+    return len;
+}
+
 ya_result
 dnsname_len_checked(const u8 *name)
 {
@@ -2664,7 +2711,7 @@ u32 dnsname_vector_copy(dnsname_vector* dst, const dnsname_vector* src)
     dst->size = src->size;
     if(dst->size > 0)
     {
-        memcpy(&dst->labels[0], &src->labels[0], sizeof(u8*) * dst->size);
+        memcpy((void*)&dst->labels[0], &src->labels[0], sizeof(u8*) * dst->size);
     }
     return dst->size;
 }

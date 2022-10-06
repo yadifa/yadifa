@@ -600,4 +600,7 @@ void database_fire_zone_processed(zone_desc_s *zone_desc);
 
 void database_post_callback(database_message_callback_function callback, void *args, const char * const name);
 
+bool database_server_down_cache_query(const host_address *ha);
+void database_server_down_cache_add(const host_address *ha);
+
 /** @} */

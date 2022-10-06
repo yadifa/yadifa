@@ -73,6 +73,11 @@ static s32 digest_sha384_get_digest(digest_s* ctx, void **ptr)
     return SHA384_DIGEST_LENGTH;
 }
 
+static void digest_sha384_finalise(struct digest_s* ctx)
+{
+    (void)ctx;
+}
+
 static const struct digest_vtbl sha384_vtbl =
 {
     digest_sha384_update,
@@ -80,6 +85,7 @@ static const struct digest_vtbl sha384_vtbl =
     digest_sha384_final_copy_bytes,
     digest_sha384_get_size,
     digest_sha384_get_digest,
+    digest_sha384_finalise,
     "SHA384"
 };
 

@@ -188,6 +188,10 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
 
                     return MAKE_ERRNO_ERROR(err);
                 }
+                else
+                {
+                    continue;
+                }
             }
 
             close_ex(fd);
@@ -218,6 +222,8 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
         if(err != EINTR)
         {
             close_ex(fd);
+
+            // note: EADDRNOTAVAIL here basically means the network is overloaded
             
             // Linux quirk
             
@@ -278,6 +284,25 @@ tcp_input_output_stream_connect_host_address(const host_address *ha, input_strea
     if(ISOK(return_code = host_address2sockaddr(ha, &sa)))
     {
         return_code = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, NULL, to_sec);
+    }
+
+    return return_code;
+}
+
+ya_result
+tcp_input_output_stream_connect_host_address_ex(const host_address *ha, input_stream *istream_, output_stream *ostream_, const host_address *bind_to, u8 to_sec)
+{
+    socketaddress sa;
+    socketaddress bind_sa;
+
+    ya_result return_code;
+
+    if(ISOK(return_code = host_address2sockaddr(ha, &sa)))
+    {
+        if(ISOK(return_code = host_address2sockaddr(bind_to, &bind_sa)))
+        {
+            return_code = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, &bind_sa.sa, to_sec);
+        }
     }
 
     return return_code;

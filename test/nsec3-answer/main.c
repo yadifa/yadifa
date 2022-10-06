@@ -337,7 +337,7 @@ nsec3_test(const host_address *ip, const u8 *zone_fqdn, const u8 *fqdn, u16 qtyp
     if((message_get_rcode(mesg) != RCODE_NOERROR) && (message_get_rcode(mesg) != RCODE_NXDOMAIN))
     {
         ret = RCODE_ERROR_CODE(message_get_rcode(mesg));
-        formatln("error: %{dnsname} NSEC3PARAM: query failed with: %r", zone_fqdn, dns_message_rcode_get_name(message_get_rcode(mesg)));
+        formatln("error: %{dnsname} NSEC3PARAM: query failed with: %s", zone_fqdn, dns_message_rcode_get_name(message_get_rcode(mesg)));
         goto nsec3_test_cleanup;
     }
     
@@ -474,7 +474,7 @@ nsec3_test(const host_address *ip, const u8 *zone_fqdn, const u8 *fqdn, u16 qtyp
     if((message_get_rcode(mesg) != RCODE_NOERROR) && (message_get_rcode(mesg) != RCODE_NXDOMAIN))
     {
         ret = RCODE_ERROR_CODE(message_get_rcode(mesg));
-        formatln("error: %{dnsname} %{dnstype}: query failed with: %r", zone_fqdn, &qtype, dns_message_rcode_get_name(message_get_rcode(mesg)));
+        formatln("error: %{dnsname} %{dnstype}: query failed with: %s", zone_fqdn, &qtype, dns_message_rcode_get_name(message_get_rcode(mesg)));
         goto nsec3_test_cleanup;
     }
     

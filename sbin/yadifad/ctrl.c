@@ -67,7 +67,7 @@ extern logger_handle *g_server_logger;
 #include "notify.h"
 
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 
 
 

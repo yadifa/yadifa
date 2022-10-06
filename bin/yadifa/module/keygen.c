@@ -167,7 +167,7 @@ keygen_print_algorithm_help(const struct cmdline_desc_s *desc, output_stream *os
             if(separate)
             {
                 width += osprint(os, " | ");
-                separate = FALSE;
+                //separate = FALSE;
             }
 
             width += osprint(os, *np);
@@ -242,8 +242,14 @@ keygen_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *ar
     (void)callback_owned;
 
     ya_result ret = cmdline_get_opt_long(desc, "origin", arg_name);
-    (void)ret;
-    return CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS;
+    if(ISOK(ret))
+    {
+        return CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS;
+    }
+    else
+    {
+        return ret;
+    }
 }
 
 CMDLINE_BEGIN(keygen_cmdline)
@@ -543,9 +549,13 @@ keygen_run(const module_s *m)
         {
             key_size = algorithm_features->size_bits_ksk_default;
         }
-        else
+        else if(key_flag == DNSKEY_FLAGS_ZSK)
         {
             key_size = algorithm_features->size_bits_zsk_default;
+        }
+        else
+        {
+            return INVALID_ARGUMENT_ERROR;
         }
     }
     else
@@ -676,9 +686,7 @@ keygen_run(const module_s *m)
     {
         if(FAIL(return_code = dnskey_store_keypair_to_dir(generated_key, keys_path)))
         {
-
             formatln("could not write the files to '%s': %r", keys_path, return_code);
-
             return return_code;
         }
     }

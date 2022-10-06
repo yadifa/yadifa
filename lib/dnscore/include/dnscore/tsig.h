@@ -208,6 +208,7 @@ void tsig_verify_tcp_last_message(struct message_data *mesg);
 void tsig_register_algorithms();
 
 ya_result tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname);
+const char* tsig_get_friendly_name_from_hmac_algorithm(u32 algorithm);
 
 u8 tsig_get_algorithm(const u8 *name);
 const u8* tsig_get_algorithm_name(u8 algorithm);

@@ -46,6 +46,7 @@
 #include <dnscore/message.h>
 #include <dnscore/host_address.h>
 #include <dnscore/config_settings.h>
+#include <dnscore/ptr_set.h>
 
 #ifdef	__cplusplus
 extern "C"
@@ -305,6 +306,10 @@ bool acl_address_match_item_equals(const address_match_item *a, const address_ma
 bool acl_address_match_list_equals(const address_match_list *a, const address_match_list *b);
 bool acl_address_match_set_equals(const address_match_set *a, const address_match_set *b);
 bool acl_address_control_equals(const access_control *a, const access_control *b);
+
+void acl_entry_iterator_init(ptr_set_iterator *iter);
+void acl_match_item_print(const struct address_match_item *item, output_stream *os);
+ya_result acl_match_items_print(const address_match_item **address, const address_match_item **limit, output_stream *os);
 
 #ifdef	__cplusplus
 }

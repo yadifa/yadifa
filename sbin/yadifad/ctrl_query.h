@@ -58,7 +58,7 @@
  * CTRL handling of the queries
  */
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 bool ctrl_query_is_listened(int sockfd);
 void ctrl_query_process(message_data *mesg);
 #endif

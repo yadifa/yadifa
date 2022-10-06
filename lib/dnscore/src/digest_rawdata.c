@@ -74,6 +74,14 @@ static s32 digest_rawdata_get_digest(struct digest_s* ctx, void** p)
     return SUCCESS;
 }
 
+static void digest_rawdata_finalise(struct digest_s* ctx)
+{
+#if DEBUG
+    memset(bytearray_output_stream_buffer(&ctx->ctx.rawdata.baos), 0xee, bytearray_output_stream_size(&ctx->ctx.rawdata.baos));
+#endif
+    output_stream_close(&ctx->ctx.rawdata.baos);
+}
+
 static const struct digest_vtbl rawdata_vtbl =
 {
     digest_rawdata_update,
@@ -81,6 +89,7 @@ static const struct digest_vtbl rawdata_vtbl =
     digest_rawdata_final_copy_bytes,
     digest_rawdata_get_size,
     digest_rawdata_get_digest,
+    digest_rawdata_finalise,
     "RAWDATA"
 };
 

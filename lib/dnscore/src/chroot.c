@@ -258,7 +258,7 @@ chroot_jail_dummy_thread(void *parm)
 
     // unreachable
     // return parm;
-    return NULL;	// just so the compiler shuts-up
+    return NULL;	// just so some old compiler shuts-up
 }
 
 ya_result

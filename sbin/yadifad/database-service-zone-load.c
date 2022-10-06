@@ -88,8 +88,10 @@
 
 #include <dnsdb/zdb_zone_label_iterator.h>
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
+#include "database-service-zone-resignature.h"
+
 #endif
 
 #define MODULE_MSG_HANDLE g_server_logger
@@ -137,7 +139,7 @@ database_zone_load_parms_free(database_service_zone_load_parms_s *parm)
     ZFREE_OBJECT(parm);
 }
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 
 /**
  * Loads a MASTER zone file from disc into memory.
@@ -498,12 +500,84 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_
             real_dnssec_mode = ZDB_ZONE_NOSEC;
         }
 
+        zdb_zone_double_lock(zone_pointer_out, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+
+        zdb_packed_ttlrdata *nsecchainstate = zdb_record_find(&zone_pointer_out->apex->resource_record_set, TYPE_NSECCHAINSTATE);
+        zdb_packed_ttlrdata *nsec3chainstate = zdb_record_find(&zone_pointer_out->apex->resource_record_set, TYPE_NSEC3CHAINSTATE);
+        zdb_packed_ttlrdata *nsec3paramqueued = zdb_record_find(&zone_pointer_out->apex->resource_record_set, TYPE_NSEC3PARAMQUEUED);
+#if DEBUG
+        log_debug("NSECCHAINSTATE: %i NSEC3CHAINSTATE: %i NSEC3PARAMQUEUED: %i", nsecchainstate != NULL, nsec3chainstate != NULL, nsec3paramqueued != NULL);
+        logger_flush();
+#endif
+        if(nsec3chainstate != NULL)
+        {
+            // NSEC3 operations were ongoing on the database, resume them
+            if(real_dnssec_mode != ZDB_ZONE_NSEC)
+            {
+                if(real_dnssec_mode == ZDB_ZONE_NOSEC)
+                {
+                    // set to NSEC3 optout, start maintenance ASAP
+                }
+                else // NSEC3 (optin/optout)
+                {
+                    // start maintenance ASAP
+                }
+            }
+            else
+            {
+                // conflict : delete the state
+            }
+        }
+        else if(nsec3paramqueued != NULL)
+        {
+            // an NSEC3PARAM was being added, setup maintenance for it
+            if(real_dnssec_mode != ZDB_ZONE_NSEC)
+            {
+                if(real_dnssec_mode == ZDB_ZONE_NOSEC)
+                {
+                    // set to NSEC3 optout, start maintenance ASAP
+                    database_apply_nsec3paramqueued(zone_pointer_out, nsec3paramqueued, ZDB_ZONE_MUTEX_LOAD);
+                    real_dnssec_mode = ZDB_ZONE_NSEC3_OPTOUT;
+                }
+                else // NSEC3 (optin/optout)
+                {
+                    // start maintenance ASAP
+                    database_apply_nsec3paramqueued(zone_pointer_out, nsec3paramqueued, ZDB_ZONE_MUTEX_LOAD);
+                }
+            }
+            else
+            {
+                // conflict : delete the state
+            }
+        }
+        else if(nsecchainstate != NULL)
+        {
+            // NSEC operations were ongoing on the database, resume them
+            if(!((real_dnssec_mode == ZDB_ZONE_NSEC3) || (real_dnssec_mode == ZDB_ZONE_NSEC3_OPTOUT)))
+            {
+                if(real_dnssec_mode == ZDB_ZONE_NOSEC)
+                {
+                    // set to NSEC optout, start maintenance ASAP
+                    real_dnssec_mode = ZDB_ZONE_NSEC3_OPTOUT;
+                }
+                else
+                {
+                    // start maintenance ASAP
+                }
+            }
+            else
+            {
+                // conflict : delete the state
+            }
+        }
+        zdb_zone_double_unlock(zone_pointer_out, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_LOAD);
+
         if(real_dnssec_mode != zone_desc_dnssec_mode)
         {
             log_debug("zone load: dnssec mode set to %i", real_dnssec_mode);
             zone_load_flags &= ~zone_desc_dnssec_mode;
             zone_desc_dnssec_mode = real_dnssec_mode;
-            zone_load_flags |= zone_desc_dnssec_mode;            
+            zone_load_flags |= zone_desc_dnssec_mode;
         }
 #endif
         if(!zone_file_soa_serial_set)
@@ -540,11 +614,10 @@ database_load_zone_master(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_
 
         zone_pointer_out->acl = &zone_desc->ac; /* The extension points to the ACL */
         zone_pointer_out->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
-
 #endif
 
 #if ZDB_HAS_DNSSEC_SUPPORT
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
         if((zone_load_flags & ZDB_ZONE_DNSSEC_MASK) != ZDB_ZONE_NOSEC)
         {
             /*
@@ -745,202 +818,213 @@ database_get_ixfr_answer_type(const u8 *zone_desc_origin, const host_address *zo
     {
         return return_value;
     }
-    
-    if(ISOK(return_value = ixfr_start_query(zone_desc_masters, zone_desc_origin, ttl, soa_rdata, soa_rdata_size, &is, &os, ixfr_query)))
+
+    if(database_server_down_cache_query(zone_desc_masters))
     {
-        u8 record_wire[1024];
-        
-        /*
-        * Read the answer (first message anyway)
-        * Look for the answer type in it.
-        */
-
-        u16 query_id = message_get_id(ixfr_query);
-
-        int fd = fd_input_stream_get_filedescriptor(&is);
-
-        tcp_set_recvtimeout(fd, 3, 0);  /* 3 seconds read timeout */
-
-        do // loop that reads TCP messages
+        return_value = ECONNREFUSED;
+    }
+    else
+    {
+        if(ISOK(return_value = ixfr_start_query(zone_desc_masters, zone_desc_origin, ttl, soa_rdata, soa_rdata_size, &is, &os, ixfr_query)))
         {
-            u16 tcp_len;
+            u8 record_wire[1024];
 
-            // no speed rate limitation from the master !
-            if(FAIL(return_value = readfully(fd, &tcp_len, 2)))
+            /*
+            * Read the answer (first message anyway)
+            * Look for the answer type in it.
+            */
+
+            u16 query_id = message_get_id(ixfr_query);
+
+            int fd = fd_input_stream_get_filedescriptor(&is);
+
+            tcp_set_recvtimeout(fd, 3, 0);  /* 3 seconds read timeout */
+
+            do // loop that reads TCP messages
             {
-                break;
-            }
-            
-            if(return_value != 2)
-            {
-                if(answer_idx == 0)
+                u16 tcp_len;
+
+                // no speed rate limitation from the master !
+                if(FAIL(return_value = readfully(fd, &tcp_len, 2)))
                 {
-                    if(return_value == 0)
+                    break;
+                }
+
+                if(return_value != 2)
+                {
+                    if(answer_idx == 0)
                     {
-                        return_value = ANSWER_UNEXPECTED_EOF; // the master closed the stream before answering anything
+                        if(return_value == 0)
+                        {
+                            return_value = ANSWER_UNEXPECTED_EOF; // the master closed the stream before answering anything
+                        }
+                        else
+                        {
+                            log_warn("zone load: %{dnsname}: %{hostaddr}: answered %i bytes when 2 were expected", zone_desc_origin, zone_desc_masters, return_value);
+                        }
                     }
                     else
                     {
-                        log_warn("zone load: %{dnsname}: %{hostaddr}: answered %i bytes when 2 were expected", zone_desc_origin, zone_desc_masters, return_value);
+                        if(return_value > 0)
+                        {
+                            log_warn("zone load: %{dnsname}: %{hostaddr}: answered %i bytes when either 2 or none were expected", zone_desc_origin, zone_desc_masters, return_value);
+                        }
+                    }
+
+                    break;
+                }
+
+                tcp_len = ntohs(tcp_len);
+
+                if(FAIL(return_value = readfully(fd, message_get_buffer(ixfr_query), tcp_len)))
+                {
+                    log_err("zone load: %{dnsname}: %{hostaddr}: failed to read next TCP message (%u bytes): %r", zone_desc_origin, zone_desc_masters, tcp_len, return_value);
+                    break;
+                }
+
+                message_set_size(ixfr_query, return_value);
+
+                if(return_value < DNS_HEADER_LENGTH + 1 + 4)
+                {
+                    return_value = ANSWER_NOT_ACCEPTABLE;
+                    log_err("zone load: %{dnsname}: %{hostaddr}: master answer is too short: %r", zone_desc_origin, zone_desc_masters, return_value);
+                    break;
+                }
+
+                /**
+                 * check the ID, check the error code
+                 *
+                 */
+
+                u16 answer_id = message_get_id(ixfr_query);
+
+                if(query_id != answer_id)
+                {
+                    return_value = ANSWER_NOT_ACCEPTABLE;
+
+                    log_err("zone load: %{dnsname}: %{hostaddr}: master answer ID does not match query ID (q:%hd != a:%hd)", zone_desc_origin, zone_desc_masters, query_id, answer_id);
+                    break;
+                }
+
+                if(message_get_rcode(ixfr_query) != RCODE_NOERROR)
+                {
+                    return_value = MAKE_DNSMSG_ERROR(message_get_rcode(ixfr_query));
+                    log_err("zone load: %{dnsname}: %{hostaddr}: master answer with error: %r", zone_desc_origin, zone_desc_masters, return_value);
+                    break;
+                }
+
+                u16 answer_count = message_get_answer_count(ixfr_query);
+
+                if(answer_count == 0)
+                {
+                    return_value = ANSWER_NOT_ACCEPTABLE;
+                    log_err("zone load: %{dnsname}: %{hostaddr}: master gave empty answer: %r", zone_desc_origin, zone_desc_masters, return_value);
+                    break;
+                }
+
+                u8 error_code = message_get_rcode(ixfr_query);
+
+                if(error_code != RCODE_OK)
+                {
+                    return_value = MAKE_DNSMSG_ERROR(error_code); // error_code is an rcode
+
+                    log_err("zone load: %{dnsname}: %{hostaddr}: master answered with error code: %r", zone_desc_origin, zone_desc_masters, return_value);
+
+                    break;
+                }
+
+                /* read the query record */
+
+                packet_unpack_reader_data pr;
+
+                packet_reader_init_from_message_at(&pr, ixfr_query, DNS_HEADER_LENGTH);
+
+                u16 query_count = message_get_query_count(ixfr_query);
+
+                if(query_count == 1)
+                {
+                    if(FAIL(return_value = packet_reader_read_zone_record(&pr, record_wire, sizeof(record_wire))))
+                    {
+                        log_err("zone load: %{dnsname}: %{hostaddr}: failed to read next zone record: %r", zone_desc_origin, zone_desc_masters, return_value);
+
+                        break;
                     }
                 }
                 else
                 {
-                    if(return_value > 0)
+                    return_value = ANSWER_NOT_ACCEPTABLE;
+                    //break;
+                }
+
+                /* read the next answer */
+
+                for(;(answer_count > 0) && (answer_idx < 2); answer_count--)
+                {
+                    if(FAIL(return_value = packet_reader_read_record(&pr, record_wire, sizeof(record_wire))))
                     {
-                        log_warn("zone load: %{dnsname}: %{hostaddr}: answered %i bytes when either 2 or none were expected", zone_desc_origin, zone_desc_masters, return_value);
-                    }
-                }
-                
-                break;
-            }
+                        log_err("zone load: %{dnsname}: %{hostaddr}: failed to read next record: %r", zone_desc_origin, zone_desc_masters, return_value);
 
-            tcp_len = ntohs(tcp_len);
-            
-            if(FAIL(return_value = readfully(fd, message_get_buffer(ixfr_query), tcp_len)))
-            {
-                log_err("zone load: %{dnsname}: %{hostaddr}: failed to read next TCP message (%u bytes): %r", zone_desc_origin, zone_desc_masters, tcp_len, return_value);
-                break;
-            }
-            
-            message_set_size(ixfr_query, return_value);
-
-            if(return_value < DNS_HEADER_LENGTH + 1 + 4)
-            {
-                return_value = ANSWER_NOT_ACCEPTABLE;
-                log_err("zone load: %{dnsname}: %{hostaddr}: master answer is too short: %r", zone_desc_origin, zone_desc_masters, return_value);
-                break;
-            }
-            
-            /**
-             * check the ID, check the error code
-             * 
-             */
-
-            u16 answer_id = message_get_id(ixfr_query);
-
-            if(query_id != answer_id)
-            {
-                return_value = ANSWER_NOT_ACCEPTABLE;
-                
-                log_err("zone load: %{dnsname}: %{hostaddr}: master answer ID does not match query ID (q:%hd != a:%hd)", zone_desc_origin, zone_desc_masters, query_id, answer_id);
-                break;
-            }
-            
-            if(message_get_rcode(ixfr_query) != RCODE_NOERROR)
-            {
-                return_value = MAKE_DNSMSG_ERROR(message_get_rcode(ixfr_query));
-                log_err("zone load: %{dnsname}: %{hostaddr}: master answer with error: %r", zone_desc_origin, zone_desc_masters, return_value);
-                break;
-            }
-
-            u16 answer_count = message_get_answer_count(ixfr_query);
-
-            if(answer_count == 0)
-            {
-                return_value = ANSWER_NOT_ACCEPTABLE;
-                log_err("zone load: %{dnsname}: %{hostaddr}: master gave empty answer: %r", zone_desc_origin, zone_desc_masters, return_value);
-                break;
-            }
-                        
-            u8 error_code = message_get_rcode(ixfr_query);
-            
-            if(error_code != RCODE_OK)
-            {
-                return_value = MAKE_DNSMSG_ERROR(error_code); // error_code is an rcode
-                
-                log_err("zone load: %{dnsname}: %{hostaddr}: master answered with error code: %r", zone_desc_origin, zone_desc_masters, return_value);
-                
-                break;
-            }
-
-            /* read the query record */
-
-            packet_unpack_reader_data pr;
-
-            packet_reader_init_from_message_at(&pr, ixfr_query, DNS_HEADER_LENGTH);
-
-            u16 query_count = message_get_query_count(ixfr_query);
-            
-            if(query_count == 1)
-            {
-                if(FAIL(return_value = packet_reader_read_zone_record(&pr, record_wire, sizeof(record_wire))))
-                {
-                    log_err("zone load: %{dnsname}: %{hostaddr}: failed to read next zone record: %r", zone_desc_origin, zone_desc_masters, return_value);
-                    
-                    break;
-                }
-            }
-            else
-            {
-                return_value = ANSWER_NOT_ACCEPTABLE;
-                //break;
-            }
-
-            /* read the next answer */
-
-            for(;(answer_count > 0) && (answer_idx < 2); answer_count--)
-            {
-                if(FAIL(return_value = packet_reader_read_record(&pr, record_wire, sizeof(record_wire))))
-                {
-                    log_err("zone load: %{dnsname}: %{hostaddr}: failed to read next record: %r", zone_desc_origin, zone_desc_masters, return_value);
-                    
-                    break;
-                }
-
-                u8 *p = record_wire + dnsname_len(record_wire);
-                u16 rtype = GET_U16_AT(*p);
-
-                if(rtype != TYPE_SOA)
-                {
-                    if(answer_idx == 0) // first record should be an SOA (AXFR or IXFR)
-                    {
-                        // not an XFR
-                        log_err("zone load: %{dnsname}: %{hostaddr}: master did not answer with an XFR (expected SOA, got %{dnstype})",
-                                zone_desc_origin, zone_desc_masters, &rtype);
-                        return_value = ANSWER_NOT_ACCEPTABLE;
                         break;
                     }
-                    
-                    if(answer_idx == 1) // second record may be an SOA (IXFR, or a limit case of an AXFR with two SOA)
+
+                    u8 *p = record_wire + dnsname_len(record_wire);
+                    u16 rtype = GET_U16_AT(*p);
+
+                    if(rtype != TYPE_SOA)
                     {
-                        // not an IXFR (but most likely an AXFR)
-                        log_debug("zone load: %{dnsname}: %{hostaddr}: master did not answer with an IXFR (expected SOA, got %{dnstype})",
-                                zone_desc_origin, zone_desc_masters, &rtype);
-                        return_value = SUCCESS;
+                        if(answer_idx == 0) // first record should be an SOA (AXFR or IXFR)
+                        {
+                            // not an XFR
+                            log_err("zone load: %{dnsname}: %{hostaddr}: master did not answer with an XFR (expected SOA, got %{dnstype})",
+                                    zone_desc_origin, zone_desc_masters, &rtype);
+                            return_value = ANSWER_NOT_ACCEPTABLE;
+                            break;
+                        }
+
+                        if(answer_idx == 1) // second record may be an SOA (IXFR, or a limit case of an AXFR with two SOA)
+                        {
+                            // not an IXFR (but most likely an AXFR)
+                            log_debug("zone load: %{dnsname}: %{hostaddr}: master did not answer with an IXFR (expected SOA, got %{dnstype})",
+                                    zone_desc_origin, zone_desc_masters, &rtype);
+                            return_value = SUCCESS;
+                            break;
+                        }
+                    }
+
+                    p += 8;
+                    u16 rdata_size = ntohs(GET_U16_AT(*p));
+                    p += 2;
+
+                    u32 serial;
+
+                    if(FAIL(return_value = rr_soa_get_serial(p, rdata_size, &serial)))
+                    {
+                        log_err("zone load: %{dnsname}: %{hostaddr}: failed to get serial from SOA record: %r", zone_desc_origin, zone_desc_masters, return_value);
+
                         break;
                     }
+
+                    answer_serial[answer_idx] = serial;
+
+                    // p += rdata_size;
+
+                    answer_idx++;
                 }
 
-                p += 8;
-                u16 rdata_size = ntohs(GET_U16_AT(*p));
-                p += 2;
-                
-                u32 serial;
-                
-                if(FAIL(return_value = rr_soa_get_serial(p, rdata_size, &serial)))
+                if((answer_idx == 1) && (answer_serial[0] == current_serial))
                 {
-                    log_err("zone load: %{dnsname}: %{hostaddr}: failed to get serial from SOA record: %r", zone_desc_origin, zone_desc_masters, return_value);
-                    
                     break;
                 }
-                
-                answer_serial[answer_idx] = serial;
-                
-                // p += rdata_size;
-                
-                answer_idx++;
             }
-            
-            if((answer_idx == 1) && (answer_serial[0] == current_serial))
-            {
-                break;
-            }
+            while((answer_idx < 2) && ISOK(return_value));
+
+            input_stream_close(&is);
+            output_stream_close(&os);
         }
-        while((answer_idx < 2) && ISOK(return_value));
-        
-        input_stream_close(&is);
-        output_stream_close(&os);
+        else
+        {
+            database_server_down_cache_add(zone_desc_masters);
+        }
     }
     
     if(FAIL(return_value))
@@ -1199,7 +1283,6 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_p
      * This part is supposed to see if there is a RELEVANT axfr file
      */
 
-
     if(ISOK(return_value = database_zone_reader_axfr_open_with_fqdn(&zr, zone_desc_origin)))
     {
         log_debug("zone load: %{dnsname}: found an AXFR image", zone_desc_origin);
@@ -1319,23 +1402,43 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_p
 #endif
 
     // Retrieve the serial on the master, if we are allowed to
+
+    bool dont_probe_the_primary = ((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) != 0);
+
+    if(!dont_probe_the_primary)
+    {
+        if(zone_desc->flags & ZONE_FLAG_PRIORITISE_LOCAL_SOURCE)
+        {
+            if(!zone_source_has_flags(&db_source, ZONE_SOURCE_EXISTS|ZONE_SOURCE_LOADED))
+            {
+                if(zone_source_has_flags(best_source, ZONE_SOURCE_EXISTS | ZONE_SOURCE_LOCALE))
+                {
+                    dont_probe_the_primary = TRUE;
+                }
+            }
+        }
+    }
     
-    if(((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0) && zone_source_has_flags(best_source, ZONE_SOURCE_LOCALE))
+    if(!dont_probe_the_primary && zone_source_has_flags(best_source, ZONE_SOURCE_LOCALE))
     {
         // a fail here would mean something horribly wrong is going on with the journal ...
         
         u32 master_serial;
-        
-        if(ISOK(return_value = message_query_serial(zone_desc_origin, zone_desc_masters, &master_serial)))
+
+        if(!database_server_down_cache_query(zone_desc_masters))
         {
-            log_debug("zone load: %{dnsname}: master %{hostaddr} has serial %u", zone_desc_origin, zone_desc_masters, master_serial);
-            
-            zone_source_set(&master_source, ZONE_SOURCE_EXISTS | ZONE_SOURCE_REMOTE);
-            zone_source_set_serial(&master_source, master_serial);
-        }
-        else
-        {
-            log_err("zone load: %{dnsname}: unable to get the serial from the master at %{hostaddr}: %r", zone_desc_origin, zone_desc_masters, return_value);
+            if(ISOK(return_value = message_query_serial(zone_desc_origin, zone_desc_masters, &master_serial)))
+            {
+                log_debug("zone load: %{dnsname}: master %{hostaddr} has serial %u", zone_desc_origin, zone_desc_masters, master_serial);
+
+                zone_source_set(&master_source, ZONE_SOURCE_EXISTS | ZONE_SOURCE_REMOTE);
+                zone_source_set_serial(&master_source, master_serial);
+            }
+            else
+            {
+                log_err("zone load: %{dnsname}: unable to get the serial from the master at %{hostaddr}: %r", zone_desc_origin, zone_desc_masters, return_value);
+                database_server_down_cache_add(zone_desc_masters);
+            }
         }
 
         if(zone_source_compare(best_source, &master_source) >= 0)
@@ -1485,7 +1588,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_p
                 zone_pointer_out->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
 #endif
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
                /*
                 * Setup the validity period and the jitter
                 */
@@ -1625,7 +1728,7 @@ database_load_zone_slave(zdb *db, zone_desc_s *zone_desc, struct zdb_zone_load_p
         current_zone->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
 #endif
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 
        /*
         * Setup the validity period and the jitter (slave)
@@ -1917,7 +2020,7 @@ database_service_zone_load(zone_desc_s *zone_desc)
 
     // wait
     
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 
     if(zone_desc->type == ZT_MASTER)
     {

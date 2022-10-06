@@ -51,9 +51,9 @@
 #include <pthread.h>
 
 #include "dnscore/timeformat.h"
-
 #include "dnscore/ctrl-rfc.h"
 #include "dnscore/hash.h"
+#include "dnscore/mutex.h"
 
 // Enables or disables the feature
 #define HAS_DLADDR_SUPPORT 0
@@ -61,8 +61,12 @@
 #ifdef __linux__
 #ifdef __GNUC__
 // linux + gnu: Enabling enhanced function address translation
-#define __USE_GNU
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#ifndef __USE_GNU
+#define __USE_GNU 1
+#endif
 #include <dlfcn.h>
 #undef HAS_DLADDR_SUPPORT
 #define HAS_DLADDR_SUPPORT 0    // keep it disabled for the rest of the binary
@@ -157,9 +161,9 @@ static const u8 TXT_ESCAPE_TYPE[256] =
  */
 
 static ptr_vector format_handler_descriptor_table = {NULL, -1, -1};
-
 static const format_handler_descriptor** format_handler_descriptor_hash_table = NULL;
 static int format_handler_descriptor_hash_table_size = 0;
+static mutex_t debug_osformat_mtx = MUTEX_INITIALIZER;
 
 //static bool g_format_usable = FALSE;
 
@@ -285,7 +289,7 @@ void
 format_class_finalize()
 {
     ptr_vector_destroy(&format_handler_descriptor_table);
-    free(format_handler_descriptor_hash_table);
+    free((void*)format_handler_descriptor_hash_table);
     format_handler_descriptor_hash_table = NULL;
 }
 
@@ -303,7 +307,7 @@ static void format_grow_hash_table()
     {
         if(format_handler_descriptor_hash_table != NULL)
         {
-            free(format_handler_descriptor_hash_table);
+            free((void*)format_handler_descriptor_hash_table);
 
             int next = (format_handler_descriptor_hash_table_size * 2) | 1;
 
@@ -326,7 +330,7 @@ static void format_grow_hash_table()
         retry = FALSE;
 
         MALLOC_OBJECT_ARRAY_OR_DIE(format_handler_descriptor_hash_table, const format_handler_descriptor*, format_handler_descriptor_hash_table_size, FMTHDESC_TAG);
-        ZEROMEMORY(format_handler_descriptor_hash_table, format_handler_descriptor_hash_table_size * sizeof(format_handler_descriptor*));
+        ZEROMEMORY((void*)format_handler_descriptor_hash_table, format_handler_descriptor_hash_table_size * sizeof(format_handler_descriptor*));
 
         for(int i = 0; i <= ptr_vector_last_index(&format_handler_descriptor_table); ++i)
         {
@@ -450,7 +454,7 @@ format_signed(const char* input, size_t size, output_stream* stream, s32 padding
 static void
 format_hex_u64_common(const char* hexa_table, u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
 {
-    char tmp[__SIZEOF_POINTER__ * 2];
+    char tmp[__SIZEOF_LONG_LONG__ * 2];
     char* next = &tmp[sizeof(tmp)];
 
     do
@@ -573,9 +577,7 @@ format_longdouble(long double val, output_stream* stream, s32 padding, s32 float
     char tmp[64];
 
     format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, TRUE);
-
     int len = snprintf(tmp, sizeof(tmp), fmt, val);
-
     output_stream_write(stream, (const u8*)tmp, len);
 }
 
@@ -586,9 +588,7 @@ format_double(double val, output_stream* stream, s32 padding, s32 float_padding,
     char tmp[64];
 
     format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, FALSE);
-
     int len = snprintf(tmp, sizeof(tmp), fmt, val);
-
     output_stream_write(stream, (const u8*)tmp, len);
 }
 
@@ -1258,6 +1258,7 @@ ya_result
 debug_osformatln(output_stream* stream, const char* fmt, ...)
 {
     s64 now = timeus();
+    mutex_lock(&debug_osformat_mtx);
     localdatetimeus_format_handler_method((void*)(intptr)now, stream, 0, 0, FALSE, NULL);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
     format_dec_u64(getpid(), stream, 0, 0, FALSE);
@@ -1269,6 +1270,7 @@ debug_osformatln(output_stream* stream, const char* fmt, ...)
     ya_result err1 = vosformat(stream, fmt, args);
     va_end(args);
     output_stream_write(stream, STREOL, 1);
+    mutex_unlock(&debug_osformat_mtx);
     return err1;
 }
 
@@ -1276,6 +1278,7 @@ ya_result
 debug_println(const char* text)
 {
     s64 now = timeus();
+    mutex_lock(&debug_osformat_mtx);
     localdatetimeus_format_handler_method((void*)(intptr)now, termout, 0, 0, FALSE, NULL);
     output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
     format_dec_u64(getpid(), termout, 0, 0, FALSE);
@@ -1285,6 +1288,7 @@ debug_println(const char* text)
     ya_result n = strlen(text);
     output_stream_write(termout, (const u8*)text, n);
     output_stream_write(termout, STREOL, 1);
+    mutex_unlock(&debug_osformat_mtx);
     return n + 1;
 }
 
@@ -2631,8 +2635,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
             }
             return INCORRECT_RDATA;
         }
-
-
 
         case TYPE_TALINK:
         {

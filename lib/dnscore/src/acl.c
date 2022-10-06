@@ -60,12 +60,13 @@ logger_handle *g_acl_logger = LOGGER_HANDLE_SINK;
 #include <dnscore/bytearray_output_stream.h>
 #include <dnscore/ptr_set.h>
 
-#if !HAS_ACL_SUPPORT
+#if !DNSCORE_HAS_ACL_SUPPORT
 #error "ACL support should not be compiled in"
 #endif
 
 #include <dnscore/acl.h>
 #include <dnscore/acl-config.h>
+#include <dnscore/counter_output_stream.h>
 
 #define ADRMITEM_TAG 0x4d4554494d524441
 #define ACLENTRY_TAG 0x5952544e454c4341
@@ -257,6 +258,7 @@ acl_entry_compare_node(const void *key_a, const void *key_b)
 static ptr_set g_amim_set = PTR_SET_EMPTY_WITH_COMPARATOR(acl_address_match_item_compare_node);
 static ptr_set g_acl_set = PTR_SET_EMPTY_WITH_COMPARATOR(acl_entry_compare_node);
 static mutex_t ami_mtx = MUTEX_INITIALIZER;
+static u32 g_acl_entry_count = 0;
 
 typedef int amim_function(struct address_match_item*, void*);
 
@@ -355,6 +357,155 @@ amim_reference(const struct address_match_item *item, const void *data)
     return AMIM_REJECT;
 }
 // </editor-fold>
+
+static bool acl_count_bits(const u8 *bytes, int len, u32 *bit_countp)
+{
+    u32 bit_count = 0;
+    const u8 *limit = &bytes[len];
+    for(; bytes < limit; ++bytes)
+    {
+        u8 b = *bytes;
+        if(b == 255)
+        {
+            bit_count += 8;
+        }
+        else
+        {
+            while(b != 0)
+            {
+                if((b & 0x80) != 0)
+                {
+                    return false;
+                }
+
+                ++bit_count;
+                b <<= 1;
+            }
+
+            for(++bytes; bytes < limit; ++bytes)
+            {
+                if(*bytes != 0)
+                {
+                    return false;
+                }
+            }
+
+            break;
+        }
+    }
+
+    *bit_countp = bit_count;
+
+    return TRUE;
+}
+
+void acl_match_item_print(const struct address_match_item *item, output_stream *os)
+{
+    if(item == NULL)
+    {
+        output_stream_write(os, "NULL", 4);
+    }
+    else if(item->match == amim_none)
+    {
+        output_stream_write(os, "none", 4);
+    }
+    else if(item->match == amim_any)
+    {
+        output_stream_write(os, "any", 3);
+    }
+    else if(IS_IPV4_ITEM(item))
+    {
+        u32 mask = item->parameters.ipv4.mask.value;
+        u32 mask_bits = 0;
+        bool broken_mask = FALSE;
+
+        while(mask != 0)
+        {
+            if((mask & 1) == 0)
+            {
+                // broken mask
+                broken_mask = TRUE;
+                break;
+            }
+            ++mask_bits;
+            mask >>= 1;
+        }
+
+        osformat(os,"%s%u.%u.%u.%u",
+            IS_IPV4_ITEM_MATCH_NOT(item)?"!":"",
+            item->parameters.ipv4.address.bytes[0],
+            item->parameters.ipv4.address.bytes[1],
+            item->parameters.ipv4.address.bytes[2],
+            item->parameters.ipv4.address.bytes[3]
+        );
+        if(!broken_mask)
+        {
+            if(mask_bits < 32)
+            {
+                osformat(os, "/%u", mask_bits);
+            }
+        }
+        else
+        {
+            osformat(os,"/%u.%u.%u.%u",
+             item->parameters.ipv4.mask.bytes[0],
+                 item->parameters.ipv4.mask.bytes[1],
+                 item->parameters.ipv4.mask.bytes[2],
+                 item->parameters.ipv4.mask.bytes[3]);
+        }
+    }
+    else if(IS_IPV6_ITEM(item))
+    {
+        u32 mask_bits = 0;
+        bool broken_mask = !acl_count_bits(item->parameters.ipv6.mask.bytes, 16, &mask_bits);
+
+        struct sockaddr_in6 sa6;
+        sa6.sin6_family = AF_INET6;
+        memcpy(&sa6.sin6_addr, item->parameters.ipv6.address.bytes, 16);
+        osformat(os,"%s%{sockaddrip}", IS_IPV6_ITEM_MATCH_NOT(item)?"!":"", &sa6);
+
+        if(!broken_mask)
+        {
+            if(mask_bits < 128)
+            {
+                osformat(os, "/%u", mask_bits);
+            }
+        }
+        else
+        {
+            memcpy(&sa6.sin6_addr, item->parameters.ipv6.mask.bytes, 16);
+            osformat(os,"/%{sockaddrip}", &sa6);
+        }
+    }
+    else if((item->match == amim_tsig) || (item->match == amim_tsig_not))
+    {
+        osformat(os, "%skey %{dnsname}", (item->match == amim_tsig_not)?"!":"", item->parameters.tsig.name);
+    }
+    else
+    {
+        output_stream_write_u8(os, '?');
+    }
+}
+
+ya_result acl_match_items_print(const address_match_item **address, const address_match_item **limit, output_stream *os)
+{
+    counter_output_stream_data cosd;
+    output_stream cos;
+    counter_output_stream_init(os, &cos, &cosd);
+
+    for(const address_match_item **itemp = address; itemp < limit; ++itemp)
+    {
+        const address_match_item *item = *itemp;
+        if(itemp != address)
+        {
+            output_stream_write(&cos, ", ", 2);
+        }
+        acl_match_item_print(item, &cos);
+    }
+
+    return (ya_result)cosd.written_count;
+}
+
 
 // <editor-fold defaultstate="collapsed" desc="RULES SORTING">
 
@@ -477,12 +628,24 @@ acl_entry_get(const char *name)
     }
 }
 
+u32
+acl_entry_count()
+{
+    return g_acl_entry_count;
+}
+
+void acl_entry_iterator_init(ptr_set_iterator *iter)
+{
+    ptr_set_iterator_init(&g_acl_set, iter);
+}
+
 static acl_entry*
 acl_entry_new_instance(const char *name)
 {
     ptr_node *node = ptr_set_insert(&g_acl_set, (char*)name);
     if(node->value == NULL)
-    {    
+    {
+        ++g_acl_entry_count;
         acl_entry *acl;
         MALLOC_OBJECT_OR_DIE(acl, acl_entry, ACLENTRY_TAG);
         ZEROMEMORY(acl, sizeof(acl_entry));
@@ -497,6 +660,11 @@ acl_entry_new_instance(const char *name)
 
 static void acl_entry_delete(acl_entry *acl)
 {
+    if(ptr_set_find(&g_acl_set, acl->name) != NULL)
+    {
+        --g_acl_entry_count;
+    }
+
     ptr_set_delete(&g_acl_set, acl->name);
     free((char*)acl->name);
     free(acl);
@@ -2421,7 +2589,7 @@ acl_address_match_item_to_stream(output_stream *os, const address_match_item *am
         }
         else
         {
-            return_code = osformat(os, "! key %{dnsname}", ami->parameters.tsig.name);
+            return_code = osformat(os, "!key %{dnsname}", ami->parameters.tsig.name);
         }
     }
 #endif

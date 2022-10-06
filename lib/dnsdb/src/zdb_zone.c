@@ -81,7 +81,7 @@
 #include "dnsdb/dynupdate-message.h"
 #include "dnsdb/zdb-zone-path-provider.h"
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
 #if ZDB_HAS_NSEC_SUPPORT
 #include "dnsdb/nsec.h"
@@ -520,7 +520,7 @@ zdb_zone_destroy_nolock(zdb_zone *zone)
 
         u32 zone_footprint = zdb_zone_get_struct_size(zone->origin);
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
         if(zone->progressive_signature_update.current_fqdn != NULL)
         {
             log_debug("zone: %{dnsname}: releasing progressive signature update (nolock)", zone->origin);
@@ -652,7 +652,7 @@ zdb_zone_destroy(zdb_zone *zone)
         
         u32 zone_footprint = zdb_zone_get_struct_size(zone->origin);
         
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
         if(zone->progressive_signature_update.current_fqdn != NULL)
         {
             log_debug("zone: %{dnsname}: releasing progressive signature update", zone->origin);
@@ -826,7 +826,7 @@ zdb_zone_isinvalid(zdb_zone *zone)
     return invalid;
 }
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 
 /**
  * 
@@ -1070,6 +1070,7 @@ zdb_zone_update_zone_remove_add_dnskeys(zdb_zone *zone, ptr_vector *removed_keys
         else
         {
             log_err("dnskey: %{dnsname}: keys update failed: FORMERR", fqdn);
+            ret = RCODE_ERROR_CODE(RCODE_FORMERR);
         }
 
         dynupdate_message_finalize(&dmsg);

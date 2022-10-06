@@ -49,7 +49,7 @@
 #include "dnscore/timeformat.h"
 #endif // DEBUG
 
-#define HAS_ALARM_DUMP 0
+#define DEBUG_ALARM_DUMP 0
 
 #define MODULE_MSG_HANDLE g_system_logger
 
@@ -98,7 +98,7 @@ typedef struct alarm_time_node alarm_time_node;
 
 static ptr_vector alarm_handles = PTR_VECTOR_EMPTY;
 static alarm_time_node doomsday = { NULL, {NULL, NULL}, MAX_U32 }; // nothing after this point
-static alarm_time_node time_list = { &doomsday, {NULL, NULL}, 0 };
+static alarm_time_node g_alarm_time_list = {&doomsday, {NULL, NULL}, 0 };
 static mutex_t alarm_mutex = MUTEX_INITIALIZER;
 static int alarm_handles_next_free = -1;
 #if DEBUG
@@ -113,13 +113,17 @@ static void alarm_handle_close(alarm_handle *handle_struct);
 
 /**/
 
-#if HAS_ALARM_DUMP
-void alarm_log_dump_nolock(bool check);
-void alarm_log_dump();
+#if DEBUG_ALARM_DUMP
+static void alarm_log_dump_nolock(bool check);
+static void alarm_log_dump();
 #endif
 
 struct timespec __alarm__approximate_time_10s = { 0, 0 };
 struct timespec __alarm__approximate_time_30s = { 0, 0 };
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+static s64 g_alarm_run_tick_stats_dump_us = 0;
+#endif
 
 /**
  * Allocates an uninitialised event node.
@@ -458,7 +462,7 @@ alarm_time_get(u32 epoch)
     assert(alarm_mutex_locked);
     assert(epoch != MAX_U32);
 
-    alarm_time_node *time_node = time_list.next;
+    alarm_time_node *time_node = g_alarm_time_list.next;
 
     while(time_node->epoch < epoch)
     {
@@ -493,8 +497,8 @@ alarm_time_create(u32 epoch)
         epoch = time(NULL);
     }
         
-    alarm_time_node *time_prev = &time_list;
-    alarm_time_node *time_node = time_list.next;
+    alarm_time_node *time_prev = &g_alarm_time_list;
+    alarm_time_node *time_node = g_alarm_time_list.next;
     
     // find a node at or after the one we need
 
@@ -539,7 +543,7 @@ alarm_init()
     {
         ptr_vector_resize(&alarm_handles, 64);
 
-        alarm_event_list_init(&time_list.events); /* init: NO LOCK */
+        alarm_event_list_init(&g_alarm_time_list.events); /* init: NO LOCK */
 
         s32 now_s = time(NULL);
         now_s += 10;
@@ -592,9 +596,9 @@ alarm_finalize()
         
         mutex_lock(&alarm_mutex);
         
-        if(alarm_event_list_isempty(&time_list.events))
+        if(alarm_event_list_isempty(&g_alarm_time_list.events))
         {
-            alarm_event_list_finalize(&time_list.events);
+            alarm_event_list_finalize(&g_alarm_time_list.events);
         }
         else
         {
@@ -699,7 +703,7 @@ alarm_handle_close(alarm_handle *handle_struct)
 {    
     alarm_event_node *node = handle_struct->events.first;
 #if DEBUG
-#if HAS_ALARM_DUMP
+#if DEBUG_ALARM_DUMP
     alarm_log_dump_nolock(FALSE);
 #endif
     u32 removed_events = 0;
@@ -742,7 +746,7 @@ alarm_handle_close(alarm_handle *handle_struct)
     // clear the obsolete times
     
 #if DEBUG
-#if HAS_ALARM_DUMP
+#if DEBUG_ALARM_DUMP
     alarm_log_dump_nolock(FALSE);
 #endif
 #endif
@@ -750,7 +754,7 @@ alarm_handle_close(alarm_handle *handle_struct)
     if(obsolete_times)
     {
         
-        alarm_time_node *time_node_prev = &time_list;
+        alarm_time_node *time_node_prev = &g_alarm_time_list;
         alarm_time_node *time_node = time_node_prev->next;
         
         while(time_node->next != NULL)
@@ -777,7 +781,7 @@ alarm_handle_close(alarm_handle *handle_struct)
 
     memset(handle_struct, 0xe4, sizeof(alarm_event_list));
     
-#if HAS_ALARM_DUMP
+#if DEBUG_ALARM_DUMP
     alarm_log_dump_nolock(FALSE);
 #endif
 #endif
@@ -1011,7 +1015,7 @@ alarm_run_tick(u32 epoch)
 #endif
 
 #if DEBUG
-#if HAS_ALARM_DUMP
+#if DEBUG_ALARM_DUMP
     alarm_log_dump_nolock(TRUE);
 #endif
 #endif
@@ -1033,14 +1037,14 @@ alarm_run_tick(u32 epoch)
     {
         // detach the node
         
-        alarm_time_node *time_node = time_list.next;
+        alarm_time_node *time_node = g_alarm_time_list.next;
                 
         if(time_node->epoch > epoch)
         {
             break;
         }
-        
-        time_list.next = time_node->next;
+
+        g_alarm_time_list.next = time_node->next;
         
         // while there are events in the time node
                 
@@ -1075,7 +1079,6 @@ alarm_run_tick(u32 epoch)
     
     double fetch_delta_ms = (double)(fetch_stop - fetch_start);
     fetch_delta_ms /= 1000.0;
-    
     log_debug("alarm: fetched %u events in %.3fms", event_count, fetch_delta_ms);
     
     event_stack->time_next = NULL;
@@ -1085,7 +1088,7 @@ alarm_run_tick(u32 epoch)
     s64 total_run = 0;
     
 #if DEBUG
-#if HAS_ALARM_DUMP
+#if DEBUG_ALARM_DUMP
     alarm_log_dump_nolock(TRUE);
     alarm_mutex_locked = FALSE;
 #endif
@@ -1164,6 +1167,18 @@ alarm_run_tick(u32 epoch)
     total_run_ms /= 1000.0;
 
     log_debug("alarm: tick times fetch %.3fms + run %.3fms = total %.3fms)", fetch_delta_ms, total_run_ms, fetch_delta_ms + total_run_ms);
+
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+    s64 now = timeus();
+
+    if(now - g_alarm_run_tick_stats_dump_us > ONE_SECOND_US * 60)
+    {
+        debug_stat(DEBUG_STAT_SIZES|DEBUG_STAT_TAGS|DEBUG_STAT_WALK|DEBUG_STAT_MMAP);
+        flushout();
+        flusherr();
+        g_alarm_run_tick_stats_dump_us = now;
+    }
+#endif
 }
 
 void
@@ -1197,9 +1212,10 @@ alarm_get_first(alarm_t hndl)
     return handle_struct->events.first;
 }
 
-#if HAS_ALARM_DUMP
+#if DEBUG_ALARM_DUMP
 
-void alarm_log_dump_nolock(bool check)
+static void
+alarm_log_dump_nolock(bool check)
 {
 #if DEBUG
     u32 handles_count = 0;
@@ -1246,7 +1262,8 @@ void alarm_log_dump_nolock(bool check)
 #endif
 }
 
-void alarm_log_dump()
+static void
+alarm_log_dump()
 {
     mutex_lock(&alarm_mutex);
     

@@ -75,7 +75,7 @@ sys_get_cpu_count()
 {
     if(cpu_count_override == 0)
     {
-#ifndef WIN32
+#if __unix__
         int cc = sysconf(_SC_NPROCESSORS_ONLN);
 
         if( cc <= 0 )

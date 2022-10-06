@@ -60,7 +60,7 @@ extern "C"
 #endif
 
 /*
- * Self explanatory but not mandatory, defaulted to TRUE
+ * Self-explanatory but not mandatory, defaulted to TRUE
  */
 
 // #define AVL_REFERENCE_IS_POINTER TRUE
@@ -115,7 +115,6 @@ struct AVL_PREFIXED(iterator)
     s32 stack_pointer;
     AVL_NODE_TYPE* stack[AVL_MAX_DEPTH];    /* An AVL depth of 64 is HUGE */
 };
-
 
 /** @brief Initializes the tree
  *

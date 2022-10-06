@@ -186,7 +186,7 @@ dynamic_module_handler_load(int argc, const char **argv)
                 // get the last '/'
                 const char *start = parse_skip_until_chars(shared_object_path, "/", 1);
                 // get the first '.'
-                const char *stop = parse_skip_until_chars(stop, ".", 1);
+                const char *stop = parse_skip_until_chars(start, ".", 1);
                 
                 if(stop == start)
                 {
@@ -219,6 +219,7 @@ dynamic_module_handler_load(int argc, const char **argv)
             MALLOC_OBJECT_OR_DIE(module, struct dynamic_module, YDYNMOD_TAG);
             MALLOC_OBJECT_ARRAY_OR_DIE(module->args.argv, char*, argc, YDYNMODA_TAG);
             module->so = so;
+#pragma message("You can safely ignore the pointer conversion warning. (To be safe, it's checked at runtime in the dnscore_arch_checkup() function.)")
             module->entry_point = (dynamic_module_interface_init*)f;
             module->path = strdup(shared_object_path);
             module->rc = 0;
@@ -362,7 +363,7 @@ dynamic_module_handler_load(int argc, const char **argv)
         {
             // failed to load
 
-            ret = ERRNO_ERROR;
+            ya_result ret = ERRNO_ERROR;
             
             mutex_unlock(&dynamic_module_mtx);
             
@@ -375,7 +376,7 @@ dynamic_module_handler_load(int argc, const char **argv)
     {
         // already loaded, somehow
 
-        ret = ERRNO_ERROR;
+        ya_result ret = ERRNO_ERROR;
         
         mutex_unlock(&dynamic_module_mtx);
         
@@ -490,7 +491,7 @@ dynamic_module_on_dnskey_args_init(struct dynamic_module_on_dnskey_args *args, c
         return BUFFER_WOULD_OVERFLOW;
     }
 
-    key->vtbl->dnssec_key_writerdata(key, buffer);
+    key->vtbl->dnssec_key_writerdata(key, buffer, buffer_size);
     args->rdata = buffer;
     args->epoch_created = dnskey_get_created_epoch(key);
     args->epoch_publish = dnskey_get_publish_epoch(key);

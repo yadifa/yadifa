@@ -53,7 +53,7 @@
 #include <grp.h>
 #endif
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
 #include <dnsdb/dnssec-keystore.h>
 #endif
@@ -71,7 +71,7 @@
 #include <dnscore/tsig.h>
 #include <dnscore/fdtools.h>
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #include <dnsdb/dnssec.h>
 #endif
 
@@ -137,7 +137,7 @@ static const struct logger_name_handle_s logger_name_handles[] =
 {
     {"system", &g_system_logger},
     {"database", &g_database_logger},
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
     {"dnssec", &g_dnssec_logger},
 #endif
     {"zone", &g_zone_logger},
@@ -155,6 +155,9 @@ CMDLINE_BEGIN(yadifad_cmdline)
 CMDLINE_SECTION("main")
 CMDLINE_OPT("config",'c',"config_file")
 CMDLINE_HELP("", "sets the configuration file to use (default: " S_CONFIGDIR S_CONFIGFILE ")")
+#if DEBUG
+CMDLINE_BOOL("print-config", 0, "print_config")
+#endif
 CMDLINE_BOOL("daemon", 'd', "daemon")
 CMDLINE_HELP("", "overrides the daemon setting, enables it")
 CMDLINE_BOOL_NOT("nodaemon", 0, "daemon")
@@ -276,11 +279,11 @@ yadifad_show_version(u8 level)
  */
 
 ya_result config_register_main(s32 priority);
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
 ya_result acl_config_register(const char *null_or_acl_name, s32 priority);
 #endif
 ya_result config_register_zone(const char *null_or_key_name, s32 priority);
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 ya_result config_register_control(s32 priority);
 #endif
 #if HAS_RRL_SUPPORT
@@ -325,14 +328,14 @@ yadifad_config_init()
     }
 #endif
     
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     if(FAIL(return_code = acl_config_register(NULL, priority++)))
     {
         return return_code;
     }
 #endif
 
-#if HAS_MASTER_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT    
+#if ZDB_HAS_MASTER_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
     if(FAIL(return_code = config_register_dnssec_policy(NULL, priority)))
     {
         return return_code;
@@ -353,7 +356,7 @@ yadifad_config_init()
     
     priority += 2;
     
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
     if(FAIL(return_code = config_register_control(priority++)))
     {
         return return_code;
@@ -580,7 +583,12 @@ yadifad_config_finalize()
             logger_handle_close(name_handle->name);
         }
     }
-
+#if DEBUG
+    if(g_config->print_config)
+    {
+        config_print(termout);
+    }
+#endif
     return return_code;
 }
 

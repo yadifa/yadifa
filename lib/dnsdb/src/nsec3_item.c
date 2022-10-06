@@ -285,7 +285,6 @@ nsec3_zone_item_to_zdb_packed_ttlrdata(const nsec3_zone* n3,
 
     nsec3->ttl = ttl;
     nsec3->rdata_size = rdata_size;
-
     nsec3->next = NULL;
 
     u8* p = &nsec3->rdata_start[0];
@@ -379,8 +378,6 @@ nsec3_zone_item_to_new_zdb_packed_ttlrdata(
 
     zdb_packed_ttlrdata* nsec3;
 
-    // ZDB_RECORD_MALLOC_EMPTY(nsec3, nsec3_parms->ttl, rdata_size);
-    
     u8 * restrict * pool = nsec3_parms->pool;
     nsec3 = (zdb_packed_ttlrdata*)*pool;
     *pool += ALIGN16(ZDB_RECORD_SIZE_FROM_RDATASIZE(rdata_size));

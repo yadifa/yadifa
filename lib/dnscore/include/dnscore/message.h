@@ -91,6 +91,10 @@ extern "C"
 
 #define MESSAGE_FLAGS(buffer_) GET_U16_AT((buffer_)[ 2])
 
+#if DNSCORE_HAS_TSIG_SUPPORT
+#define TSIGOTHR_TAG 0x5248544f47495354
+#endif
+
 /* Only use constants with this */
 #if AVOID_ANTIALIASING
     
@@ -873,7 +877,7 @@ static inline void message_copy_into_buffer(message_data *mesg, const void *in_d
 
 static inline u8 message_copy_control(const message_data *mesg, void *out_data, size_t data_size)
 {
-#ifndef WIN32
+#if __unix__
     yassert(data_size >= mesg->_msghdr.msg_controllen);
     (void)data_size;
     memcpy(out_data, mesg->_msghdr.msg_control, mesg->_msghdr.msg_controllen);
@@ -890,11 +894,11 @@ static inline u8 message_control_size(const message_data *mesg)
 
 static inline void message_set_control(message_data *mesg, const void *data, size_t data_size)
 {
-#ifndef WIN32
+#if __unix__
     yassert(data_size <= sizeof(mesg->_msghdr_control_buffer));
     memcpy(mesg->_msghdr_control_buffer, data, data_size);
     mesg->_msghdr.msg_controllen = data_size;
-#if __FreeBSD__
+#if __FreeBSD__ || __OpenBSD__
     if(data_size != 0)
     {
         mesg->_msghdr.msg_control = mesg->_msghdr_control_buffer;
@@ -910,8 +914,8 @@ static inline void message_set_control(message_data *mesg, const void *data, siz
 
 static inline void message_reset_control_size(message_data *mesg)
 {
-#ifndef WIN32
-#if __FreeBSD__
+#if __unix__
+#if __FreeBSD__ || __OpenBSD__
     mesg->_msghdr.msg_control = mesg->_msghdr_control_buffer;
 #endif
     mesg->_msghdr.msg_controllen = sizeof(mesg->_msghdr_control_buffer);
@@ -921,7 +925,7 @@ static inline void message_reset_control_size(message_data *mesg)
 
 static inline void message_reset_control(message_data *mesg)
 {
-#ifndef WIN32
+#if __unix__
     mesg->_msghdr.msg_control = mesg->_msghdr_control_buffer;
     mesg->_msghdr.msg_controllen = sizeof(mesg->_msghdr_control_buffer);
 #else
@@ -930,7 +934,7 @@ static inline void message_reset_control(message_data *mesg)
 
 static inline void message_clear_control(message_data *mesg)
 {
-#ifndef WIN32
+#if __unix__
     mesg->_msghdr.msg_control = NULL;
     mesg->_msghdr.msg_controllen = 0;
 #else
@@ -1265,7 +1269,7 @@ static inline const struct sockaddr_in6 *message_get_sender_sa6(const message_da
 static inline void message_copy_sender_from(message_data *mesg, const message_data *original)
 {
     memcpy(&mesg->_sender, &original->_sender, message_get_sender_size(original));
-    mesg->_msghdr.msg_name = &mesg->_sender;
+    mesg->_msghdr.msg_name = &mesg->_sender.sa;
     mesg->_msghdr.msg_namelen = original->_msghdr.msg_namelen;
 }
 
@@ -1280,7 +1284,7 @@ static inline ya_result message_copy_sender_from_socket(message_data *mesg, int 
     mesg->_msghdr.msg_namelen = sizeof(mesg->_sender);
     if(getpeername(client_sockfd, (struct sockaddr*)&mesg->_sender, &mesg->_msghdr.msg_namelen) >= 0)
     {
-        mesg->_msghdr.msg_name = &mesg->_sender;
+        mesg->_msghdr.msg_name = &mesg->_sender.sa;
         return SUCCESS;
     }
     else
@@ -1344,7 +1348,7 @@ static inline ssize_t message_recv_udp(message_data *mesg, int sockfd)
     if(ret >= 0)
     {
         message_set_size(mesg, ret);
-#if __FreeBSD__
+#if __FreeBSD__ || __OpenBSD__
         if(mesg->_msghdr.msg_controllen == 0)
         {
             mesg->_msghdr.msg_control = NULL;
@@ -1393,7 +1397,7 @@ static inline u16 message_parse_query_class(const message_data *mesg)
     if(message_get_query_count_ne(mesg) != 0)
     {
         const u8 *fqdn = &mesg->_buffer[DNS_HEADER_LENGTH];
-        fqdn += dnsname_len(fqdn) + 2;
+        fqdn += (intptr)dnsname_len(fqdn) + 2;
         return GET_U16_AT_P(fqdn);
     }
     else

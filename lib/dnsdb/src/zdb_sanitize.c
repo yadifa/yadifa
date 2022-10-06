@@ -55,7 +55,7 @@
 #include "dnsdb/zdb_zone_load.h"
 #include "dnsdb/rrsig.h"
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #include "dnsdb/rrsig.h"
 #endif
 
@@ -1014,7 +1014,7 @@ zdb_sanitize_rr_label_ext(zdb_sanitize_parms *parms, zdb_rr_label *label, dnsnam
     return SUCCESS;
 }
 
-#if HAS_NSEC3_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT
 
 static ya_result
 zdb_sanitize_zone_nsec3(zdb_sanitize_parms *parms)
@@ -1126,7 +1126,7 @@ zdb_sanitize_zone_ex(zdb_zone *zone, struct zdb_zone_load_parms *load_parms)
 
     if(ISOK(return_code))
     {
-#if HAS_NSEC3_SUPPORT 
+#if ZDB_HAS_NSEC3_SUPPORT
         if((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3) != 0)
         {
             if(zdb_zone_is_nsec3(zone))
@@ -1167,7 +1167,7 @@ zdb_sanitize_zone(zdb_zone *zone)
 
     if(ISOK(return_code))
     {
-#if HAS_NSEC3_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT
         if((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3) != 0)
         {
             if(zdb_zone_is_nsec3(zone))

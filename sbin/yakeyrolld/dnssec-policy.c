@@ -59,10 +59,6 @@
 #include <dnsdb/nsec.h>
 #include <dnsdb/nsec3.h>
 
-#if HAS_EVENT_DYNAMIC_MODULE
-#include "dynamic-module-handler.h"
-#endif
-
 #ifndef HAS_DYNUPDATE_DIFF_ENABLED
 #error "HAS_DYNUPDATE_DIFF_ENABLED not defined"
 #endif
@@ -2045,6 +2041,9 @@ dnssec_policy_release(dnssec_policy *dp)
     if(--dp->rc == 0)
     {
         free(dp->name);
+#if DEBUG
+        dp->name = NULL;
+#endif
         for(int i = 0; i <= ptr_vector_last_index(&dp->key_suite); ++i)
         {
             dnssec_policy_key_suite *dpks = (dnssec_policy_key_suite*)ptr_vector_get(&dp->key_suite, i);
@@ -2131,9 +2130,9 @@ dnssec_policy_key_roll_keys_generate_at(keyroll_t *keyroll, struct dnssec_policy
         {
             dnssec_key *key = (dnssec_key*)ptr_vector_get(key_roll_keys_vector, i);
 
+#if DEBUG
             bool print_details = (i > MAX(0, ptr_vector_last_index(key_roll_keys_vector) - 3));
 
-#if DEBUG
             if(print_details)
             {
                 log_debug("dnssec-policy: %s: %s: key %05d/%d timings: %U %U %U %U %U [%i / %i]",

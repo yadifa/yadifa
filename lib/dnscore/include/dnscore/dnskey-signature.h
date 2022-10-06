@@ -75,9 +75,8 @@ struct dnskey_signature
     resource_record_view *rr_view;
     u32 inception;
     u32 expiration;
-    unsigned int is_canonised:1, has_digest:1, inception_set:1, expiration_set:1, reserved:4,
-                key_algorithm:8,
-                digest_size:8;
+    u32 digest_size; /// @note 20211202 edf -- MUST be 32 bits to accomodate EDDSA
+    unsigned int is_canonised:1, has_digest:1, inception_set:1, expiration_set:1, reserved:4, key_algorithm:8;
     //u8 digest_buffer[DIGEST_BUFFER_SIZE];
     digest_s digest_ctx;
 };

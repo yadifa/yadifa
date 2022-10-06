@@ -427,10 +427,8 @@ zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata* * restrict t
      * Should return a stack of zones
      */
 
-#ifdef HAS_DYNAMIC_PROVISIONING
     zdb_lock(db, ZDB_MUTEX_READER); // zdb_query_ip_records
-#endif
-    
+
     zdb_zone_label_pointer_array zone_label_stack;
 
     s32 top = zdb_zone_label_match(db, &name, zone_label_stack);
@@ -457,11 +455,7 @@ zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata* * restrict t
                 {
                     *ttlrdata_out_a = a;
                     *ttlrdata_out_aaaa = aaaa;
-                    
-#ifdef HAS_DYNAMIC_PROVISIONING
                     zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query_ip_records (success)
-#endif
-                    
                     return SUCCESS;
                 }
             }
@@ -470,11 +464,7 @@ zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata* * restrict t
         sp--;
     }
 
-
-
-#ifdef HAS_DYNAMIC_PROVISIONING
     zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query_ip_records (failure)
-#endif
     
     return ZDB_ERROR_KEY_NOTFOUND;
 }
@@ -487,15 +477,17 @@ zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata* * restrict t
  * Given the nature of the list, what is returned is a copy.
  * The call locks the database for reading, then each involved zone for reading.
  * Locks are released before the function returns.
+ * The port field of the host_address is set to a given port (network order)
  * 
  * @param db database
  * @param name_ fqdn
  * @param target_list list
+ * @param network_order_port u16
  * @return 
  */
 
 ya_result
-zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
+zdb_append_ip_records_with_port_ne(zdb* db, const u8* name_, host_address *target_list, u16 network_order_port)
 {
     yassert(target_list != NULL);
     
@@ -507,10 +499,8 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
      * Should return a stack of zones
      */
 
-#ifdef HAS_DYNAMIC_PROVISIONING
     zdb_lock(db, ZDB_MUTEX_READER); // zdb_query_ip_records
-#endif
-    
+
     zdb_zone_label_pointer_array zone_label_stack;
 
     s32 top = zdb_zone_label_match(db, &name, zone_label_stack);
@@ -538,7 +528,7 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
                 rrset = zdb_record_find(&rr_label->resource_record_set, TYPE_A); // zone is locked
                 while(rrset != NULL)
                 {
-                    host_address_append_ipv4(target_list, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset), NU16(DNS_DEFAULT_PORT));
+                    host_address_append_ipv4(target_list, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset), network_order_port);
                     ++ret;
                     rrset = rrset->next;
                 }
@@ -546,7 +536,7 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
                 rrset = zdb_record_find(&rr_label->resource_record_set, TYPE_AAAA); // zone is locked
                 while(rrset != NULL)
                 {
-                    host_address_append_ipv6(target_list, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset), NU16(DNS_DEFAULT_PORT));
+                    host_address_append_ipv6(target_list, ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset), network_order_port);
                     ++ret;
                     rrset = rrset->next;
                 }
@@ -564,13 +554,29 @@ zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
         sp--;
     }
 
-
-
-#ifdef HAS_DYNAMIC_PROVISIONING
     zdb_unlock(db, ZDB_MUTEX_READER); // zdb_query_ip_records (failure)
-#endif
-    
+
     return ZDB_ERROR_KEY_NOTFOUND;
+}
+
+/**
+ *
+ * Appends all A and AAAA records found in the database for the given fqdn
+ * Given the nature of the list, what is returned is a copy.
+ * The call locks the database for reading, then each involved zone for reading.
+ * Locks are released before the function returns.
+ *
+ * @param db database
+ * @param name_ fqdn
+ * @param target_list list
+ * @return
+ */
+
+ya_result
+zdb_append_ip_records(zdb* db, const u8* name_, host_address *target_list)
+{
+    ya_result ret = zdb_append_ip_records_with_port_ne(db, name_, target_list, NU16(DNS_DEFAULT_PORT));
+    return ret;
 }
 
 /** @brief Destroys the database

@@ -292,7 +292,7 @@ thread_pool_random_key_finalize(void *unused)
 }
 
 static void
-thread_pool_random_key_init()
+thread_pool_random_key_init(void)
 {
 #if VERBOSE_THREAD_LOG >= 2
     log_debug("thread: random thread-local key init");
@@ -307,7 +307,7 @@ thread_pool_random_key_init()
 }
 
 static void
-thread_pool_thread_index_init()
+thread_pool_thread_index_init(void)
 {
 #if VERBOSE_THREAD_LOG >= 2
     log_debug("thread: random thread-local key init");

@@ -73,9 +73,9 @@ CONFIG_STRING(        id,                   NULL                                
 CONFIG_STRING(        description,          NULL                                )
 CONFIG_STRING_ARRAY(  key_suite,            NULL,   DP_KEY_SUITE_SIZE           )
 CONFIG_U32_RANGE(     ds_ttl,               "3600", 0, MAX_S32                  )
-CONFIG_FLAG8(         weaker_key_removal,   "0",    flags, DP_FLAGS_WEAKER_KEY  )
-CONFIG_FLAG8(         stronger_key_removal, "0",    flags, DP_FLAGS_STRONGER_KEY)
-CONFIG_U8(            max_key,              "2"                                 ) /// @todo 20160520 gve -- check if this per key or key_suite
+CONFIG_FLAG8(         weaker_key_removal,   "0",    flags, DP_FLAGS_WEAKER_KEY  ) /// @note 20211109 edf -- unused, for now
+CONFIG_FLAG8(         stronger_key_removal, "0",    flags, DP_FLAGS_STRONGER_KEY) /// @note 20211109 edf -- unused, for now
+CONFIG_U8(            max_key,              "2"                                 ) /// @note it's the maximum number of key suites
 
          /*           alias,                aliased */
 CONFIG_ALIAS(         max_keys,             max_key                             )
@@ -100,10 +100,11 @@ config_section_dnssec_policy_set_wild(struct config_section_descriptor_s *csd, c
 
 
 static ya_result
-config_section_dnssec_policy_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_dnssec_policy_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
+    (void)context;
     
     if(key != NULL)
     {

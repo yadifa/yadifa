@@ -282,7 +282,7 @@ static inline s32 parse_copy_word(char *dst, size_t dst_size, const char *txt)
     
     *dst = '\0';
     
-    return dst - base;
+    return (s32)(dst - base);
 }
 
 static inline s32 parse_copy_next_word(char *dst, size_t dst_size, const char *txt)
@@ -292,7 +292,7 @@ static inline s32 parse_copy_next_word(char *dst, size_t dst_size, const char *t
     
     if(n >= 0)
     {
-        n += non_blank_txt - txt;
+        n += (s32)(non_blank_txt - txt);
     }
     
     return n;

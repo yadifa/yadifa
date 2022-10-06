@@ -70,6 +70,8 @@
 #include <dnsdb/dnssec-keystore.h>
 #include "dnssec-policy.h"
 #include <dnsdb/nsec3.h>
+#include <dnscore/tcp_io_stream.h>
+
 #endif
 
 #include "server.h"
@@ -209,7 +211,7 @@ zone_alloc()
     zone_desc->qclass = CLASS_IN;
     
 #if ZDB_HAS_DNSSEC_SUPPORT
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
     
     zone_desc->signature.sig_validity_interval = MAX_S32;
 
@@ -222,7 +224,7 @@ zone_alloc()
     
     zone_desc->signature.scheduled_sig_invalid_first = MAX_S32;
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
     ptr_set_init(&zone_desc->dnssec_policy_processed_key_suites);
     zone_desc->dnssec_policy_processed_key_suites.compare = ptr_set_asciizp_node_compare;
 #endif
@@ -262,8 +264,9 @@ zone_clone(zone_desc_s *zone_desc)
 
     clone->masters = host_address_copy_list(zone_desc->masters);
     clone->notifies = host_address_copy_list(zone_desc->notifies);
+    clone->transfer_source = host_address_copy_list(zone_desc->transfer_source);
     
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     /*
     acl_unmerge_access_control(&zone_setup->ac, &g_config->ac); COMMENTED OUT
     acl_access_control_clear(&zone_setup->ac);                COMMENTED OUT
@@ -277,7 +280,7 @@ zone_clone(zone_desc_s *zone_desc)
     
     clone->rc = 1;
     
-#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT && DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
     if(clone->dnssec_policy != NULL)
     {
         dnssec_policy_acquire(clone->dnssec_policy);
@@ -387,8 +390,11 @@ zone_release(zone_desc_s *zone_desc)
 
             host_address_delete_list(zone_desc->notifies);
             zone_desc->notifies = NULL;
+
+            host_address_delete_list(zone_desc->transfer_source);
+            zone_desc->transfer_source = NULL;
             
-#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT && DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
             if(zone_desc->dnssec_policy != NULL)
             {
                 dnssec_policy_release(zone_desc->dnssec_policy);
@@ -396,7 +402,7 @@ zone_release(zone_desc_s *zone_desc)
             }
 #endif
 
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
             acl_unmerge_access_control(&zone_desc->ac);
             acl_access_control_clear(&zone_desc->ac);
 #endif
@@ -528,7 +534,7 @@ zone_complete_settings(zone_desc_s *zone_desc)
             return DATABASE_ZONE_MISSING_MASTER;
         }
     }
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
     else if(zone_desc->type == ZT_MASTER)
     {
         if(zone_desc->file_name == NULL || zone_desc->file_name[0] == '\0')
@@ -575,7 +581,7 @@ zone_complete_settings(zone_desc_s *zone_desc)
         }
     }
         
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     // acl
     
     acl_merge_access_control(&zone_desc->ac, g_config->ac);
@@ -650,22 +656,23 @@ zone_desc_match(const zone_desc_s *a, const zone_desc_s *b)
     }
     ZONE_DESC_EQUALS_FIELD_PTR(a->masters,b->masters,host_address_list_equals, ZONE_DESC_MATCH_MASTERS);
     ZONE_DESC_EQUALS_FIELD_PTR(a->notifies,b->notifies,host_address_list_equals, ZONE_DESC_MATCH_NOTIFIES);
+    ZONE_DESC_EQUALS_FIELD_PTR(a->transfer_source,b->transfer_source,host_address_list_equals, ZONE_DESC_MATCH_TRANSFERSOURCE);
     
-#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT && DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
     if(a->dnssec_policy != b->dnssec_policy)
     {
         return_code |= ZONE_DESC_MATCH_DNSSEC_POLICIES;
     }
 #endif
 
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     if(!acl_address_control_equals(&a->ac, &b->ac))
     {
         return_code |= ZONE_DESC_MATCH_ACL;
     }
 #endif
     
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL && DNSCORE_HAS_DYNAMIC_PROVISIONING
     if(memcmp(&a->dynamic_provisioning, &b->dynamic_provisioning, sizeof(dynamic_provisioning_s)) != 0)
     {
         return_code |= ZONE_DESC_MATCH_DYNAMIC;
@@ -684,7 +691,7 @@ zone_desc_match(const zone_desc_s *a, const zone_desc_s *b)
         return_code |= ZONE_DESC_MATCH_NOTIFY;
     }
     
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
     if(a->dnssec_mode != b->dnssec_mode)
     {
         return_code |= ZONE_DESC_MATCH_DNSSEC_MODE;
@@ -1299,11 +1306,11 @@ zone_setdefaults(zone_desc_s *zone_desc)
     
     zone_desc->_status_flags = ZONE_STATUS_STARTING_UP;
     
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     acl_merge_access_control(&zone_desc->ac, g_config->ac);
 #endif
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 
     /*
      * The newly generated signatures will be valid for that amount of days
@@ -1348,6 +1355,8 @@ zone_setdefaults(zone_desc_s *zone_desc)
 
     host_address_set_default_port_value(zone_desc->masters, ntohs(port));
     host_address_set_default_port_value(zone_desc->notifies, ntohs(port));
+    host_address_set_port_value(zone_desc->transfer_source, 0);
+    // note: transfer_source ignores the port
 
     // seems incorrect here : acl_access_control_copy(&zone_desc->ac, &g_config->ac);
 }
@@ -1383,7 +1392,9 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
 #if ZDB_HAS_DNSSEC_SUPPORT
         desc_zone_desc->dnssec_mode = src_zone_desc->dnssec_mode;
 #endif
+#if HAS_DYNAMIC_PROVISIONING
         desc_zone_desc->dynamic_provisioning.flags = desc_zone_desc->dynamic_provisioning.flags;
+#endif
         desc_zone_desc->_origin = dnsname_dup(zone_origin(src_zone_desc));
         desc_zone_desc->_status_flags = src_zone_desc->_status_flags;
         if(src_zone_desc->file_name != NULL)
@@ -1394,11 +1405,11 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
         changed = TRUE;
     }
         
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     acl_access_control_copy(&desc_zone_desc->ac, &src_zone_desc->ac);
 #endif
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 
     /*
      * The newly generated signatures will be valid for that amount of days
@@ -1474,6 +1485,7 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
     
     changed |= host_address_update_host_address_list(&desc_zone_desc->masters, src_zone_desc->masters);
     changed |= host_address_update_host_address_list(&desc_zone_desc->notifies, src_zone_desc->notifies);
+    changed |= host_address_update_host_address_list(&desc_zone_desc->transfer_source, src_zone_desc->transfer_source);
     changed |= host_address_update_host_address_list(&desc_zone_desc->slaves, src_zone_desc->slaves);
     
     if(src_zone_desc->file_name != NULL)
@@ -1486,7 +1498,7 @@ zone_setwithzone(zone_desc_s *desc_zone_desc, zone_desc_s *src_zone_desc)
         }
     }
     
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT && ZDB_HAS_DYNAMIC_PROVISIONING
     // master zone without a file name ...
             
     if((desc_zone_desc->file_name == NULL) && (desc_zone_desc->type == ZT_MASTER))
@@ -1632,7 +1644,7 @@ zone_desc_status_flags_long_format(const void *value, output_stream *os, s32 pad
     }
 }
 
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
 /**
  * 
  * helper formatting tool to print the ACL fields of the zone descriptor
@@ -1719,8 +1731,10 @@ zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, co
             text, FQDNNULL(zone_origin(zone_desc)), zone_desc->masters);
     logger_handle_msg(handle, level, "%s: %{dnsname} notified=%{hostaddrlist}",
             text, FQDNNULL(zone_origin(zone_desc)), zone_desc->notifies);
+    logger_handle_msg(handle, level, "%s: %{dnsname} transfer-source=%{hostaddrlist}",
+                      text, FQDNNULL(zone_origin(zone_desc)), zone_desc->transfer_source);
     
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     format_writer status_ams_fw = {zone_desc_ams_format, &zone_desc->ac.allow_query};
     logger_handle_msg(handle, level, "%s: %{dnsname} allow query=%w", text, FQDNNULL(zone_origin(zone_desc)), &status_ams_fw);
     
@@ -1738,8 +1752,7 @@ zone_desc_log(logger_handle* handle, u32 level, const zone_desc_s *zone_desc, co
 #endif
     
 #if HAS_DYNAMIC_PROVISIONING
-    
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     status_ams_fw.value = &zone_desc->ac.allow_control;
 
     logger_handle_msg(handle, level, "%s: %{dnsname} allow control=%w", text, FQDNNULL(zone_origin(zone_desc)), &status_ams_fw);
@@ -2000,6 +2013,94 @@ u32
 zone_get_status(const zone_desc_s *zone_desc)
 {
     return zone_desc->_status_flags;
+}
+
+host_address*
+zone_transfer_source_copy(const u8 *domain)
+{
+    host_address *transfer_source;
+
+    zone_desc_s *zone_desc = zone_acquirebydnsname(domain);
+    if(zone_desc != NULL)
+    {
+        if(zone_desc->transfer_source != NULL)
+        {
+            transfer_source = host_address_copy_list(zone_desc->transfer_source);
+        }
+        else
+        {
+            transfer_source = NULL;
+        }
+        zone_release(zone_desc);
+    }
+    else if(g_config->transfer_source != NULL)
+    {
+        transfer_source = host_address_copy_list(g_config->transfer_source);
+    }
+    else
+    {
+        transfer_source = NULL;
+    }
+
+    return transfer_source;
+}
+
+ya_result
+zone_transfer_source_tcp_connect(const host_address *server, host_address **current_transfer_sourcep, input_stream *is, output_stream *os, int to_sec)
+{
+    if((server == NULL) || (is == NULL) || (os == NULL) || (current_transfer_sourcep == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+    host_address *current_transfer_source = *current_transfer_sourcep;
+
+    ya_result ret;
+    if(current_transfer_source == NULL)
+    {
+        log_debug("zone_transfer_source_tcp_connect: connection to %{hostaddr}", server);
+
+        ret = tcp_input_output_stream_connect_host_address(server, is, os, to_sec);
+    }
+    else
+    {
+        ret = ERROR; // generic error
+
+        for(;;)
+        {
+            if(current_transfer_source != NULL)
+            {
+                log_debug("zone_transfer_source_tcp_connect: connection to %{hostaddr} binding to %{hostaddr}", server, current_transfer_source);
+
+                if(ISOK(ret = tcp_input_output_stream_connect_host_address_ex(server, is, os, current_transfer_source, g_config->xfr_connect_timeout)))
+                {
+                    *current_transfer_sourcep = current_transfer_source;
+                    break;
+                }
+
+                if(!((ret == MAKE_ERRNO_ERROR(EADDRNOTAVAIL)) || (ret == MAKE_ERRNO_ERROR(EINVAL))))
+                {
+                    *current_transfer_sourcep = current_transfer_source;
+                    break;
+                }
+
+                current_transfer_source = current_transfer_source->next;
+
+                while((current_transfer_source != NULL) && (server->version != current_transfer_source->version))
+                {
+                    current_transfer_source = current_transfer_source->next;
+                }
+            }
+            else
+            {
+                log_warn("axfr: could not find a valid bind point to query a transfer from %{hostaddr}", server);
+                *current_transfer_sourcep = NULL;
+                break;
+            }
+        }
+    }
+
+    return ret;
 }
 
 #if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT

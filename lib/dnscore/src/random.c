@@ -119,7 +119,7 @@ random_init_auto()
 {
     u64 now = timeus();
     now ^= (now >> 32);
-    now ^= (u32)thread_self();
+    now ^= (u32)(intptr)thread_self();
 
     now ^= smp_int_get(&random_serial);
     smp_int_add(&random_serial, 0xc18e2a1d);

@@ -63,7 +63,7 @@ extern logger_handle *g_system_logger;
 #define DNSUDPHS_TAG 0x5348504455534e44
 
 
-#define HAS_TC_FALLBACK_TO_TCP_SUPPORT 1
+#define DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT 1
 
 #define DNS_UDP_SIMPLE_QUERY 0
 
@@ -131,7 +131,7 @@ static volatile u32 recvfrom_epoch = 0;
 static volatile u32 recvfrom_total = 0;
 static volatile u32 recvfrom_packets = 0;
 
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT // local define
 static struct thread_pool_s *tcp_query_thread_pool = NULL;
 #endif
 
@@ -575,7 +575,7 @@ dns_udp_handler_stop()
     }
 
 
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
     if(tcp_query_thread_pool != NULL)
     {
         if(FAIL(err0 = thread_pool_destroy(tcp_query_thread_pool)))
@@ -777,13 +777,13 @@ static void *dns_udp_simple_message_answer_call_handlers_thread(void* arg)
     }
 
 #if DEBUG
-    if(simple_message->rc.value > 1)
+    if(smp_int_get(&simple_message->rc) > 1)
     {
-        log_warn("receive: message RC is not 1 (%i)", simple_message->rc.value);
+        log_warn("receive: message RC is not 1 (%i)", smp_int_get(&simple_message->rc));
     }
 #endif
 
-    assert(simple_message->rc.value > 0);
+    assert(smp_int_get(&simple_message->rc) > 0);
 
     // there is no need to retain, the reference from the collection has not been decreased yet
     simple_message->async_node.async->handler(simple_message->async_node.async);
@@ -805,7 +805,7 @@ dns_udp_simple_message_answer_call_handlers(dns_simple_message_s *simple_message
     thread_pool_enqueue_call(dns_udp_callback_tp, dns_udp_simple_message_answer_call_handlers_thread, simple_message, NULL, "dns-cb");
 }
 
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
 
 #define DNSUTQTP_TAG 0x5054515455534e44
 
@@ -1006,9 +1006,8 @@ dns_udp_send_simple_message(const host_address* name_server, const u8 *fqdn, u16
 #endif
     simple_message->owner = 0;
     
-    smp_int_init(&simple_message->rc);  // sets it to 0
-    simple_message->rc.value = 1;       // no need to lock it yet to change it to 1
-    
+    smp_int_init_set(&simple_message->rc, 1); // sets it to 1
+
     dnsname_canonize(fqdn, simple_message->fqdn);
     
     log_debug5("new message@%p: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr}", simple_message, simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server);
@@ -1057,9 +1056,8 @@ dns_udp_send_recursive_message(const host_address* name_server, const u8 *fqdn, 
     cond_init(&simple_message->mtx_cond);
 #endif
     simple_message->owner = 0;
-    smp_int_init(&simple_message->rc); // sets it to 0
-    simple_message->rc.value = 1;       // no need to lock it yet to change it to 1
-    
+    smp_int_init_set(&simple_message->rc, 1); // sets it to 1
+
     dnsname_canonize(fqdn, simple_message->fqdn);
     
     log_debug5("new message@%p: %{dnsname} %{dnstype} %{dnsclass} to %{hostaddr}", simple_message, simple_message->fqdn, &simple_message->qtype, &simple_message->qclass, simple_message->name_server);
@@ -1172,7 +1170,7 @@ dns_udp_send_simple_message_sync(const host_address* name_server, const u8 *fqdn
 bool
 dns_udp_simple_message_trylock(dns_simple_message_s *message)
 {
-    log_debug7("dns_udp_simple_message_lock(%p) try locking (#%i)", message, message->rc.value);
+    log_debug7("dns_udp_simple_message_lock(%p) try locking (#%i)", message, smp_int_get(&message->rc));
     
     if(group_mutex_trylock(&message->mtx, GROUP_MUTEX_WRITE))
     {
@@ -1336,7 +1334,7 @@ dns_udp_simple_message_release(dns_simple_message_s *simple_message)
 
         memset(simple_message, 0xd5, sizeof(dns_simple_message_s));
 #if DEBUG
-        simple_message->rc.value = -12345678;
+        smp_int_set(&simple_message->rc, -12345678);
 #endif
         simple_message->status = status;
         
@@ -1939,7 +1937,7 @@ struct dns_udp_receive_ctx
     message_4k *messages; // = malloc(message_buffer_count * sizeof(message_4k));
     aligned_socketaddress *addresses; // = malloc(message_buffer_count * sizeof(socketaddress));
     size_t count;                                   // total number of slots
-#ifndef WIN32
+#if __unix__
     size_t read_index __attribute__((aligned(64))); // where incoming messages can be read
     size_t proc_index __attribute__((aligned(64))); // where processor can get its next one
     //size_t read_avail __attribute__((aligned(64))); // how many incoming slots are available
@@ -2315,9 +2313,9 @@ dns_udp_receive_process_service(struct service_worker_s *worker)
 
                     // RC is supposed to be 1
 #if DEBUG
-                    if(simple_message->rc.value != 1)
+                    if(smp_int_get(&simple_message->rc) != 1)
                     {
-                        log_warn("receive: message RC is not 1 (%i)", simple_message->rc.value);
+                        log_warn("receive: message RC is not 1 (%i)", smp_int_get(&simple_message->rc));
                     }
 #endif
                     simple_message->received_time_us = timeus();
@@ -2325,7 +2323,7 @@ dns_udp_receive_process_service(struct service_worker_s *worker)
                     double dts = dt;
                     dts /= ONE_SECOND_US_F;
 
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
                     if(!truncated)
                     {
 #endif
@@ -2341,7 +2339,7 @@ dns_udp_receive_process_service(struct service_worker_s *worker)
                         // when the pool has reached peak capacity, allocation returns NULL
 
                         mesg = dns_udp_allocate_message_data(worker);
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
                     }
                     else
                     {
@@ -2843,9 +2841,9 @@ dns_udp_receive_service_hook(dns_simple_message_s *simple_message, message_data 
                 // RC is supposed to be 1
 
 #if DEBUG
-                if(simple_message_cached->rc.value != 1)
+                if(smp_int_get(&simple_message_cached->rc) != 1)
                 {
-                    log_warn("receive: message RC is not 1 (%i) (hook)", simple_message_cached->rc.value);
+                    log_warn("receive: message RC is not 1 (%i) (hook)", smp_int_get(&simple_message_cached->rc));
                 }
 #endif
                 simple_message_cached->received_time_us = timeus();
@@ -2853,7 +2851,7 @@ dns_udp_receive_service_hook(dns_simple_message_s *simple_message, message_data 
                 double dts = dt;
                 dts /= ONE_SECOND_US_F;
 
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
                 if(!truncated)
                 {
 #endif
@@ -2868,7 +2866,7 @@ dns_udp_receive_service_hook(dns_simple_message_s *simple_message, message_data 
 
                     // allocate the next buffer, handle the hard_limit of the pool:
                     // when the pool has reached peak capacity, allocation returns NULL
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
 
                 }
                 else
@@ -3037,7 +3035,7 @@ dns_udp_handler_init()
                 {
                     if(ISOK(err = service_init(&dns_udp_timeout_handler, dns_udp_timeout_service, "qts")))
                     {
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
                         if((tcp_query_thread_pool = thread_pool_init_ex(dns_udp_settings->tcp_thread_pool_size, 0x4000, "dnstcpqr")) != NULL)
                         {
 #endif   
@@ -3071,7 +3069,7 @@ dns_udp_handler_init()
                             pool_finalize(&dns_simple_message_pool);
                             pool_finalize(&dns_simple_message_async_node_pool);
 
-#if HAS_TC_FALLBACK_TO_TCP_SUPPORT
+#if DNS_UDP_TC_FALLBACK_TO_TCP_SUPPORT
                             thread_pool_destroy(tcp_query_thread_pool);
                             tcp_query_thread_pool = NULL;
                         }

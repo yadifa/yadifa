@@ -57,10 +57,10 @@
 #include "dnscore/dnskey.h"
 #include "dnscore/dnskey_rsa.h"
 #include "dnscore/dnskey_dsa.h"
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
 #include "dnscore/dnskey_ecdsa.h"
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
 #include "dnscore/dnskey_eddsa.h"
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
@@ -72,6 +72,7 @@
 #include "dnscore/file_input_stream.h"
 #include "dnscore/file_output_stream.h"
 #include "dnscore/buffer_output_stream.h"
+#include "dnscore/checked_output_stream.h"
 #include "dnscore/parser.h"
 #include "dnscore/zalloc.h"
 #include "dnscore/logger.h"
@@ -126,11 +127,11 @@ static const char *dsasha1nsec3_names[] = {DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME,"
 static const char *rsasha1nsec3_names[] = {DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME,"7", NULL};
 static const char *rsasha256_names[] = {DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME,"8", NULL};
 static const char *rsasha512_names[] = {DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME,"10", NULL};
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
 static const char *ecdsap256sha256_names[] = {DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME,"13", NULL};
 static const char *ecdsap384sha384_names[] = {DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME,"14", NULL};
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
 static const char *ed25619_names[] = { DNSKEY_ALGORITHM_ED25519_NAME, "15", NULL};
 static const char *ed448_names[] = { DNSKEY_ALGORITHM_ED448_NAME, "16", NULL};
 #endif
@@ -210,7 +211,7 @@ static const struct dnskey_features dnskey_supported_algorithms[] =
     },
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 11
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 12
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
     {
         ecdsap256sha256_names,
         256,256,
@@ -233,7 +234,7 @@ static const struct dnskey_features dnskey_supported_algorithms[] =
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 13
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 14
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
         {
         ed25619_names,
         0,0,
@@ -554,8 +555,6 @@ dnskey_get_tag_from_rdata(const u8* dnskey_rdata, u32 dnskey_rdata_size)
     return (u16)sum;
 }
 
-
-
 /**
  * Initialises the context for a key algorithm.
  * 
@@ -585,7 +584,7 @@ dnskey_digest_init(digest_s *ctx, u8 algorithm)
         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             digest_sha512_init(ctx);
             break;
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
         case DNSKEY_ALGORITHM_ED25519:
         case DNSKEY_ALGORITHM_ED448:
             digest_rawdata_init(ctx);
@@ -893,13 +892,13 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_ke
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
             return_value = dnskey_dsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
             return_value = dnskey_ecdsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
         case DNSKEY_ALGORITHM_ED25519:
         case DNSKEY_ALGORITHM_ED448:
             return_value = dnskey_eddsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
@@ -1495,7 +1494,10 @@ dnskey_new_public_key_from_stream(input_stream *is, dnssec_key** keyp)
                 if(ret & PARSER_EOF)
                 {
                     input_stream *completed_stream = parser_pop_stream(&parser);
-                    input_stream_close(completed_stream);
+                    if(completed_stream != is)
+                    {
+                        input_stream_close(completed_stream);
+                    }
                     ret = UNEXPECTED_EOF;
                     break;
                 }
@@ -1837,7 +1839,7 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                             dnskey_dsa_parse_init(&dnskey_parser);
                             break;
                         }
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
                         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
                         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
                         {
@@ -1845,7 +1847,7 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                             break;
                         }
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
                         case DNSKEY_ALGORITHM_ED25519:
                         case DNSKEY_ALGORITHM_ED448:
                         {
@@ -2057,11 +2059,16 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
  * @return
  */
 
-void
+ya_result
 dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os)
 {
     yassert(os != NULL);
     yassert(key != NULL);
+
+    checked_output_stream_data_t chkos_data;
+    output_stream chkos;
+    checked_output_stream_init(&chkos, os, &chkos_data);
+    os = &chkos;
 
     const char *key_algorithm_name = dnskey_get_algorithm_name_from_value(key->algorithm);
 
@@ -2108,6 +2115,7 @@ dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os)
         osformatln(os, "Delete: %w", &epoch);
     }
 
+    return checked_output_stream_error(os);
 }
 
 /**
@@ -2132,11 +2140,14 @@ dnskey_store_private_key_to_file(dnssec_key *key, const char *filename)
     {
         buffer_output_stream_init(&os, &os, 4096);
 
-        dnskey_store_private_key_to_stream(key, &os);
+        ret = dnskey_store_private_key_to_stream(key, &os);
 
         output_stream_close(&os);
-        
-        ret = SUCCESS;
+
+        if(FAIL(ret))
+        {
+            unlink(filename);
+        }
     }
     
     return ret;
@@ -2158,13 +2169,18 @@ dnskey_store_public_key_to_stream(dnssec_key *key, output_stream *os)
 
     if(key->vtbl->dnssec_key_rdatasize(key) < sizeof(rdata))
     {
+        checked_output_stream_data_t chkos_data;
+        output_stream chkos;
+        checked_output_stream_init(&chkos, os, &chkos_data);
+        os = &chkos;
+
         int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
         rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
         osformatln(os, "; This is a key, keyid %d, for domain %{dnsname}", dnskey_get_tag(key), key->owner_name);
         osformatln(os, "%{dnsname} IN %{typerdatadesc}", key->owner_name, &dnskeyrdata);
 
-        return SUCCESS;
+        return checked_output_stream_error(os);
     }
     else
     {
@@ -2298,7 +2314,11 @@ dnskey_store_keypair_to_dir(dnssec_key *key, const char *dir)
     
     if(ISOK(ret = dnskey_store_public_key_to_dir(key, dir)))
     {
-        ret = dnskey_store_private_key_to_dir(key, dir);
+        if(FAIL(ret = dnskey_store_private_key_to_dir(key, dir)))
+        {
+            // delete the public key file
+            dnskey_delete_public_key_from_dir(key, dir);
+        }
     }
     
     return ret;
@@ -2672,13 +2692,13 @@ ya_result dnskey_newinstance(u32 size, u8 algorithm, u16 flags, const char* orig
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
             ret = dnskey_dsa_newinstance(size, algorithm, flags, origin, out_key);
             break;
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
             ret = dnskey_ecdsa_newinstance(size, algorithm, flags, origin, out_key);
             break;
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
         case DNSKEY_ALGORITHM_ED25519:
         case DNSKEY_ALGORITHM_ED448:
             ret = dnskey_eddsa_newinstance(size, algorithm, flags, origin, out_key);

@@ -61,7 +61,7 @@
 #include "dnscore/signals.h"
 
 #include <fcntl.h>
-#ifndef WIN32
+#if __unix__
 #include <sys/resource.h>
 #endif
 #include <sys/time.h>
@@ -116,7 +116,7 @@ ttylog_err(const char *format, ...)
 int
 server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
 {
-#ifndef WIN32
+#if __unix__
     mode_t                                                         mask = 0;
     pid_t                                                               pid;
     struct sigaction                                                     sa;
@@ -211,7 +211,7 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     /* Set program in new session */
     setsid();
 
-#ifndef WIN32
+#if __unix__
     /* Ensure future opens won't allocate controlling TTYs */
     sa.sa_handler = SIG_IGN;
     sigemptyset(&sa.sa_mask);
@@ -277,7 +277,7 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     // Later, the "server" part will also be modifiable by the caller.
 
     char output_file[PATH_MAX];
-    snformat(output_file, sizeof(output_file), "/tmp/server-%013x-%05x.std.txt", timeus(), getpid());
+    snformat(output_file, sizeof(output_file), "/tmp/server-%013llx-%05x.std.txt", timeus(), getpid());
     debug_osformatln(termout,"redirecting all to '%s'\n", output_file);
     int file_flags = O_RDWR|O_CREAT|O_EXCL; // ensure no overwrite
 #else
@@ -345,8 +345,6 @@ server_setup_daemon_go_ex(bool parent_exit, bool child_logger_ownership)
     flushout();
 #endif
 
-
-
     log_debug("daemonize: start thread pools");
     
     thread_pool_start_all();
@@ -387,12 +385,12 @@ server_setup_env(pid_t *pid, char ** pid_file_pathp, uid_t uid, gid_t gid, u32 s
 {
     ya_result                                    return_code;
 
-    if((pid == NULL) || (pid_file_pathp == NULL) || (*pid_file_pathp == NULL))
+    if((pid_file_pathp == NULL) || (*pid_file_pathp == NULL))
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
 
-#ifndef WIN32
+#if __unix__
     if(setup_flags & SETUP_CORE_LIMITS)
     {
         struct rlimit core_limits = {RLIM_INFINITY, RLIM_INFINITY};

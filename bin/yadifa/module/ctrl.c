@@ -214,7 +214,7 @@ ctrl_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_
 
                 if(ISOK(ret))
                 {
-                    cmdline_state = keyword_value;
+                    // cmdline_state = keyword_value;
                     u16 qtype = CTRL_CMD_STATE_TO_TYPE_CTRL[keyword_value];
                     const char * qtype_name = dns_type_get_name(qtype);
 
@@ -248,7 +248,7 @@ ctrl_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_
             case CTRL_CMD_STATE_ZONENOTIFY:
             {
                 ret = cmdline_get_opt_short(desc, "q", arg_name);
-                cmdline_state = CTRL_CMD_STATE_END;
+                // cmdline_state = CTRL_CMD_STATE_END;
                 break;
             }
             case CTRL_CMD_STATE_ZONESYNC:
@@ -260,13 +260,13 @@ ctrl_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_
                 {
                     g_yadifa_ctrl_settings.clean = TRUE;
                     ret = cmdline_get_opt_long(desc, "clean", NULL);
-                    cmdline_state = CTRL_CMD_STATE_END;
+                    // cmdline_state = CTRL_CMD_STATE_END;
                 }
                 else
                 {
                     ret = cmdline_get_opt_short(desc, "q", arg_name);
                 }
-                cmdline_state = CTRL_CMD_STATE_ZONESYNC_FQDN;
+                // cmdline_state = CTRL_CMD_STATE_ZONESYNC_FQDN;
                 break;
             }
             case CTRL_CMD_STATE_ZONESYNC_FQDN:
@@ -275,7 +275,7 @@ ctrl_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_
                 {
                     g_yadifa_ctrl_settings.clean = TRUE;
                     ret = cmdline_get_opt_long(desc, "clean", NULL);
-                    cmdline_state = CTRL_CMD_STATE_END;
+                    // cmdline_state = CTRL_CMD_STATE_END;
                 }
                 else
                 {
@@ -302,13 +302,13 @@ ctrl_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_
                     ret = PARSE_INVALID_ARGUMENT;
                 }
 
-                cmdline_state = CTRL_CMD_STATE_END;
+                // cmdline_state = CTRL_CMD_STATE_END;
                 break;
             }
             case CTRL_CMD_STATE_SRVLOGLEVEL:
             {
                 ret = cmdline_get_opt_short(desc, "l", arg_name);
-                cmdline_state = CTRL_CMD_STATE_END;
+                // cmdline_state = CTRL_CMD_STATE_END;
                 break;
             }
             case CTRL_CMD_STATE_SRVCFGRELOAD:

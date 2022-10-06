@@ -94,10 +94,11 @@ config_section_key_roll_set_wild(struct config_section_descriptor_s *csd, const 
 
 
 static ya_result
-config_section_key_roll_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_roll_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
+    (void)context;
 
     if(key != NULL)
     {
@@ -283,11 +284,11 @@ config_section_key_roll_stop(struct config_section_descriptor_s *csd)
     }
 #endif // if HAS_DS_PUBLICATION_SUPPORT
 
-    /// @todo 20160603 gve -- still needs to test if they exist
     if(krl_generate.type == krl_publish.type &&
        krl_generate.type == krl_activate.type &&
        krl_generate.type == krl_inactive.type &&
 #if HAS_DS_PUBLICATION_SUPPORT
+       /// @todo 20160603 gve -- still needs to test if they exist
        krl_generate.type == krl_remove.type &&
        krl_generate.type == krl_ds_publish.type &&
        krl_generate.type == krl_ds_remove.type)

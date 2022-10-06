@@ -422,7 +422,7 @@ usleep_until(s64 epoch_us)
     }
 }
 
-#ifndef WIN32
+#if __unix__
 time_t
 mkgmtime(const struct tm *tm_)
 {
@@ -432,7 +432,7 @@ mkgmtime(const struct tm *tm_)
 #else
     struct tm tm;
     memcpy(&tm, tm_, sizeof(struct tm));
-#ifndef WIN32
+#if __unix__
     tm.tm_zone = NULL;
     tm.tm_gmtoff = 0;
 #endif

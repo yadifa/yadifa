@@ -546,6 +546,8 @@ zdb_rr_label_find_path_from_name(zdb_zone *zone, const u8 *fqdn, zdb_rr_label** 
     return ret;
 }
 
+/// @note used in nsec3_chain_replay_execute
+
 zdb_rr_label*
 zdb_rr_label_find_from_name_delete_empty_terminal(zdb_zone* zone, const u8 *fqdn)
 {
@@ -560,7 +562,6 @@ zdb_rr_label_find_from_name_delete_empty_terminal(zdb_zone* zone, const u8 *fqdn
         ya_result ret;
 
         if(ISOK(ret = zdb_rr_label_delete_record_and_empty_terminal(zone, name, top - zone->origin_vector.size, TYPE_ANY)))
-        //if(ISOK(ret = zdb_rr_label_delete_record(zone, name, top - zone->origin_vector.size, TYPE_ANY)))
         {
             label = NULL;
         }
@@ -869,6 +870,8 @@ zdb_rr_label_delete_record_process_callback(void* a, dictionary_node* node)
  * @param[in] path_index the index of the top of the stack
  *
  * @return the matching label or NULL if it has not been found
+ *
+ * @note used in nsec_chain_replay_execute
  */
 
 ya_result
@@ -927,167 +930,8 @@ zdb_rr_label_delete_record(zdb_zone* zone, dnslabel_vector_reference path, s32 p
     return err;
 }
 
-/**
- * @brief INTERNAL callback
- */
 
-static ya_result
-zdb_rr_label_delete_record_and_empty_terminal_process_callback(void* a, dictionary_node* node)
-{
-    yassert(node != NULL);
-
-    zdb_rr_label *rr_label = (zdb_rr_label*)node;
-
-    zdb_rr_label_delete_record_process_callback_args* args = (zdb_rr_label_delete_record_process_callback_args*)a;
-
-    /*
-     * a points to a kind of dnsname and we are going in
-     *
-     * we go down and down each time calling the dictionnary process for the next level
-     *
-     * at the last level we return the "delete" code
-     *
-     * from there, the dictionnary processor will remove the entry
-     *
-     * at that point the calling dictionnary will know if he has to delete his node or not
-     *
-     * and so on and so forth ...
-     *
-     */
-
-    s32 top = args->top;
-    const u8* label = args->sections[top];
-
-    if(!dnslabel_equals(rr_label->name, label))
-    {
-        return COLLECTION_PROCESS_NEXT;
-    }
-
-    /* match */
-
-    if(top > 0)
-    {
-        /* go to the next level */
-
-        label = args->sections[--args->top];
-        hashcode hash = hash_dnslabel(label);
-
-        ya_result err;
-        if((err = dictionary_process(&rr_label->sub, hash, args, zdb_rr_label_delete_record_process_callback)) == COLLECTION_PROCESS_DELETENODE)
-        {
-            /* check the node for relevance, return "delete" if irrelevant */
-
-            if(zdb_rr_label_can_be_deleted(rr_label))
-            {
-                zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
-
-                return COLLECTION_PROCESS_DELETENODE;
-            }
-
-            if(rr_label->resource_record_set == NULL)
-            {
-                zdb_rr_label_flag_and(rr_label, ~(ZDB_RR_LABEL_HASCNAME|ZDB_RR_LABEL_DROPCNAME));
-            }
-
-            /* If the label just removed is a wildcard, then the parent is marked as not having a wildcard. */
-
-            if(IS_WILD_LABEL(label))
-            {
-                zdb_rr_label_flag_and(rr_label, ~ZDB_RR_LABEL_GOT_WILD);
-            }
-
-            return COLLECTION_PROCESS_STOP;
-        }
-
-        /* or ... stop */
-
-        return err;
-    }
-
-    /* We are at the right place for the record */
-
-    ya_result err;
-
-    if(ISOK(err = zdb_record_delete(&rr_label->resource_record_set, args->type))) /* FB done */
-    {
-        if(zdb_rr_label_cannot_be_deleted(rr_label))
-        {
-            /* If the type was XXXX and we deleted the last one the flag may change.
-             * NS => not a delegation anymore
-             * CNAME => no cname anymore
-             * ANY => nothing anymore (and should not be relevant anymore either ...)
-             */
-
-            u16 clear_mask = 0;
-            switch(args->type)
-            {
-                case TYPE_NS:
-                    clear_mask = ~ZDB_RR_LABEL_DELEGATION; // will clear "delegation"
-
-                    if(!ZDB_LABEL_UNDERDELEGATION(rr_label))
-                    {
-                        // must clear ZDB_RR_LABEL_UNDERDELEGATION from everything under this one
-                        zdb_rr_label_clear_underdelegation_under(rr_label);
-                    }
-
-                    break;
-                case TYPE_CNAME:
-                    clear_mask = ~ZDB_RR_LABEL_HASCNAME; // will clear "has cname"
-                    break;
-                case TYPE_ANY:
-                    clear_mask = ~(ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_DROPCNAME|ZDB_RR_LABEL_HASCNAME); // will clear "delegation", "drop cname" and "has cname"
-                    break;
-                case TYPE_RRSIG:
-                case TYPE_NSEC:
-                    break;
-                default:
-                    // checks if there are any other types than CNAME, RRSIG and NSEC, clears DROPCNAME if it's true
-                    clear_mask = ~ZDB_RR_LABEL_DROPCNAME; // will clear "drop cname"
-                    break;
-            }
-
-            zdb_rr_label_flag_and(rr_label, clear_mask); // clears the bits using the mask
-
-            return COLLECTION_PROCESS_STOP;
-        }
-        else
-        {
-            if(zdb_rr_label_has_dnssec_extension(rr_label))
-            {
-                // remove the extension
-
-                if(zdb_rr_label_nsec3any_linked(rr_label))
-                {
-                    // detach then destroy the ext
-                    nsec3_zone_label_detach(rr_label);
-                }
-                else if(zdb_rr_label_nsec_linked(rr_label))
-                {
-                    nsec_zone_label_detach(rr_label);
-                }
-#if DEBUG
-                else
-                {
-                    yassert(rr_label->nsec.dnssec == NULL);
-                }
-#endif
-            }
-        }
-
-        /* NOTE: the 'detach' is made by destroy : do not touch to the "next" field */
-        /* NOTE: the free of the node is made by destroy : do not do it */
-
-        /* dictionary destroy will take every item in the dictionary and
-         * iterate through it calling the passed function.
-         */
-
-        zdb_rr_label_free(args->zone, rr_label); // valid call because in a delete
-
-        return COLLECTION_PROCESS_DELETENODE;
-    }
-
-    return err /*COLLECTION_PROCESS_RETURNERROR*/;
-}
+/// @note used in zdb_rr_label_find_from_name_delete_empty_terminal -> nsec3_chain_replay_execute
 
 ya_result
 zdb_rr_label_delete_record_and_empty_terminal(zdb_zone* zone, dnslabel_vector_reference path, s32 path_index, u16 type)
@@ -1122,7 +966,7 @@ zdb_rr_label_delete_record_and_empty_terminal(zdb_zone* zone, dnslabel_vector_re
 
     ya_result err;
 
-    if((err = dictionary_process(&apex->sub, hash, &args, zdb_rr_label_delete_record_and_empty_terminal_process_callback)) == COLLECTION_PROCESS_DELETENODE)
+    if((err = dictionary_process(&apex->sub, hash, &args, zdb_rr_label_delete_record_process_callback)) == COLLECTION_PROCESS_DELETENODE)
     {
         if(zdb_rr_label_can_be_deleted(apex))
         {
@@ -1144,7 +988,6 @@ zdb_rr_label_delete_record_and_empty_terminal(zdb_zone* zone, dnslabel_vector_re
 
     return err;
 }
-
 
 typedef struct zdb_rr_label_delete_record_exact_process_callback_args zdb_rr_label_delete_record_exact_process_callback_args;
 

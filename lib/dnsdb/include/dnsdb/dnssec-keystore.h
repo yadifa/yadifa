@@ -181,10 +181,26 @@ dnssec_key *dnssec_keystore_acquire_key_from_fqdn_with_tag(const u8 *domain, u16
 dnssec_key *dnssec_keystore_acquire_key_from_fqdn_by_index(const u8 *domain, int idx);
 
 /**
+ * Returns TRUE iff the domain has a KSK.
+ */
+
+bool dnssec_keystore_has_any_ksk(const u8 *domain);
+
+/**
+ * Returns TRUE iff the domain has an activaed KSK loaded.
+ */
+
+bool dnssec_keystore_has_activated_ksk(const u8 *domain, time_t attime);
+
+bool dnssec_keystore_has_activated_zsk(const u8 *domain, time_t attime);
+
+/**
  * Returns TRUE iff the domain has an activaed KSK with its private part loaded.
  */
 
 bool dnssec_keystore_has_usable_ksk(const u8 *domain, time_t attime);
+
+bool dnssec_keystore_has_usable_zsk(const u8 *domain, time_t attime);
 
 /**
  * Returns true iff the key for theddomain+algorithm+tag is active at 'now'
@@ -316,9 +332,34 @@ dnssec_key*	dnssec_keystore_get(u8 algorithm,u16 tag,u16 flags,const char *origi
 dnssec_key*	dnssec_keystore_remove(u8 algorithm,u16 tag,u16 flags,const char *origin);
 */
 void dnssec_keystore_destroy();
- 
-/** Generates a private key, store in the keystore */
-ya_result dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, dnssec_key **out_key);
+
+struct dnskey_smart_fields_s
+{
+    u32 created_epoch;
+    u32 publish_epoch;
+    u32 activate_epoch;
+    u32 deactivate_epoch;
+    u32 unpublish_epoch;
+    u32 fields;
+};
+
+typedef struct dnskey_smart_fields_s dnskey_smart_fields_t;
+
+/**
+ * Generates a private key, store in the keystore
+ * The caller is expected to create a resource record with this key and add it to the owner.
+ *
+ * @param algorithm the DNSKEY algorithm
+ * @param size the size of the key. Not all algoritms are taking it into account.
+ * @param flags the DNSKEY flags
+ * @param origin the domain of the key
+ * @param smart_fields all the smart fields to set, don't forget to set the "fields" field to tell which fields are valid
+ * @param out_key the generated key
+ * @returns an error code
+ *
+ */
+
+ya_result dnssec_keystore_new_key(u8 algorithm, u32 size, u16 flags, const char *origin, dnskey_smart_fields_t *smart_fields, dnssec_key **out_key);
 
 
 /**
@@ -365,18 +406,24 @@ ya_result dnssec_keystore_load_private_key_from_rdata(const u8 *rdata, u16 rdata
  * @return SUCCESS if a key was loaded, 1 if the key was already loaded, or an error code
  */
 
-ya_result	dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flags, const u8 *fqdn, dnssec_key **out_key);
+ya_result dnssec_keystore_load_private_key_from_parameters(u8 algorithm, u16 tag, u16 flags, const u8 *fqdn, dnssec_key **out_key);
+
+ya_result dnssec_keystore_get_key_path(dnssec_key* key, char *buffer, size_t buffer_size, bool private);
+
+/// does not remove the key from the keyring (so only call this if you know what you are doing)
+
+ya_result dnssec_keystore_delete_key_files(dnssec_key *key);
 
 /** Writes the key into g_keystore_path (which should be changed to whatever is the right path of the key */
-ya_result	dnssec_keystore_store_private_key(dnssec_key *key);
+ya_result dnssec_keystore_store_private_key(dnssec_key *key);
 
 /** Writes the key into g_keystore_path (which should be changed to whatever is the right path of the key */
-ya_result	dnssec_keystore_store_public_key(dnssec_key *key);
+ya_result dnssec_keystore_store_public_key(dnssec_key *key);
 /*
-void		dnssec_key_addrecord_to_zone(dnssec_key* key, zdb_zone* zone);
+void dnssec_key_addrecord_to_zone(dnssec_key* key, zdb_zone* zone);
 */
 
-dnssec_key     *dnssec_keystore_acquire_key_from_fqdn_at_index(const u8 *domain, int index);
+dnssec_key *dnssec_keystore_acquire_key_from_fqdn_at_index(const u8 *domain, int index);
 
 /**
  * Returns all the active keys, chained in a single linked list whose nodes need to be freed,

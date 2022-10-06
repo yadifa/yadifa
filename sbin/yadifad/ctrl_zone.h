@@ -70,10 +70,7 @@ ya_result ctrl_zone_reload(zone_desc_s *zone_desc, bool dolock);
 ya_result ctrl_zone_generate_from_message(message_data *mesg);  /* generate but let on the unactivated side */
 ya_result ctrl_zone_config_merge(zone_desc_s *zone_desc, bool dolock);
 ya_result ctrl_zone_config_merge_all();
-
 ya_result ctrl_zone_config_delete(zone_desc_s *zone_desc, bool dolock);
-
-
 #endif
 
 /** @} */

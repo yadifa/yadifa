@@ -682,7 +682,7 @@ message_verify_rrsig(const message_data *mesg, struct dnskey_keyring *keyring, m
                                         type_info.wrong_count++;
                                         rrsig_header.result |= MESSAGE_VERIFY_RRSIG_WRONG;
                                     }
-                                    
+                                    digest_finalise(&digest_ctx);
                                     dnskey_release(key);
                                 }
                                 else

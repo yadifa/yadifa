@@ -43,7 +43,7 @@ AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/i
 dist_noinst_DATA = VERSION include/dnscore/thirdparty/stdatomic.h src/tcp_manager.c
 
 lib_LTLIBRARIES= libdnscore.la
-libdnscore_la_LDFLAGS = -version-info 7:4:0
+libdnscore_la_LDFLAGS = -version-info 7:5:0
 #libdnscore_la_LIBADD=$(top_buildir)/lib/.../libsomething.la
 
 I=include/dnscore
@@ -58,150 +58,6 @@ FEATURESSRC=$(top_builddir)/$(FEATURESDIR)/dnscore-config.h
 # alphabetically please
 
 pkgincludedir = $(includedir)/dnscore
-
-libdnscore_la_SOURCES = \
-	src/alarm.c \
-	src/acl.c \
-	src/acl-config.c \
-	src/allocator.c \
-	src/async.c \
-	src/base16.c \
-	src/base32.c \
-	src/base32hex.c \
-	src/base64.c \
-	src/basic-priority-queue.c \
-	src/buffer_input_stream.c \
-	src/buffer_output_stream.c \
-	src/buffered-file.c \
-	src/bytearray_input_stream.c \
-	src/bytearray_output_stream.c \
-	src/bytezarray_output_stream.c \
-	src/chroot.c \
-	src/circular-file.c \
-	src/clone_input_output_stream.c \
-	src/cmdline.c \
-	src/concat_input_stream.c \
-	src/config-cmdline.c \
-	src/config_file_reader.c \
-	src/config_key.c \
-	src/config_logger.c \
-	src/config_settings.c \
-	src/config_struct.c \
-	src/counter_output_stream.c \
-	src/debug.c \
-	src/digest_rawdata.c \
-	src/digest_sha1.c \
-	src/digest_sha256.c \
-	src/digest_sha384.c \
-	src/digest_sha512.c \
-	src/dns-udp.c \
-	src/dns_resource_record.c \
-	src/dnscore.c \
-	src/dnsformat.c \
-	src/dnskey.c \
-	src/dnskey-keyring.c \
-	src/dnskey_dsa.c \
-	src/dnskey_ecdsa.c \
-	src/dnskey_eddsa.c \
-	src/dnskey_rsa.c \
-	src/dnskey-signature.c \
-	src/dnsname.c \
-	src/empty-input-stream.c \
-        src/error_state.c \
-	src/fdtools.c \
-	src/file_input_stream.c \
-	src/file_output_stream.c \
-	src/file-pool.c \
-	src/filesystem-file.c \
-	src/format.c \
-	src/hash.c \
-	src/hash-table-values.c \
-	src/hmac-openssl.c \
-	src/host_address.c \
-	src/hsdllist.c \
-	src/identity.c \
-	src/input_stream.c \
-	src/json.c \
-	src/limited_input_stream.c \
-	src/limiter.c \
-	src/list-dl.c \
-	src/list-sl.c \
-	src/list-sl-debug.c \
-	src/logger-output-stream.c \
-	src/logger.c \
-	src/logger_channel_file.c \
-	src/logger_channel_pipe.c \
-	src/logger_channel_stream.c \
-	src/logger_channel_syslog.c \
-	src/logger_handle.c \
-	src/message-buffer.c \
-	src/message-viewer.c \
-	src/message.c \
-	src/message_print_format_dig.c \
-	src/message_verify_rrsig.c \
-	src/message_dnsupdate.c \
-	src/mapped-file.c \
-	src/mt_output_stream.c \
-	src/mutex.c \
-	src/network.c \
-	src/nsec3-hash.c \
-	src/output_stream.c \
-	src/pace.c \
-	src/packet_reader.c \
-	src/packet_writer.c \
-	src/parser.c \
-	src/parsing.c \
-	src/process.c \
-	src/pid.c \
-	src/pipe_stream.c \
-	src/pool.c \
-	src/popen-output-stream.c \
-	src/ptr_set.c \
-	src/ptr_set_debug.c \
-	src/ptr_vector.c \
-	src/queue-sl.c \
-	src/random.c \
-	src/rc.c \
-	src/rewind-input-stream.c \
-	src/rfc.c \
-	src/serial.c \
-	src/server-setup.c \
-	src/service.c \
-	src/shared-heap.c \
-	src/shared-circular-buffer.c \
-	src/shared-heap-bytearray-output-stream.c \
-	src/signals.c \
-	src/simple-http-server.c \
-	src/socket-server.c \
-	src/string_set.c \
-	src/sys_error.c \
-	src/sys_get_cpu_count.c \
-	src/tcp_io_stream.c \
-	src/thread.c \
-	src/thread_pool.c \
-	src/thread-tag.c \
-	src/threaded-qsl-cw.c \
-	src/threaded_dll_cw.c \
-	src/threaded_nb_mm.c \
-	src/threaded_nbrb.c \
-	src/threaded_queue_slg.c \
-	src/threaded_ringbuffer.c \
-	src/threaded_ringbuffer_cw.c \
-	src/threaded_ringlist.c \
-	src/timeformat.c \
-	src/timems.c \
-	src/typebitmap.c \
-	src/u32_set.c \
-	src/u64_set.c \
-	src/u64_set_debug.c \
-	src/xfr_input_stream.c \
-	src/zalloc.c \
-	src/zone_reader_axfr.c \
-	src/zone_reader_text.c
-
-# src/ipc.c
-# src/name.c
-
 pkginclude_HEADERS = \
 	$(I)/alarm.h \
 	$(I)/acl.h \
@@ -221,6 +77,7 @@ pkginclude_HEADERS = \
 	$(I)/bytearray_input_stream.h \
 	$(I)/bytearray_output_stream.h \
 	$(I)/bytezarray_output_stream.h \
+	$(I)/checked_output_stream.h \
 	$(I)/chroot.h \
 	$(I)/circular-file.h \
 	$(I)/clone_input_output_stream.h \
@@ -250,7 +107,7 @@ pkginclude_HEADERS = \
 	$(I)/dnsname_set.h \
 	$(I)/dnssec_errors.h \
 	$(I)/empty-input-stream.h \
-        $(I)/error_state.h \
+	$(I)/error_state.h \
 	$(I)/fdtools.h \
 	$(I)/file.h \
 	$(I)/file_input_stream.h \
@@ -350,7 +207,157 @@ pkginclude_HEADERS = \
 	$(I)/zone_reader_text.h \
 	$(I)/zonefile_reader.h
 
-nodist_include_HEADERS = $(FEATURES)
+libdnscore_la_SOURCES = \
+	src/alarm.c \
+	src/acl.c \
+	src/acl-config.c \
+	src/allocator.c \
+	src/async.c \
+	src/base16.c \
+	src/base32.c \
+	src/base32hex.c \
+	src/base64.c \
+	src/basic-priority-queue.c \
+	src/buffer_input_stream.c \
+	src/buffer_output_stream.c \
+	src/buffered-file.c \
+	src/bytearray_input_stream.c \
+	src/bytearray_output_stream.c \
+	src/bytezarray_output_stream.c \
+	src/checked_output_stream.c \
+	src/chroot.c \
+	src/circular-file.c \
+	src/clone_input_output_stream.c \
+	src/cmdline.c \
+	src/concat_input_stream.c \
+	src/config-cmdline.c \
+	src/config_file_reader.c \
+	src/config_key.c \
+	src/config_logger.c \
+	src/config_settings.c \
+	src/config_struct.c \
+	src/counter_output_stream.c \
+	src/debug.c \
+	src/debug_bench.c \
+	src/debug_bfd.c \
+	src/debug_malloc.c \
+	src/debug_mmap.c \
+	src/debug_stacktrace.c \
+	src/digest_rawdata.c \
+	src/digest_sha1.c \
+	src/digest_sha256.c \
+	src/digest_sha384.c \
+	src/digest_sha512.c \
+	src/dns-udp.c \
+	src/dns_resource_record.c \
+	src/dnscore.c \
+	src/dnsformat.c \
+	src/dnskey.c \
+	src/dnskey-keyring.c \
+	src/dnskey_dsa.c \
+	src/dnskey_ecdsa.c \
+	src/dnskey_eddsa.c \
+	src/dnskey_rsa.c \
+	src/dnskey-signature.c \
+	src/dnsname.c \
+	src/empty-input-stream.c \
+    src/error_state.c \
+	src/fdtools.c \
+	src/file_input_stream.c \
+	src/file_output_stream.c \
+	src/file-pool.c \
+	src/filesystem-file.c \
+	src/format.c \
+	src/hash.c \
+	src/hash-table-values.c \
+	src/hmac-openssl.c \
+	src/host_address.c \
+	src/hsdllist.c \
+	src/identity.c \
+	src/input_stream.c \
+	src/json.c \
+	src/limited_input_stream.c \
+	src/limiter.c \
+	src/list-dl.c \
+	src/list-sl.c \
+	src/list-sl-debug.c \
+	src/logger-output-stream.c \
+	src/logger.c \
+	src/logger_channel_file.c \
+	src/logger_channel_pipe.c \
+	src/logger_channel_stream.c \
+	src/logger_channel_syslog.c \
+	src/logger_handle.c \
+	src/message-buffer.c \
+	src/message-viewer.c \
+	src/message.c \
+	src/message_print_format_dig.c \
+	src/message_verify_rrsig.c \
+	src/message_dnsupdate.c \
+	src/mapped-file.c \
+	src/mt_output_stream.c \
+	src/mutex.c \
+	src/network.c \
+	src/nsec3-hash.c \
+	src/output_stream.c \
+	src/pace.c \
+	src/packet_reader.c \
+	src/packet_writer.c \
+	src/parser.c \
+	src/parsing.c \
+	src/process.c \
+	src/pid.c \
+	src/pipe_stream.c \
+	src/pool.c \
+	src/popen-output-stream.c \
+	src/ptr_set.c \
+	src/ptr_set_debug.c \
+	src/ptr_vector.c \
+	src/queue-sl.c \
+	src/random.c \
+	src/rc.c \
+	src/rewind-input-stream.c \
+	src/rfc.c \
+	src/serial.c \
+	src/server-setup.c \
+	src/service.c \
+	src/shared-heap.c \
+	src/shared-circular-buffer.c \
+	src/shared-heap-bytearray-output-stream.c \
+	src/signals.c \
+	src/simple-http-server.c \
+	src/socket-server.c \
+	src/string_set.c \
+	src/sys_error.c \
+	src/sys_get_cpu_count.c \
+	src/tcp_io_stream.c \
+	src/thread.c \
+	src/thread_pool.c \
+	src/thread-tag.c \
+	src/threaded-qsl-cw.c \
+	src/threaded_dll_cw.c \
+	src/threaded_nb_mm.c \
+	src/threaded_nbrb.c \
+	src/threaded_queue_slg.c \
+	src/threaded_ringbuffer.c \
+	src/threaded_ringbuffer_cw.c \
+	src/threaded_ringlist.c \
+	src/timeformat.c \
+	src/timems.c \
+	src/typebitmap.c \
+	src/u32_set.c \
+	src/u64_set.c \
+	src/u64_set_debug.c \
+	src/xfr_input_stream.c \
+	src/zalloc.c \
+	src/zone_reader_axfr.c \
+	src/zone_reader_text.c
+
+# src/ipc.c
+# src/name.c
+
+
+BUILT_SOURCES = $(FEATURES)
 
 # $(I)/ipc.h
 # $(I)/name.h
@@ -407,3 +414,8 @@ VP=DNSCORE
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
+
+install-data-local: $(FEATURES)
+	mkdir -p $(DESTDIR)$(prefix)/include/dnscore
+	/usr/bin/install -c -m 644 $(FEATURES) $(DESTDIR)$(prefix)/$(FEATURES)
+

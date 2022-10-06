@@ -51,6 +51,12 @@
 
 #include "dnscore/file_output_stream.h"
 #include "dnscore/fdtools.h"
+#include "dnscore/error_state.h"
+
+extern logger_handle *g_system_logger;
+#define MODULE_MSG_HANDLE g_system_logger
+
+extern error_state_t nospace_error_state;
 
 /*
  * This structure is supposed to match the output_stream one
@@ -118,8 +124,8 @@ static ya_result
 file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
 {
     const file_output_stream* stream = (file_output_stream*)stream_;
-
     const u8* start = buffer;
+    bool nospace = FALSE;
 
     while(len > 0)
     {
@@ -149,6 +155,11 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
             if(err == ENOSPC)
             {
                 // the disk is full : wait a bit, hope the admin catches it, try again later
+                if(error_state_log_locked(&nospace_error_state, MAKE_ERRNO_ERROR(ENOSPC)))
+                {
+                    log_err("filesystem full for stream");
+                }
+                nospace = TRUE;
                 sleep((rand()&7) + 1);
                 continue;
             }
@@ -159,6 +170,11 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
 
         buffer += ret;
         len -= (u32)ret;
+    }
+
+    if(nospace)
+    {
+        error_state_clear_locked(&nospace_error_state, NULL, 0, NULL);
     }
 
     return (ya_result)(buffer - start);
@@ -398,13 +414,14 @@ s64 fd_output_stream_get_size(output_stream* stream_)
 
 void file_output_steam_advise_sequential(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
-    
 #if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+    file_output_stream* stream = (file_output_stream*)stream_;
     if(stream->data.fd >= 0)
     {
         posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);
     }
+#else
+    (void)stream_;
 #endif
 }
 

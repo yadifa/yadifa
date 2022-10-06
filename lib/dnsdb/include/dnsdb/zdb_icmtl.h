@@ -68,6 +68,13 @@ struct zdb_icmtl_replay_commit_state
     u32 dnskey_removed;
     u32 dnskey_added;
     u32 end_serial;
+#if __SIZEOF_POINTER__ ==  8
+    u32 reserved0;
+#endif
+#if HAS_EVENT_DYNAMIC_MODULE
+    ptr_vector dnskey_added_list;
+    ptr_vector dnskey_removed_list;
+#endif
 };
 
 typedef struct zdb_icmtl_replay_commit_state zdb_icmtl_replay_commit_state;

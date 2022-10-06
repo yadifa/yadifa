@@ -630,8 +630,9 @@ zonesign_nsec3_chain_update(zdb_zone *zone, nsec3_zone* n3, ptr_vector *zsks, bo
                             flushout();
                         }
 
-                        // TODO: check for validity
                         bitarray_set(tags_bitmap, rrsig_tag, 0); // the signature is good
+
+                        // @todo 20220307 edf -- verify the signature
 
                         // redo
                         rrsig_rrset = rrsig_rrset->next;
@@ -1454,7 +1455,7 @@ zonesign_run()
         }
 
         u16 mode = zone->apex->_flags & ZDB_RR_LABEL_DNSSEC_MASK;
-        char *zone_dnssec_mode;
+        char *zone_dnssec_mode = "?";
 
         switch(mode)
         {

@@ -72,7 +72,7 @@ ssize_t g_page_mask = 0;
 static void
 mapped_file_update_system_consts()
 {
-#ifndef WIN32
+#if __unix__
     if(g_page_size == 0)
     {
         g_page_size = sysconf(_SC_PAGE_SIZE);

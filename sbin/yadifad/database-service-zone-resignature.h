@@ -45,7 +45,7 @@
 
 #include <dnsdb/zdb_types.h>
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 
 /**
  * If zone_desc_owner is 0, does not lock the zone_desc

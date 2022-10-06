@@ -101,7 +101,7 @@ extern logger_handle *g_server_logger;
 #include "database-service-zone-mount.h"
 #include "database-service-zone-unmount.h"
 #include "database-service-zone-download.h"
-#if HAS_RRSIG_MANAGEMENT_SUPPORT &&  ZDB_HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT &&  ZDB_HAS_DNSSEC_SUPPORT
 #include "database-service-zone-resignature.h"
 #include "zone-signature-policy.h"
 #endif
@@ -113,7 +113,7 @@ extern logger_handle *g_server_logger;
 #include "notify.h"
 #include "ixfr.h"
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 #endif
 
@@ -159,15 +159,55 @@ static int database_service(struct service_worker_s *worker);
 zone_data_set database_zone_desc = {PTR_SET_DNSNAME_EMPTY, GROUP_MUTEX_INITIALIZER, 0};
 /* Zones meant to be merged with zones */
 
-
 static struct thread_pool_s *database_zone_load_thread_pool = NULL;
 static struct thread_pool_s *database_zone_store_thread_pool = NULL;
 static struct thread_pool_s *database_zone_unload_thread_pool = NULL;
 static struct thread_pool_s *database_zone_download_thread_pool = NULL;
 static struct thread_pool_s *database_callback_thread_pool = NULL;
 
+static ptr_set database_server_down_cache_set = PTR_SET_HOST_ADDRESS_EMPTY;
+static mutex_t database_server_down_cache_set_mtx = MUTEX_INITIALIZER;
+static s64 database_server_down_cache_timeout_us = ONE_SECOND_US;
+
+bool database_server_down_cache_query(const host_address *ha)
+{
+    bool ret = FALSE;
+    mutex_lock(&database_server_down_cache_set_mtx);
+    ptr_node *node = ptr_set_find(&database_server_down_cache_set, ha);
+    if(node != NULL)
+    {
+        s64 now = timeus();
+        s64 last_probe = node->value_s64;
+        if(now - last_probe < database_server_down_cache_timeout_us)
+        {
+            ret = TRUE; // the node exist and hasn't expired
+        }
+        else
+        {
+            host_address *ha_key = node->key;
+            ptr_set_delete(&database_server_down_cache_set, ha_key);
+            host_address_delete(ha_key);
+        }
+    }
+    mutex_unlock(&database_server_down_cache_set_mtx);
+    return ret;
+}
+
+void database_server_down_cache_add(const host_address *ha)
+{
+    mutex_lock(&database_server_down_cache_set_mtx);
+    ptr_node *node = ptr_set_insert(&database_server_down_cache_set, (host_address*)ha);
+    if(node != NULL)
+    {
+        s64 now = timeus();
+        node->key = host_address_copy(ha);
+        node->value_s64 = now;
+    }
+    mutex_unlock(&database_server_down_cache_set_mtx);
+}
+
 #if ZDB_HAS_DNSSEC_SUPPORT
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 static struct thread_pool_s *database_zone_resignature_thread_pool = NULL;
 #if DATABASE_ZONE_RRSIG_THREAD_POOL
 static struct thread_pool_s *database_zone_rrsig_thread_pool = NULL;
@@ -328,7 +368,7 @@ database_service_init()
         }
         
 #if ZDB_HAS_DNSSEC_SUPPORT                
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
         if(database_zone_resignature_thread_pool == NULL)
         {
             database_zone_resignature_thread_pool = thread_pool_init_ex((!g_config->hidden_master)?1:8, DATABASE_SERVICE_RESIGN_QUEUE_SIZE, "dbresign"); /// @note thread count MUST be set to 1
@@ -443,7 +483,7 @@ database_service_finalize_destroy_threadpools()
     }
 
 #if ZDB_HAS_DNSSEC_SUPPORT
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 
     if(database_zone_resignature_thread_pool != NULL)
     {
@@ -574,8 +614,6 @@ database_zone_desc_is_mounted(const u8 *origin)
     return mounted;
 }
 
-
-
 static void
 database_service_set_drop_after_reload()
 {
@@ -617,7 +655,7 @@ database_service_set_drop_after_reload_for_set(const ptr_set *fqdn_set)
                     zone_set_status(zone_desc, ZONE_STATUS_DROP_AFTER_RELOAD);
                     if(zone_desc->loaded_zone != NULL)
                     {
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
                         zdb_zone_set_maintained(zone_desc->loaded_zone, zdb_rr_label_flag_isclear(zone_desc->loaded_zone->apex, ZDB_ZONE_IS_SLAVE));
 #else
                         // the preprocessor exclusion could go around the 'if' but
@@ -870,7 +908,7 @@ database_service_message_clear(database_message *message)
     }
 }
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 
 static zone_desc_s *
 database_service_on_update_zone_signatures_event(database_message *message)
@@ -1570,7 +1608,7 @@ database_service(struct service_worker_s *worker)
             //
 
 #if ZDB_HAS_DNSSEC_SUPPORT
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
             
             case DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES:
             {                
@@ -1903,13 +1941,13 @@ database_zone_update_signatures_at(zdb_zone *zone, u32 at)
     log_debug("database: %{dnsname}: will enqueue operation DATABASE_SERVICE_UPDATE_ZONE_SIGNATURES at %T", zone->origin, at);
 
     zdb_zone_acquire(zone);
-    alarm_event_node *event = alarm_event_new(
-                        at,
-                        ALARM_KEY_ZONE_SIGNATURE_UPDATE,
-                        database_zone_update_signatures_alarm,
-                        zone,
-                        ALARM_DUP_REMOVE_LATEST,
-                        "database-service-zone-maintenance");
+    alarm_event_node *event = alarm_event_new( // update signatures
+            at,
+            ALARM_KEY_ZONE_SIGNATURE_UPDATE,
+            database_zone_update_signatures_alarm,
+            zone,
+            ALARM_DUP_REMOVE_LATEST,
+            "database-service-zone-maintenance");
 
     alarm_set(zone->alarm_handle, event);
 }
@@ -2088,7 +2126,7 @@ database_zone_axfr_query_at(const u8 *origin, time_t at)
     async->handler = NULL;
     async->handler_args = NULL;
     
-    alarm_event_node *event = alarm_event_new(
+    alarm_event_node *event = alarm_event_new( // axfr query
             at,
             ALARM_KEY_ZONE_AXFR_QUERY,
             database_zone_axfr_query_alarm,
@@ -2156,7 +2194,7 @@ database_zone_ixfr_query_at(const u8 *origin, time_t at)
     async->handler = NULL;
     async->handler_args = NULL;
         
-    alarm_event_node *event = alarm_event_new(
+    alarm_event_node *event = alarm_event_new( // ixfr query
             at,
             ALARM_KEY_ZONE_AXFR_QUERY,
             database_zone_ixfr_query_alarm,
@@ -2706,7 +2744,7 @@ database_service_zone_download_queue_thread(thread_pool_function func, void *par
 }
 
 #if ZDB_HAS_DNSSEC_SUPPORT
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 void
 database_service_zone_resignature_queue_thread(thread_pool_function func, void *parm, thread_pool_task_counter *counter, const char* categoryname)
 {

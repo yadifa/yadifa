@@ -42,7 +42,9 @@
  *
  *----------------------------------------------------------------------------*/
 
-#define HAS_DYNAMIC_PROVISIONING 1
+#define HAS_DYNAMIC_PROVISIONING 0
+
+#define     OPCODE_CTRL                     (9<<OPCODE_SHIFT)
 
 #if HAS_DYNAMIC_PROVISIONING
 #define     TYPE_ZONE_TYPE_NAME             "ZONETYPE"
@@ -60,7 +62,6 @@
 #define     TYPE_NTFRPI_NAME                "NTFRPI"
 #define     TYPE_NTFAUTO_NAME               "NTFAUTO"
 
-#define     OPCODE_CTRL                     (9<<OPCODE_SHIFT)
 
 /*
  ACL is a chain of accept/reject triggers on IPv4 IPv6 TSIGs (...)
@@ -103,8 +104,6 @@
 #define     TYPE_CTRL_SRVCFGRELOAD_NAME     "CFGRELOAD"
 
 #define     TYPE_CTRL_ZONENOTIFY_NAME       "NOTIFY"
-
-
 
 #define     TYPE_CTRL_CFGLOAD_NAME          "CFGLOAD"
 
@@ -374,7 +373,6 @@
 
 #define     TYPE_CTRL_ZONECFGRELOAD         NU16(0x2b0b)
 #define     TYPE_CTRL_ZONECFGRELOADALL      NU16(0x2b0c)
-
 
 /* DOMAIN NAME = zone */
 /* RDATASIZE = 0 */

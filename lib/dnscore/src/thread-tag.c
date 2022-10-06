@@ -118,10 +118,9 @@ thread_id_key(thread_t id_)
 {
     intptr id = (intptr)id_;
     unsigned int key = (u32)id;
-    if(sizeof(id) == 8)
-    {
-        key ^= (u32)(id >> 32);
-    }
+#if __SIZEOF_POINTER__ == 8
+    key ^= (u32)(id >> 32);
+#endif
     return key % THREAD_TAG_HASH_PRIME;
 }
 

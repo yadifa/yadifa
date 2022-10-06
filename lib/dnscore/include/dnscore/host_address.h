@@ -137,7 +137,7 @@ struct host_address
         addressv6 v6;
         addressdname dname;
     } ip;
-    u16 port;
+    u16 port; // network order
     u8 version;
 };
 
@@ -175,7 +175,10 @@ void host_address_delete(host_address *address);
 
 
 void host_address_delete_list(host_address *address);
+// sets the port value to port for all addresses in that list where port is set to 0
 void host_address_set_default_port_value(host_address *address, u16 port);
+// sets the port value to port for all addresses in that list
+void host_address_set_port_value(host_address *address, u16 port);
 u32 host_address_count(const host_address *address);
 
 static inline bool

@@ -76,7 +76,7 @@ struct shared_circular_buffer
     s64 last_report_time;
     s64 peak_usage;
 #endif
-#ifndef WIN32
+#if __unix__
     volatile s64 enqueue_index __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
     volatile s64 dequeue_index __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
     struct shared_circular_buffer_slot base[] __attribute__ ((aligned (L1_DATA_LINE_SIZE)));

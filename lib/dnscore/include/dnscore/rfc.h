@@ -689,16 +689,15 @@
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */ 
 /*
- * @todo 20171121 thx -- this is not about RDATA, fix this (maybe it should not
- *                       be here at all ?)
- * 
+ * The TTL field of an OPT record has a different meaning:
+ *
  *
                                    1  1  1  1  1  1
      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   |     EXTENDED-RCODE    |       VERSION         |
+   |     VERSION           |    EXTENDED-RCODE     |
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-   |                       Z                       |
+   |                       Z                    |DO|
    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
    */
 #define     TYPE_OPT                        NU16(41)    /* edns0 flag                       rfc 6891 rfc 3225 */
@@ -1579,19 +1578,25 @@ static inline u8 rrsig_get_labels_from_rdata(const void *rdata, u16 rdata_size)
     return l;
 }
 
-static inline s32 rrsig_get_original_ttl_from_rdata(const void *rdata, u16 rdata_size)
+static inline s32 rrsig_get_original_ttl_from_rdata_ne(const void *rdata, u16 rdata_size)
 {
     s32 ottl = 0;
     if(rdata_size >= 8)
     {
-        ottl = ntohl(GET_U32_AT(((const u8*)rdata)[4]));
+        ottl = GET_U32_AT(((const u8*)rdata)[4]);
     }
     return ottl;
 }
 
-static inline u32 rrsig_get_valid_until_from_rdata(const void *rdata, u16 rdata_size)
+static inline s32 rrsig_get_original_ttl_from_rdata(const void *rdata, u16 rdata_size)
 {
-    u32 t = 0;
+    s32 ttl_ne = rrsig_get_original_ttl_from_rdata_ne(rdata, rdata_size);
+    return ntohl(ttl_ne);
+}
+
+static inline s32 rrsig_get_valid_until_from_rdata(const void *rdata, u16 rdata_size)
+{
+    s32 t = 0;
     if(rdata_size >= RRSIG_RDATA_HEADER_LEN)
     {
         t = ntohl(GET_U32_AT(((const u8*)rdata)[8]));
@@ -1599,9 +1604,9 @@ static inline u32 rrsig_get_valid_until_from_rdata(const void *rdata, u16 rdata_
     return t;
 }
 
-static inline u32 rrsig_get_valid_from_from_rdata(const void *rdata, u16 rdata_size)
+static inline s32 rrsig_get_valid_from_from_rdata(const void *rdata, u16 rdata_size)
 {
-    u32 t = 0;
+    s32 t = 0;
     if(rdata_size >= RRSIG_RDATA_HEADER_LEN)
     {
         t = ntohl(GET_U32_AT(((const u8*)rdata)[12]));

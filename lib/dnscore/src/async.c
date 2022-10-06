@@ -409,7 +409,7 @@ async_wait(async_wait_s *aw)
 }
 
 bool
-async_wait_timeout_absolute(async_wait_s *aw, u64 epoch_usec)
+async_wait_timeout_absolute(async_wait_s *aw, s64 epoch_usec)
 {
 #if !ASYNC_NO_TIMEOUT
     struct timespec ts;
@@ -474,27 +474,27 @@ async_wait_timeout_absolute(async_wait_s *aw, u64 epoch_usec)
  */
 
 bool
-async_wait_timeout(async_wait_s *aw, u64 usec)
+async_wait_timeout(async_wait_s *aw, s64 relative_usec)
 {
 #if ASYNC_WAIT_DUMP
     formatln("[%5i][%p] async_wait_timeout(%p, %llu)", getpid_ex(), thread_self(), aw, usec);flushout();
 #endif
-    
 
-    usec += timeus();
+
+    relative_usec += timeus();
     
-    return async_wait_timeout_absolute(aw, usec);
+    return async_wait_timeout_absolute(aw, relative_usec);
 }
 
 s32
 async_wait_get_counter(async_wait_s *aw)
 {
     s32 counter;
-    
+
     mutex_lock(&aw->mutex);
     
     counter = aw->wait_count;
-    
+
     mutex_unlock(&aw->mutex);
     
     return counter;
@@ -583,11 +583,11 @@ s32
 async_wait_get_error(async_wait_s *aw)
 {
     s32 err;
-    
+
     mutex_lock(&aw->mutex);
     
     err = aw->error_code;
-    
+
     mutex_unlock(&aw->mutex);
     
     return err;

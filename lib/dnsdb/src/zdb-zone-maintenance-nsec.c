@@ -63,7 +63,7 @@ extern logger_handle* g_database_logger;
  */
 
 int
-zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *diff_fqdn, ptr_vector *rrset_to_sign)
+zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_fqdn, ptr_vector *rrset_to_sign)
 {
     //   if NSEC created :
     //   _ add the NSEC record & signature if missing
@@ -75,7 +75,7 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
     //   _ remove the NSEC node from the collection
     
     // NSEC signatures should be handled with the general signatures
-    
+
     int ret = 0;
 
     if((mctx->nsec_chain_status & (NSEC_ZONE_GENERATING|NSEC_ZONE_REMOVING)) == NSEC_ZONE_GENERATING)
@@ -86,7 +86,7 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
         {
             // need to add the NSEC record and its signature
             // difficult as the next record has to be known
-            
+
             ret = dnssec_chain_add_from_diff_fqdn(&mctx->nsec_chain_updater, diff_fqdn, 0);
         }
     }
@@ -212,6 +212,7 @@ zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *
             }
         }
     }
+
     return ret;
 }
 

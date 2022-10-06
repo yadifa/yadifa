@@ -146,6 +146,8 @@ static group_mutex_t dnssec_policy_key_suite_mtx = GROUP_MUTEX_INITIALIZER;
 
 static volatile int dnssec_policy_queue_serial = 0;
 
+static void zone_policy_process_alarm_arm(zone_desc_s *zone_desc, u32 delay_in_seconds);
+
 static void
 zone_policy_date_format_handler_method(const void *restrict val, output_stream *os, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters)
 {
@@ -305,7 +307,7 @@ dnssec_policy_queue_add_command_at_epoch(dnssec_policy_queue *cmd, alarm_t hndl,
 {
     int serial = dnssec_policy_queue_add_command(cmd) | ALARM_KEY_DNSSEC_POLICY_EVENT;
 
-    alarm_event_node *event = alarm_event_new(
+    alarm_event_node *event = alarm_event_new( // policy : key generation
         at,
         serial,
         dnssec_policy_alarm_handler,
@@ -449,12 +451,15 @@ dnssec_policy_queue_add_generate_key_create_at(zone_desc_s *zone_desc, struct dn
 #endif
 
     dnssec_policy_queue *cmd = dnssec_policy_queue_new(zone_origin(zone_desc));
+
+    dnssec_policy_key_suite_acquire(kr); // scan-build doesn't get this prevents the free to happen
+    zone_acquire(zone_desc);
+
     cmd->epoch = epoch;
     cmd->command = DNSSEC_POLICY_COMMAND_GENERATE_KEY;
-    dnssec_policy_key_suite_acquire(kr);
     cmd->parameters.generate_key.suite = kr; // must be done else the dnssec_policy_queue_has_command will fail
     cmd->parameters.generate_key.zone_desc = zone_desc;
-    zone_acquire(zone_desc);
+
 
     if(!dnssec_policy_queue_has_command(cmd))
     {
@@ -2157,30 +2162,29 @@ dnssec_policy_alarm_command_generate_key(dnssec_policy_queue *cmd)
         return ret;
     }
 
+    dnskey_smart_fields_t smart_fields;
+    smart_fields.created_epoch = created_epoch;
+    smart_fields.publish_epoch = publish_epoch;
+    smart_fields.activate_epoch = activate_epoch;
+    smart_fields.deactivate_epoch = deactivate_epoch;
+    smart_fields.unpublish_epoch = unpublish_epoch;
+    smart_fields.fields = DNSKEY_KEY_HAS_SMART_FIELD_CREATED|DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE;
+
     dnssec_key *key;
     ret = dnssec_keystore_new_key(cmd->parameters.generate_key.suite->key->algorithm,
                                   cmd->parameters.generate_key.suite->key->size,
                                   cmd->parameters.generate_key.suite->key->flags|DNSKEY_FLAGS_ZSK,
                                   domain,
+                                  &smart_fields,
                                   &key);
 
     if(ISOK(ret))
     {
-        key->epoch_created = created_epoch;
-        key->epoch_publish = publish_epoch;
-        key->epoch_activate = activate_epoch;
-        key->epoch_inactive = deactivate_epoch;
-        key->epoch_delete = unpublish_epoch;
-
-        key->status |= DNSKEY_KEY_HAS_SMART_FIELD_CREATED|DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE;
-
-        dnssec_keystore_store_private_key(key);
-        dnssec_keystore_store_public_key(key);
+        // note: the keystore has already stored the key on disk
 
         log_info("dnssec-policy: %{dnsname}: key K%{dnsname}+%03d+%05d/%d generated from %T: created at %T, publish at %T, activate at %T, inactive at %T, delete at %T",
                  cmd->origin, cmd->origin, key->algorithm, dnskey_get_tag(key), ntohs(key->flags), cmd->epoch,
-                 key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete
-        );
+                 key->epoch_created, key->epoch_publish, key->epoch_activate, key->epoch_inactive, key->epoch_delete);
 
 #if HAS_EVENT_DYNAMIC_MODULE
         if(dynamic_module_dnskey_interface_chain_available())
@@ -2218,6 +2222,9 @@ dnssec_policy_alarm_command_generate_key(dnssec_policy_queue *cmd)
     else
     {
         log_err("dnssec-policy: %{dnsname}: failed to generate key: %r This is likely to break the policy maintenance state for the zone.", cmd->origin, ret);
+
+        // try to run the policies again in one minute
+        zone_policy_process_alarm_arm(cmd->parameters.generate_key.zone_desc, 60);
     }
 
     zone_policy_key_suite_unmark_processed(cmd->parameters.generate_key.zone_desc, cmd->parameters.generate_key.suite);
@@ -2269,7 +2276,11 @@ zone_policy_nsec3_enable(zdb_zone *zone, dnssec_denial *denial)
 {
     u8 *salt;
     u8 salt_len;
+    u8 flags = (denial->optout)?1:0;
+    u8 current_status = 0;
     u8 salt_buffer[256];
+
+    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
     if(denial->salt != NULL)
     {
@@ -2278,22 +2289,27 @@ zone_policy_nsec3_enable(zdb_zone *zone, dnssec_denial *denial)
     }
     else
     {
-        random_ctx rnd = random_init_auto();
+        ya_result matched = nsec3_zone_get_first_salt_matching(zone, denial->algorithm, flags, denial->iterations, denial->salt_length, salt_buffer);
 
-        salt = &salt_buffer[0];
-        salt_len = denial->salt_length;
-        for(int i = 0; i < salt_len; ++i)
+        if(matched == 0)
         {
-            salt[i] = random_next(rnd);
+            random_ctx rnd = random_init_auto();
+
+            salt = &salt_buffer[0];
+            salt_len = denial->salt_length;
+            for(int i = 0; i < salt_len; ++i)
+            {
+                salt[i] = random_next(rnd);
+            }
+
+            random_finalize(rnd);
         }
-
-        random_finalize(rnd);
+        else
+        {
+            salt = &salt_buffer[0];
+            salt_len = denial->salt_length;
+        }
     }
-
-    u8 flags = (denial->optout)?1:0;
-    u8 current_status = 0;
-
-    zdb_zone_lock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER);
 
     if(zdb_rr_label_has_rrset(zone->apex, TYPE_DNSKEY))
     {
@@ -2627,11 +2643,13 @@ dnssec_policy_denial_create(const char *id, u8 algorithm, u16 iterations, const 
     dd->rc = 1;
     
     group_mutex_write_lock(&dnssec_denial_set_mtx);
+
     ptr_node *node = ptr_set_insert(&dnssec_denial_set, dd->name);
     if(node->value != NULL)
     {
         dnssec_policy_denial_release((dnssec_denial*)node->value);
     }
+
     node->key = dd->name;
     node->value = dd;
     group_mutex_write_unlock(&dnssec_denial_set_mtx);
@@ -2823,7 +2841,9 @@ dnssec_policy_create(char *name, dnssec_denial *dd, ptr_vector *key_suite)
         }
         
         dnssec_policy_key_suite *dpks_a = dnssec_policy_key_suite_acquire_from_name(dpks->name);
-        
+
+        yassert(dpks_a != NULL);
+
         for(int j = 0; j <= ptr_vector_last_index(&dp->key_suite); ++j)
         {
             dnssec_policy_key_suite* dpks_b = (dnssec_policy_key_suite*)ptr_vector_get(&dp->key_suite, j);
@@ -2906,6 +2926,77 @@ dnssec_policy_release(dnssec_policy *dp)
         ZFREE_OBJECT(dp);
     }
     group_mutex_write_unlock(&dnssec_policy_mtx);
+}
+
+bool
+dnssec_policy_is_key_matching(dnssec_policy *dp, dnssec_key *key)
+{
+    bool explicit_deactivate = dnskey_has_explicit_deactivate(key);
+
+    if(!explicit_deactivate)
+    {
+        return FALSE;
+    }
+
+    bool explicit_delete = dnskey_has_explicit_delete(key);
+
+    if(!explicit_delete)
+    {
+        return FALSE;
+    }
+
+    bool matching = FALSE;
+
+    for(int i = 0; i <= ptr_vector_last_index(&dp->key_suite); ++i)
+    {
+        dnssec_policy_key_suite *dpks = (dnssec_policy_key_suite*)ptr_vector_get(&dp->key_suite, i);
+        if(dpks->key != NULL)
+        {
+            if(dpks->key->algorithm == dnskey_get_algorithm(key))
+            {
+                if(dpks->key->flags == dnskey_get_flags(key))
+                {
+                    if(dpks->key->size == dnskey_get_size(key))
+                    {
+                        matching = TRUE;
+                        break;
+                    }
+                    else if(abs((int)dpks->key->size - (int)dnskey_get_size(key)) < 16)
+                    {
+                        log_debug("key K%{dnsname}+%03i+%05i only loosely matches the '%s' policy", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), dp->name);
+                        matching = TRUE;
+                        break;
+                    }
+#if DEBUG
+                    else
+                    {
+                        log_debug("key not matching the '%s' policy because size %i differs from %i", dp->name, dpks->key->size, dnskey_get_size(key));
+                    }
+#endif
+                }
+            }
+        }
+    }
+
+    return matching;
+}
+
+bool
+dnssec_policy_defines_ksk(dnssec_policy *dp)
+{
+    for(int i = 0; i <= ptr_vector_last_index(&dp->key_suite); ++i)
+    {
+        dnssec_policy_key_suite *dpks = (dnssec_policy_key_suite*)ptr_vector_get(&dp->key_suite, i);
+        if(dpks->key != NULL)
+        {
+            if(dpks->key->flags == DNSKEY_FLAGS_KSK)
+            {
+                return TRUE;
+            }
+        }
+    }
+
+    return FALSE;
 }
 
 ya_result
@@ -3198,7 +3289,6 @@ zone_policy_process(zone_desc_s *zone_desc)
          */
 
         if(dnskey_is_expired_now(key) ||
-
            (key->epoch_publish == 0) ||
            (key->epoch_inactive == 0))
         {
@@ -3226,6 +3316,8 @@ zone_policy_process(zone_desc_s *zone_desc)
 
                     dnskey_acquire(key);
                     ptr_vector_append(&key_roll_keys[j], key);
+
+                    //zone_policy_key_suite_mark_processed(zone_desc, kr);
                 }
             }
         }
@@ -3444,6 +3536,46 @@ zone_policy_process(zone_desc_s *zone_desc)
     // decide what to do
 
     return final_ret;   // returns success or the last error from the key generation part
+}
+
+#define ALARM_KEY_POLICY_DELAYED_INITIALISATION ALARM_KEY_ZONE_NEXT_AVAILABLE_ID
+
+static ya_result
+zone_policy_process_alarm(void *args, bool cancel)
+{
+    zone_desc_s *zone_desc = (zone_desc_s*)args;
+
+    if(!cancel)
+    {
+        zone_policy_process(zone_desc);
+    }
+
+    zone_release(zone_desc);
+
+    return SUCCESS;
+}
+
+static void
+zone_policy_process_alarm_arm(zone_desc_s *zone_desc, u32 delay_in_seconds)
+{
+    if(zone_desc != NULL)
+    {
+        zone_lock(zone_desc, ZONE_LOCK_READONLY);
+        zdb_zone *zone = zone_get_loaded_zone(zone_desc);
+        if(zone != NULL)
+        {
+            zone_acquire(zone_desc);
+            alarm_event_node *event = alarm_event_new( // zone refresh
+                time(NULL) + delay_in_seconds,
+                ALARM_KEY_POLICY_DELAYED_INITIALISATION,
+                zone_policy_process_alarm,
+                zone_desc,
+                ALARM_DUP_REMOVE_LATEST,
+                "database-zone-policy-alarm");
+            alarm_set(zone->alarm_handle, event);
+        }
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+    }
 }
 
 void

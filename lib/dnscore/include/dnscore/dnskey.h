@@ -39,8 +39,7 @@
  *
  * @{
  */
-#ifndef _DNSKEY_H
-#define	_DNSKEY_H
+#pragma once
 
 #include <arpa/inet.h>
 #include <dnscore/sys_types.h>
@@ -60,7 +59,7 @@
 #define DNSSEC_MINIMUM_KEY_SIZE_BYTES   ((DNSSEC_MINIMUM_KEY_SIZE+7)/8)
 #define DNSSEC_MAXIMUM_KEY_SIZE_BYTES   ((DNSSEC_MAXIMUM_KEY_SIZE+7)/8)
 
-#ifdef WORDS_BIGENDIAN
+#if WORDS_BIGENDIAN
 #define DNSKEY_FLAGS_KSK 0x0101 // NATIVE
 #define DNSKEY_FLAGS_ZSK 0x0100 // NATIVE
 #else
@@ -154,10 +153,10 @@ union dnssec_key_data
     void* any;
     RSA* rsa;
     DSA* dsa;
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
     EC_KEY* ec;
 #endif
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
     EVP_PKEY* ed;
 #endif
 };
@@ -704,7 +703,7 @@ static inline u8 ds_get_digesttype_from_rdata(const u8 *rdata)
  * @return
  */
 
-void dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os);
+ya_result dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os);
 
 /**
  * 
@@ -866,7 +865,5 @@ void dnskey_init_dns_resource_record(dnssec_key *key, s32 ttl, dns_resource_reco
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	/* _DNSKEY_H */
 
 /** @} */

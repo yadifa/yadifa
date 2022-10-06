@@ -32,12 +32,14 @@
  *
  */
 
+#include <dnscore/format.h>
 #include "dnscore/dnscore-config.h"
 #include "dnscore/tsig.h"
 #include "dnscore/base64.h"
 #include "dnscore/config_settings.h"
 
 #define CFGSKEY_TAG 0x59454b53474643
+#define CSKEYTMP_TAG 0x504d5459454b5343
 
 struct config_section_key_s
 {
@@ -202,11 +204,48 @@ config_section_key_set_wild(struct config_section_descriptor_s *csd, const char 
 }
 
 static ya_result
-config_section_key_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
     (void)key;
+
+    u32* indexp;
+
+    if(*context == NULL)
+    {
+        MALLOC_OBJECT_OR_DIE(indexp, u32, CSKEYTMP_TAG);
+        *indexp = 0;
+        *context = indexp;
+    }
+    else
+    {
+        indexp = (u32*)*context;
+    }
+
+    if(*indexp < tsig_get_count())
+    {
+        /*
+        CONFIG_STRING_COPY(name, NULL)
+        CONFIG_STRING_COPY(algorithm, NULL)
+        CONFIG_STRING_COPY(secret, NULL)
+        */
+        tsig_item* tsig = tsig_get_at_index(*indexp);
+        if(tsig != NULL) // shouldn't be
+        {
+            osformatln(os, "name      %{dnsname}", tsig->name);
+            osformatln(os, "algorithm %s", tsig_get_friendly_name_from_hmac_algorithm(tsig->mac_algorithm));
+            output_stream_write(os, "secret    ", 10);
+            base64_print(tsig->mac, tsig->mac_size, os);
+            output_stream_write_u8(os, '\n');
+        }
+        ++(*indexp);
+    }
+    else
+    {
+        free(indexp);
+        *context = NULL;
+    }
 
     return CONFIG_UNKNOWN_SETTING;
 }

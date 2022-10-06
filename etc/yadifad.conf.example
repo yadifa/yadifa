@@ -31,7 +31,7 @@
         serverid                     "yadifad-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                      "2.5.4"
+        version                      "2.6.0"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -52,6 +52,10 @@
         # The interfaces to listen to.
         listen                      0.0.0.0
 
+        # Specifies what address to bind to to do transfer requests
+        # Can be specified per-zone
+        # transfer-source           192.0.2.53
+
         # Enable the collection and logging of statistics
         statistics                  on
 
@@ -64,6 +68,10 @@
         # Maximum number of records in an AXFR packet.  Set to one for compatibility
         # with very old name servers
         # axfr-maxrecordbypacket    0
+
+
+        # Zones smaller than this will be sent witout using temporary storage in the 'xfrpath' directory
+        # axfr-memory-threshold     65536
 
         # Global Access Control List rules.
         #
@@ -262,9 +270,45 @@ include "keys.conf"
         # The zone file, relative to 'datapath'.  (mandatory for a primary)
         file                    masters/somedomain.eu.zone
 
+        # Specifies what address to bind to to do transfer requests for this zone
+        # transfer-source       192.0.2.53
 
         dnssec-policy           "typical-policy"
 </zone>
+
+<zone>
+        # This server is primary for that zone (mandatory)
+        type                    primary
+
+        # The domain name (mandatory)
+        domain                  somedomain.eu.
+
+        # The zone file, relative to 'datapath'.  (mandatory for a primary)
+        file                    masters/somedomain.eu.zone
+
+        # The DNSSEC policy to apply for automatic key management by YADIFA
+        dnssec-policy           "typical-policy"
+</zone>
+
+<zone>
+        # This server is primary for that zone (mandatory)
+        type                    secondary
+
+        # The domain name (mandatory)
+        domain                  someotherdomain.eu.
+
+        # The zone file, relative to 'datapath'.  (mandatory for a primary)
+        file                    slaves/someotherdomain.eu.zone
+
+        primary                 192.0.2.54
+        
+
+        # With this set, the zone will be loaded from its local source before
+        # looking for updates on the primary
+        load-local-first        yes
+
+</zone>
+
 
 ################################################################################
 ################################################################################

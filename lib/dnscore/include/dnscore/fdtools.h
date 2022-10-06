@@ -39,8 +39,7 @@
  * @{
  */
 
-#ifndef _FDTOOLS_H
-#define	_FDTOOLS_H
+#pragma once
 
 #include <dirent.h>
 #include <dnscore/sys_types.h>
@@ -361,10 +360,17 @@ void file_mtime_set_clear(struct file_mtime_set_s *ctx);
 void file_mtime_set_delete(struct file_mtime_set_s *ctx);
 #endif
 
+#define ACCESS_CHECK_READ R_OK
+#define ACCESS_CHECK_WRITE W_OK
+#define ACCESS_CHECK_EXECUTE X_OK
+#define ACCESS_CHECK_EXISTS F_OK
+
+#define ACCESS_CHECK_READWRITE (ACCESS_CHECK_READ|ACCESS_CHECK_WRITE)
+
+ya_result access_check(const char* path, int mode);
+
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	/* _FDTOOLS_H */
 
 /** @} */

@@ -118,10 +118,12 @@ config_section_key_template_set_wild(struct config_section_descriptor_s *csd, co
 }
 
 static ya_result
-config_section_key_template_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_template_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
+    (void)context;
+
     if(key != NULL)
     {
         return INVALID_ARGUMENT_ERROR;

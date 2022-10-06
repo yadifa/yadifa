@@ -67,7 +67,6 @@
 #include <dnsdb/dnssec.h>
 #endif
 
-#include <dnsdb/zdb.h>
 #include <dnsdb/zdb_zone.h>
 #include <dnsdb/zdb-zone-arc.h>
 #include <dnsdb/zdb_icmtl.h>
@@ -83,12 +82,13 @@
 
 #include <dnscore/zone_reader_text.h>
 #include <dnscore/zone_reader_axfr.h>
-
+#include <dnsdb/zdb-zone-maintenance.h>
+#include <dnsdb/dynupdate-message.h>
 
 #include "server.h"
 #include "database.h"
 #include "database-service.h"
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 #include "database-service-zone-resignature.h"
 #endif
 
@@ -1020,6 +1020,49 @@ database_zone_ensure_private_keys_from_message(message_data *mesg)
 
 #endif
 
+// ZDB_ZONE_MUTEX_DYNUPDATE
+
+ya_result
+database_apply_nsec3paramqueued(zdb_zone *zone, zdb_packed_ttlrdata *rrset, u8 lock_owner)
+{
+    ya_result ret = SUCCESS;
+
+    if(rrset != NULL)
+    {
+        const u8 *rdata = ZDB_PACKEDRECORD_PTR_RDATAPTR(rrset);
+        u32 rdata_size = ZDB_PACKEDRECORD_PTR_RDATASIZE(rrset);
+        u8 algorithm = NSEC3PARAM_RDATA_ALGORITHM(rdata);
+        u16 iterations = NSEC3PARAM_RDATA_ITERATIONS(rdata);
+        const u8 *salt = NSEC3PARAM_RDATA_SALT(rdata);
+        u8 salt_len = NSEC3PARAM_RDATA_SALT_LEN(rdata);
+        u8 optout = ((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT) == ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT)?1:0;
+
+        if(ISOK(ret = nsec3_zone_set_status(zone, lock_owner, algorithm, optout, iterations, salt, salt_len, NSEC3_ZONE_ENABLED|NSEC3_ZONE_GENERATING)))
+        {
+            dynupdate_message dmsg;
+            packet_unpack_reader_data reader;
+            dynupdate_message_init(&dmsg, zone->origin, CLASS_IN);
+            dynupdate_message_del_record(&dmsg, zone->origin, TYPE_NSEC3PARAMQUEUED, 0, rdata_size, rdata);
+            dynupdate_message_set_reader(&dmsg, &reader);
+            u16 count = dynupdate_message_get_count(&dmsg);
+            packet_reader_skip(&reader, DNS_HEADER_LENGTH); // checked below
+            packet_reader_skip_fqdn(&reader);               // checked below
+            packet_reader_skip(&reader, 4);             // checked below
+            ret = dynupdate_diff(zone, &reader, count, lock_owner, DYNUPDATE_DIFF_RUN);
+
+            if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+            {
+                // trigger a background store of the zone
+                zdb_zone_info_background_store_zone(zone->origin);
+            }
+
+            dynupdate_message_finalize(&dmsg);
+        }
+    }
+
+    return ret;
+}
+
 ya_result
 database_update(zdb *database, message_data *mesg)
 {
@@ -1075,7 +1118,7 @@ database_update(zdb *database, message_data *mesg)
                      */
                     if(!zdb_zone_is_frozen(zone))
                     {
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
                         if(ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_update)))
                         {
                             /* notauth */
@@ -1296,7 +1339,6 @@ database_update(zdb *database, message_data *mesg)
                                 count = message_get_prerequisite_count(mesg);
                                 
                                 // The reader is positioned after the QR section, read AN section
-
                                 // from this point, the zone is single-locked
 
                                 log_debug("database: update: %{dnsname}: processing %d prerequisites", zone_origin(zone_desc), count);
@@ -1319,7 +1361,7 @@ database_update(zdb *database, message_data *mesg)
                                         zone->sig_validity_jitter_seconds = zone_desc->signature.sig_validity_jitter * SIGNATURE_VALIDITY_JITTER_S;
                                     }
 #endif
-                                    if(ISOK(ret = dynupdate_diff(zone, &pr, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN)))
+                                    if(ISOK(ret = dynupdate_diff(zone, &pr, count, ZDB_ZONE_MUTEX_DYNUPDATE, DYNUPDATE_DIFF_RUN|DYNUPDATE_DIFF_EXTERNAL)))
                                     {
 #if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
                                         u8 zone_maintain_mode_now = zone_get_maintain_mode(zone);
@@ -1397,6 +1439,7 @@ database_update(zdb *database, message_data *mesg)
                                 zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 
                                 zdb_zone_release(zone);
+                                zone = NULL;
                             }
                             else
                             {
@@ -1476,7 +1519,7 @@ database_update(zdb *database, message_data *mesg)
                  * Forward back the answer to the caller.
                  */
                 
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
                 if(!ACL_REJECTED(acl_check_access_filter(mesg, &zone_desc->ac.allow_update_forwarding)))
                 {
                     random_ctx rndctx = thread_pool_get_random_ctx();
@@ -1543,6 +1586,30 @@ database_update(zdb *database, message_data *mesg)
         if(database_service_zone_dnssec_maintenance_start)
         {
 	    log_info("database: update: %{dnsname}: DEBUG: maintenance starting", zone_origin(zone_desc));
+            zone = zdb_acquire_zone_read_double_lock(database, &name, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+
+            if(zone != NULL && !zdb_zone_invalid(zone))
+            {
+                u32 zone_status = zdb_zone_get_status(zone);
+                if(zone_status & ZDB_ZONE_STATUS_GENERATE_CHAIN)
+                {
+                    // enable NSEC3 mode
+                    if((zone_get_maintain_mode(zone) & ZDB_ZONE_MAINTAIN_NSEC3) != 0)
+                    {
+                        //u8 optout, u16 iterations, const u8 *salt, u8 salt_len, u8 status);
+                        zdb_packed_ttlrdata *rrset = zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAMQUEUED);
+
+                        database_apply_nsec3paramqueued(zone, rrset, ZDB_ZONE_MUTEX_DYNUPDATE);
+                    }
+                    else
+                    {
+                        nsec_zone_set_status(zone, ZDB_ZONE_MUTEX_DYNUPDATE, NSEC_ZONE_ENABLED|NSEC_ZONE_GENERATING);
+                    }
+                }
+                zdb_zone_release_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
+                zone = NULL;
+            }
+
             database_service_zone_dnssec_maintenance(zone_desc);
         }
 #endif
@@ -1679,7 +1746,7 @@ database_zone_refresh_alarm(void *args, bool cancel)
     u32 next_alarm_epoch = 0;
     soa_rdata soa;
 
-    log_info("database: refresh: %{dnsname}", origin);
+    log_debug("database: refresh: %{dnsname}", origin);
 
     zone_desc_s *zone_desc = zone_acquirebydnsname(origin);
 
@@ -1898,7 +1965,7 @@ database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch)
 
         sszra->origin = dnsname_dup(zone->origin);
 
-        alarm_event_node *event = alarm_event_new(
+        alarm_event_node *event = alarm_event_new( // zone refresh
                         next_alarm_epoch,
                         ALARM_KEY_ZONE_REFRESH,
                         database_zone_refresh_alarm,

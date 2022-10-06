@@ -50,7 +50,7 @@
 extern logger_handle *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 static config_control tmp_config_control =
 {
@@ -83,7 +83,7 @@ config_control_section_postprocess(struct config_section_descriptor_s *csd)
 
         if(ha->port == 0)
         {
-            ha->port = CTRL_PORT_DEFAULT;
+            ha->port = NU16(CTRL_PORT_DEFAULT);
         }
 
         hap = &ha->next;

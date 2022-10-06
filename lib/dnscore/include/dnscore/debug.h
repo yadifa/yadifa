@@ -253,7 +253,8 @@ void debug_bench_print_all(struct output_stream *os);
 void debug_bench_unregister_all();
 
 typedef intptr* stacktrace;
-stacktrace debug_stacktrace_get();
+stacktrace debug_stacktrace_get_ex(int index);
+stacktrace debug_stacktrace_get(); // debug_stacktrace_get_ex(1)
 void debug_stacktrace_log(struct logger_handle *handle, u32 level, stacktrace trace);
 void debug_stacktrace_log_with_prefix(struct logger_handle* handle, u32 level, stacktrace trace, const char *prefix);
 void debug_stacktrace_try_log(struct logger_handle *handle, u32 level, stacktrace trace);
@@ -268,21 +269,29 @@ void debug_stacktrace_clear();
 #define UNICITY_ACQUIRE(x)
 #define UNICITY_RELEASE(x)
 
+#if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
+
 extern volatile size_t malloc_hook_total;
 extern volatile size_t malloc_hook_malloc;
 extern volatile size_t malloc_hook_free;
 extern volatile size_t malloc_hook_realloc;
 extern volatile size_t malloc_hook_memalign;
 
+#endif
+
 void debug_malloc_hooks_init();
 void debug_malloc_hooks_finalize();
+
 void *debug_malloc_unmonitored(size_t size);
+void *debug_realloc_unmonitored(void* ptr, size_t size);
 void debug_free_unmonitored(void* ptr);
+void *debug_memalign_unmonitored(size_t alignment, size_t size);
+
 void debug_malloc_hook_tracked_dump();
 void debug_malloc_hook_caller_dump();
 void *debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off);
 
-void debug_nop_hook(); // meant
+void debug_dump_page(void* ptr);
 
 struct debug_memory_by_tag_context_s;
 typedef struct debug_memory_by_tag_context_s debug_memory_by_tag_context_t;
@@ -296,6 +305,8 @@ void debug_memory_by_tag_alloc_notify(debug_memory_by_tag_context_t *ctx, u64 ta
 void debug_memory_by_tag_free_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s64 size);
 void debug_memory_by_tag_print(debug_memory_by_tag_context_t *ctx, struct output_stream *os);
 #endif
+
+void debug_memory_stat(int mask);
 
 #ifdef	__cplusplus
 }

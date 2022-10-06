@@ -179,7 +179,7 @@ void* threaded_queue_slg_dequeue(threaded_queue_slg_t *q)
     {
         volatile threaded_queue_slg_page_t *page = (volatile threaded_queue_slg_page_t*)q->read_page;
 
-        intptr d = (volatile intptr)page->size - (volatile intptr)q->read_index;
+        intptr d = (intptr)page->size - (intptr)q->read_index;
 
         if(d > 0)
         {

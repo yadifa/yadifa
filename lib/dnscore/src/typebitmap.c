@@ -223,7 +223,9 @@ type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type)
 void
 type_bit_maps_init(type_bit_maps_context *context)
 {
-    ZEROMEMORY(context, sizeof(type_bit_maps_context));
+    //context->last_type_window = 0;
+    context->type_bit_maps_size = 0;
+    //ZEROMEMORY(context, sizeof(type_bit_maps_context));
     context->last_type_window = -1;
 }
 
@@ -231,19 +233,33 @@ void type_bit_maps_set_type(type_bit_maps_context *context, u16 rtype)
 {
     u8 *type_bitmap_field = context->type_bitmap_field;
     u8 *window_size = context->window_size;
+    s32 last_type_window = context->last_type_window;
 
-    /* Network bit order */
+    // Network bit order
     rtype = (u16)ntohs(rtype);
+
+    const s32 type_window = rtype >> 8;
+
+    // clear additional bytes if needed
+
+    if(type_window > last_type_window)
+    {
+        s32 length = type_window - last_type_window;
+        ZEROMEMORY(&window_size[last_type_window + 1], length);
+        ZEROMEMORY(&type_bitmap_field[(last_type_window + 1) << 5], length << 5);
+        last_type_window = type_window;
+        context->last_type_window = last_type_window;
+    }
     
     const u8 mask = 1 << (7 - (rtype & 7));
-    
-    if((type_bitmap_field[rtype >> 3] & mask) == 0)
+    type_bitmap_field[rtype >> 3] |= mask;
+    u8 new_window_size = ((rtype & 0xf8) >> 3) + 1;
+    if(new_window_size > window_size[type_window])
     {
-        type_bitmap_field[rtype >> 3] |= mask;
-        window_size[rtype >> 8] = MAX(((rtype & 0xf8) >> 3) + 1, window_size[rtype >> 8]);
-
-        context->last_type_window = MAX(rtype >> 8, context->last_type_window);
+        window_size[type_window] = new_window_size;
     }
+
+    // if the bit is cleared, increase the window size
 }
 
 void type_bit_maps_clear_type(type_bit_maps_context *context, u16 rtype)
@@ -283,7 +299,7 @@ void type_bit_maps_clear_type(type_bit_maps_context *context, u16 rtype)
             }
         }
 
-        context->last_type_window = MAX(rtype >> 8, context->last_type_window);
+        context->last_type_window = MAX(rtype_window_offset, context->last_type_window);
     }
 }
 

@@ -60,6 +60,8 @@
 #define PAGE_MAGIC MAGIC4('P','A','G','E')
 #define PAGE_COUNT (MOSTLY_PRIMES_COUNT * 100)
 
+#define CIRCULAR_FILE_TEST_ENABLED 0
+
 static int g_page_count = PAGE_COUNT;
 
 
@@ -202,6 +204,7 @@ static int mostly_primes[MOSTLY_PRIMES_COUNT] =
     7841, 7853, 7867, 7873, 7877, 7879, 7883, 7901, 7907, 7919,
 };
 
+#if CIRCULAR_FILE_TEST_ENABLED
 static u32 page_build(struct page_s *page, int i, random_ctx rnd)
 {
     u32 data_size = mostly_primes[i % MOSTLY_PRIMES_COUNT];
@@ -480,7 +483,7 @@ circular_file_test(bool can_grow)
 
     return ret;
 }
-
+#endif
 struct circular_file_resize_script_line_s
 {
     char command;
@@ -724,7 +727,7 @@ main(int argc, char *argv[])
 
     ya_result ret;
     int exit_code = EXIT_SUCCESS;
-/*
+#if CIRCULAR_FILE_TEST_ENABLED
     if(FAIL(ret = circular_file_test(TRUE)))
     {
         formatln("can-grow failed: %r", ret);
@@ -737,7 +740,7 @@ main(int argc, char *argv[])
         exit_code = EXIT_FAILURE;
     }
     else
-    */
+#endif
     {
         static const circular_file_resize_script_line_t script[] =
         {

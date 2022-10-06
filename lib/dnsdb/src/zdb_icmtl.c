@@ -139,6 +139,28 @@ zdb_icmtl_replay_remove_keep_flag(ptr_set *marked_labels, const u8 *origin)
     }
 }
 
+void
+zdb_icmtl_replay_commit_state_init(zdb_icmtl_replay_commit_state *state)
+{
+    state->dnskey_added = 0;
+    state->dnskey_removed = 0;
+#if DNSCORE_HAS_EVENT_DYNAMIC_MODULE
+    ptr_vector_init_empty(&state->dnskey_added_list);
+    ptr_vector_init_empty(&state->dnskey_removed_list);
+#endif
+}
+
+void
+zdb_icmtl_replay_commit_state_finalize(zdb_icmtl_replay_commit_state *state)
+{
+#if DNSCORE_HAS_EVENT_DYNAMIC_MODULE
+    ptr_vector_destroy(&state->dnskey_added_list);
+    ptr_vector_destroy(&state->dnskey_removed_list);
+#else
+    (void)state;
+#endif
+}
+
 ya_result
 zdb_icmtl_replay_commit_ex(zdb_zone *zone, input_stream *is, zdb_icmtl_replay_commit_state *out_state)
 {
@@ -204,8 +226,7 @@ zdb_icmtl_replay_commit_ex(zdb_zone *zone, input_stream *is, zdb_icmtl_replay_co
     nsec_chain_replay_init(&nsecreplay, zone);
 #endif
 
-    out_state->dnskey_removed = 0;
-    out_state->dnskey_added = 0;
+    zdb_icmtl_replay_commit_state_init(out_state);
 
     /* 
      * At this point : the next record, if it exists AND is not an SOA , has to be deleted
@@ -491,10 +512,15 @@ zdb_icmtl_replay_commit_ex(zdb_zone *zone, input_stream *is, zdb_icmtl_replay_co
 
                         if(ISOK(ret))
                         {
-
+                            /*
+#if HAS_EVENT_DYNAMIC_MODULE
+                            if(dynamic_module_dnskey_interface_chain_available())
+                            {
+                                dynamic_module_on_dnskey_publish(key);
+                            }
+#endif
+                             */
                             dnskey_state_disable(key, DNSKEY_KEY_IS_IN_ZONE);
-
-
 
                             if(dnssec_keystore_remove_key(key))
                             {
@@ -566,7 +592,7 @@ zdb_icmtl_replay_commit_ex(zdb_zone *zone, input_stream *is, zdb_icmtl_replay_co
             
             bool handled_by_chain = FALSE;
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
             if(rr.tctr.qtype == TYPE_RRSIG)
             {
                 // get expiration, update resignature alarm if needed
@@ -808,6 +834,7 @@ zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *out_serial_after_
     {
         *out_serial_after_replayp = state.end_serial;
     }
+    zdb_icmtl_replay_commit_state_finalize(&state);
     return ret;
 }
 

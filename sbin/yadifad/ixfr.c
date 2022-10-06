@@ -333,37 +333,45 @@ ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u
      * connect & send
      */
 
-    while(FAIL(return_value = tcp_input_output_stream_connect_host_address(servers, is, os, g_config->xfr_connect_timeout)))
+    host_address *transfer_source = zone_transfer_source_copy(origin);
+    host_address *current_transfer_source;
+    current_transfer_source = transfer_source;
+
+    return_value = zone_transfer_source_tcp_connect(servers, &current_transfer_source, is, os, g_config->xfr_connect_timeout);
+
+    if(ISOK(return_value))
     {
-        int err = errno;
-        
-        if(err != EINTR)
+#if DEBUG
+        log_debug("ixfr_start_query: write: sending %d bytes to %{hostaddr}", message_get_size(ixfr_queryp) + 2, servers);
+        log_memdump_ex(g_server_logger, LOG_DEBUG, message_get_buffer_const(ixfr_queryp), message_get_size(ixfr_queryp), 16, OSPRINT_DUMP_HEXTEXT);
+#endif
+        if(ISOK(return_value = message_write_tcp(ixfr_queryp, os)))
         {
-            log_info("ixfr: %{dnsname}: %{hostaddr}: failed to send the query: %r", origin, servers, return_value);
-            return return_value;
+            output_stream_flush(os);
+
+            int fd = fd_input_stream_get_filedescriptor(is);
+
+            tcp_set_sendtimeout(fd, 30, 0);
+            tcp_set_recvtimeout(fd, 30, 0);
+
+            return SUCCESS;
+        }
+
+        input_stream_close(is);
+        output_stream_close(os);
+    }
+    else
+    {
+        if((transfer_source != NULL) && (current_transfer_source == NULL))
+        {
+            log_warn("ixfr: %{dnsname}: %{hostaddr}: could not find a valid bind point to query a transfer from", origin, servers);
+        }
+        else
+        {
+            log_info("ixfr: %{dnsname}: %{hostaddr}: stream connection failed: %r", origin, servers, return_value);
         }
     }
-    
-#if DEBUG
-    log_debug("ixfr_start_query: write: sending %d bytes to %{hostaddr}", message_get_size(ixfr_queryp) + 2, servers);
-    log_memdump_ex(g_server_logger, LOG_DEBUG, message_get_buffer_const(ixfr_queryp), message_get_size(ixfr_queryp), 16, OSPRINT_DUMP_HEXTEXT);
-#endif
 
-    if(ISOK(return_value = message_write_tcp(ixfr_queryp, os)))
-    {
-        output_stream_flush(os);
-
-        int fd = fd_input_stream_get_filedescriptor(is);
-
-        tcp_set_sendtimeout(fd, 30, 0);
-        tcp_set_recvtimeout(fd, 30, 0);
-
-        return SUCCESS;
-    }
-        
-    input_stream_close(is);
-    output_stream_close(os);
-    
     return return_value;
 }
 

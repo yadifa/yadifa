@@ -164,7 +164,7 @@ void nsec_logdump_tree(zdb_zone *zone);
 #define NSEC_ZONE_GENERATING    2
 #define NSEC_ZONE_REMOVING      4
 
-#define TYPE_NSECCHAINSTATE NU16(0xff03)
+#define TYPE_NSECCHAINSTATE NU16(0xff01)
 
 /**
  * marks the zone with private records

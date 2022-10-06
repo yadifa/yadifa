@@ -39,7 +39,7 @@ AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/i
 dist_noinst_DATA = VERSION
 
 lib_LTLIBRARIES = libdnsdb.la
-libdnsdb_la_LDFLAGS = -version-info 7:4:0
+libdnsdb_la_LDFLAGS = -version-info 7:5:0
 libdnsdb_la_LIBADD=$(top_builddir)/lib/dnscore/libdnscore.la
 
 I = include/dnsdb
@@ -125,8 +125,6 @@ pkginclude_HEADERS = \
 	$(I)/zdb_zone_write.h \
 	$(I)/nsec3-forall-label.h
 
-nodist_include_HEADERS = $(FEATURES)
-#
 
 libdnsdb_la_SOURCES = \
 	src/avl.c \
@@ -185,6 +183,8 @@ libdnsdb_la_SOURCES = \
 #	src/journal-cjf.c \
 #
 
+BUILT_SOURCES = $(FEATURES)
+
 # DNSSEC is defined if either NSEC3 or NSEC are defined
 
 if HAS_MASTER_SUPPORT
@@ -239,7 +239,7 @@ REVISION:
 	(svn info 2>/dev/null;if [ $$? -ne 0 ];then echo "Revision: 0";fi)|grep Revision:|sed 's/^Revision: *//' > REVISION
 
 $(srcdir)/src/avl.c: $(FEATURES) $(FEATURESSRC)
-	
+
 $(FEATURESSRC): ../../config.h
 	mkdir -p $(top_builddir)/$(FEATURESDIR)
 	cp ../../config.h $(FEATURESSRC)
@@ -270,3 +270,8 @@ VP=ZDB
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
+
+install-data-local: $(FEATURES)
+	mkdir -p $(DESTDIR)$(prefix)/include/dnsdb
+	/usr/bin/install -c -m 644 $(FEATURES) $(DESTDIR)$(prefix)/$(FEATURES)
+

@@ -56,7 +56,6 @@
 #include "dnscore/message.h"
 #include "dnscore/packet_reader.h"
 
-extern logger_handle *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 ya_result

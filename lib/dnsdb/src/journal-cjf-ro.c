@@ -128,9 +128,9 @@ extern logger_handle* g_database_logger;
 #define VERSION_LO 1
 #define JOURNAL_CLASS_NAME "journal_cjf"
 
-#define LOCK_NONE   0
-#define LOCK_READ   1
-#define LOCK_WRITE  2
+#define JNL_LOCK_NONE   0
+#define JNL_LOCK_READ   1
+#define JNL_LOCK_WRITE  2
 
 #define CJF_EXT "cjf"
 #define CJF_EXT_STRLEN 3
@@ -1844,7 +1844,7 @@ journal_cjf_ro_load_idxt(journal_cjf *jnl)
         jnl->serial_begin = 0;
         jnl->serial_end = 0;
 
-        jnl->mtx.owner = LOCK_NONE;
+        jnl->mtx.owner = JNL_LOCK_NONE;
         jnl->mtx.count = 0;
         jnl->first_page_offset = CJF_HEADER_SIZE;
         jnl->page_table_file_offset = 0;

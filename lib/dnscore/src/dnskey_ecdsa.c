@@ -44,8 +44,9 @@
  *
  * USE INCLUDES */
 #include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore-config-features.h"
 
-#if HAS_ECDSA_SUPPORT
+#if DNSCORE_HAS_ECDSA_SUPPORT
 
 #include <stdio.h>
 #include <stdlib.h>

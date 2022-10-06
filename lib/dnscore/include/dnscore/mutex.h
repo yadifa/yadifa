@@ -41,8 +41,7 @@
  * @{
  *
  *----------------------------------------------------------------------------*/
-#ifndef _MUTEX_H
-#define	_MUTEX_H
+#pragma once
 
 /**
  * This helper header allows to chose the kind of mutex used.
@@ -350,7 +349,7 @@ static inline void cond_wait_auto_time_out(cond_t *cond, mutex_t *mtx)
     mutex_contention_lock_resume_with_mutex(thread_self(), mtx);
 #endif
 #endif
-#ifndef WIN32
+#if __unix__
     if(ret != 0)
     {
 #if DEBUG
@@ -772,5 +771,4 @@ bool shared_group_mutex_islocked_by(shared_group_mutex_t *mtx, u8 owner);
 }
 #endif
 
-#endif	/* _MUTEX_H */
 /** @} */

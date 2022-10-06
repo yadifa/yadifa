@@ -211,7 +211,7 @@ json
 json_array_get(json j, size_t index)
 {
     yassert(j->type == JSON_ARRAY);
-    json ret = (json)ptr_vector_get(&j->array.array, index);
+    json ret = (json)ptr_vector_get(&j->array.array, (u32)index);
     return ret;
 }
 
@@ -326,7 +326,7 @@ json_write_to(json j, output_stream *os)
             ya_result ret_tmp;
             if((ret_tmp = output_stream_write(os, "\"", 1)) == 1)
             {
-                if(ISOK(ret = output_stream_write(os, j->string.text, j->string.text_size)))
+                if(ISOK(ret = output_stream_write(os, j->string.text, (u32)j->string.text_size)))
                 {
                     if((ret_tmp = output_stream_write(os, "\"", 1)) == 1)
                     {

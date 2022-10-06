@@ -41,6 +41,15 @@
 #ifndef _DEBUG_CONFIG_H
 #define	_DEBUG_CONFIG_H
 
+/**
+ *
+ * DEBUG: Enables (1) or disables (0) dumping each time a malloc of a free
+ * is called.
+ * Recommende value: FALSE
+ */
+
+#define DNSCORE_DEBUG_SHOW_ALLOCS FALSE
+
 #if DEBUG
 
 #ifdef	__cplusplus
@@ -91,15 +100,6 @@ extern "C"
 #define DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE 8192
 
 /**
- *
- * DEBUG: Enables (1) or disables (0) dumping each time a malloc of a free
- * is called.
- * Recommende value: FALSE
- */
-
-#define DNSCORE_DEBUG_SHOW_ALLOCS FALSE
-
-/**
  * DEBUG: Sets a limit on the memory available for the database.
  * Debug overhead is not taken in account here.
  *
@@ -140,8 +140,12 @@ extern "C"
  */
     
 #define DNSCORE_DEBUG_KEEP_STACKTRACE 1
-    
+
+#if DEBUG
 #define DEBUG_BENCH_FD 1
+#else // !DEBUG
+#define DEBUG_BENCH_FD 0
+#endif // DEBUG
 
 #ifdef	__cplusplus
 }

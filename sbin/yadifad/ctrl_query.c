@@ -64,7 +64,7 @@ extern logger_handle *g_server_logger;
 
 
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 
 #include "ctrl_zone.h"
 
@@ -290,7 +290,7 @@ ctrl_query_parse_byte_fqdn_class_view(packet_unpack_reader_data *pr, u8* one_byt
                 {
                     if(cmd_tctr.rdlen != 0)
                     {
-                        return MAKE_DNSMSG_ERROR(RCODE_FORMERR); // the one forbidden value is 1 byte available
+                        return MAKE_RCODE_ERROR(RCODE_FORMERR); // the one forbidden value is 1 byte available
                     }
                 }
             }

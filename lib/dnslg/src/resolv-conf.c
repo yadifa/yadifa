@@ -174,7 +174,7 @@ resolv_print(resolv_s *resolver)
     formatln("RO NDOTS           : %u", resolver->ndots);
     formatln("RO NO_TLD_QUERY    : %u", resolver->no_tld_query);
     formatln("RO DEBUG           : %u", resolver->debug);
-    formatln("RO SEARCH_OR_DOMAIN: %u", resolver->search_or_domain);
+    //formatln("RO SEARCH_OR_DOMAIN: %u", resolver->search_or_domain);
 
     flushout();
 }

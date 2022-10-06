@@ -52,7 +52,7 @@
 //#include "dnscore/rfc.h"
 #include "dnscore/tsig.h"
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "dnscore/ctrl-rfc.h"
 #endif
 
@@ -784,12 +784,10 @@ packet_reader_read_record(packet_unpack_reader_data* reader, u8* output_buffer, 
         /******************************************************************************
          * The types that requires special handling (dname compression)
          ******************************************************************************/
-
         case TYPE_MX:
         case TYPE_AFSDB:
         {
             u8 *p = buffer;
-
             buffer += 2;
             len -= 2;
             rdata_size -= 2;
@@ -1072,7 +1070,6 @@ packet_reader_skip_fqdn(packet_unpack_reader_data* reader)
 
     if(p >= p_limit)
     {
-        reader->offset = reader->packet_size;
         return UNEXPECTED_EOF; /* EOF */
     }
 
@@ -1143,7 +1140,7 @@ packet_reader_skip_record(packet_unpack_reader_data* reader)
     return reader->offset - from;
 }
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 
 /**
  * 

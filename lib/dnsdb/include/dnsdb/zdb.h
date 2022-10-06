@@ -270,11 +270,29 @@ static inline ya_result zdb_query_message_update_with_rrl(message_data* mesg, zd
 ya_result zdb_query_ip_records(zdb* db, const u8* name_, zdb_packed_ttlrdata **ttlrdata_out_a, zdb_packed_ttlrdata **ttlrdata_out_aaaa);
 
 /**
+ *
+ * Appends all A and AAAA records found in the database for the given fqdn
+ * Given the nature of the list, what is returned is a copy.
+ * The call locks the database for reading, then each involved zone for reading.
+ * Locks are released before the function returns.
+ * The port field of the host_address is set to a given port (network order)
+ *
+ * @param db database
+ * @param name_ fqdn
+ * @param target_list list
+ * @param network_order_port u16
+ * @return
+ */
+
+ya_result zdb_append_ip_records_with_port_ne(zdb* db, const u8* name_, host_address *target_list, u16 network_order_port);
+
+/**
  * 
  * Appends all A and AAAA records found in the database for the given fqdn
  * Given the nature of the list, what is returned is a copy.
  * The call locks the database for reading, then each involved zone for reading.
  * Locks are released before the function returns.
+ * The port is set to 53 (in network order)
  * 
  * @param db database
  * @param name_ fqdn

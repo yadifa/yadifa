@@ -54,6 +54,8 @@
 
 #define BYTEARRAY_STARTSIZE 1024
 
+#define BYTEARRAY_OUTPUT_STREAM_GROWTH_THRESHOLD 0x100000
+
 #define BAOSZDUP_TAG 0x5055445a534f4142
 #define BAOSDUP_TAG 0x505544534f4142
 
@@ -94,7 +96,14 @@ bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 
             do
             {
-                newsize = newsize * 2;
+                if(newsize < BYTEARRAY_OUTPUT_STREAM_GROWTH_THRESHOLD)
+                {
+                    newsize = newsize * 2;
+                }
+                else
+                {
+                    newsize += BYTEARRAY_OUTPUT_STREAM_GROWTH_THRESHOLD;
+                }
             }
             while(newsize < data->buffer_size + len);
 
@@ -288,7 +297,6 @@ bytearray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size, 
     data->buffer_size = buffer_size;
     data->flags = (data->flags & BYTEARRAY_ZALLOC_CONTEXT) | ((owned)?BYTEARRAY_OWNED:0);
 }
-
     /**
      
      * @param out_stream

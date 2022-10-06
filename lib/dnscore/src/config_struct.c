@@ -96,11 +96,12 @@ config_section_struct_set_wild(struct config_section_descriptor_s *csd, const ch
 }
 
 static ya_result
-config_section_struct_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_struct_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
     (void)key;
+    (void)context;
 
     return CONFIG_UNKNOWN_SETTING;
 }

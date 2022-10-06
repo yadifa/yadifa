@@ -177,7 +177,7 @@ ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *func
 
 ya_result thread_kill(thread_t t, int signo)
 {
-#ifndef WIN32
+#if __unix__
     int ret = pthread_kill(t, signo);
     if(ret != 0)
     {

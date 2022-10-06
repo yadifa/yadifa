@@ -337,7 +337,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     
                     if(service_port > port_limit)
                     {
-                        return_code = MAKE_ERRNO_ERROR(ERANGE); /// @todo 20181018 edf -- consider having a value/parameter "out of range" error code
+                        return_code = MAKE_ERRNO_ERROR(ERANGE);
                         break;
                     }
                     
@@ -357,7 +357,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
                 
                 if(max_index < 0) // @todo 20150608 timh -- is this the right way to do it?
-                {
+                {                 // @note 20220805 edf -- this seems pointless. It seems max_index is only < 0 if there has been an error.
                     return_code = INVALID_RECORD;
                     break;
                 }

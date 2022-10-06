@@ -933,18 +933,13 @@ parser_concat_next_tokens(parser_s *parser)
     size_t offset = 0;
 
 //    char space = parser->blank_marker[0];
-    char space = ' ';
+    const char space = ' ';
     do
     {
         ret = parser_next_token(parser);
 
         if(ret & PARSER_WORD)
         {
-            //   if((ret & PARSER_COMMENT) != 0)
-            //  {
-            //     continue;
-            //  }
-
             const char *text = parser_text(parser);
             size_t text_length = parser_text_length(parser);
             size_t new_length = offset + text_length;
@@ -962,11 +957,9 @@ parser_concat_next_tokens(parser_s *parser)
     }
     while((ret & (PARSER_EOF|PARSER_EOL)) == 0);
 
-
     // remove the last space, because we always add a space
     offset--;
 
-    
     char *text = parser->additional_buffer;
 
     parser->text_length = offset - (text - parser->additional_buffer);
@@ -1194,9 +1187,9 @@ parser_type_bit_maps_initialise(parser_s *p, type_bit_maps_context* context)
 
     /*    ------------------------------------------------------------    */
 
-    ZEROMEMORY(window_size, sizeof(context->window_size));
-    context->last_type_window = -1;
-    ZEROMEMORY(type_bitmap_field, sizeof(context->type_bitmap_field));
+    //ZEROMEMORY(window_size, sizeof(context->window_size));
+    s32 last_type_window = -1;
+    //ZEROMEMORY(type_bitmap_field, sizeof(context->type_bitmap_field));
 
     ya_result return_code;
     
@@ -1220,17 +1213,24 @@ parser_type_bit_maps_initialise(parser_s *p, type_bit_maps_context* context)
 
             type = ntohs(type); /* types are now stored in NETWORK order */
 
+            s32 type_window = type >> 8;
+            if(type_window > last_type_window)
+            {
+                s32 length = type_window - last_type_window;
+                ZEROMEMORY(&window_size[last_type_window + 1], length);
+                ZEROMEMORY(&type_bitmap_field[(last_type_window + 1) << 5], length << 5);
+                last_type_window = type_window;
+            }
+
             /* Network bit order */
             type_bitmap_field[type >> 3] |= 1 << (7 - (type & 7));
-            window_size[type >> 8] = ((type & 0xf8) >> 3) + 1;
-
-            context->last_type_window = MAX(type >> 8, context->last_type_window);
+            window_size[type_window] = ((type & 0xf8) >> 3) + 1;
         }
         
     }
     while((return_code & (PARSER_EOF|PARSER_EOL)) == 0);
 
-    for(s32 i = 0; i <= context->last_type_window; i++)
+    for(s32 i = 0; i <= last_type_window; i++)
     {
         ws = window_size[i];
 
@@ -1241,6 +1241,7 @@ parser_type_bit_maps_initialise(parser_s *p, type_bit_maps_context* context)
     }
 
     context->type_bit_maps_size = type_bit_maps_size;
+    context->last_type_window = last_type_window;
 
     return type_bit_maps_size;
 }

@@ -59,6 +59,7 @@
 #include <dnscore/dnskey_rsa.h>
 #include <dnscore/dnskey_dsa.h>
 #include <dnscore/dnskey_ecdsa.h>
+#include <dnscore/dnskey-signature.h>
 
 static smp_int workers_active;
 static smp_int smp_tries;
@@ -68,6 +69,9 @@ struct main_args
     u8* domain;
     u32 size;
     u32 force_tag;
+    u32 sign_count;
+    u32 verify_count;
+    u32 time_limit;
     bool ksk;
     u8 algorithm;
     u8 workers;
@@ -81,6 +85,9 @@ CONFIG_BEGIN(main_args_desc)
 CONFIG_FQDN(domain, ".")
 CONFIG_U32_RANGE(size, "1024", 512, 4096)
 CONFIG_U32_RANGE(force_tag, "65536", 0, 65536)
+CONFIG_U32_RANGE(sign_count, "0", 0, MAX_U32)
+CONFIG_U32_RANGE(verify_count, "0", 0, MAX_U32)
+CONFIG_U32_RANGE(time_limit, "0", 0, MAX_U32)
 CONFIG_BOOL(ksk, "0")
 CONFIG_DNSKEY_ALGORITHM(algorithm, "8")
 CONFIG_U8(workers, "1")
@@ -101,17 +108,24 @@ CMDLINE_OPT("algorithm",'a',"algorithm")
 CMDLINE_HELP("id", "the algorithm of the key")
 CMDLINE_OPT("workers", 'w' ,"workers")
 CMDLINE_HELP("thread-count", "when insanely looking for a tag, spawn that amount of workers")
+CMDLINE_OPT("sign-count", 'S' ,"sign_count")
+CMDLINE_HELP("sign-count", "after generation, will do that amount of signatures generation and bench it")
+CMDLINE_OPT("verify-count", 'V' ,"verify_count")
+CMDLINE_HELP("verify-count", "after generation, will do that amount of signatures verification and bench it")
+CMDLINE_OPT("time-limit", 'L' ,"time_limit")
+CMDLINE_HELP("seconds", "limits time spent on generation and verification so it doesn't go overboard")
 CMDLINE_VERSION_HELP(keygen_test_cmdline)
 CMDLINE_END(keygen_test_cmdline)
 
-static main_args g_config = {NULL, 0, 0, FALSE, 0, 0};
+static main_args g_config = {NULL, 0, 0, 0, 0, 0, FALSE, 0, 0};
+static dnssec_key *g_key = NULL;
 
 static void
 help(const char *name)
 {
     formatln("%s domain [-a algorithm] [-b size] [--KSK] [-T forcedtag] [-w workers]\n\n", name);
-
     cmdline_print_help(keygen_test_cmdline, 4, 0, " :  ", 0, termout);
+    flushout();
 }
 
 static ya_result
@@ -172,6 +186,8 @@ main_config(int argc, char *argv[])
              g_config.domain,
              dns_encryption_algorithm_get_name(g_config.algorithm),
              g_config.size);
+
+    ret = g_config.algorithm;
 
     return ret;
 }
@@ -241,7 +257,12 @@ dnskey_generate()
                 //formatln("key generated after %llu trie(s) and %lli seconds (duplicate)", tries, (now - start) / ONE_SECOND_US);
             }
 
-            dnskey_release(key);
+            //dnskey_release(key);
+            if(g_key != NULL)
+            {
+                dnskey_release(g_key);
+            }
+            g_key = key;
 
             break;
         }
@@ -265,6 +286,202 @@ dnskey_generate_thread(void* arg)
     return NULL;
 }
 
+static void
+signature_generation_bench(dnssec_key *key, u16 rtype, int rec_count, int sign_bench_count, int verify_bench_count, int time_limit)
+{
+    s64 bench_setup_start;
+    s64 bench_setup_stop;
+    s64 bench_generate_start;
+    s64 bench_generate_stop;
+    s64 bench_verify_start;
+    s64 bench_verify_stop;
+    s64 bench_time_limit = MAX_S64;
+
+    bench_setup_start = timeus();
+
+    ptr_vector rrset;
+    ptr_vector_init_empty(&rrset);
+
+    char tmp_text[1024];
+    u8 tmp_fqdn[1024];
+
+    dns_resource_record *rr_array[rec_count];
+
+    switch(rtype)
+    {
+        case TYPE_NS:
+        {
+            for(int i = 0; i < rec_count; ++i)
+            {
+                dns_resource_record *rr = dns_resource_record_new_instance();
+                snformat(tmp_text, sizeof(tmp_text), "ns%i.%{dnsname}", i, dnskey_get_domain(key));
+                cstr_to_dnsname(tmp_fqdn, tmp_text);
+                dns_resource_record_set_record(rr, dnskey_get_domain(key), TYPE_NS, CLASS_IN, 86400, dnsname_len(tmp_fqdn), tmp_fqdn);
+                rr_array[i] = rr;
+                ptr_vector_append(&rrset, rr);
+            }
+            break;
+        }
+        case TYPE_DS:
+        {
+            for(int i = 0; i < rec_count; ++i)
+            {
+                dns_resource_record *rr = dns_resource_record_new_instance();
+                SET_U16_AT(tmp_fqdn[0], i *  1019);
+                tmp_fqdn[2] = 8;
+                tmp_fqdn[3] = 2;
+
+                for(int j = 0; j < 32; ++j)
+                {
+                    tmp_fqdn[j + 4] = rand();
+                }
+
+                dns_resource_record_set_record(rr, dnskey_get_domain(key), TYPE_DS, CLASS_IN, 86400, 36, tmp_fqdn);
+                rr_array[i] = rr;
+                ptr_vector_append(&rrset, rr);
+            }
+            break;
+        }
+        default:
+        {
+            for(int i = 0; i < rec_count; ++i)
+            {
+                dns_resource_record *rr = dns_resource_record_new_instance();
+
+                for(int j = 0; j < 8; ++j)
+                {
+                    tmp_fqdn[j] = rand();
+                }
+
+                dns_resource_record_set_record(rr, dnskey_get_domain(key), rtype, CLASS_IN, 86400, 8, tmp_fqdn);
+                rr_array[i] = rr;
+                ptr_vector_append(&rrset, rr);
+            }
+            break;
+        }
+    }
+
+    bench_setup_stop = timeus();
+
+    bench_generate_start = timeus();
+
+    dns_resource_record* rrsig_rr = NULL;
+    ya_result ret = SUCCESS;
+
+    if(time_limit > 0)
+    {
+        bench_time_limit = bench_generate_start + ONE_SECOND_US * time_limit;
+    }
+
+    for(int i = sign_bench_count; i >= 0; --i)
+    {
+        resource_record_view rrv;
+        dns_resource_record_resource_record_view_init(&rrv);
+
+        s32 from_epoch = dnskey_get_activate_epoch(key);
+        s32 to_epoch = dnskey_get_inactive_epoch(key);
+
+        dnskey_signature ds;
+        dnskey_signature_init(&ds);
+        dnskey_signature_set_validity(&ds, from_epoch, to_epoch);
+        dnskey_signature_set_view(&ds, &rrv);
+        dnskey_signature_set_rrset_reference(&ds, &rrset);
+        dnskey_signature_set_canonised(&ds, FALSE);
+        ret = dnskey_signature_sign(&ds, key, (void **) &rrsig_rr);
+        dnskey_signature_finalize(&ds);
+
+        if(FAIL(ret))
+        {
+            // oopsie
+            break;
+        }
+
+        s64 now = timeus();
+        if(now >= bench_time_limit)
+        {
+            sign_bench_count = sign_bench_count - i;
+            break;
+        }
+
+        if((i > 0) && (rrsig_rr != NULL))
+        {
+            dns_resource_record_free(rrsig_rr);
+            rrsig_rr = NULL;
+        }
+    }
+
+    bench_generate_stop = timeus();
+    bench_verify_start = timeus();
+
+    if(rrsig_rr != NULL)
+    {
+        if(time_limit > 0)
+        {
+            bench_time_limit = bench_verify_start + ONE_SECOND_US * time_limit;
+        }
+
+        for(int i = verify_bench_count; i > 0; --i)
+        {
+            resource_record_view rrv;
+            dns_resource_record_resource_record_view_init(&rrv);
+
+            s32 from_epoch = dnskey_get_activate_epoch(key);
+            s32 to_epoch = dnskey_get_inactive_epoch(key);
+
+            dnskey_signature ds;
+            dnskey_signature_init(&ds);
+            dnskey_signature_set_validity(&ds, from_epoch, to_epoch);
+            dnskey_signature_set_view(&ds, &rrv);
+            dnskey_signature_set_rrset_reference(&ds, &rrset);
+            dnskey_signature_set_canonised(&ds, FALSE);
+            ret = dnskey_signature_verify(&ds, key, rrsig_rr);
+            dnskey_signature_finalize(&ds);
+
+            if(FAIL(ret))
+            {
+                // oopsie
+                break;
+            }
+
+            s64 now = timeus();
+            if(now >= bench_time_limit)
+            {
+                verify_bench_count = verify_bench_count - i;
+                break;
+            }
+        }
+    }
+
+    bench_verify_stop = timeus();
+
+    u16 rrsig_rr_size = 0;
+
+    if(rrsig_rr != NULL)
+    {
+        rrsig_rr_size = rrsig_rr->rdata_size;
+        dns_resource_record_free(rrsig_rr);
+        rrsig_rr = NULL;
+    }
+
+    for(int i = 0; i < rec_count; ++i)
+    {
+        dns_resource_record_free(rr_array[i]);
+    }
+
+    double bench_setup_dt = bench_setup_stop - bench_setup_start;
+    double bench_generate_dt = bench_generate_stop - bench_generate_start;
+    double bench_verify_dt = bench_verify_stop - bench_verify_start;
+
+    formatln("type: %{dnstype} count: %i", &rtype, rec_count);
+    formatln("setup: %6.3fs", bench_setup_dt / ONE_SECOND_US);
+    formatln("generation   : %u samples %6.3fs %6.3f/s", sign_bench_count, bench_generate_dt / ONE_SECOND_US, (ONE_SECOND_US * sign_bench_count) / bench_generate_dt);
+    formatln("verification : %u samples %6.3fs %6.3f/s", verify_bench_count, bench_verify_dt / ONE_SECOND_US, (ONE_SECOND_US * verify_bench_count) / bench_verify_dt);
+    formatln("signature-size : %hhu", rrsig_rr_size);
+    flushout();
+
+    ptr_vector_destroy(&rrset);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -276,6 +493,11 @@ main(int argc, char *argv[])
     if(FAIL(ret))
     {
         return EXIT_FAILURE;
+    }
+
+    if(ret == 0)
+    {
+        return EXIT_SUCCESS;
     }
 
     smp_int_init_set(&workers_active, 1);
@@ -304,10 +526,28 @@ main(int argc, char *argv[])
     s64 now = timeus();
 
     formatln("key generated after a total of %llu trie(s) and %lli seconds", smp_int_get(&smp_tries), (now - start) / ONE_SECOND_US);
-
     flushout();
     flusherr();
     fflush(NULL);
+
+    if(g_key != NULL)
+    {
+        if(g_config.verify_count > 0)
+        {
+            if(g_config.sign_count == 0)
+            {
+                g_config.sign_count = 1;
+            }
+        }
+
+        if(g_config.sign_count > 0)
+        {
+            signature_generation_bench(g_key, TYPE_DS, 2, g_config.sign_count, g_config.verify_count, g_config.time_limit);
+        }
+
+        dnskey_release(g_key);
+        g_key = NULL;
+    }
 
     dnscore_finalize();
 

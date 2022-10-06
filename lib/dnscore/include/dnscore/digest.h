@@ -47,8 +47,7 @@
  * 
  * @{
  */
-#ifndef _DIGEST_H
-#define	_DIGEST_H
+#pragma once
 
 #include <openssl/engine.h>
 #include <openssl/sha.h>
@@ -60,10 +59,11 @@
 struct digest_s;
 
 typedef s32 digest_update_method(struct digest_s*,const void*, u32);
-typedef s32 digest_final_method(struct digest_s*);
+typedef s32 digest_final_method(struct digest_s*); // finishes computing the digest
 typedef s32 digest_sha1_final_copy_bytes_method(struct digest_s*, void*, u32);
 typedef s32 digest_get_size_method(struct digest_s*);
 typedef s32 digest_get_digest_method(struct digest_s*, void**);
+typedef void digest_finalise_method(struct digest_s*); // destroys the object, frees resources
 
 struct digest_vtbl
 {
@@ -72,6 +72,7 @@ struct digest_vtbl
     digest_sha1_final_copy_bytes_method* final_copy_bytes;
     digest_get_size_method* get_size;
     digest_get_digest_method* get_digest;
+    digest_finalise_method *finalise;
     const char * __class__;
 };
 
@@ -107,6 +108,7 @@ typedef struct digest_s digest_s;
 #define digest_final_copy_bytes(ctx_,buffer_,buffer_size_) (ctx_)->vtbl->final_copy_bytes((ctx_),(buffer_),(buffer_size_))
 #define digest_get_size(ctx_) (ctx_)->vtbl->get_size(ctx_)
 #define digest_get_digest(ctx_,ptr_) (ctx_)->vtbl->get_digest((ctx_),(ptr_))
+#define digest_finalise(ctx_) (ctx_)->vtbl->finalise(ctx_)
 
 static inline void digest_copy_bytes(digest_s *ctx, void *buffer)
 {
@@ -140,5 +142,3 @@ void digest_rawdata_init(digest_s *ctx);
 #ifndef OPENSSL_NO_SHA0
 void digest_sha0_init(digest_s *ctx);
 #endif
-
-#endif // _DIGEST_H

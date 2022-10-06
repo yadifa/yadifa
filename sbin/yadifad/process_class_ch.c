@@ -261,7 +261,7 @@ class_ch_process(message_data *mesg)
 
     u8 qname[MAX_DOMAIN_LENGTH];
     
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     if(ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_query)))
     {
         message_set_status(mesg, FP_ACCESS_REJECTED);

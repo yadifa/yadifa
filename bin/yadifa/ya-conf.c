@@ -284,6 +284,15 @@ ya_conf_read(const cmdline_desc_s *cmdline_table, int argc, char **argv, cmdline
         }
     }
 
+    if(ISOK(return_code))
+    {
+        if(FAIL(return_code = config_set_default(&cfgerr)))
+        {
+            formatln("defaults: internal error: %s:%u : '%s': %r", cfgerr.file, cfgerr.line_number, cfgerr.line, return_code);
+            flushout();
+        }
+    }
+
     return return_code;
 }
 

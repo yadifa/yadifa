@@ -173,7 +173,7 @@ static const output_stream_vtbl popen_output_stream_vtbl =
 int
 popen_output_stream_ex(output_stream* os, const char* command, popen_output_stream_parameters* parms)
 {
-#ifndef WIN32
+#if __unix__
     int write_pipe[2];
     ya_result ret;
 
@@ -231,7 +231,7 @@ popen_output_stream_ex(output_stream* os, const char* command, popen_output_stre
     else if(child == 0)
     {
         close_ex(write_pipe[1]);
-#ifndef WIN32
+#if __unix__
         signal(SIGHUP, SIG_DFL);
         signal(SIGINT, SIG_DFL);
         signal(SIGABRT, SIG_DFL);

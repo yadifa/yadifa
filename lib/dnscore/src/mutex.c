@@ -55,7 +55,7 @@
 #include "dnscore/thread-tag.h"
 #include "dnscore/process.h"
 
-#if __OpenBSD__
+#if __OpenBSD__0
 #error "OpenBSD doesn't handle PTHREAD_PROCESS_SHARED"
 #endif
 
@@ -769,6 +769,7 @@ void mutex_contention_monitor_stop()
 
 int cond_init_process_shared(cond_t *cond)
 {
+#if !defined(__OpenBSD__)
     int ret;
     pthread_condattr_t attr;
     if((ret = pthread_condattr_init(&attr)) == 0)
@@ -794,8 +795,12 @@ int cond_init_process_shared(cond_t *cond)
         ret = MAKE_ERRNO_ERROR(ret);
     }
     return ret;
-}
 
+#else
+    (void)cond;
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
+#endif
+}
 
 /*
  * Group mutex lock
@@ -1269,6 +1274,7 @@ mutex_init_recursive(mutex_t *mtx)
 int
 mutex_init_process_shared(mutex_t *mtx)
 {
+#if !defined(__OpenBSD__)
     int ret;
 
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
@@ -1300,8 +1306,12 @@ mutex_init_process_shared(mutex_t *mtx)
     {
         ret = MAKE_ERRNO_ERROR(ret);
     }
-    
+
     return ret;
+#else
+    (void)mtx;
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
+#endif
 }
 
 void

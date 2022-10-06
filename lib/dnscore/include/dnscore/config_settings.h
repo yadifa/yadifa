@@ -82,7 +82,7 @@
 #define CONFIG_FILE_PATH_TOO_BIG                CONFIG_ERROR_CODE(0x0013)
 #define CONFIG_BAD_UID                          CONFIG_ERROR_CODE(0x0014)
 #define CONFIG_BAD_GID                          CONFIG_ERROR_CODE(0x0015)
-#define CONFIG_TEXT_LENGHT_TOO_BIG              CONFIG_ERROR_CODE(0x0016)
+#define CONFIG_TEXT_LENGTH_TOO_BIG              CONFIG_ERROR_CODE(0x0016)
 #define CONFIG_ARRAY_SIZE_TOO_BIG               CONFIG_ERROR_CODE(0x0017)
 
 // Logger config specific issues
@@ -131,10 +131,10 @@
  * Meant to be used to store different parameters
  */
 
+#if BYTE_ORDER == LITTLE_ENDIAN
 union anytype_u
 {
     /* DO NOT ADD THIS : bool    _bool; */
-    intptr  _intptr;
     u8      _u8;
     u16     _u16;
     u32     _u32;
@@ -149,12 +149,51 @@ union anytype_u
     s8      _8s8[8];
     s16     _4s16[4];
     s32     _2s32[2];
+    intptr  _intptr;
     callback_function *void_callback;
     result_callback_function *result_callback;
     void*   _voidp;
     char*   _charp;
     u8*     _u8p;
 };
+#elif BYTE_ORDER == BIG_ENDIAN
+union anytype_u
+{
+    /* DO NOT ADD THIS : bool    _bool; */
+
+    struct { u8  _u8_0, _u8_1, _u8_2, _u8_3, _u8_4, _u8_5, _u8_6,_u8; };
+    struct { u16 _u16_0, _u16_1, _u16_2, _u16; };
+    struct { u32 _u32_0, _u32; };
+    u64     _u64;
+    u8      _8u8[8];
+    u16     _4u16[4];
+    u32     _2u32[2];
+    struct { s8  _s8_0, _s8_1, _s8_2, _s8_3, _s8_4, _s8_5, _s8_6,_s8; };
+    struct { s16 _s16_0, _s16_1, _s16_2, _s16; };
+    struct { s32 _s32_0, _s32; };
+    s64     _s64;
+    s8      _8s8[8];
+    s16     _4s16[4];
+    s32     _2s32[2];
+#if __SIZEOF_POINTER__ == 8
+    intptr  _intptr;
+    callback_function *void_callback;
+    result_callback_function *result_callback;
+    void*   _voidp;
+    char*   _charp;
+    u8*     _u8p;
+#else
+    struct { intptr  _intptr_0, _intptr; };
+    struct { callback_function *_void_callback_0, *void_callback; };
+    struct { result_callback_function *_result_callback_0, *result_callback; };
+    struct { void *_voidp_0, *_voidp; };
+    struct { char *_charp_0, *_charp; };
+    struct { u8 *_u8p_0, *_u8p; };
+#endif
+};
+#else
+#error "BYTE_ORDER value not expected"
+#endif
 
 typedef union anytype_u anytype;
 
@@ -190,7 +229,7 @@ struct config_table_descriptor_item_s
 typedef struct config_table_descriptor_item_s config_table_descriptor_item_s;
 
 typedef ya_result config_section_set_wild_method(struct config_section_descriptor_s *, const char *key, const char *value);
-typedef ya_result config_section_print_wild_method(const struct config_section_descriptor_s *, output_stream *os, const char *key);
+typedef ya_result config_section_print_wild_method(const struct config_section_descriptor_s *, output_stream *os, const char *key, void **iterator_context);
 
 typedef ya_result config_section_init_method(struct config_section_descriptor_s *);
 typedef ya_result config_section_start_method(struct config_section_descriptor_s *);
@@ -203,17 +242,17 @@ typedef ya_result config_section_finalize_method(struct config_section_descripto
 struct config_section_descriptor_vtbl_s
 {
     /// section name
-    const char                                 *name; // the table name
-    config_table_descriptor_item_s            *table; // the descriptor for the table (static fields)
+    const char                                 *name;   // the table name
+    config_table_descriptor_item_s            *table;   // the descriptor for the table (static fields)
     
-    config_section_set_wild_method         *set_wild; // sets an undefined (dynamic) field
-    config_section_print_wild_method     *print_wild; // prints an undefined (dynamic) field
-
-    config_section_init_method                 *init; // initialises
-    config_section_start_method               *start; // called when a section starts
-    config_section_stop_method                 *stop; // called when a section stops
-    config_section_postprocess_method   *postprocess; // called after the section has been processed
-    config_section_finalize_method         *finalise; // finishes, deletes all memory for this section, this vtbl included (if needed)
+    config_section_set_wild_method         *set_wild;   // sets an undefined (dynamic) field
+    config_section_print_wild_method     *print_wild;   // prints an undefined (dynamic) field
+                                                        // note: never stop iterating before the updated context value after a call to print_wild is NULL
+    config_section_init_method                 *init;   // initialises
+    config_section_start_method               *start;   // called when a section starts
+    config_section_stop_method                 *stop;   // called when a section stops
+    config_section_postprocess_method   *postprocess;   // called after the section has been processed
+    config_section_finalize_method         *finalise;   // finishes, deletes all memory for this section, this vtbl included (if needed)
 };
 
 typedef struct config_section_descriptor_vtbl_s config_section_descriptor_vtbl_s;
@@ -253,10 +292,10 @@ typedef struct config_section_descriptor_s config_section_descriptor_s;
 
 #define CONFIG_BEGIN(name_) static /* DO NOT const */ config_table_descriptor_item_s name_[] = {
 #define CONFIG_BOOL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_bool, defaultvalue_,{._intptr=0}, sizeof(bool), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
-#define CONFIG_FLAG8(fieldname_,defaultvalue_, realfieldname_, mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag8, defaultvalue_,{(u8)(mask_)}, sizeof(u8), sizeof(u8), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
-#define CONFIG_FLAG16(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag16, defaultvalue_,{(u16)(mask_)}, sizeof(u16), sizeof(u16), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
-#define CONFIG_FLAG32(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag32, defaultvalue_,{(u32)(mask_)}, sizeof(u32), sizeof(u32), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
-#define CONFIG_FLAG64(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag64, defaultvalue_,{(u64)(mask_)}, sizeof(u64), sizeof(u64), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG8(fieldname_,defaultvalue_, realfieldname_, mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag8, defaultvalue_,{._u8=(u8)(mask_)}, sizeof(u8), sizeof(u8), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG16(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag16, defaultvalue_,{._u16=(u16)(mask_)}, sizeof(u16), sizeof(u16), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG32(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag32, defaultvalue_,{._u32=(u32)(mask_)}, sizeof(u32), sizeof(u32), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_FLAG64(fieldname_,defaultvalue_, realfieldname_,mask_) {#fieldname_,offsetof(CONFIG_TYPE, realfieldname_), (config_set_field_function*)config_set_flag64, defaultvalue_,{._u64=(u64)(mask_)}, sizeof(u64), sizeof(u64), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 #define CONFIG_U64(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u64,       defaultvalue_,{._intptr=0}, sizeof(u64), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 #define CONFIG_U32(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_u32,       defaultvalue_,{._intptr=0}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 #define CONFIG_S32(fieldname_,defaultvalue_)                 {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_s32,       defaultvalue_,{._intptr=0}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
@@ -282,7 +321,7 @@ typedef struct config_section_descriptor_s config_section_descriptor_s;
 //#define CONFIG_ACL(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, ac) + offsetof(access_control,fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 //#define CONFIG_ACL_FILTER(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_acl_item, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 //#define CONFIG_LIST_ITEM(fieldname_,defaultvalue_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_add_list_item, defaultvalue_,{._intptr=0}, sizeof(), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
-#define CONFIG_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum_value, defaultvalue_, {(intptr)(enumtable_)}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
+#define CONFIG_ENUM(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum_value, defaultvalue_, {._intptr=(intptr)(enumtable_)}, sizeof(u32), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 //#define CONFIG_ENUM8(fieldname_,defaultvalue_,enumtable_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_enum8_value, defaultvalue_, {(intptr)enumtable_}, sizeof(u8), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 #define CONFIG_HOST_LIST(fieldname_,defaultvalue_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={CONFIG_HOST_LIST_FLAGS_DEFAULT,255,0,0,0,0,0,0}}, sizeof(host_address*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 #define CONFIG_HOST_LIST_EX(fieldname_,defaultvalue_,flags_,host_list_max_) {#fieldname_, offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)config_set_host_list, defaultvalue_,{._8u8={(flags_),(host_list_max_),0,0,0,0,0,0}}, sizeof(host_address*), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },

@@ -73,7 +73,7 @@ extern zone_data_set database_zone_desc;
 
 static value_name_table zone_type_enum_table[]=
 {
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
     {ZT_MASTER,     ZT_STRING_MASTER},
     {ZT_MASTER,     ZT_STRING_PRIMARY},
 #endif
@@ -109,6 +109,7 @@ CONFIG_STRING(file_name, NULL)
 CONFIG_PATH(keys_path, NULL)
 CONFIG_HOST_LIST(masters, NULL)
 CONFIG_HOST_LIST(notifies, NULL)
+CONFIG_HOST_LIST(transfer_source, NULL)
 CONFIG_ENUM(type, NULL, zone_type_enum_table)
 
 #if ZDB_HAS_ACL_SUPPORT
@@ -125,11 +126,12 @@ CONFIG_ACL(allow_control, NULL)
 CONFIG_FLAG32(notify_auto , S_ZONE_NOTIFY_AUTO, flags, ZONE_FLAG_NOTIFY_AUTO)
 CONFIG_FLAG32(drop_before_load, S_ZONE_FLAG_DROP_BEFORE_LOAD, flags, ZONE_FLAG_DROP_BEFORE_LOAD)
 CONFIG_FLAG32(no_master_updates , S_ZONE_NO_MASTER_UPDATES, flags, ZONE_FLAG_NO_MASTER_UPDATES)
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 CONFIG_FLAG32(true_multimaster, S_ZONE_FLAG_TRUE_MULTIMASTER, flags, ZONE_FLAG_TRUE_MULTIMASTER)
 CONFIG_FLAG32(maintain_dnssec, S_ZONE_FLAG_MAINTAIN_DNSSEC, flags, ZONE_FLAG_MAINTAIN_DNSSEC)
-CONFIG_FLAG32(maintain_zone_before_mount, "1", flags, ZONE_FLAG_MAINTAIN_ZONE_BEFORE_MOUNT) // used nowhere
+//CONFIG_FLAG32(maintain_zone_before_mount, "1", flags, ZONE_FLAG_MAINTAIN_ZONE_BEFORE_MOUNT) // used nowhere
 #endif
+CONFIG_FLAG32(load_local_first, "0", flags, ZONE_FLAG_PRIORITISE_LOCAL_SOURCE)
 
 CONFIG_U32_RANGE(notify.retry_count, S_NOTIFY_RETRY_COUNT, NOTIFY_RETRY_COUNT_MIN, NOTIFY_RETRY_COUNT_MAX)
 CONFIG_U32_RANGE(notify.retry_period, S_NOTIFY_RETRY_PERIOD, NOTIFY_RETRY_PERIOD_MIN, NOTIFY_RETRY_PERIOD_MAX)
@@ -137,11 +139,11 @@ CONFIG_U32_RANGE(notify.retry_period_increase, S_NOTIFY_RETRY_PERIOD_INCREASE, N
         
 CONFIG_U8(multimaster_retries, S_MULTIMASTER_RETRIES)
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
         
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
         
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 CONFIG_DNSSEC_POLICY(dnssec_policy)
 #endif
         
@@ -149,7 +151,7 @@ CONFIG_U32_RANGE(signature.sig_validity_interval, S_S32_VALUE_NOT_SET, SIGNATURE
 CONFIG_U32_RANGE(signature.sig_validity_regeneration, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_REGENERATION_MIN, SIGNATURE_VALIDITY_REGENERATION_MAX)
 CONFIG_U32_RANGE(signature.sig_validity_jitter, S_S32_VALUE_NOT_SET, SIGNATURE_VALIDITY_JITTER_MIN, SIGNATURE_VALIDITY_JITTER_MAX)
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 CONFIG_FLAG32(rrsig_nsupdate_allowed, S_ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED, flags, ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED)
 #endif
         
@@ -160,7 +162,7 @@ CONFIG_ALIAS(signature_jitter, signature.sig_validity_jitter)
 
 CONFIG_ENUM(dnssec_mode, S_ZONE_DNSSEC_DNSSEC, dnssec_enum)
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 CONFIG_ALIAS(signature.sig_jitter, sig_validity_jitter)
 #endif
 
@@ -170,7 +172,7 @@ CONFIG_ALIAS(rrsig_push_allowed, rrsig_nsupdate_allowed)
 
 CONFIG_U32_RANGE(journal_size_kb, S_JOURNAL_SIZE_KB_DEFAULT, S_JOURNAL_SIZE_KB_MIN, S_JOURNAL_SIZE_KB_MAX)
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL && DNSCORE_HAS_DYNAMIC_PROVISIONING
 //CONFIG_U8(ctrl_flags, "0")  // SHOULD ONLY BE IN THE DYNAMIC CONTEXT
 CONFIG_BYTES(dynamic_provisioning, "AAA=", sizeof(dynamic_provisioning_s))
 CONFIG_HOST_LIST(slaves, NULL)
@@ -311,7 +313,12 @@ config_section_zone_stop(struct config_section_descriptor_s *csd)
             server_tcp_client_register(&sa.ss, g_config->max_secondary_tcp_queries);
 #endif
         }
-        
+
+        if((zone_desc->transfer_source == NULL) && (g_config->transfer_source != NULL))
+        {
+            zone_desc->transfer_source = host_address_copy_list(g_config->transfer_source);
+        }
+
         // load the descriptor (most likely offline)
 
 #if DEBUG_FORCE_INSANE_SIGNATURE_MAINTENANCE_PARAMETERS
@@ -395,7 +402,7 @@ config_section_zone_set_wild(struct config_section_descriptor_s *csd, const char
 }
 
 static ya_result
-config_section_zone_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_zone_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     if(key != NULL)
     {
@@ -404,21 +411,34 @@ config_section_zone_print_wild(const struct config_section_descriptor_s *csd, ou
     
     // for all zones, print table of the zone
     
-    zone_set_lock(&database_zone_desc); // unlock checked
-    
-    ptr_set_iterator iter;
-    ptr_set_iterator_init(&database_zone_desc.set, &iter);
-
-    while(ptr_set_iterator_hasnext(&iter))
+    ptr_set_iterator *iterp;
+    if(*context == NULL)
     {
-        ptr_node *zone_node = ptr_set_iterator_next_node(&iter);
+        zone_set_lock(&database_zone_desc); // unlock checked
+
+        MALLOC_OBJECT_OR_DIE(iterp, ptr_set_iterator, GENERIC_TAG);
+        ptr_set_iterator_init(&database_zone_desc.set, iterp);
+        *context = iterp;
+    }
+    else
+    {
+        iterp = (ptr_set_iterator*)*context;
+    }
+
+    if(ptr_set_iterator_hasnext(iterp))
+    {
+        ptr_node *zone_node = ptr_set_iterator_next_node(iterp);
         zone_desc_s *zone_desc = (zone_desc_s *)zone_node->value;
-        
         config_section_struct_print(csd, zone_desc, os);
     }
-    
-    zone_set_unlock(&database_zone_desc);
-    
+    else
+    {
+        zone_set_unlock(&database_zone_desc);
+
+        free(iterp);
+        *context = NULL;
+    }
+
     return SUCCESS;
 }
 

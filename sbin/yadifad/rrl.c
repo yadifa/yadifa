@@ -343,7 +343,7 @@ rrl_key_is_error(const u8 *key)
     return iserror;
 }
 
-/*
+/**
  * out_key must be at least 1 + 1 + 16 + 255 bytes long
  * 
  * returns the size of the key

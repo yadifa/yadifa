@@ -104,10 +104,11 @@ config_section_denial_set_wild(struct config_section_descriptor_s *csd, const ch
 
 
 static ya_result
-config_section_denial_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_denial_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
+    (void)context;
 
     if(key != NULL)
     {
@@ -239,16 +240,15 @@ config_section_denial_stop(struct config_section_descriptor_s *csd)
         }
     }
 
-#if 0 /* fix */
-#else
+    // Now allows empty salt.
+/*
     size_t salt_length = (denial->salt != NULL) ? strlen(denial->salt) : 0;
-    
+
     if((denial->salt_length > 0) == (salt_length > 0))
     {
        return CONFIG_SECTION_ERROR;
     }
-#endif // if 0
-
+*/
 
     ptr_node *node = ptr_set_insert(&denial_desc_set, denial->id);
 

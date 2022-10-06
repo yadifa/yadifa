@@ -217,7 +217,7 @@ database_service_zone_download_xfr(u16 qtype, const u8 *origin)
 
                         u32 next_refresh = zone_desc->refresh.refreshed_time + soa.refresh;
 
-                        log_info("database: refresh: %{dnsname}: zone didn't need a refresh, next refresh currently scheduled for %T", origin, next_refresh);
+                        log_debug("database: refresh: %{dnsname}: zone didn't need a refresh, next refresh currently scheduled for %T", origin, next_refresh);
 
                         database_zone_refresh_maintenance_wih_zone(zone, next_refresh);
 

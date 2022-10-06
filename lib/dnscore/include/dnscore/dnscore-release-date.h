@@ -1,3 +1,2 @@
-#pragma once
-#define YADIFA_DNSCORE_RELEASE_DATE "2022-02-28"
-
+#pragma
+#define YADIFA_DNSCORE_RELEASE_DATE "2022-10-05"

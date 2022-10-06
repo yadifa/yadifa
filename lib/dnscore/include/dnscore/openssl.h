@@ -81,6 +81,14 @@
 #define SSL_API_LT_110 0
 #endif
 
+#if OPENSSL_VERSION_MAJOR >= 3
+#define SSL_API_LT_300 0
+#define SSL_API_GE_300 1
+#else
+#define SSL_API_LT_300 1
+#define SSL_API_GE_300 0
+#endif
+
 #define SSL_API_LT_100 (OPENSSL_VERSION_NUMBER < 0x10000000L)
 #else
 #define SSL_API 0

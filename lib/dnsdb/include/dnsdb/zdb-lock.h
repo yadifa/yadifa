@@ -70,6 +70,13 @@ static inline void zdb_unlock(zdb *db, u8 owner)
     group_mutex_unlock(&db->mutex, owner);
 }
 
+// used for assertions
+
+static inline bool zdb_ismutexlocked(zdb *db)
+{
+    return group_mutex_islocked(&db->mutex);
+}
+
 static inline bool zdb_islocked(zdb *db)
 {
     mutex_lock(&db->mutex.mutex);

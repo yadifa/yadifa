@@ -581,7 +581,7 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
         if(FAIL(return_code = config_file_reader_read(cfr, cfgerr)))
         {
             // failure: if the error reporting is set then use it
-#if 1
+
             if((cfgerr != NULL) && (cfr->includes_count > 0) && !cfgerr->has_content)
             {
                 const char *file_name = cfr->file_name[cfr->includes_count - 1];
@@ -603,7 +603,6 @@ config_file_reader_parse_stream(const char* stream_name, input_stream *ins, conf
                 cfgerr->line_number = parser_get_line_number(&cfr->parser);
                 cfgerr->has_content = TRUE;
             }
-#endif
         }
        
        // ends parsing, this also closes the input stream pushed to the parser

@@ -203,5 +203,4 @@ void *u64_set_debug_iterator_hasnext_next_value(u64_set_debug_iterator *iterp);
 #endif	/* _U64_SET_H */
 /** @} */
 
-/*----------------------------------------------------------------------------*/
 

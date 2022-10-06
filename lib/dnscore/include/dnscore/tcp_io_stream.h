@@ -57,26 +57,21 @@ extern "C"
 {
 #endif
     
-ya_result
-gethostaddr(const char* host, u16 port, struct sockaddr *sa, int family);
+ya_result gethostaddr(const char* host, u16 port, struct sockaddr *sa, int family);
 
-ya_result
-tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
+ya_result tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
 
-ya_result
-tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
+ya_result tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
 
-ya_result
-tcp_input_output_stream_connect(const char *server, u16 port, input_stream *istream, output_stream *ostream);
+ya_result tcp_input_output_stream_connect(const char *server, u16 port, input_stream *istream, output_stream *ostream);
 
-ya_result
-tcp_input_output_stream_connect_host_address(const host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec);
+ya_result tcp_input_output_stream_connect_host_address(const host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec);
 
-ya_result
-tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct sockaddr *bind_from);
+ya_result tcp_input_output_stream_connect_host_address_ex(const host_address *ha, input_stream *istream_, output_stream *ostream_, const host_address *bind_to, u8 to_sec);
 
-ya_result
-tcp_io_stream_connect(const char *server, u16 port, io_stream *ios);
+ya_result tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct sockaddr *bind_from);
+
+ya_result tcp_io_stream_connect(const char *server, u16 port, io_stream *ios);
 
 void tcp_set_sendtimeout(int fd, int seconds, int useconds);
 void tcp_get_sendtimeout(int fd, int *seconds, int *useconds);

@@ -877,8 +877,6 @@ nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status)
     {
         ret = dynupdate_diff(zone, &reader, count, secondary_lock, DYNUPDATE_DIFF_RUN);
 
-        dynupdate_message_finalize(&dmsg);
-
         if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
         {
             // trigger a background store of the zone
@@ -890,6 +888,8 @@ nsec_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 status)
     {
         ret = MAKE_DNSMSG_ERROR(RCODE_FORMERR);
     }
+
+    dynupdate_message_finalize(&dmsg);
         
     return ret;
 }

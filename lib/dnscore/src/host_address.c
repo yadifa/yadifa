@@ -226,10 +226,6 @@ host_address2allocated_sockaddr(const host_address *address, struct sockaddr **s
 #if HAS_SOCKADDR_IN6_SIN6_LEN
             sa_in6->sin6_len = sizeof(struct sockaddr_in6);
 #endif
-            /*
-               sa_in6->sin6_flowinfo = 0;
-               sa_in6->sin6_scope_id = 0;
-               */
             *sap = (struct sockaddr*)sa_in6;
             return sizeof(struct sockaddr_in6);
         }
@@ -291,6 +287,18 @@ host_address_set_default_port_value(host_address *address, u16 port)
             address->port = port;
         }
 
+        address = address->next;
+    }
+}
+
+void
+host_address_set_port_value(host_address *address, u16 port)
+{
+    /* set the default port on any unset port */
+
+    while(address != NULL)
+    {
+        address->port = port;
         address = address->next;
     }
 }

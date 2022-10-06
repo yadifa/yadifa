@@ -62,7 +62,7 @@
 
 #include "dnscore/thread_pool.h"
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "dnscore/ctrl-rfc.h"
 #endif
 
@@ -284,7 +284,6 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                     if(tsigname[0] == '\0')
                     {
                         message_process_adjust_buffer_size(mesg, ntohs(tctr.qclass));
-
                         mesg->_edns = TRUE;
                         mesg->_rcode_ext = tctr.ttl;
 #if DEBUG
@@ -305,9 +304,9 @@ message_process_additionals(message_data *mesg, u8* s, u16 ar_count)
                     mesg->_edns = TRUE;
                     mesg->_rcode_ext = 0;
 #if DEBUG
-                   log_debug("OPT record is not processable (not supported)");
+                    log_debug("OPT record is not processable (not supported)");
 #endif
-                   return MAKE_DNSMSG_ERROR(FP_EDNS_BAD_VERSION);
+                    return MAKE_DNSMSG_ERROR(FP_EDNS_BAD_VERSION);
                 }
             }
 #if DNSCORE_HAS_TSIG_SUPPORT
@@ -1209,7 +1208,7 @@ message_process(message_data *mesg)
             
             return OK;
         }
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
         case OPCODE_CTRL:
         {
             MESSAGE_LOFLAGS(buffer) &= ~(Z_BITS|AD_BITS|CD_BITS|RCODE_BITS);
@@ -2317,14 +2316,14 @@ message_query_tcp_ex(message_data *mesg, const host_address *bindto, const host_
                     close(sockfd);
                     return ret;
                 }
-
+#ifdef SO_REUSEPORT
                 if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (void *) &on, sizeof(on))))
                 {
                     ret = ERRNO_ERROR;
                     close(sockfd);
                     return ret;
                 }
-
+#endif
                 if(bind(sockfd, &sa.sa, sa_len) < 0)
                 {
                     ret = ERRNO_ERROR;
@@ -3052,11 +3051,11 @@ message_query_serial(const u8 *origin, const host_address *server, u32 *serial_o
 void message_init_ex(message_data* mesg, u32 mesg_size, void *buffer, size_t buffer_size)
 {
     ZEROMEMORY(mesg, offsetof(message_data, _msghdr_control_buffer)); // includes the tsig structure
-    mesg->_msghdr.msg_name = &mesg->_sender;
+    mesg->_msghdr.msg_name = &mesg->_sender.sa;
     mesg->_msghdr.msg_namelen = sizeof(mesg->_sender);
     mesg->_msghdr.msg_iov = &mesg->_iovec;
     mesg->_msghdr.msg_iovlen = 1;
-#ifndef WIN32
+#if __unix__
     mesg->_msghdr.msg_control = NULL;
     mesg->_msghdr.msg_controllen = 0;
 #else
@@ -3206,18 +3205,17 @@ message_dup(const message_data *mesg)
             );
     
     message_copy_sender_from(clone, mesg);
-#ifndef WIN32
+#if __unix__
     memcpy(clone->_msghdr_control_buffer, mesg->_msghdr_control_buffer, mesg->_msghdr.msg_controllen);
 #else
     memcpy(clone->_msghdr_control_buffer, mesg->_msghdr_control_buffer, mesg->_msghdr.msg_control.len);
 #endif
-    
     dnsname_copy(clone->_canonised_fqdn, message_get_canonised_fqdn(mesg));
 #if !MESSAGE_PAYLOAD_IS_POINTER
     SET_U16_AT(clone->_buffer_tcp_len[0], GET_U16_AT(mesg->_buffer_tcp_len[0]));
 #endif
-    memcpy(message_get_buffer(clone), message_get_buffer_const(mesg), message_size);
-    message_set_size(clone, message_size);
+    memcpy(message_get_buffer(clone), message_get_buffer_const(mesg), message_get_size(mesg));
+    message_set_size(clone, message_get_size(mesg));
     
     return clone;
 }
@@ -4135,7 +4133,8 @@ s32 message_send_udp_debug(const message_data *mesg, int sockfd)
     log_info("message_send_udp(%p, %i) through %{sockaddr}", mesg, sockfd, mesg->_msghdr.msg_name);
 
     s32 n;
-
+    void** p = (void**)&mesg->_msghdr.msg_control;
+    *p = NULL;
     while((n = sendmsg(sockfd, &mesg->_msghdr, 0)) < 0)
     {
         int err = errno;
@@ -4166,7 +4165,9 @@ ssize_t message_send_tcp(const message_data *mesg, int sockfd)
     tcp_msghdr.msg_iov = &tcp_data[0];
     tcp_msghdr.msg_iovlen = 2;
     tcp_msghdr.msg_control = mesg->_msghdr.msg_control;
+#if __unix__
     tcp_msghdr.msg_controllen = mesg->_msghdr.msg_controllen;
+#endif
     tcp_msghdr.msg_flags = 0;
 
     s32 remain = tcp_len + 2;

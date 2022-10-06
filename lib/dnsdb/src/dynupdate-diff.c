@@ -69,7 +69,7 @@
 #include "dnsdb/dynupdate-diff.h"
 #include "dnsdb/zdb-zone-path-provider.h"
 #include "dnsdb/zdb_icmtl.h"
-#if HAS_NSEC3_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3.h"
 #endif
 
@@ -80,6 +80,8 @@
 extern logger_handle *g_database_logger;
 
 // Disable detailed diff log even in debug builds
+
+#define DYNUPDATE_DIFF_DO_NOT_ADD_NSEC3_ON_NON_NSEC3_ZONE 0
 
 #define DYNUPDATE_DIFF_DETAILED_LOG 0
 
@@ -404,8 +406,6 @@ static void dnssec_chain_add_node(dnssec_chain *dc, const u8 *fqdn, u16 rtype, u
 
 static void dnssec_chain_add_node_neighbours(dnssec_chain *dc, const zone_diff_fqdn *diff_fqdn, void *chain_node, int chain_index)
 {
-
-
     (void)diff_fqdn;
     (void)chain_index;
 
@@ -463,7 +463,7 @@ static void dnssec_chain_add_node_neighbours(dnssec_chain *dc, const zone_diff_f
 }
 
 static int
-dnssec_chain_add_node_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn *diff_fqdn, u16 rtype, u8 asked_or_mask)
+dnssec_chain_add_node_from_diff_fqdn(dnssec_chain *dc, zone_diff_fqdn *diff_fqdn, u16 rtype, u8 asked_or_mask)
 {
     int ret = 0;
     // compute the hash
@@ -532,6 +532,7 @@ dnssec_chain_add_node_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn *dif
 #if DEBUG
                 log_debug2("dnssec-chain: %{dnsname}: chain[%i]: node %w is new, getting both neighbours", diff_fqdn->fqdn, chain_index, &chain_node_fw);
 #endif
+                diff_fqdn->will_have_new_nsec = 1;
                 node->value = chain_node;
 
                 // create a node for the prev & next
@@ -593,6 +594,7 @@ dnssec_chain_add_node_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn *dif
             }
             else
             {
+                diff_fqdn->will_have_new_nsec = 1;
                 node->value = chain_node;
             }
                
@@ -618,7 +620,7 @@ void dnssec_chain_add(dnssec_chain *dc, const u8 *fqdn, u16 rtype)
     // dnssec_chain_add_node(dc, fqdn, rtype, 0);
 }
 
-int dnssec_chain_add_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn* diff_fqdn, u16 rtype)
+int dnssec_chain_add_from_diff_fqdn(dnssec_chain *dc, zone_diff_fqdn* diff_fqdn, u16 rtype)
 {
     int ret = dnssec_chain_add_node_from_diff_fqdn(dc, diff_fqdn, rtype, DNSSEC_CHAIN_ADD);
     return ret;
@@ -637,7 +639,7 @@ void dnssec_chain_del(dnssec_chain *dc, const u8 *fqdn, u16 rtype)
     dnssec_chain_add_node(dc, fqdn, rtype, DNSSEC_CHAIN_DELETE);
 }
 
-int dnssec_chain_del_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn* diff_fqdn, u16 rtype)
+int dnssec_chain_del_from_diff_fqdn(dnssec_chain *dc, zone_diff_fqdn* diff_fqdn, u16 rtype)
 {
     int ret = dnssec_chain_add_node_from_diff_fqdn(dc, diff_fqdn, rtype, DNSSEC_CHAIN_DELETE);
     return ret;
@@ -1359,15 +1361,12 @@ zone_diff_fqdn_rr_set_add(zone_diff_fqdn *diff_fqdn, u16 rtype)
 zone_diff_fqdn_rr_set *
 zone_diff_fqdn_rr_set_get(const zone_diff_fqdn *diff_fqdn, u16 rtype)
 {
-#if 0 /* fix */
-#else
     u32_node *node = u32_set_find(&diff_fqdn->rrset, rtype);
     if(node != NULL)
     {
         return (zone_diff_fqdn_rr_set*)node->value;
     }
     return NULL;
-#endif
 }
 
 /**
@@ -1461,7 +1460,7 @@ bool zone_diff_fqdn_type_map_changed(const zone_diff_fqdn *diff_fqdn)
 {
     if(diff_fqdn->rrsig_kept == 0)
     {
-        if(diff_fqdn->rrsig_added || diff_fqdn->rrsig_removed)
+        if(diff_fqdn->rrsig_added || diff_fqdn->rrsig_removed || diff_fqdn->rrsig_expect_new_rrsig)
         {
             return TRUE;        // RRSIG type bitmap has changed;
         }
@@ -3128,8 +3127,6 @@ zone_diff_validate(zone_diff *diff)
                 {
                     ptr_vector_append(&diff_fqdn_to_remove, diff_fqdn_node);
                 }
-
-                // TODO: remove NSEC3 record
             }
         }
         
@@ -3358,7 +3355,7 @@ zone_diff_get_changes_update_rr(zone_diff_fqdn_rr_set *rr_set, struct zone_diff_
 }
 
 u64
-zone_diff_key_vector_get_mask(ptr_vector *keys, time_t now)
+zone_diff_key_vector_get_mask(ptr_vector *keys, time_t now, u32 regeneration_seconds)
 {
     u64 mask = 0;
     for(int i = 0; i <= ptr_vector_last_index(keys); ++i)
@@ -3367,7 +3364,7 @@ zone_diff_key_vector_get_mask(ptr_vector *keys, time_t now)
 
         bool is_private = dnskey_is_private(key);
 
-        if((is_private && dnskey_is_activated(key, now)) || !is_private)
+        if((is_private && dnskey_is_activated_lenient(key, now, regeneration_seconds)) || !is_private)
         {
             mask |= 1ULL << i;
         }
@@ -3390,22 +3387,22 @@ zone_diff_key_vector_get_mask(ptr_vector *keys, time_t now)
  */
 
 s32
-zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vector *ksks, ptr_vector *zsks, ptr_vector *remove, ptr_vector *add)
+zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vector *ksks, ptr_vector *zsks, ptr_vector *remove, ptr_vector *add, s32 regeneration_seconds)
 {
     s32 mandatory_changes = 0;
     ya_result err = SUCCESS;
 
     // first fill the arrays with the relevant keys
 
-    zone_diff_store_diff_dnskey_get_keys(diff, ksks, zsks);
+    zone_diff_store_diff_dnskey_get_keys(diff, ksks, zsks, regeneration_seconds);
 
     ptr_set_iterator fqdn_iter;
     ptr_set_iterator rr_iter;
       
     time_t now = time(NULL);
 
-    u64 ksks_mask = zone_diff_key_vector_get_mask(ksks, now);
-    u64 zsks_mask = zone_diff_key_vector_get_mask(zsks, now);
+    u64 ksks_mask = zone_diff_key_vector_get_mask(ksks, now, regeneration_seconds);
+    u64 zsks_mask = zone_diff_key_vector_get_mask(zsks, now, regeneration_seconds);
 
     //bool may_have_empty_terminals = FALSE;
 
@@ -3419,6 +3416,11 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
         const u8 *diff_fqdn_name = (const u8*)diff_fqdn_node->key;
 #endif
         zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
+
+        if(diff_fqdn->will_have_new_nsec)
+        {
+            ++mandatory_changes;
+        }
 
         // for all rrset
 
@@ -3610,8 +3612,11 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
 
                 if(rr_set->rtype == TYPE_DNSKEY)
                 {
-                    keys = ksks;
-                    keys_mask = ksks_mask;
+                    if(!ptr_vector_isempty(ksks))
+                    {
+                        keys = ksks;
+                        keys_mask = ksks_mask;
+                    }
                 }
 
                 if(rrset_node->key == TYPE_RRSIG)
@@ -3626,8 +3631,6 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
                     ++mandatory_changes;
                 }
 
-    #if 0 /* fix */
-#else
                 bool rrset_expected_to_be_covered =
                         !(diff_fqdn->at_delegation || diff_fqdn->under_delegation) ||
                         (!diff_fqdn->under_delegation &&
@@ -3635,7 +3638,6 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
                         );
 
                 bool rrset_rrsig_covered_with_chain_rules = (!rrset_removed && rrset_expected_to_be_covered);
-    #endif
                 bool came_under_delegation = (!diff_fqdn->was_under_delegation && diff_fqdn->under_delegation);
                 //bool came_out_of_delegation = (diff_fqdn->was_under_delegation && !diff_fqdn->under_delegation);
 
@@ -3645,10 +3647,7 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
                    (rrset_updated ||
                    all_rrset_removed ||
                    came_under_delegation ||
-    #if 0 /* fix */
-#else
                     !rrset_rrsig_covered_with_chain_rules
-    #endif
                     )
                    )
                 {
@@ -3691,10 +3690,7 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
                 //bool rrset_already_covered = FALSE;
 
                 if(!all_rrset_removed &&
-    #if 0 /* fix */
-#else
                     rrset_rrsig_covered_with_chain_rules
-    #endif
                     ) // else this would be pointless
                 {
                     if(rrsig_rr_set != NULL)
@@ -3777,13 +3773,11 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
 
                     // verify that signatures are not already present
 
-
 #if DYNUPDATE_DIFF_DETAILED_LOG
                         log_debug("update: %{dnsname}: dnssec: %{dnsname} %{dnstype} rrset @%p should be signed (%08llx/%08llx)", diff->origin,
                                 diff_fqdn_name, &rr_set->rtype, rr_set, rr_set->key_mask, keys_mask);
 #endif
                         ptr_vector_append(rrset_to_sign_vector, rr_set);
-
                 }
             }
         }
@@ -3821,13 +3815,16 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
 #if DYNUPDATE_DIFF_DETAILED_LOG
         {
             // empty
-            log_debug("update: -- --- %{dnsname} remap=%i +all=%i -all=%i !empty=%i", diff_fqdn->fqdn, type_map_changed, all_rrset_added, all_rrset_removed, non_empty);
+            log_debug("update: -- --- %{dnsname} remap=%i +all=%i -all=%i !empty=%i mandatory = %i + %i + %i",
+                      diff_fqdn->fqdn, type_map_changed, all_rrset_added, all_rrset_removed, non_empty,
+                      mandatory_changes, diff->nsec_change_count, diff->nsec3_change_count);
         }
 #endif
     }
 
     if(ISOK(err))
     {
+        // mandatory_changes += diff->nsec_change_count + diff->nsec3_change_count;
         return mandatory_changes;
     }
     else
@@ -3849,6 +3846,141 @@ zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vec
         }
     }
 #endif
+
+bool
+zone_diff_adds_nsec3param(zone_diff *diff)
+{
+    ptr_set_iterator fqdn_iter;
+    ptr_set_iterator_init(&diff->fqdn, &fqdn_iter);
+    while(ptr_set_iterator_hasnext(&fqdn_iter))
+    {
+        ptr_node *diff_fqdn_node = ptr_set_iterator_next_node(&fqdn_iter);
+        zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
+        if(!dnsname_equals(diff->origin, diff_fqdn->fqdn))
+        {
+            continue;
+        }
+
+        u32_node *rrset_node = u32_set_find(&diff_fqdn->rrset, /*TYPE_NSEC3PARAM*/TYPE_NSEC3PARAMQUEUED);
+        if(rrset_node != NULL)
+        {
+            zone_diff_fqdn_rr_set *rrset = (zone_diff_fqdn_rr_set*)rrset_node->value;
+
+            ptr_set_iterator rr_iter;
+            ptr_set_iterator_init(&rrset->rr, &rr_iter);
+            while(ptr_set_iterator_hasnext(&rr_iter))
+            {
+                ptr_node *node = ptr_set_iterator_next_node(&rr_iter);
+                zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
+
+                if((rr->state & ZONE_DIFF_RR_ADDED) != 0)
+                {
+                    return TRUE;
+                }
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+bool
+zone_diff_has_or_adds_nsec3param(zone_diff *diff)
+{
+    ptr_set_iterator fqdn_iter;
+    ptr_set_iterator_init(&diff->fqdn, &fqdn_iter);
+    while(ptr_set_iterator_hasnext(&fqdn_iter))
+    {
+        ptr_node *diff_fqdn_node = ptr_set_iterator_next_node(&fqdn_iter);
+        zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
+        if(!dnsname_equals(diff->origin, diff_fqdn->fqdn))
+        {
+            continue;
+        }
+
+        u32_node *rrset_node;
+
+        rrset_node = u32_set_find(&diff_fqdn->rrset, TYPE_NSEC3PARAM);
+        if(rrset_node != NULL)
+        {
+            zone_diff_fqdn_rr_set *rrset = (zone_diff_fqdn_rr_set*)rrset_node->value;
+
+            ptr_set_iterator rr_iter;
+            ptr_set_iterator_init(&rrset->rr, &rr_iter);
+            while(ptr_set_iterator_hasnext(&rr_iter))
+            {
+                ptr_node *node = ptr_set_iterator_next_node(&rr_iter);
+                zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
+
+                if((rr->state & (ZONE_DIFF_RR_IN_ZONE|ZONE_DIFF_RR_ADD|ZONE_DIFF_RR_ADDED)) != 0)
+                {
+                    return TRUE;
+                }
+            }
+        }
+
+        rrset_node = u32_set_find(&diff_fqdn->rrset, TYPE_NSEC3PARAMQUEUED);
+        if(rrset_node != NULL)
+        {
+            zone_diff_fqdn_rr_set *rrset = (zone_diff_fqdn_rr_set*)rrset_node->value;
+
+            ptr_set_iterator rr_iter;
+            ptr_set_iterator_init(&rrset->rr, &rr_iter);
+            while(ptr_set_iterator_hasnext(&rr_iter))
+            {
+                ptr_node *node = ptr_set_iterator_next_node(&rr_iter);
+                zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
+
+                if((rr->state & (ZONE_DIFF_RR_IN_ZONE|ZONE_DIFF_RR_ADD|ZONE_DIFF_RR_ADDED)) != 0)
+                {
+                    return TRUE;
+                }
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+bool
+zone_diff_has_zsk(zone_diff *diff)
+{
+    ptr_set_iterator fqdn_iter;
+    ptr_set_iterator_init(&diff->fqdn, &fqdn_iter);
+    while(ptr_set_iterator_hasnext(&fqdn_iter))
+    {
+        ptr_node *diff_fqdn_node = ptr_set_iterator_next_node(&fqdn_iter);
+        zone_diff_fqdn *diff_fqdn = (zone_diff_fqdn*)diff_fqdn_node->value;
+        if(!dnsname_equals(diff->origin, diff_fqdn->fqdn))
+        {
+            continue;
+        }
+
+        u32_node *rrset_node = u32_set_find(&diff_fqdn->rrset, TYPE_DNSKEY);
+        if(rrset_node != NULL)
+        {
+            zone_diff_fqdn_rr_set *rrset = (zone_diff_fqdn_rr_set*)rrset_node->value;
+
+            ptr_set_iterator rr_iter;
+            ptr_set_iterator_init(&rrset->rr, &rr_iter);
+            while(ptr_set_iterator_hasnext(&rr_iter))
+            {
+                ptr_node *node = ptr_set_iterator_next_node(&rr_iter);
+                zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
+
+                if((rr->state & ZONE_DIFF_RR_ADDED) != 0)
+                {
+                    if((rr->rdata_size >= 2) && DNSKEY_FLAGS_FROM_RDATA(rr->rdata) == DNSKEY_FLAGS_ZSK)
+                    {
+                        return TRUE;
+                    }
+                }
+            }
+        }
+    }
+
+    return FALSE;
+}
 
 void
 zone_diff_get_chain_changes(zone_diff *diff, dnssec_chain* dc/*, ptr_vector *rrset_to_sign_vector, ptr_vector *ksks, ptr_vector *zsks, ptr_vector *remove, ptr_vector *add*/)
@@ -4302,14 +4434,11 @@ zone_diff_sign_rrset(zone_diff *diff, zdb_zone *zone, ptr_vector *keys, ptr_vect
             }
 
             rrsig_rr->state |= rrsig_state_mask;
-#if 0 /* fix */
-#else
             zone_diff_label_rr *final_rrsig_rr = zone_diff_fqdn_rr_set_rr_add_get(rrsig_rr_set, rrsig_rr);
             if((final_rrsig_rr->state & ZONE_DIFF_RR_IN_ZONE) == 0)
             {
                 ptr_vector_append(add, final_rrsig_rr);
             }
-#endif
         }
         else
         {
@@ -4529,13 +4658,40 @@ zone_diff_sign(zone_diff *diff, zdb_zone *zone, ptr_vector* rrset_to_sign_vector
 
         // use the adequate DNSKEY collection
         
-        keys = (rr_set->rtype != TYPE_DNSKEY)?zsks:ksks;
+        if(rr_set->rtype != TYPE_DNSKEY)
+        {
+            keys = zsks;
+        }
+        else
+        {
+            if(!ptr_vector_isempty(ksks))
+            {
+                keys = ksks;
+            }
+            else
+            {
+                keys = zsks;
+            }
+        }
 
         // for all keys from said collection
 
         for(int j = 0; j <= ptr_vector_last_index(keys); ++j)
         {
             const dnssec_key *key = (dnssec_key*)ptr_vector_get(keys, j);
+
+#if DYNUPDATE_DIFF_DETAILED_DNSKEY_LOG
+            log_debug("update: considering key %{dnsname} %03d %05d",
+                     diff->origin, dnskey_get_algorithm(key), dnskey_get_tag_const(key));
+#endif
+
+#if DYNUPDATE_DIFF_DETAILED_DNSKEY_LOG
+            if(rr_set->rtype == TYPE_DNSKEY)
+            {
+                log_info("update: %{dnsname} DNSKEY cannot use key %03d %05d as it is not private",
+                         diff->origin, dnskey_get_algorithm(key), dnskey_get_tag_const(key));
+            }
+#endif
 
             // check if the key is to be used (using the key_mask)
 
@@ -4638,8 +4794,6 @@ zone_diff_sign(zone_diff *diff, zdb_zone *zone, ptr_vector* rrset_to_sign_vector
                 }
                 
                 rrsig_rr->state |= rrsig_state_mask;
-#if 0 /* fix */
-#else
 #if DEBUG
                 {
                     rdata_desc rrsig_rr_desc = {rrsig_rr->rtype, rrsig_rr->rdata_size, rrsig_rr->rdata};
@@ -4694,7 +4848,6 @@ zone_diff_sign(zone_diff *diff, zdb_zone *zone, ptr_vector* rrset_to_sign_vector
                         }
                     }
                 }
-#endif
                 //(void)rrsig_rr_set;
             }
             else
@@ -4821,7 +4974,72 @@ zone_diff_sign(zone_diff *diff, zdb_zone *zone, ptr_vector* rrset_to_sign_vector
 }
 
 void
-zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vector *zsks)
+zone_diff_label_state_flags_long_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
+{
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
+    (void)reserved_for_method_parameters;
+
+    static char separator[1] = {','};
+
+    if(value == NULL)
+    {
+        return;
+    }
+
+    u8 state = *(u8*)value;
+    int separator_size = 0;
+    if(state & ZONE_DIFF_RR_ADD)
+    {
+        output_stream_write(os, "add", 3);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_REMOVE)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "remove", 6);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_RDATA_OWNED)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "owned", 5);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_VOLATILE)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "volatile", 8);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_IN_ZONE)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "inzone", 6);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_AUTOMATED)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "auto", 4);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_ADDED)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "added", 5);
+        separator_size = 1;
+    }
+    if(state & ZONE_DIFF_RR_REMOVED)
+    {
+        output_stream_write(os, separator, separator_size);
+        output_stream_write(os, "removed", 7);
+    }
+}
+
+void
+zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vector *zsks, s32 regeneration_seconds)
 {
     // remove all signing keys that are about to be removed
     // add all activated signing keys that are being added
@@ -4844,9 +5062,10 @@ zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vect
             ptr_node *node = ptr_set_iterator_next_node(&rr_iter);
             zone_diff_label_rr *rr = (zone_diff_label_rr *)node->key;
 #if DEBUG
-            log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': key listed (%02x)", diff->origin,
+            format_writer state_flags = {zone_diff_label_state_flags_long_format, &rr->state};
+            log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': key listed (%w)", diff->origin,
                      dnskey_get_algorithm_from_rdata(rr->rdata),
-                     dnskey_get_tag_from_rdata(rr->rdata, rr->rdata_size), rr->state);
+                     dnskey_get_tag_from_rdata(rr->rdata, rr->rdata_size), &state_flags);
 #endif
             if((rr->state & ZONE_DIFF_RR_REMOVE) == 0) // exists or is being added
             {
@@ -4865,21 +5084,29 @@ zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vect
                     {
                         keys = zsks;
                     }
+                    else
+                    {
+                        log_err("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': unexpected flags: %u", diff->origin,
+                                dnskey_get_algorithm_from_rdata(rr->rdata),
+                                dnskey_get_tag_from_rdata(rr->rdata, rr->rdata_size), htons(dnskey_get_flags(key)));
+                        dnskey_release(key);
+                        continue;
+                    }
 
                     // if key is activated, and not already in the (signing) set, add it
 #if DEBUG
-                    log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': key found, exists or is about to be added", diff->origin,
+                    log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': key found, exists or is about to be added", diff->origin,
                              dnskey_get_algorithm(key), dnskey_get_tag_const(key));
 #endif
-                    if(dnskey_is_activated_lenient(key, now, 5))
+                    if(dnskey_is_activated_lenient(key, now, regeneration_seconds))
                     {
 #if DEBUG
-                        log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key is active", diff->origin,
-                                 dnskey_get_algorithm(key), dnskey_get_tag_const(key));
+                        log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key is active (or will soon be) (%T)", diff->origin,
+                                 dnskey_get_algorithm(key), dnskey_get_tag_const(key), (u32)dnskey_get_activate_epoch(key));
 #endif
 
 #if DEBUG
-                        log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key added in signers", diff->origin,
+                        log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key added in signers", diff->origin,
                                  dnskey_get_algorithm(key), dnskey_get_tag_const(key));
 #endif
                         ptr_vector_append(keys, key);
@@ -4887,8 +5114,8 @@ zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vect
                     else
                     {
 #if DEBUG
-                        log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key is not active", diff->origin,
-                                  dnskey_get_algorithm(key), dnskey_get_tag_const(key));
+                        log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key is not active (%T)", diff->origin,
+                                  dnskey_get_algorithm(key), dnskey_get_tag_const(key), (u32)dnskey_get_activate_epoch(key));
 #endif
                     }
                 }
@@ -4899,7 +5126,7 @@ zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vect
                     if(ISOK(ret))
                     {
 #if DEBUG
-                        log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': key found, about to be removed", diff->origin,
+                        log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': key found, private key not available", diff->origin,
                                   dnskey_get_algorithm(key), dnskey_get_tag_const(key));
 #endif
                         ptr_vector *keys = NULL;
@@ -4912,21 +5139,38 @@ zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vect
                         {
                             keys = zsks;
                         }
+                        else
+                        {
+                            log_err("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': unexpected flags: %u", diff->origin,
+                                    dnskey_get_algorithm_from_rdata(rr->rdata),
+                                    dnskey_get_tag_from_rdata(rr->rdata, rr->rdata_size), htons(dnskey_get_flags(key)));
+                            dnskey_release(key);
+                            continue;
+                        }
+
 #if DEBUG
-                        log_debug("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key not loaded: %r", diff->origin,
+                        log_debug("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': private key not loaded: %r", diff->origin,
                                  dnskey_get_algorithm_from_rdata(rr->rdata),
                                  dnskey_get_tag_from_rdata(rr->rdata, rr->rdata_size), ret);
 #endif
                         ptr_vector_append(keys, key);
                     }
-                    else
+                    else // no private key and public record could not be loaded
                     {
-                        log_err("update: DNSKEY: 'K%{dnsname}+%03d+%05hd': public key not loaded: %r", diff->origin,
+                        log_err("maintenance: DNSKEY: 'K%{dnsname}+%03d+%05hd': public key not loaded: %r", diff->origin,
                                  dnskey_get_algorithm_from_rdata(rr->rdata),
                                  dnskey_get_tag_from_rdata(rr->rdata, rr->rdata_size), ret);
+                        // if the zone is handled by policies, this key should be removed
+#if 0
+                        // note: don't cleanup keys here
+                        if(ret != DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM)
+                        {
+                            rr->state |= ZONE_DIFF_RR_REMOVE;
+                        }
+#endif
                     }
                 }
-            }
+            } // else key is being removed
         }
 
     } // else would be surprising
@@ -4935,13 +5179,13 @@ zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vect
     for(int i = 0; i <= ptr_vector_last_index(ksks); ++i)
     {
         dnssec_key *key = (dnssec_key*)ptr_vector_get(ksks, i);
-        log_debug3("update: DNSKEY: KSK: 'K%{dnsname}+%03d+%05hd': final state", diff->origin, dnskey_get_algorithm(key), dnskey_get_tag_const(key));
+        log_debug3("maintenance: DNSKEY: KSK: 'K%{dnsname}+%03d+%05hd': final state", diff->origin, dnskey_get_algorithm(key), dnskey_get_tag_const(key));
     }
 
     for(int i = 0; i <= ptr_vector_last_index(zsks); ++i)
     {
         dnssec_key *key = (dnssec_key*)ptr_vector_get(zsks, i);
-        log_debug3("update: DNSKEY: ZSK: 'K%{dnsname}+%03d+%05hd': final state", diff->origin, dnskey_get_algorithm(key), dnskey_get_tag_const(key));
+        log_debug3("maintenance: DNSKEY: ZSK: 'K%{dnsname}+%03d+%05hd': final state", diff->origin, dnskey_get_algorithm(key), dnskey_get_tag_const(key));
     }
 #endif
 }
@@ -5082,7 +5326,7 @@ zone_diff_store_diff(zone_diff *diff, zdb_zone *zone, ptr_vector *remove, ptr_ve
 
         // store changes in vectors and get the RR sets to sign
 
-        s32 mandatory_changes = zone_diff_get_changes(diff, &rrset_to_sign, &ksks, &zsks, remove, add);
+        s32 mandatory_changes = zone_diff_get_changes(diff, &rrset_to_sign, &ksks, &zsks, remove, add, zone->sig_validity_regeneration_seconds);
 
 #if DYNUPDATE_DIFF_DETAILED_LOG
         for(int i = 0; i <= ptr_vector_last_index(remove); ++i)
@@ -5474,9 +5718,11 @@ dynupdate_diff_write_to_journal_and_replay(zdb_zone *zone, u8 secondary_lock, pt
  */
 
 ya_result
-dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 secondary_lock, bool dryrun)
+dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 secondary_lock, u32 flags)
 {
     yassert(zdb_zone_islocked(zone));
+    const bool dryrun = (flags & DYNUPDATE_DIFF_DRYRUN) != 0;
+    const bool external = (flags & DYNUPDATE_DIFF_EXTERNAL) != 0;
     
 #if DEBUG
     log_debug("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i)",
@@ -5674,6 +5920,33 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
         rttl = ntohl(GET_U32_AT(p[4]));
         rdata_size = ntohs(GET_U16_AT(p[8]));
 
+        /**
+         * Some records are used internally by yadifad to track chain creation states.
+         * They shouldn't be received externally (e.g. DNS dynamic update) as it could wreak havoc with the logic.
+         * This change avoids having to handle a legion of pitfalls.
+         *
+         * In the future, we may give the option to change the value of these 3 records at build time.
+         * It may be useful for some specific use cases.
+         * Alternatively, we may document how to change their value manually.
+         */
+
+        if(external)
+        {
+            switch(rtype)
+            {
+                case TYPE_NSECCHAINSTATE:
+                case TYPE_NSEC3CHAINSTATE:
+                case TYPE_NSEC3PARAMQUEUED:
+                {
+                    log_err("update: %{dnsname}: reserved record found in update message: %r", zone->origin, ret);
+                    zone_diff_finalize(&diff);
+                    zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_IN_DYNUPDATE_DIFF);
+
+                    return RCODE_ERROR_CODE(RCODE_REFUSED);
+                }
+            }
+        }
+
         if((rdata_size > 0) && (rclass == CLASS_ANY))
         {
             log_err("update: %{dnsname}: next record has non-empty rdata with class ANY: %r", zone->origin, RCODE_ERROR_CODE(RCODE_FORMERR));
@@ -5797,7 +6070,7 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 return RCODE_ERROR_CODE(RCODE_REFUSED);
             }
 
-            if(!ZONE_HAS_NSEC3PARAM(zone) && zdb_zone_has_nsec_chain(zone))
+            if(/*!ZONE_HAS_NSEC3PARAM(zone) &&*/ zdb_zone_has_nsec_chain(zone))
             {
                 // don't add/del NSEC3PARAM on a zone that is not already NSEC3 (it works if the zone is not secure but only if the zone has keys already. So for now : disabled)
 
@@ -5859,11 +6132,56 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 {
                     // scan-build false positive : assumes rdata_size < 0 => impossible
                     //                                  or ((rdata_size == 0) & (rclass == CLASS_ANY)) => this would branch in the first "if" a few lines above
+                    /*
                     ret = nsec3_zone_set_status(zone, ZDB_ZONE_MUTEX_DYNUPDATE, NSEC3PARAM_RDATA_ALGORITHM(rdata), 0, NSEC3PARAM_RDATA_ITERATIONS(rdata), NSEC3PARAM_RDATA_SALT(rdata), NSEC3PARAM_RDATA_SALT_LEN(rdata), NSEC3_ZONE_ENABLED|NSEC3_ZONE_GENERATING);
+                    */
+#if DYNUPDATE_DIFF_DO_NOT_ADD_NSEC3_ON_NON_NSEC3_ZONE
+                    ret = 0; // nsec3_zone_set_status recursively calls to dynupdate_diff : don't do it here.
                     continue;
+#else
+                    rtype = TYPE_NSEC3PARAMQUEUED;
+#endif
                 }
             }
         } // type == TYPE_NSEC3PARAM
+        else if(((rtype == TYPE_NSEC3PARAMQUEUED) || (rtype == TYPE_NSEC3CHAINSTATE)) && (rdata != NULL))
+        {
+            u16 expected_rdata_size = NSEC3PARAM_RDATA_SIZE_FROM_SALT(NSEC3PARAM_RDATA_SALT_LEN(rdata));
+
+            if(rtype == TYPE_NSEC3CHAINSTATE)
+            {
+                ++expected_rdata_size;
+                /// @todo 20211202 edf -- check the status byte (last one in the rdata) makes sense
+            }
+
+            if(rdata_size != expected_rdata_size)
+            {
+                log_warn("update: %{dnsname}: %{dnsname} %{dnstype} has as a size of %d when it should be %d", zone->origin, rname, &rtype, rdata_size, expected_rdata_size);
+                zone_diff_finalize(&diff);
+                zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_IN_DYNUPDATE_DIFF);
+                return RCODE_ERROR_CODE(RCODE_NOTIMP);
+            }
+
+            // check the content is looking like an NSEC3PARAM
+            if(NSEC3PARAM_RDATA_ALGORITHM(rdata) != NSEC3_DIGEST_ALGORITHM_SHA1)
+            {
+                log_warn("update: %{dnsname}: %{dnsname} %{dnstype} with unsupported digest algorithm %d", zone->origin, rname, &rtype, NSEC3PARAM_RDATA_ALGORITHM(rdata));
+                zone_diff_finalize(&diff);
+                zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_IN_DYNUPDATE_DIFF);
+                return RCODE_ERROR_CODE(RCODE_NOTIMP);
+            }
+
+            if(NSEC3PARAM_RDATA_FLAGS(rdata) > 1)
+            {
+                log_warn("update: %{dnsname}: %{dnsname} %{dnstype} with unsupported flags %d", zone->origin, rname, &rtype, NSEC3PARAM_RDATA_FLAGS(rdata));
+                zone_diff_finalize(&diff);
+                zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_IN_DYNUPDATE_DIFF);
+                return RCODE_ERROR_CODE(RCODE_NOTIMP);
+            }
+
+            /// @todo 20211202 edf -- check if there are operations about this record going on and maybe reject this update because of it
+        }
+
 #endif // ZDB_HAS_NSEC3_SUPPORT
         
         if(rclass == CLASS_NONE)
@@ -5875,15 +6193,12 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
             if(rttl != 0)
             {
                 zone_diff_finalize(&diff);
-                
                 log_err("update: %{dnsname}: %{dnsname} record delete expected a TTL set to 0", zone->origin, rname);
-
 #if DEBUG
                 log_err("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i) failed with %r",
                         zone->origin, zone, reader, count, secondary_lock, dryrun, RCODE_ERROR_CODE(RCODE_FORMERR));
 #endif
                 zdb_zone_clear_status(zone, ZDB_ZONE_STATUS_IN_DYNUPDATE_DIFF);
-                
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
             
@@ -5892,11 +6207,8 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                 if((rtype == TYPE_SOA) || (rtype == TYPE_ANY))
                 {
                     // refused
-
                     log_err("update: %{dnsname}: refused", zone->origin);
-                    
                     zone_diff_finalize(&diff);
-
 #if DEBUG
                     log_err("dynupdate_diff(%{dnsname}@%p, %p, %i, %x, %i) failed with %r",
                             zone->origin, zone, reader, count, secondary_lock, dryrun, RCODE_ERROR_CODE(RCODE_REFUSED));
@@ -5962,20 +6274,14 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     {
                         if(rr_label != zone->apex)
                         {
-#if 0 /* fix */
-#else
                             zone_diff_add_fqdn_children(&diff, rname, rr_label);
                             zone_diff_add_fqdn_parents_up_to_below_apex(&diff, rname, zone);
-#endif
                         }
-#if 0 /* fix */
-#else
                         if(!zone_diff_record_remove_existing(&diff, rr_label, rname, rtype, rttl, rdata_size, rdata))
                         {
                             rdata_desc rd = {rtype, rdata_size, rdata};
                             log_warn("update: %{dnsname}: delete %{dnsname} %{typerdatadesc} not in zone", zone->origin, rname, &rd);
                         }
-#endif
                     }
                     else
                     {
@@ -6096,11 +6402,8 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     {
                         if(rr_label != zone->apex)
                         {
-#if 0 /* fix */
-#else
                             zone_diff_add_fqdn_children(&diff, rname, rr_label);
                             zone_diff_add_fqdn_parents_up_to_below_apex(&diff, rname, zone);
-#endif
                         }
                         zone_diff_record_remove_all(&diff, rr_label, rname, rtype);
                     }
@@ -6136,11 +6439,8 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 #endif
                     if(rr_label != zone->apex)
                     {
-#if 0 /* fix */
-#else
                         zone_diff_add_fqdn_children(&diff, rname, rr_label);
                         zone_diff_add_fqdn_parents_up_to_below_apex(&diff, rname, zone);
-#endif
                         zone_diff_record_remove_all_sets(&diff, rr_label, rname);
                     }
                     else
@@ -6191,11 +6491,8 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
             {
                 if(rr_label != zone->apex)
                 {
-#if 0 /* fix */
-#else
                     zone_diff_add_fqdn_children(&diff, rname, rr_label);
                     zone_diff_add_fqdn_parents_up_to_below_apex(&diff, rname, zone);
-#endif
                 }
                 else
                 {
@@ -6428,6 +6725,79 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
                 input_stream_close(&bais);
                 output_stream_close(&baos);
+#if 0
+                if(!zdb_zone_is_maintained(zone) && (zone_get_maintain_mode(zone) == ZDB_ZONE_MAINTAIN_NOSEC))
+                {
+                    if(zone_diff_adds_nsec3param(&diff))
+                    {
+                        zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                        zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                    }
+                    else if(zone_diff_has_zsk(&diff))
+                    {
+                        zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                        zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                    }
+                }
+#else
+                if(!zdb_zone_is_maintained(zone))
+                {
+                    u8 maintain_mode = zone_get_maintain_mode(zone);
+                    switch(maintain_mode)
+                    {
+                        case ZDB_ZONE_MAINTAIN_NOSEC:
+                        {
+                            if(zone_diff_adds_nsec3param(&diff) || zone_diff_has_or_adds_nsec3param(&diff))
+                            {
+                                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                                zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                            }
+                            else if(zone_diff_has_zsk(&diff))
+                            {
+                                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                                zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                            }
+
+                            break;
+                        }
+                        case ZDB_ZONE_MAINTAIN_NSEC:
+                        {
+                            if(zone_diff_adds_nsec3param(&diff))
+                            {
+                                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                                zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                            }
+                            else if(zone_diff_has_zsk(&diff))
+                            {
+                                //zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                                zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                            }
+
+                            break;
+                        }
+                        case ZDB_ZONE_MAINTAIN_NSEC3:
+                        case ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT:
+                        {
+                            if(zone_diff_adds_nsec3param(&diff) || zone_diff_has_or_adds_nsec3param(&diff))
+                            {
+                                //zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                                zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                            }
+                            else if(zone_diff_has_zsk(&diff))
+                            {
+                                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                                zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
+                            }
+
+                            break;
+                        }
+                        default:
+                        {
+                            break;
+                        }
+                    }
+                }
+#endif
             }
         } // storediff succeeded
         else

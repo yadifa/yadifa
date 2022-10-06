@@ -202,43 +202,15 @@ directory_writable(const char *path)
         return INVALID_PATH;
     }
 
-    char tempfile[PATH_MAX];
+    ya_result ret;
 
-    ya_result ret = snformat(tempfile, sizeof(tempfile), "%s/ydf.XXXXXX", path);
-
-    if(FAIL(ret))
+    if(FAIL(ret = access_check(path, ACCESS_CHECK_READWRITE)))
     {
-        log_err("error: '%s' temp file name creation failed: %r", path, ret);
-        formatln("error: '%s' temp file name creation failed: %r", path, ret);
-        return ret;
-    }
-
-    if(ret >= PATH_MAX)
-    {
-        log_err("error: '%s' path is too big", path);
-        formatln("error: '%s' path is too big", path);
-        return INVALID_PATH;
-    }
-
-    int tempfd;
-    if((tempfd = mkstemp_ex(tempfile)) < 0)
-    {
-        int ret = ERRNO_ERROR;
-#ifndef WIN32
         formatln("error: '%s' is not writable as (%d:%d): %r", path, getuid(), getgid(), ret);
-#else
-        log_err("error: '%s' is not writable: %r", fullpath, ret);
-        formatln("error: '%s' is not writable: %r", fullpath, ret);
-#endif
-        return ret;
     }
 
-    unlink(tempfile);
-    close_ex(tempfd);
-
-    return SUCCESS;
+    return ret;
 }
-
 
 #ifndef PREFIX
 #define PREFIX "/usr/local"
@@ -258,37 +230,37 @@ directory_writable(const char *path)
 
 CONFIG_BEGIN(main_args_desc)
         CONFIG_STRING_ARRAY(domains,NULL, 200)      // I'm using a thread-pool for this, it cannot go beyond THREAD_POOL_SIZE_LIMIT_MAX threads.
-        CONFIG_PATH(log_path, LOCALSTATEDIR "/log/yakeyrolld")
-        CONFIG_FILE(configuration_file_path, CONFIGURATION_FILE_PATH_DEFAULT)
-        CONFIG_PATH(keys_path, LOCALSTATEDIR "/zones/keys")
-        CONFIG_PATH(plan_path, LOCALSTATEDIR "/plans")
-        CONFIG_PATH(pid_path, LOCALSTATEDIR "/run")
-        CONFIG_STRING(pid_file, "yakeyrolld.pid")
-        CONFIG_HOST_LIST(server, "127.0.0.1")
-        CONFIG_U32(timeout, "3")
-        CONFIG_U32(ttl, "600")
+        CONFIG_PATH(log_path, LOCALSTATEDIR "/log/yakeyrolld")      // doc
+        CONFIG_FILE(configuration_file_path, CONFIGURATION_FILE_PATH_DEFAULT)  // cmdline
+        CONFIG_PATH(keys_path, LOCALSTATEDIR "/zones/keys")         // doc
+        CONFIG_PATH(plan_path, LOCALSTATEDIR "/plans")              // doc
+        CONFIG_PATH(pid_path, LOCALSTATEDIR "/run")                 // doc
+        CONFIG_STRING(pid_file, "yakeyrolld.pid")                   // doc
+        CONFIG_HOST_LIST(server, "127.0.0.1")                       // doc
+        CONFIG_U32(timeout, "3")                                    // doc
+        CONFIG_U32(ttl, "600")                                      // doc
 
-        CONFIG_U32_RANGE(update_apply_verify_retries, "60", 0, 3600)        // if an update wasn't applied successfully, retry CHECKING this amount of times
-        CONFIG_U32_RANGE(update_apply_verify_retries_delay, "1", 1, 60)     // time between the above retries
+        CONFIG_U32_RANGE(update_apply_verify_retries, "60", 0, 3600)    // doc     // if an update wasn't applied successfully, retry CHECKING this amount of times
+        CONFIG_U32_RANGE(update_apply_verify_retries_delay, "1", 1, 60) // doc    // time between the above retries
 
-        CONFIG_U32_RANGE(match_verify_retries, "60", 0, 3600)        // if there is not match, retry checking this amount of times
-        CONFIG_U32_RANGE(match_verify_retries_delay, "1", 1, 60)  // time between the above retries
+        CONFIG_U32_RANGE(match_verify_retries, "60", 0, 3600)     // doc // if there is not match, retry checking this amount of times
+        CONFIG_U32_RANGE(match_verify_retries_delay, "1", 1, 60)  // doc // time between the above retries
 
-        CONFIG_STRING(generate_from, "now")
-        CONFIG_STRING(generate_until, "+1y")
-        CONFIG_STRING(policy_name, "")
-        CONFIG_UID(uid, "0")
-        CONFIG_GID(gid, "0")
-        CONFIG_BOOL(reset, "0")
-        CONFIG_BOOL(dryrun, "0")
-        CONFIG_BOOL(wait_for_yadifad, "1")
-        CONFIG_BOOL(daemonise, "0")
-        CONFIG_BOOL(print_plan, "0")
-        CONFIG_BOOL(user_confirmation, "1")
+        CONFIG_STRING(generate_from, "now")                         // doc
+        CONFIG_STRING(generate_until, "+1y")                        // doc
+        CONFIG_STRING(policy_name, "")                              // doc
+        CONFIG_UID(uid, "0")                                        // doc
+        CONFIG_GID(gid, "0")                                        // doc
+        CONFIG_BOOL(reset, "0")                                     // cmdline
+        CONFIG_BOOL(dryrun, "0")                                    // cmdline
+        CONFIG_BOOL(wait_for_yadifad, "1")                          //
+        CONFIG_BOOL(daemonise, "0")                                 //
+        CONFIG_BOOL(print_plan, "0")                                // cmdline (!doc)
+        CONFIG_BOOL(user_confirmation, "1")                         // cmdline (!doc)
 #if DEBUG
-        CONFIG_BOOL(with_secret_keys, "0")
+        CONFIG_BOOL(with_secret_keys, "0")                          // debug
 #endif
-        CONFIG_ENUM(program_mode, "none", program_mode_enum_table)
+        CONFIG_ENUM(program_mode, "none", program_mode_enum_table)  // cmdline
         CONFIG_ALIAS(policy, policy_name)
         CONFIG_ALIAS(domain, domains)
         CONFIG_ALIAS(daemon, daemonise)
@@ -1075,8 +1047,9 @@ program_mode_play(const u8 *domain, bool does_loop)
                     case MAKE_ERRNO_ERROR(ETIMEDOUT):
                     case MAKE_ERRNO_ERROR(EADDRNOTAVAIL):
                     case MAKE_ERRNO_ERROR(EAGAIN):
-                    case MAKE_DNSMSG_ERROR(RCODE_SERVFAIL):
-                    case MAKE_DNSMSG_ERROR(RCODE_REFUSED):
+                    case MAKE_RCODE_ERROR(RCODE_SERVFAIL):
+                    case MAKE_RCODE_ERROR(RCODE_REFUSED):
+                    case MAKE_ERRNO_ERROR(ECONNREFUSED):
                     case UNABLE_TO_COMPLETE_FULL_READ:
                     {
                         ++consecutive_errors;
@@ -1226,6 +1199,10 @@ program_mode_play_all(bool does_loop, bool daemonise)
 
                 return ret;
             }
+
+            signal_handler_set(SIGINT, signal_int);
+            signal_handler_set(SIGTERM, signal_int);
+            signal_handler_set(SIGHUP, signal_hup);
         }
     }
     else
@@ -1414,9 +1391,14 @@ main(int argc, char *argv[])
 
     ya_result ret = main_config(argc, argv);
 
-    if(FAIL(ret) || cmdline_help_get() || cmdline_version_get())
+    if(FAIL(ret))
     {
         return EXIT_FAILURE;
+    }
+
+    if(cmdline_help_get() || cmdline_version_get())
+    {
+        return EXIT_SUCCESS;
     }
 
     if(g_config.dryrun)

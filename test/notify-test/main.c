@@ -208,10 +208,11 @@ main(int argc, char *argv[])
     if(argc >= 5)
     {
         args.loops = atoi(argv[4]);
-        if(args.loops < 0)
-        {
-            args.loops = 1;
-        }
+    }
+
+    if(args.loops <= 0)
+    {
+        args.loops = 1;
     }
 
     logger_init_ex(0x100000, HEAP_SIZE);

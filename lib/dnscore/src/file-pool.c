@@ -58,7 +58,7 @@
 #include "dnscore/logger.h"
 
 #define FP_USE_ABSTRACT_FILES   1
-#if HAS_FILEPOOL_CACHE
+#if DNSCORE_HAS_FILEPOOL_CACHE
 #define FP_USE_CACHED_FILES     1           // minimal impact apparently
 #else
 #define FP_USE_CACHED_FILES     0           // minimal impact apparently

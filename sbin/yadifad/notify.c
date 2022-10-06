@@ -95,7 +95,7 @@
 #endif
 
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 
 #endif
@@ -341,7 +341,6 @@ notify_slaveanswer(const message_data *mesg)
 
         notifymsg->payload.answer.rcode = rcode;
         notifymsg->payload.answer.aa = aa;
-
         ZALLOC_OBJECT_OR_DIE(notifymsg->payload.answer.host, host_address, HOSTADDR_TAG);
         host_address_set_with_sockaddr(notifymsg->payload.answer.host, sa);
         
@@ -1469,7 +1468,7 @@ notify_service_context_process_next_message(struct notify_service_context *ctx, 
 
                     socketaddress sa;
 
-                    ya_result ret = gethostaddr(name, DNS_DEFAULT_PORT, &sa.sa, 0);
+                    ya_result ret = gethostaddr(name, g_config->server_port_value, &sa.sa, 0);
 
                     if(ISOK(ret))
                     {
@@ -1701,18 +1700,27 @@ notify_service_context_process_next_message(struct notify_service_context *ctx, 
     } /* switch notifymsg type */
 }
 
+#if DEBUG
+atomic_bool notify_no_notification_notified = FALSE;
+#endif
+
 static void
 notify_service_context_send_notifications(struct notify_service_context *ctx)
 {
 #if DEBUG
     if(ptr_set_isempty(&ctx->notifications_being_sent))
     {
-        log_debug("notify: no notification to send");
+        if(!atomic_load(&notify_no_notification_notified))
+        {
+            log_debug("notify: no notification to send");
+            atomic_store(&notify_no_notification_notified, TRUE);
+        }
         return;
     }
     else
     {
         log_debug("notify: sending notifications");
+        atomic_store(&notify_no_notification_notified, FALSE);
     }
 #endif
 
@@ -2222,6 +2230,11 @@ notify_slaves_alarm(void *args_, bool cancel)
     return SUCCESS;
 }
 
+bool notify_has_candidates_for_zone(zone_desc_s *zone_desc)
+{
+    return (zone_ismaster(zone_desc) && zone_is_auto_notify(zone_desc)) || (zone_desc->notifies != NULL);
+}
+
 /**
  * 
  * @param origin
@@ -2326,11 +2339,10 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
 
                 // valid candidate : append IP addresses
             
-                if(zdb_append_ip_records(db, ns_dname, &list) <= 0) // zone is locked
+                if(zdb_append_ip_records_with_port_ne(db, ns_dname, &list, htons(g_config->server_port_value)) <= 0) // zone is locked
                 {
                     // If no IP has been found, they will have to be resolved using the system ... later
-
-                    host_address_append_dname(&list, ns_dname, NU16(DNS_DEFAULT_PORT));
+                    host_address_append_dname(&list, ns_dname, htons(g_config->server_port_value));
                 }
             }
 
@@ -2395,7 +2407,7 @@ notify_slaves_convert_domain_to_notify(notify_message *message)
         {        
             if(!zdb_zone_invalid(zone))
             {
-                alarm_event_node *event = alarm_event_new(
+                alarm_event_node *event = alarm_event_new( // slave notification
                         time(NULL),
                         ALARM_KEY_ZONE_NOTIFY_SLAVES,
                         notify_slaves_alarm,

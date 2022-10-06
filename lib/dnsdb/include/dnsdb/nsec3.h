@@ -101,10 +101,9 @@ extern "C"
 #define NSEC3_RDATA_FLAGS(__rdata__) (((u8*)(__rdata__))[1])
 #define NSEC3_RDATA_ITERATIONS_NE(__rdata__) (((u16*)(__rdata__))[1])
 #define NSEC3_RDATA_ITERATIONS(__rdata__) NU16(NSEC3_RDATA_ITERATIONS_NE(__rdata__))
-    
-#define TYPE_NSEC3PARAMADD   NU16(0xff00)
-#define TYPE_NSEC3PARAMDEL   NU16(0xff01)
+
 #define TYPE_NSEC3CHAINSTATE NU16(0xff02)
+#define TYPE_NSEC3PARAMQUEUED NU16(0xff03)
 
 /**
  * 
@@ -228,6 +227,22 @@ ya_result nsec3_zone_set_status(zdb_zone *zone, u8 secondary_lock, u8 algorithm,
  */
 
 ya_result nsec3_zone_get_status(zdb_zone *zone, u8 algorithm, u8 optout, u16 iterations, const u8 *salt, u8 salt_len, u8 *statusp);
+
+/**
+ * Gets a copy of the salt bytes from the first matching NSEC3PARAM record.
+ *
+ * The zone must be locked.
+ *
+ * @param zone
+ * @param algorithm
+ * @param optout
+ * @param salt_len
+ * @param iterations
+ * @param salt_buffer
+ * @return
+ */
+
+ya_result nsec3_zone_get_first_salt_matching(zdb_zone *zone, u8 algorithm, u8 optout, u16 iterations, u8 salt_len, u8 *salt_buffer);
 
 /**
  * Gets the NSEC3 maintenance status for a specific chain.

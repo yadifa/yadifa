@@ -133,7 +133,7 @@ zdb_zone_label_find(zdb * db, const dnsname_vector* origin) // mutex checked
 {
     zdb_zone_label* zone_label;
     
-    yassert(group_mutex_islocked(&db->mutex));
+    yassert(zdb_ismutexlocked(db));
         
     zone_label = db->root; /* the "." zone */
 

@@ -363,7 +363,7 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
     }
     else
     {
-#ifndef WIN32
+#if __unix__
         const char *chroot_base = chroot_get_path();
         
         uid_t uid = logger_get_uid();
@@ -448,8 +448,8 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
             logger_channel_register(key, file_channel);
         }
 #else
-    osformatln(termerr, "config: pipes not supported");
-    return ERROR;
+        osformatln(termerr, "config: pipes not supported");
+        return ERROR;
 #endif
     }
     
@@ -457,11 +457,12 @@ config_section_handles_set_wild(struct config_section_descriptor_s *csd, const c
 }
 
 static ya_result
-config_section_handles_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_handles_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
     (void)key;
+    (void)context;
 
     return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
@@ -617,11 +618,12 @@ config_section_loggers_set_wild(struct config_section_descriptor_s *csd, const c
 }
 
 static ya_result
-config_section_loggers_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_loggers_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
     (void)key;
+    (void)context;
 
     return FEATURE_NOT_IMPLEMENTED_ERROR;
 }

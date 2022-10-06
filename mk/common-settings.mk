@@ -202,7 +202,6 @@ if HAS_CPU_NIAGARA
 AM_CFLAGS += -mcpu=niagara
 endif
 
-
 if HAS_LTO_SUPPORT
 AM_CFLAGS += -DLTO -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
 AM_LDFLAGS += -flto -fwhole-program -fno-fat-lto-objects -fuse-linker-plugin
@@ -216,6 +215,10 @@ endif
 
 AM_CFLAGS += -DUSES_GCC
 DEBUGFLAGS += -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
+
+if HAS_BFD_DEBUG_SUPPORT
+AM_CFLAGS += -rdynamic
+endif
 
 if IS_LINUX_FAMILY
 AM_LDFLAGS += -Wl,-z,stack-size=8388608

@@ -42,7 +42,7 @@
 #include "process_class_ch.h"
 #include "dynupdate_query_service.h"
 #include "notify.h"
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl_notify.h"
 #endif
 #include "log_query.h"
@@ -510,7 +510,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                         local_statistics->udp_updates_count++;
                         if(ISOK(dynupdate_query_service_enqueue(database, mesg, fd)))
                         {
-                            return SUCCESS_DROPPED; // NOT break;
+                            return SUCCESS_DROPPED; // NOT break; the processing will be handled in another thread
                         }
                         else
                         {
@@ -659,7 +659,7 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
         case (15<<OPCODE_SHIFT):
         {
-            if(service_should_reconfigure_or_stop(ctx->worker) || (ctx->must_stop))
+            if(service_should_reconfigure_or_stop(ctx->worker) || (ctx->must_stop)) // will fallthrough on purpose
             {
                 return STOPPED_BY_APPLICATION_SHUTDOWN;
             }

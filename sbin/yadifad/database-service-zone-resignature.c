@@ -56,7 +56,6 @@
 #include <dnscore/timeformat.h>
 #include <dnscore/dnskey-keyring.h>
 #include <dnscore/thread_pool.h>
-
 #include <dnsdb/dnssec.h>
 #include <dnsdb/rrsig.h>
 #include <dnsdb/zdb_rr_label.h>
@@ -209,7 +208,7 @@ database_service_zone_add_dnskey(dnssec_key *key)
 #if HAS_EVENT_DYNAMIC_MODULE
                         if(dynamic_module_dnskey_interface_chain_available())
                         {
-                            dynamic_module_on_dnskey_publish(key);
+                            dynamic_module_on_dnskey_publish(key); // we know this key has been pushed as we have crafted the update message
                         }
 #endif
                         notify_slaves(zone->origin);
@@ -224,11 +223,15 @@ database_service_zone_add_dnskey(dnssec_key *key)
                         // trigger a background store of the zone
 
                         //zdb_zone_info_background_store_zone(dnskey_get_domain(key));
-                        zdb_zone_info_store_locked_zone(dnskey_get_domain(key));
-
-                        reader.offset = reader_offset;
-
-                        continue;
+                        if(ISOK(ret = zdb_zone_info_store_locked_zone(dnskey_get_domain(key))))
+                        {
+                            reader.offset = reader_offset;
+                            continue;
+                        }
+                        else
+                        {
+                            log_err("dnskey: %{dnsname}: failed to store the zone on disk: %r", dnskey_get_domain(key), ret);
+                        }
                     }
 
                     break;
@@ -255,6 +258,11 @@ database_service_zone_add_dnskey(dnssec_key *key)
     
     return ret;
 }
+
+/**
+ * Applies the dynamic update to that zone.
+ * Note that the zone may be flushed on disk as a result (e.g. if the journal is full.)
+ */
 
 static ya_result
 database_service_zone_update_published_keys_flush(const u8 *fqdn, dynupdate_message *dmsg)
@@ -285,13 +293,6 @@ database_service_zone_update_published_keys_flush(const u8 *fqdn, dynupdate_mess
                 if(ISOK(ret))
                 {
                     // done
-
-#if HAS_EVENT_DYNAMIC_MODULE
-                    if(dynamic_module_dnskey_interface_chain_available())
-                        {
-                            dynamic_module_on_dnskey_publish(key);
-                        }
-#endif
                 }
                 else if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
                 {
@@ -299,11 +300,15 @@ database_service_zone_update_published_keys_flush(const u8 *fqdn, dynupdate_mess
 
                     // trigger a background store of the zone
 
-                    zdb_zone_info_store_locked_zone(fqdn);
-
-                    reader.offset = reader_offset;
-
-                    continue; // try again
+                    if(ISOK(ret = zdb_zone_info_store_locked_zone(fqdn)))
+                    {
+                        reader.offset = reader_offset;
+                        continue; // try again
+                    }
+                    else
+                    {
+                        log_err("dnskey: %{dnsname}: failed to store the zone on disk: %r", fqdn, ret);
+                    }
                 }
 
                 break;
@@ -325,17 +330,48 @@ database_service_zone_update_published_keys_flush(const u8 *fqdn, dynupdate_mess
 
     return ret;
 }
+/*
+static void
+database_service_zone_maintain_presignatures_for_key(const u8 *fqdn, time_t now, dnssec_key *key)
+{
+    zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
+    if(zone_desc != NULL)
+    {
+        zone_lock(zone_desc, ZONE_LOCK_READONLY);
+        zdb_zone *zone = zone_get_loaded_zone(zone_desc);
+        if(zone != NULL)
+        {
+            if(dnskey_is_activated_lenient(fqdn, now, zone->sig_validity_regeneration_seconds))
+            {
+                // maintenance
 
+                database_service_zone_dnssec_maintenance(zone_desc);
+            }
+            zdb_zone_release(zone);
+        }
+        zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+        zone_release(zone_desc);
+    }
+}
+*/
 static ya_result
 database_service_zone_update_published_keys(const u8 *fqdn)
 {
     // make a dynupdate query update that adds the record
+
+    zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
+
+    if(zone_desc == NULL)
+    {
+        return INVALID_STATE_ERROR;
+    }
 
     ptr_vector publish_keys = EMPTY_PTR_VECTOR;
     ptr_vector delete_keys = EMPTY_PTR_VECTOR;
 
     if(dnssec_keystore_acquire_publish_delete_keys_from_fqdn_to_vectors(fqdn, &publish_keys, &delete_keys) == 0)
     {
+        zone_release(zone_desc);
         return SUCCESS; // nothing to do
     }
 
@@ -344,17 +380,48 @@ database_service_zone_update_published_keys(const u8 *fqdn)
     dynupdate_message_init(&dmsg, fqdn, CLASS_IN);
     ya_result ret = SUCCESS;
     int record_count = 0;
+    bool should_star_maintenance = FALSE;
     bool some_work_done = FALSE;
+
+    dnssec_policy *dp;
+    bool is_dnssec_policy_managed = ((dp = zone_desc->dnssec_policy) != NULL);
+
+    if(is_dnssec_policy_managed)
+    {
+        dnssec_policy_acquire(dp);
+    }
+
+    zone_release(zone_desc);
 
     for(int i = 0; i <= ptr_vector_last_index(&publish_keys); ++i)
     {
         dnssec_key *key = (dnssec_key*)ptr_vector_get(&publish_keys, i);
 
+        if(is_dnssec_policy_managed)
+        {
+            if(!dnssec_policy_is_key_matching(dp, key))
+            {
+                continue;
+            }
+        }
+
         if(ISOK(ret = dynupdate_message_add_dnskey(&dmsg, 86400, key)))
         {
-            log_info("dnskey: %{dnsname}: +%03d+%05d/%d key will be published %T => %T => %T => %T",
+            bool key_should_start_maintenance = FALSE;
+            zone_lock(zone_desc, ZONE_LOCK_READONLY);
+            zdb_zone *zone = zone_get_loaded_zone(zone_desc);
+            if(zone != NULL)
+            {
+                key_should_start_maintenance = dnskey_is_activated_lenient(key, time(NULL), zone->sig_validity_regeneration_seconds);
+                should_star_maintenance |= key_should_start_maintenance;
+                zdb_zone_release(zone);
+            }
+            zone_unlock(zone_desc, ZONE_LOCK_READONLY);
+
+            log_info("dnskey: %{dnsname}: +%03d+%05d/%d key will be published %T => %T => %T => %T (%i)",
                 dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)),
-                dnskey_get_publish_epoch(key), dnskey_get_activate_epoch(key), dnskey_get_inactive_epoch(key), dnskey_get_delete_epoch(key)
+                dnskey_get_publish_epoch(key), dnskey_get_activate_epoch(key), dnskey_get_inactive_epoch(key), dnskey_get_delete_epoch(key),
+                key_should_start_maintenance
             );
             ++record_count;
         }
@@ -381,6 +448,12 @@ database_service_zone_update_published_keys(const u8 *fqdn)
                 break;
             }
         }
+    }
+
+    if(is_dnssec_policy_managed)
+    {
+        dnssec_policy_release(dp);
+        dp = NULL;
     }
 
     if(ISOK(ret))
@@ -438,7 +511,8 @@ database_service_zone_update_published_keys(const u8 *fqdn)
 
     // does the zone needs to have its chain(s) processed ?
 
-    zone_desc_s *zone_desc = zone_acquirebydnsname(fqdn);
+    zone_desc = zone_acquirebydnsname(fqdn);
+
     if(zone_desc != NULL)
     {
         zone_lock(zone_desc, ZONE_LOCK_READONLY);
@@ -451,6 +525,8 @@ database_service_zone_update_published_keys(const u8 *fqdn)
 
     dnssec_keystore_release_keys_from_vector(&delete_keys);
     dnssec_keystore_release_keys_from_vector(&publish_keys);
+    ptr_vector_destroy(&delete_keys);
+    ptr_vector_destroy(&publish_keys);
 
     if(some_work_done)
     {
@@ -463,6 +539,25 @@ database_service_zone_update_published_keys(const u8 *fqdn)
             zdb_zone_set_maintenance_paused(zone, FALSE);
             zdb_zone_double_unlock(zone, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
             zdb_zone_release(zone);
+        }
+
+        if(should_star_maintenance)
+        {
+            zone_desc = zone_acquirebydnsname(fqdn);
+            if(zone_desc != NULL)
+            {
+                log_debug("dnskey: %{dnsname}: starting maintenance", fqdn);
+                database_service_zone_dnssec_maintenance(zone_desc);
+                zone_release(zone_desc);
+            }
+            else
+            {
+                log_err("dnskey: %{dnsname}: cannot start maintenance", fqdn); // which should never happen
+            }
+        }
+        else
+        {
+            log_debug("dnskey: %{dnsname}: no maintenance needed", fqdn);
         }
     }
 
@@ -525,11 +620,15 @@ database_service_zone_remove_dnskey(dnssec_key *key)
 
                         //zdb_zone_info_background_store_zone(dnskey_get_domain(key));
 
-                        zdb_zone_info_store_locked_zone(dnskey_get_domain(key));
-
-                        reader.offset = reader_offset;
-
-                        continue;
+                        if(ISOK(ret = zdb_zone_info_store_locked_zone(dnskey_get_domain(key))))
+                        {
+                            reader.offset = reader_offset;
+                            continue;
+                        }
+                        else
+                        {
+                            log_err("dnskey: %{dnsname}: failed to store the zone on disk: %r", dnskey_get_domain(key), ret);
+                        }
                     }
 
                     break;
@@ -591,7 +690,7 @@ database_service_zone_resignature_publish_dnskey_thread(void *args_)
                 {
                     if(ISOK(ret = database_service_zone_update_published_keys(dnskey_get_domain(key))))
                     {
-
+                        // database_service_zone_maintain_presignatures_for_key(dnskey_get_domain(key), now, key);
                     }
                     else
                     {
@@ -701,7 +800,7 @@ database_service_zone_resignature_unpublish_dnskey_thread(void *args_)
 
     if(ISOK(database_service_zone_update_published_keys(args->domain))) // fails -> works
     {
-        log_info("dnskey: %{dnsname}: DNSKEY rrset updated", args->domain);
+        log_info("dnskey: %{dnsname}: DNSKEY rrset updated (unpublish)", args->domain);
     }
     else // failed, try to do the one
     {
@@ -827,7 +926,45 @@ database_service_zone_resignature_activate_dnskey_thread(void *args_)
             {
                 // will be automatically added, except if there is no signing key for this
 
-                bool can_edit_dnskey_rrsig = dnssec_keystore_has_usable_ksk(dnskey_get_domain(key), now);
+                /*
+                 * YADIFA-168 key point
+                 *
+                 * current: KSK or nothing
+                 *
+                 * should be: ((policy without a KSK) || (!policy but zone without a KSK)) => ZSK allowed, else KSK only
+                 */
+
+                bool can_edit_dnskey_rrsig = FALSE;
+
+                zone_desc_s *zone_desc = zone_acquirebydnsname(args->domain);
+                if(zone_desc != NULL)
+                {
+                    dnssec_policy *dp = zone_desc->dnssec_policy;
+                    if(dp != NULL)
+                    {
+                        if(dnssec_policy_defines_ksk(dp))
+                        {
+                            // ksk only
+                            can_edit_dnskey_rrsig = dnssec_keystore_has_usable_ksk(dnskey_get_domain(key), now);
+                        }
+                        else
+                        {
+                            can_edit_dnskey_rrsig = TRUE; // (args->flags == DNSKEY_FLAGS_KSK) || (args->flags == DNSKEY_FLAGS_ZSK);
+                        }
+                    }
+                    else
+                    {
+                        if(dnssec_keystore_has_any_ksk(dnskey_get_domain(key)))
+                        {
+                            can_edit_dnskey_rrsig = dnssec_keystore_has_usable_ksk(dnskey_get_domain(key), now);
+                        }
+                        else
+                        {
+                            can_edit_dnskey_rrsig = dnssec_keystore_has_usable_zsk(dnskey_get_domain(key), now);
+                        }
+                    }
+                    zone_release(zone_desc);
+                }
 
                 if(!can_edit_dnskey_rrsig)
                 {
@@ -864,18 +1001,7 @@ database_service_zone_resignature_activate_dnskey_thread(void *args_)
 #if HAS_EVENT_DYNAMIC_MODULE
                 if(dynamic_module_dnskey_interface_chain_available())
                 {
-                    dnssec_key *key = NULL;
-                    ya_result ret = dnssec_keystore_load_private_key_from_parameters(args->algorithm, args->tag, args->flags, args->domain, &key);
-                    if(ISOK(ret))
-                    {
-                        dynamic_module_on_dnskey_activate(key);
-                        dnskey_release(key);
-                    }
-                    else
-                    {
-                        log_warn("dnskey: %{dnsname}: +%03d+%05d/%d: could not load key to notify deactivation to module",
-                                args->domain, args->algorithm, args->tag, ntohs(args->flags));
-                    }<
+                    dynamic_module_on_dnskey_activate(key);
                 }
 #endif
                 zone_release(zone_desc);
@@ -1092,7 +1218,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
 
                 log_info("dnskey: %{dnsname}: +%03d+%05d/%d: will be published at %T", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)), when);
 
-                alarm_event_node *event = alarm_event_new(
+                alarm_event_node *event = alarm_event_new( // dnskey publish (resignature)
                     when,
                     database_service_zone_resignature_dnskey_alarm_unique_key(key, ALARM_KEY_ZONE_DNSKEY_PUBLISH),
                     database_service_zone_resignature_publish_dnskey_alarm,
@@ -1118,7 +1244,11 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
             {
                 // mark the key as timed for activation and arm said activation
 
-                when = MAX(active_epoch, now - 5);
+                // sig_validity_regeneration
+                when = MIN(MAX(active_epoch - zone->sig_validity_regeneration_seconds, now - zone->sig_validity_regeneration_seconds - 5), publish_epoch);
+#if DEBUG
+                log_info("dnskey: %{dnsname}: +%03d+%05d/%d: activation alarm set to %T but activation is really at %T (regeneration is: %i)", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)), when, active_epoch, zone->sig_validity_regeneration_seconds);
+#endif
 
                 if(!(publish_queued && (when <= publish_epoch)))
                 {
@@ -1127,7 +1257,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
 
                     // set alarm
 
-                    alarm_event_node *event = alarm_event_new(
+                    alarm_event_node *event = alarm_event_new( // dnskey activate (resignature)
                         when,
                         database_service_zone_resignature_dnskey_alarm_unique_key(key, ALARM_KEY_ZONE_DNSKEY_ACTIVATE),
                         database_service_zone_resignature_activate_dnskey_alarm,
@@ -1169,7 +1299,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
 
                 // set alarm
 
-                alarm_event_node *event = alarm_event_new(
+                alarm_event_node *event = alarm_event_new( // dnskey deactivate (resignature)
                     when,
                     database_service_zone_resignature_dnskey_alarm_unique_key(key, ALARM_KEY_ZONE_DNSKEY_DEACTIVATE),
                     database_service_zone_resignature_deactivate_dnskey_alarm,
@@ -1193,7 +1323,7 @@ database_service_zone_dnskey_set_alarms_for_key(zdb_zone *zone, dnssec_key *key)
 
             log_info("dnskey: %{dnsname}: +%03d+%05d/%d: will be unpublished at %T", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag(key), ntohs(dnskey_get_flags(key)), when);
 
-            alarm_event_node *event = alarm_event_new(
+            alarm_event_node *event = alarm_event_new( // dnskey unpublish (resignature)
                 when,
                 database_service_zone_resignature_dnskey_alarm_unique_key(key, ALARM_KEY_ZONE_DNSKEY_UNPUBLISH),
                 database_service_zone_resignature_unpublish_dnskey_alarm,
@@ -1451,8 +1581,9 @@ database_service_zone_dnssec_maintenance_thread(void *parms_)
                         break;
                     case ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY:
                         log_info("zone sign: %{dnsname}: unable to sign, the journal is full (pausing maintenance)", zone_origin(zone_desc));
-                        zdb_zone_info_background_store_zone(zone_origin(zone_desc));
                         zdb_zone_set_maintenance_paused(zone, TRUE);
+                        zone_clear_status(zone_desc, ZONE_STATUS_SIGNATURES_UPDATING);
+                        zdb_zone_info_background_store_zone(zone_origin(zone_desc));
                         break;
                     default:
                         log_err("zone sign: %{dnsname}: signature failed: %r", zone_origin(zone_desc), return_code);
@@ -1471,6 +1602,7 @@ database_service_zone_dnssec_maintenance_thread(void *parms_)
                 }
                 else
                 {
+                    // the signature should happen before of course ...
                     // alarm queue
                     database_zone_update_signatures_at(zone, zone->progressive_signature_update.earliest_signature_expiration);
                 }
@@ -1533,7 +1665,7 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
     
     log_debug1("zone sign: %{dnsname}: locking zone for signature update", origin);
 
-    if(zone_desc_owner != 0)
+    if(zone_desc_owner == 0)
     {
         if(FAIL(zone_lock(zone_desc, ZONE_LOCK_SIGNATURE)))
         {
@@ -1566,7 +1698,7 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
             ret = ZDB_READER_ZONENOTLOADED;
         }
 
-        if(zone_desc_owner != 0)
+        if(zone_desc_owner == 0)
         {
             zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE); // locked in this call
         }
@@ -1585,7 +1717,7 @@ database_service_zone_dnssec_maintenance_lock_for(zone_desc_s *zone_desc, u8 zon
     
     log_debug1("zone sign: %{dnsname}: unlocking zone for signature update", origin);
 
-    if(zone_desc_owner != 0)
+    if(zone_desc_owner == 0)
     {
         zone_unlock(zone_desc, ZONE_LOCK_SIGNATURE); // locked in this call
     }

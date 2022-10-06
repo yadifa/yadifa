@@ -159,6 +159,12 @@ ya_result packet_writer_add_rdata(packet_writer *pw, u16 rr_type, const u8 *rdat
 ya_result packet_writer_add_record(packet_writer *pw, const u8* fqdn, u16 rr_type, u16 rr_class, u32 ttl, const u8* rdata, u16 rdata_len);
 ya_result packet_writer_add_dnsrr(packet_writer *pw, dns_resource_record* dns_rr);
 
+static inline void
+packet_writer_set_truncated(packet_writer  *pw)
+{
+    MESSAGE_HIFLAGS(pw->packet) |= TC_BITS|QR_BITS;
+}
+
 static inline void packet_writer_forward(packet_writer *pw, u32 bytes)
 {
     assert(pw->packet_offset + bytes <= pw->packet_limit);
@@ -179,7 +185,6 @@ static inline void packet_writer_add_u8(packet_writer *pw, u16 value)
 
 static inline void packet_writer_set_u16(packet_writer *pw, u16 value, u32 offset)
 {
-
     SET_U16_AT(pw->packet[offset], value);
 }
 

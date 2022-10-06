@@ -78,12 +78,23 @@ extern "C"
 #define ZDB_ZONE_NSEC3             0x0020
 #define ZDB_ZONE_NSEC3_OPTOUT      0x0030
 
+#if BYTE_ORDER == LITTLE_ENDIAN
 struct zdb_zone_load_dnskey_id_fields
 {
     u16 tag;
     u8 algorithm;
     u8 must_be_zero;
 };
+#elif BYTE_ORDER == BIG_ENDIAN
+struct zdb_zone_load_dnskey_id_fields
+{
+    u8 must_be_zero;
+    u8 algorithm;
+    u16 tag;
+};
+#else
+#error "BYTE_ORDER value is not supported"
+#endif
 
 union zdb_zone_load_dnskey_id
 {

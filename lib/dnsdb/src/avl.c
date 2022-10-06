@@ -841,7 +841,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
          * Balance became 0 : It was -1 or +1 : the tree's height decreased.
          * It is balanced but a propagation is required.
          *
-         * Balance became -1 or +1 : It was 0 : the tree's height didn't changed.
+         * Balance became -1 or +1 : It was 0 : the tree's height didn't change.
          * It is a valid AVL and the propagation can stop.
          *
          * Balance became -2 or +2 : it was -1 or +1 : the tree is unbalanced.

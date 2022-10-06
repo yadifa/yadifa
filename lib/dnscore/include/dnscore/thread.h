@@ -67,7 +67,6 @@ extern "C"
 {
 #endif
 
-
 typedef pthread_t thread_t;
 typedef pthread_key_t thread_key_t;
 typedef pthread_once_t thread_once_t;

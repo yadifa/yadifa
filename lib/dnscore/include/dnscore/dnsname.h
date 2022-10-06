@@ -434,6 +434,9 @@ bool dnsname_equals_ignorecase3(const u8* name_a, const u8* name_b);
 
 u32 dnsname_len(const u8* name);
 
+s32 dnsname_len_with_size(const u8 *name, size_t name_buffer_size);
+s32 dnsname_len_checked_with_size(const u8 *name, size_t name_buffer_size);
+
 ya_result dnsname_len_checked(const u8 *name);
 
 /* ONE use */

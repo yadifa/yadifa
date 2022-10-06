@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2022, EURid. All rights reserved.
+#  Copyright (c) 2011-2022, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -28,6 +28,23 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 ################################################################################
+
+20221004:
+    YADIFA 2.6.0-public
+
+    The server can optionally load the locally stored zone before asking for the last version to its primary (load-local-first)
+
+    The server now avoids storing temporary zone transfer images to disk if the zone is small enough (axfr-memory-threshold)
+
+    zone transfers source address can now be specified in the configuration (transfer-source)
+
+    The server now allows to sign a zone using only zone signing keys.
+
+    Fixes online chain generation started from an zone that is not covered by DNSSEC.
+
+    Fixes an issue where a generated DNSKEY could be missing smart fields if the storage became full right before they needed to be written.
+
+    Fixes an issue that could occur using EDDSA on big-enough data sets.
 
 20220228:
     YADIFA 2.5.4-public

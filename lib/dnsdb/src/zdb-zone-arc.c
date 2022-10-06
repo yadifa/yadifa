@@ -451,7 +451,7 @@ zdb_acquire_zone_read_trylock(zdb *db, dnsname_vector *exact_match_origin, u8 ow
     zdb_zone_label *label = zdb_zone_label_find(db, exact_match_origin);
     if(label != NULL)
     {
-        zdb_zone *zone = zdb_acquire_zone_resume_trylock_from_label(db, label, owner, ZDB_MUTEX_READER);
+        zdb_zone *zone = zdb_acquire_zone_resume_trylock_from_label(db, label, owner, ZDB_MUTEX_READER); //  this unlocks the DB
         return zone;
     }
 

@@ -111,7 +111,7 @@ pid_file_read(const char *pid_file_path)
     
     received = readfully(fd, buffer, sizeof(buffer) - 1);
     
-    if(0 >= received)
+    if(received <= 0)
     {
         if(received < 0)
         {
@@ -122,6 +122,8 @@ pid_file_read(const char *pid_file_path)
         {
             ret = UNEXPECTED_EOF;
         }
+
+        close_ex(fd);      /* close the pid file */
 
         return ret;
     }
@@ -158,7 +160,7 @@ pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_
     ya_result ret;
     int                                                                  fd;
     mode_t                                               permissions = 0644;
-#ifndef WIN32
+#if __unix__
     uid_t                                                    uid = getuid();
 #endif
     char                                                         buffer[16];
@@ -191,7 +193,7 @@ pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_
     {
         for(;;)
         {
-#ifndef WIN32
+#if __unix__
             if(flock(fd, LOCK_EX|LOCK_NB) < 0)
             {
                 ret = errno;
@@ -221,10 +223,10 @@ pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_
             if(writefully(fd, buffer, buffer_len) > 0)
             {
                 ret = SUCCESS;
-#ifndef WIN32
+#if __unix__
                 if(uid == 0)  // only applicable if you are root
                 {
-                    if(chown(pid_file_path, new_uid, new_gid) >= 0)
+                    if(fchown(fd, new_uid, new_gid) >= 0) // avoid race condition (Flawfinder)
                     {
                         log_debug("pid file '%s': created", pid_file_path);
                     }
@@ -266,7 +268,7 @@ pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_
 ya_result
 pid_check_running_program(const char *pid_file_path, pid_t *out_pid)
 {
-#ifndef WIN32
+#if __unix__
     yassert(pid_file_path != NULL);
     pid_t                                                               pid;
 

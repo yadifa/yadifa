@@ -107,6 +107,7 @@ static inline ya_result output_stream_write_u32(output_stream* os, u32 value)
 {
     return output_stream_write(os, (u8*) & value, 4);
 }
+
 /*
  * PACKED unsigned 32 bits
  *
@@ -117,6 +118,8 @@ static inline ya_result output_stream_write_u32(output_stream* os, u32 value)
  * [128..16384] => [0x80 0x01 .. 0xff 0x7f]
  *
  */
+
+ya_result output_stream_write_pu16(output_stream* os, u16 value);
 
 ya_result output_stream_write_pu32(output_stream* os, u32 value);
 

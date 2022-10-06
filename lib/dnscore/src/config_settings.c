@@ -43,14 +43,14 @@
 #include <unistd.h>
 #include <strings.h>
 #include <sys/types.h>
-#ifndef WIN32
+#if __unix__
 #include <pwd.h>
 #include <grp.h>
 #endif
 #include <sys/stat.h>
-#include <dnscore/config_settings.h>
-#include <dnscore/cmdline.h>
-
+#include "dnscore/config_settings.h"
+#include "dnscore/cmdline.h"
+#include "dnscore/acl-config.h"
 #include "dnscore/logger.h"
 #include "dnscore/base64.h"
 #include "dnscore/u32_set.h"
@@ -669,7 +669,7 @@ config_set_string_copy(const char *value, char *dest, const anytype maxlen)
     size_t len = strlen(value);
     if(len > maxlen._u32 - 1)
     {
-        return CONFIG_TEXT_LENGHT_TOO_BIG;
+        return CONFIG_TEXT_LENGTH_TOO_BIG;
     }
     
     memcpy(dest, value, len);
@@ -873,7 +873,7 @@ config_set_chroot(const char *value, char **dest, const anytype notused)
     (void)notused;
 
     ya_result return_code;
-#ifndef WIN32    
+#if __unix__    
     if(ISOK(return_code = config_set_path(value, dest, notused)))
     {
         return_code = chroot_set_path(*dest);
@@ -941,7 +941,7 @@ ya_result
 config_set_uid_t(const char *value, uid_t *dest, const anytype notused)
 {
     (void)notused;
-#ifndef WIN32
+#if __unix__
 
     if((*value == '\0') || (strcmp(value, "-") == 0))
     {
@@ -997,7 +997,7 @@ config_set_uid_t(const char *value, uid_t *dest, const anytype notused)
 ya_result
 config_set_gid_t(const char *value, gid_t *dest, const anytype notused)
 {
-#ifndef WIN32
+#if __unix__
     (void)notused;
 
     if((*value == '\0') || (strcmp(value, "-") == 0))
@@ -1582,7 +1582,7 @@ config_init_error_codes()
     error_register(CONFIG_BAD_UID, "CONFIG_BAD_UID");
     error_register(CONFIG_BAD_GID, "CONFIG_BAD_GID");
     
-    error_register(CONFIG_TEXT_LENGHT_TOO_BIG, "CONFIG_TEXT_LENGHT_TOO_BIG");
+    error_register(CONFIG_TEXT_LENGTH_TOO_BIG, "CONFIG_TEXT_LENGTH_TOO_BIG");
     error_register(CONFIG_ARRAY_SIZE_TOO_BIG, "CONFIG_ARRAY_SIZE_TOO_BIG");
     
     error_register(CONFIG_LOGGER_HANDLE_ALREADY_DEFINED, "CONFIG_LOGGER_HANDLE_ALREADY_DEFINED");
@@ -2411,6 +2411,12 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                 snformat(tmp, sizeof(tmp),"%d", *v);
                 value = tmp;
             }
+            else if(table->setter == (config_set_field_function*)config_set_s32)
+            {
+                s32 *v = (s32*)ptr;
+                snformat(tmp, sizeof(tmp),"%i", *v);
+                value = tmp;
+            }
             else if(table->setter == (config_set_field_function*)config_set_u16)
             {
                 u16 *v = (u16*)ptr;
@@ -2451,7 +2457,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
             {
                 value = "????????";
             }
-#ifndef WIN32
+#if __unix__
             else if(table->setter == (config_set_field_function*)config_set_chroot)
             {
                 value = chroot_get_path();
@@ -2480,7 +2486,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
             {
                 snformat(tmp, sizeof(tmp), "%{dnsname}", *((u8**)ptr));
                 value = tmp;
-            }/*
+            }
             else if(table->setter == (config_set_field_function*)acl_config_set_item)
             {
                 address_match_set* ams = (address_match_set*)ptr;
@@ -2490,9 +2496,13 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                     acl_address_match_set_to_stream(os, ams);                    
                     osprintln(os,"");
                 }
+                else
+                {
+                    osformatln(os, "# '%s' is empty", filtered_name);
+                }
                 already = TRUE;
                 value = NULL;
-            }*/
+            }
             else if(table->setter == (config_set_field_function*)config_set_host_list)
             {
                 host_address *v = *(host_address**)ptr;
@@ -2508,7 +2518,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                         socketaddress sa;
                         host_address2sockaddr(v, &sa);
                         osformat(os, "%c%{sockaddrip}", sep, &sa);
-                        if(v->port != DNS_DEFAULT_PORT)
+                        if(v->port != NU16(DNS_DEFAULT_PORT))
                         {
                             osformat(os, " port %hd", ntohs(v->port));
                         }
@@ -2525,6 +2535,10 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                     while(v != NULL);
                     
                     osprintln(os,"");
+                }
+                else
+                {
+                    osformatln(os, "# '%s' is empty", filtered_name);
                 }
                 
                 already = TRUE;
@@ -2588,15 +2602,20 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                     value = NULL;
                 }
             }
+            /*
+            else if(table->setter == (config_set_field_function*)acl_config_set_access_control_item)
+            {
+            }
+            */
             else
             {
                 config_set_field_function_as_voidp key;
                 key.setter = table->setter;
-    
+
                 ptr_node *node = ptr_set_find(&config_section_struct_type_handler_set, key.ptr);
-                
+
                 if(node != NULL)
-                {   
+                {
                     config_section_struct_type_handler_as_voidp alias_value;
                     alias_value.ptr = node->value;
                     config_section_struct_type_handler *type_handler = alias_value.handler;
@@ -2605,7 +2624,7 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
                 }
                 else
                 {
-                    osformatln(os, "# unable to dump parameter '%s'", filtered_name);
+                    osformatln(os, "# '%s' parameter cannot be dumped", filtered_name);
                     value = NULL;
                     already = TRUE;
                 }
@@ -2615,12 +2634,12 @@ config_section_struct_print(const config_section_descriptor_s *section_descripto
             {
                 if(value != NULL)
                 {
-                    osformatln(os, "%24s %s", filtered_name, value);
+                    osformatln(os, "%s %s", filtered_name, value);
                 }
 #if DEBUG
                 else
                 {
-                    osformatln(os, "# %24s is not set", filtered_name);
+                    osformatln(os, "# '%s' is not set", filtered_name);
                 }
 #endif
             }
@@ -2675,6 +2694,9 @@ config_section_struct_free(const config_section_descriptor_s *section_descriptor
                      (table->setter == (config_set_field_function*)config_set_u32_clamp))
             {
             }
+            else if(table->setter == (config_set_field_function*)config_set_s32)
+            {
+            }
             else if(table->setter == (config_set_field_function*)config_set_u16)
             {
             }
@@ -2703,7 +2725,7 @@ config_section_struct_free(const config_section_descriptor_s *section_descriptor
             else if(table->setter == (config_set_field_function*)config_set_password)
             {
             }
-#ifndef WIN32
+#if __unix__
             else if(table->setter == (config_set_field_function*)config_set_chroot)
             {
                 chroot_set_path(NULL);
@@ -2784,19 +2806,27 @@ config_print(output_stream *os)
     {
         u32_node *node = u32_set_iterator_next_node(&iter);
         config_section_descriptor_s *section_descriptor = (config_section_descriptor_s*)node->value;
-        
-        osformatln(os, "<%s>", section_descriptor->vtbl->name);
-        
+
         if((section_descriptor->vtbl->table != NULL) && (section_descriptor->base != NULL))
         {
+            osformatln(os, "<%s>", section_descriptor->vtbl->name);
             config_section_print(section_descriptor, os);
+            osformatln(os, "</%s>\n", section_descriptor->vtbl->name);
         }
-        else
+        else // there is not fixed structure associated to the configuration
         {
-            section_descriptor->vtbl->print_wild(section_descriptor, os, NULL);
+            // note: never stop iterating before the updated context value is NULL
+
+            void *context = NULL;
+
+            do
+            {
+                osformatln(os, "<%s>", section_descriptor->vtbl->name);
+                section_descriptor->vtbl->print_wild(section_descriptor, os, NULL, &context);
+                osformatln(os, "</%s>\n", section_descriptor->vtbl->name);
+            }
+            while(context != NULL);
         }
-        
-        osformatln(os, "</%s>\n", section_descriptor->vtbl->name);
     }
 }
 

@@ -39,8 +39,7 @@
  * @{
  */
 /*----------------------------------------------------------------------------*/
-#ifndef _DNSSEC_RSA_H
-#define	_DNSSEC_RSA_H
+#pragma once
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
@@ -63,7 +62,5 @@ void dnskey_rsa_parse_init(dnskey_field_parser *fp);
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	/* _DNSSEC_RSA_H */
 
 /** @} */

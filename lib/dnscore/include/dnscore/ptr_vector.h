@@ -485,7 +485,6 @@ static inline void ptr_vector_end_swap(ptr_vector *pv,s32 idx)
     pv->data[pv->offset] = tmp;
 }
 
-
 /**
  * Reverse the content 
  * 

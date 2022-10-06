@@ -47,7 +47,7 @@
 #include <dnscore/input_stream.h>
 #include <dnscore/output_stream.h>
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #include <dnscore/dnskey.h>
 #endif
 
@@ -215,7 +215,6 @@ static inline void zdb_zone_getminttl(const zdb_zone *zone, s32 *minttl)
     *minttl = zone->min_ttl;
 }
 
-
 #if ZDB_RECORDS_MAX_CLASS == 1
 static inline u16 zdb_zone_getclass(const zdb_zone *zone)
 {
@@ -233,7 +232,6 @@ static inline u16 zdb_zone_getclass(const zdb_zone *zone)
 ya_result zdb_zone_store_axfr(zdb_zone *zone, output_stream* os);
 
 const zdb_packed_ttlrdata *zdb_zone_get_dnskey_rrset(zdb_zone *zone);
-
 
 static inline u8 zdb_zone_get_flags(const zdb_zone *zone)
 {
@@ -441,7 +439,7 @@ static inline bool zdb_zone_has_nsec_records(const zdb_zone *zone)
 
 #endif
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 
 /**
  * True for zones that are to be maintained.
@@ -495,6 +493,19 @@ static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
 {
     yassert((mode & ZDB_ZONE_MAINTAIN_MASK) == mode);
     zdb_zone_set_clear_flags(zone, mode, ZDB_ZONE_MAINTAIN_MASK);
+#if OBSOLETE
+    // this is part of a branch
+    if((mode & ~ZDB_ZONE_HAS_OPTOUT_COVERAGE) == ZDB_ZONE_MAINTAIN_NSEC3)
+    {
+        u8 flags = mode & ZDB_ZONE_HAS_OPTOUT_COVERAGE;
+        nsec3_zone *n3 = zone->nsec.nsec3;
+        while(n3 != NULL)
+        {
+            n3->rdata[1] = flags;
+            n3 = n3->next;
+        }
+    }
+#endif
 }
 
 static inline u8 zone_get_maintain_mode(zdb_zone *zone)
@@ -560,7 +571,7 @@ static inline bool zdb_zone_isvalid(zdb_zone *zone)
     return !zdb_zone_isinvalid(zone);
 }
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 
 /**
  * Adds a DNSKEY record in a zone from the dnssec_key object.

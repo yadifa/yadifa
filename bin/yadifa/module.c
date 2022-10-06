@@ -46,7 +46,7 @@
 #include "ya-conf.h"
 #include "main.h"
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "module/ctrl.h"
 #endif
 
@@ -87,7 +87,7 @@ int module_verbosity_level()
 // only those that are compiled in the program are taken in
 static const module_s *module_list[] =
 {
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
     &ctrl_program,
 #endif
 

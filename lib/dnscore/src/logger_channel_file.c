@@ -150,7 +150,7 @@ logger_channel_file_close(logger_channel* chan)
 
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
-#ifndef WIN32
+#if __unix__
     chroot_unmanage_path(&sd->file_name);
 #endif    
     free(sd->file_name);
@@ -192,7 +192,7 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
      */
 
     int fd = fd_output_stream_get_filedescriptor(&errlog_os);
-#ifndef WIN32
+#if __unix__
     if((getuid() != uid) || (getgid() != gid))
     {
         if(fchown(fd, uid, gid) < 0)
@@ -294,13 +294,10 @@ logger_channel_file_reopen(logger_channel* chan)
                 );
     }
 #endif
-#ifndef WIN32
+#if __unix__
     if((getuid() != sd->uid) || (getgid() != sd->gid))
-#endif
     {
-#ifndef WIN32
         if(fchown(fd, sd->uid, sd->gid) < 0)
-#endif
         {
 #if DEBUG_LOG_CHANNEL
             osformatln(termerr, "failed to chown(%i,%i,%i)",
@@ -328,6 +325,7 @@ logger_channel_file_reopen(logger_channel* chan)
             return return_code;
         }
     }
+#endif
     
     logger_channel_file_flush(chan);
     
@@ -534,7 +532,7 @@ logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, b
     if(ISOK(return_code = logger_channel_file_append(fullpath, uid, gid, mode, sd)))
     {
         sd->file_name = strdup(fullpath);
-#ifndef WIN32
+#if __unix__
         chroot_manage_path(&sd->file_name, fullpath, FALSE);
 #endif
         sd->uid = uid;

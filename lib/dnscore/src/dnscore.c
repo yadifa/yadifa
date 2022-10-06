@@ -127,7 +127,7 @@ const char *dnscore_lib = "dnscore release";
 void rfc_init();
 void rfc_finalize();
 void format_class_finalize();
-#ifndef WIN32
+#if __unix__
 void chroot_unmanage_all();
 #endif
 void signal_handler_finalize();
@@ -135,12 +135,18 @@ void dnskey_init();
 void dnskey_finalize();
 void xfr_input_stream_finalize();
 
+/***********************************************************************
+ * These macros are silly or inefficient on purpose. Don't "fix" them. *
+ ***********************************************************************/
+
 static const char* ARCH_RECOMPILE_WARNING = "Please recompile with the correct settings.";
 static const char* ARCH_CHECK_SIZE_WARNING = "PANIC: %s does not match the size requirements (%i instead of %i).\n";
 static const char* ARCH_CHECK_SIGN_WARNING = "PANIC: %s does not match the sign requirements.\n";
 #define ARCH_CHECK_SIZE(a,b) if(a!=b) { printf(ARCH_CHECK_SIZE_WARNING,#a,a,b);puts(ARCH_RECOMPILE_WARNING);DIE(ERROR); }
 #define ARCH_CHECK_SIGNED(a) {a val=~0;if(val>0) { printf(ARCH_CHECK_SIGN_WARNING,#a);puts(ARCH_RECOMPILE_WARNING);DIE(ERROR); }}
 #define ARCH_CHECK_UNSIGNED(a) {a val=~0;if(val<0) { printf(ARCH_CHECK_SIGN_WARNING,#a);puts(ARCH_RECOMPILE_WARNING);DIE(ERROR); }}
+
+/***********************************************************************/
 
 logger_handle *g_system_logger = LOGGER_HANDLE_SINK;
 
@@ -226,7 +232,7 @@ struct dnscore_ipc_prefix_t
     char rnd[7];
 };
 
-#ifndef WIN32
+#if __unix__
 static struct dnscore_ipc_prefix_t dnscore_ipc_prefix;
 
 static void
@@ -342,8 +348,7 @@ dnscore_meminfo_get(dnscore_meminfo_t *mi)
 
     struct rlimit limits;
     getrlimit(RLIMIT_RSS, &limits);
-
-    s64 program_memory_limit = MIN((u64)total_memory, limits.rlim_cur);
+    s64 program_memory_limit = MIN(total_memory, (s64)limits.rlim_cur);
 
     mi->page_size = page_size;
     mi->page_count = page_count;
@@ -780,7 +785,7 @@ dnscore_init_ex(u32 features, int argc, char **argv)
         }
                 
         dnscore_random_set = TRUE;
-#ifndef WIN32
+#if __unix__
         dnscore_init_ipc_prefix();
 #endif
     }
@@ -1001,7 +1006,7 @@ void log_assert__(bool b, const char *txt, const char *file, int line)
 {
     if(!b)
     {
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         if(logger_is_running() && (g_system_logger != NULL) && (g_system_logger != LOGGER_HANDLE_SINK))
         {
             //logger_handle_exit_level(MAX_U32);
@@ -1016,7 +1021,7 @@ void log_assert__(bool b, const char *txt, const char *file, int line)
 }
 
 void
-dnscore_finalize()
+dnscore_finalize(void)
 {
     /*
      * No need to "finalize" format, dnsformat and rfc
@@ -1106,7 +1111,7 @@ dnscore_finalize()
     
 #endif
     
-#ifndef WIN32
+#if __unix__
     chroot_unmanage_all();
 #endif
     error_unregister_all();

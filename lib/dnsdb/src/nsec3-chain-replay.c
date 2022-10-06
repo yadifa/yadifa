@@ -820,7 +820,6 @@ nsec3_chain_replay_execute(chain_replay *cr)
             // get the label
 
             zdb_rr_label_find_from_name_delete_empty_terminal(crd->zone, fqdn);
-
         }
     }
 

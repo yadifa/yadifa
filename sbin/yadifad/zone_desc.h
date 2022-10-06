@@ -105,15 +105,16 @@ extern "C" {
                                                              * edf: I added this so I would not hammer
                                                              *      the root servers when doing tests
                                                              */
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 #define     ZONE_FLAG_MAINTAIN_DNSSEC              8
 #endif
 #define     ZONE_FLAG_TRUE_MULTIMASTER            16        // drops a zone whenever changing the master
 #define     ZONE_FLAG_DROP_CURRENT_ZONE_ON_LOAD   32        // only triggered while changing the true master: the current zone will be dropped
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 #define     ZONE_FLAG_RRSIG_NSUPDATE_ALLOWED      64        // allows to push a signature with an update
-#define     ZONE_FLAG_MAINTAIN_ZONE_BEFORE_MOUNT 128        // must finishing applying policies and signature before mounting the zone
+//#define     ZONE_FLAG_MAINTAIN_ZONE_BEFORE_MOUNT 128        // must finishing applying policies and signature before mounting the zone
 #endif
+#define     ZONE_FLAG_PRIORITISE_LOCAL_SOURCE    256        // If a zone exists locally : do not probe the master, just load it.  Probe later.
     
 // status flags
 // iIclLMUdDzZaAsSeERxX#---T---ur/!
@@ -240,7 +241,7 @@ struct zone_notify_s
     u32 retry_period_increase;
 };
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 
 #define ZONE_SIGNATURE_INVALID_FIRST_ASSUME_BROKEN 0
 
@@ -285,14 +286,17 @@ struct dynamic_provisioning_s
 #define ZONE_DESC_MATCH_FILE_NAME       0x00000004
 #define ZONE_DESC_MATCH_MASTERS         0x00000008
 #define ZONE_DESC_MATCH_NOTIFIES        0x00000010
-#define ZONE_DESC_MATCH_DYNAMIC         0x00000020
-#define ZONE_DESC_MATCH_SLAVES          0x00000040
-#define ZONE_DESC_MATCH_REFRESH         0x00000080
-#define ZONE_DESC_MATCH_NOTIFY          0x00000100
-#define ZONE_DESC_MATCH_DNSSEC_MODE     0x00000200
-#define ZONE_DESC_MATCH_TYPE            0x00000400
-#define ZONE_DESC_MATCH_ACL             0x00000800
-#define ZONE_DESC_MATCH_DNSSEC_POLICIES 0x00001000
+#define ZONE_DESC_MATCH_TRANSFERSOURCE  0x00000020
+#if HAS_DYNAMIC_PROVISIONING
+#define ZONE_DESC_MATCH_DYNAMIC         0x00000040
+#endif
+#define ZONE_DESC_MATCH_SLAVES          0x00000080
+#define ZONE_DESC_MATCH_REFRESH         0x00000100
+#define ZONE_DESC_MATCH_NOTIFY          0x00000200
+#define ZONE_DESC_MATCH_DNSSEC_MODE     0x00000400
+#define ZONE_DESC_MATCH_TYPE            0x00000800
+#define ZONE_DESC_MATCH_ACL             0x00001000
+#define ZONE_DESC_MATCH_DNSSEC_POLICIES 0x00002000
 
 struct dnssec_policy;
 
@@ -318,11 +322,11 @@ struct zone_desc_s
 #endif
     // zone notify settings
     zone_notify_s                                                  notify;      // may change (3 * 32 bits)
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
     
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
     
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
     struct dnssec_policy                                   *dnssec_policy;
     ptr_set                            dnssec_policy_processed_key_suites;
 #endif
@@ -350,9 +354,12 @@ struct zone_desc_s
     // instead of having a priority queue with two levels, two queues will do
     // the job 
     bpqueue_s                                                    commands;      // queue of commands
+#if HAS_DYNAMIC_PROVISIONING
     /// @note HAS_DYNAMIC_PROVISIONING
     dynamic_provisioning_s dynamic_provisioning;                                // proprietary
+#endif
     host_address *slaves;                                                       // proprietary
+    host_address *transfer_source;
     
     zdb_zone                                                *loaded_zone;       // internal, keeps an RC, has to be increased by users grabbing it (mutex required)
     ///

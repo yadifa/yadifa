@@ -55,6 +55,34 @@
 #include <dnsdb/zdb_types.h>
 
 /**
+ * If the zone is relatively small, there is no need to prepare an image on the disk.
+ * Instead, snapshot to memory.
+ * The default treshold is set to 64KB (way more than the needs of 99% of use-cases)
+ * TLDs are still expected use the through-storage branch of the code.
+ */
+
+/**
+ * Returns the current value of the threshold.
+ * Setting it to 0 will effectively disable the feature.
+ *
+ * @return The current value of the threshold, in bytes.
+ *
+ */
+
+u32 zdb_zone_answer_axfr_memfile_size_threshold();
+
+/**
+ * Set the new value of the threshold.
+ * Setting it to 0 will effectively disable the feature.
+ * Returns the previous value of the threshold.
+ *
+ * @param new_threshold the new value of the threshold, in bytes.
+ * @return The previous value of the threshold, in bytes.
+ */
+
+u32 zdb_zone_answer_axfr_memfile_size_threshold_set(u32 new_threshold);
+
+/**
  * 
  * @param zone
  * @param mesg

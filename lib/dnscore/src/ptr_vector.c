@@ -264,7 +264,7 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
             else
             {
 #if DEBUG
-#pragma message ("this should actually set data to NULL and keep newsize to 0 but scan-build coudln't handle it")
+#pragma message ("Should set data to NULL and keep newsize to 0 but scan-build couldn't handle it. DEBUG builds only.")
                 MALLOC_OR_DIE(void**, data, sizeof(void*), PTR_VECTOR_TAG);
                 newsize = 1;
 #else
@@ -281,7 +281,7 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
 /**
  * Ensures the vector has enough capacity to accommodate a
  * specified number of items
- * 
+ *
  * @param v a pointer to the ptr_vector structure
  * @param reqsize the minimum size of the vector
  */
@@ -298,7 +298,10 @@ ptr_vector_ensures(ptr_vector*v, s32 reqsize)
     }
     else
     {
-        ptr_vector_init_ex(v, reqsize);
+        if(reqsize > 0)
+        {
+            ptr_vector_init_ex(v, reqsize);
+        }
     }
 }
 

@@ -119,7 +119,7 @@ error_register(ya_result code, const char* const text)
     }
     else
     {
-        fprintf(stderr, "error_register(%08x,%s): duplicate key, previous value = '%s'", code, text, (const char*)error_node->value);
+        fprintf(stderr, "\nerror_register(%08x,%s): duplicate key, previous value = '%s'\n", code, text, (const char*)error_node->value);
         fflush(stderr);
     }
 }
@@ -391,7 +391,6 @@ dnscore_register_errors()
     error_register(ZONE_ALREADY_UP_TO_DATE, "ZONE_ALREADY_UP_TO_DATE");
     error_register(UNKNOWN_DNS_TYPE, "UNKNOWN_DNS_TYPE");
     error_register(UNKNOWN_DNS_CLASS, "UNKNOWN_DNS_CLASS");
-    //error_register(INVALID_MESSAGE, "INVALID_MESSAGE");
     error_register(MESSAGE_HAS_WRONG_ID, "MESSAGE_HAS_WRONG_ID");
     error_register(MESSAGE_IS_NOT_AN_ANSWER, "MESSAGE_IS_NOT_AN_ANSWER");
     error_register(MESSAGE_UNEXPECTED_ANSWER_DOMAIN, "MESSAGE_UNEXPECTED_ANSWER_DOMAIN");
@@ -420,8 +419,8 @@ dnscore_register_errors()
     error_register(RCODE_ERROR_CODE(RCODE_NOTAUTH), "NOTAUTH");
     error_register(RCODE_ERROR_CODE(RCODE_NOTZONE), "NOTZONE");
 
-    error_register(RCODE_ERROR_CODE(RCODE_BADVERS), "BADVERS");
-    //error_register(RCODE_ERROR_CODE(RCODE_BADSIG), "BADSIG");
+    // error_register(RCODE_ERROR_CODE(RCODE_BADVERS), "BADVERS"); // collides with ...
+    error_register(RCODE_ERROR_CODE(RCODE_BADSIG), "BADSIG");
     error_register(RCODE_ERROR_CODE(RCODE_BADKEY), "BADKEY");
     error_register(RCODE_ERROR_CODE(RCODE_BADTIME), "BADTIME");
     error_register(RCODE_ERROR_CODE(RCODE_BADMODE), "BADMODE");

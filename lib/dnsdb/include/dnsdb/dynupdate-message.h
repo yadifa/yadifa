@@ -130,7 +130,7 @@ ya_result dynupdate_message_del_dnskey(dynupdate_message *dmsg, const dnssec_key
  * @return 
  */
 
-ya_result dynupdate_message_add_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, void *rdata);
+ya_result dynupdate_message_add_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, const void *rdata);
 
 /**
  * Appends a "delete RR" command to the buffer.
@@ -144,7 +144,7 @@ ya_result dynupdate_message_add_record(dynupdate_message *dmsg, const u8 *fqdn, 
  * @return 
  */
 
-ya_result dynupdate_message_del_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, void *rdata);
+ya_result dynupdate_message_del_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, const void *rdata);
 
 /**
  * 

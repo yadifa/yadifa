@@ -53,7 +53,20 @@
 extern "C" {
 #endif
 
+#ifndef HAS_EDDSA_SUPPORT
 #define HAS_EDDSA_SUPPORT 1
+#endif
+
+#ifndef DNSCORE_HAS_EDDSA_SUPPORT
+#define DNSCORE_HAS_EDDSA_SUPPORT 1
+#endif
+
+#if /**/ HAS_EDDSA_SUPPORT != DNSCORE_HAS_EDDSA_SUPPORT // the comment is to avoid breaking with a search & replace
+#error "EDDSA configuration mismatch"
+#endif
+
+#if !DNSCORE_HAS_EDDSA_SUPPORT
+#endif
 
 ya_result dnskey_eddsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key);
 

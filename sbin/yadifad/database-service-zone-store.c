@@ -64,7 +64,7 @@
 #include "server.h"
 #include "database-service.h"
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
 #include "database-service-zone-resignature.h"
 #include "database-service-zone-download.h"
 
@@ -97,21 +97,20 @@ database_service_zone_store_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zone
     //bool must_be_on = ZONE_STATUS_READONLY|ZONE_STATUS_MODIFIED;
     
     bool save_unmodified = flags & DATABASE_SERVICE_ZONE_SAVE_UNMODIFIED;
+    bool will_resume_maintenance = FALSE;
     // bool ignore_shutdown = flags & DATABASE_SERVICE_ZONE_SAVE_IGNORE_SHUTDOWN;
-    
+
     const u32 must_be_off  = ZONE_STATUS_TEMPLATE_SOURCE_FILE | ZONE_STATUS_STARTING_UP |
                              ZONE_STATUS_LOADING | ZONE_STATUS_MOUNTING | ZONE_STATUS_UNMOUNTING |
                              ZONE_STATUS_DROPPING | ZONE_STATUS_SAVING_ZONE_FILE |
                              ZONE_STATUS_SAVING_AXFR_FILE | ZONE_STATUS_SIGNATURES_UPDATING |
                              ZONE_STATUS_DYNAMIC_UPDATING | /*ZONE_STATUS_DOWNLOADING_XFR_FILE |*/
                              ZONE_STATUS_UNREGISTERING;
-    
+
     if(desclockowner != 0)
     {
         zone_lock(zone_desc, desclockowner);
     }
-
-
 
     if(zone_desc->file_name == NULL)
     {
@@ -270,7 +269,18 @@ database_service_zone_store_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zone
         {
             log_err("zone store: %{dnsname}: cannot be stored because its current instance in the database is marked as invalid", zone_origin(zone_desc));
         }
-        
+
+#if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+        if(ISOK(ret))
+        {
+            if(zdb_zone_is_maintenance_paused(zone)) // not locking
+            {
+                log_info("zone store: %{dnsname}: resuming zone maintenance", zone_origin(zone_desc));
+                zdb_zone_set_maintenance_paused(zone, FALSE); // light locking
+                will_resume_maintenance = TRUE;
+            }
+        }
+#endif
         if(zonelockowner != 0)
         {
             zdb_zone_release_unlock(zone, zonelockowner);
@@ -279,36 +289,39 @@ database_service_zone_store_ex(zone_desc_s *zone_desc, u8 desclockowner, u8 zone
         {
             zdb_zone_release(zone);
         }
-    }
+#if DEBUG
+        zone = NULL;
+#endif
+    } // if zone != NULL ...
     
     // zdb_unlock(db, ZDB_MUTEX_READER);
     
     zone_clear_status(zone_desc, ZONE_STATUS_SAVETO_ZONE_FILE|ZONE_STATUS_SAVING_ZONE_FILE|ZONE_STATUS_PROCESSING);
+
+#if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+    if(will_resume_maintenance)
+    {
+        ya_result internal_ret;
+        if(ISOK(internal_ret = database_service_zone_dnssec_maintenance_lock_for(zone_desc, desclockowner)))
+        {
+            log_info("zone store: %{dnsname}: resuming zone maintenance", zone_origin(zone_desc));
+        }
+        else
+        {
+            log_info("zone store: %{dnsname}: failed to resume zone maintenance: %r", zone_origin(zone_desc), internal_ret);
+        }
+    }
+#endif
     
     if(desclockowner != 0)
     {
         zone_unlock(zone_desc, desclockowner);
+        // desclockowner = 0; /// @note the zone_desc is not locked anymore after this point
     }
-
-#if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
-    if(ISOK(ret))
-    {
-        if(zdb_zone_is_maintenance_paused(zone))
-        {
-            log_info("zone store: %{dnsname}: resuming zone maintenance", zone_origin(zone_desc));
-            zdb_zone_set_maintenance_paused(zone, FALSE);
-            ya_result internal_ret;
-            if(FAIL(internal_ret = database_service_zone_dnssec_maintenance_lock_for(zone_desc, desclockowner)))
-            {
-                log_info("zone store: %{dnsname}: failed to resume zone maintenance: %r", zone_origin(zone_desc), internal_ret);
-            }
-        }
-    }
-#endif
 
     database_fire_zone_processed(zone_desc);
     zone_release(zone_desc);
-    
+
     return ret;
 }
 

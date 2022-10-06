@@ -66,6 +66,11 @@
 
 #define NEXT_SIGNATURE_EPOCH_MARGIN 57 // one minute should be enough, and adding a non-minute multiple makes is easier to notice
 
+#define KEYROLL_STEPS_MAX 1000  // Typically: 13 keys a year, ready for two years. More is kind of counter-productive. So 1000 is plenty.
+                                // exceptions requiring a bigger limit are corner-cases tests
+
+#define ISTREAMP_TAG 0x504d414552545349
+
 logger_handle *g_keyroll_logger = LOGGER_HANDLE_SINK;
 
 static bool keyroll_dryrun_mode = FALSE;
@@ -165,7 +170,7 @@ keyroll_init(keyroll_t* keyroll, const u8 *domain, const char *plan_path, const 
 
     keyroll->update_apply_verify_retries = 60;        // if an update wasn't applied successfully, retry CHECKING this amount of times
     keyroll->update_apply_verify_retries_delay = 1;  // time between the above retries
-    keyroll->match_verify_retries = 60;        // if there is not match, retry checking this amount of times
+    keyroll->match_verify_retries = 60;        // if there is no match, retry checking this amount of times
     keyroll->match_verify_retries_delay = 1;  // time between the above retries
 
     keyroll->generation_mode = generation_mode;
@@ -488,7 +493,7 @@ input_stream_create_from_base64_text(input_stream* is, const char *text, const c
 
     bytearray_input_stream_init(is, bytearray_output_stream_buffer(&baos), bytearray_output_stream_size(&baos), TRUE);
     bytearray_output_stream_detach(&baos);
-    ret = bytearray_input_stream_size(is);
+    ret = (ya_result)bytearray_input_stream_size(is);
 
     return ret;
 }
@@ -535,7 +540,7 @@ keyroll_parse_record(parser_s *parser, dns_resource_record **rrp)
         }
 
         char *rdata_text = (char*)parser_text(parser);
-        int rdata_text_size = parser_text_length(parser);
+        u32 rdata_text_size = parser_text_length(parser);
 
         ret = zone_reader_text_len_copy_rdata(rdata_text, rdata_text_size, rtype, rdata, rdata_size, fqdn);
 
@@ -562,6 +567,21 @@ keyroll_parse_record(parser_s *parser, dns_resource_record **rrp)
 
     return ret;
 }
+
+static inline bool equals_char_array(const char *command, const char *text, size_t text_len)
+{
+    size_t command_len = strlen(command);
+    if(command_len == text_len)
+    {
+        return (memcmp(command, text, text_len) == 0);
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+#define equals_static_string(command_, text_) equals_char_array((command_), (text_), sizeof(text_) - 1)
 
 static ya_result
 keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
@@ -635,7 +655,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
 
                 if(step == NULL)
                 {
-                    if((n == 7) && (memcmp(command, "epochus", 7) == 0))
+                    if(equals_static_string(command, "epochus"))
                     {
                         char epochus_buffer[24];
 
@@ -663,7 +683,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                 }
                 else // step != NULL
                 {
-                    if((n == 6) && (memcmp(command, "dateus", 6) == 0))
+                    if(equals_static_string(command, "dateus"))
                     {
                         // human readable, epochus check
 
@@ -697,54 +717,9 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             break;
                         }
                     }
-                    else if((n == 7) && (memcmp(command, "actions", 7) == 0))
+                    else if(equals_static_string(command, "actions") || equals_static_string(command, "version") || equals_static_string(command, "debug"))
                     {
-                        // human readable, implies some of the commands that will follow
-
-                        for(;;)
-                        {
-                            ret = parser_next_word(&parser);
-
-                            if(FAIL(ret))
-                            {
-                                break;
-                            }
-                        }
-
-                        if(ret == PARSER_REACHED_END_OF_LINE)
-                        {
-                            continue;
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    else if((n == 5) && (memcmp(command, "debug", 5) == 0))
-                    {
-                        // human readable, implies some of the commands that will follow
-
-                        for(;;)
-                        {
-                            ret = parser_next_word(&parser);
-
-                            if(FAIL(ret))
-                            {
-                                break;
-                            }
-                        }
-
-                        if(ret == PARSER_REACHED_END_OF_LINE)
-                        {
-                            continue;
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    else if((n == 7) && (memcmp(command, "version", 7) == 0))
-                    {
+                        // human-readable, implies some of the commands that will follow
                         // version, ignored
 
                         for(;;)
@@ -766,7 +741,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             break;
                         }
                     }
-                    else if( ((n == 3) && (memcmp(command, "add", 3) == 0)) || ((n == 3) && (memcmp(command, "del", 3) == 0)) )
+                    else if( (equals_static_string(command, "add")) || (equals_static_string(command, "del")) )
                     {
                         // filename base64 of a file
                         char file_name[MAX_DOMAIN_TEXT_LENGTH + 2];
@@ -852,7 +827,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                                 {
                                     node->key = strdup(file_name);
                                     input_stream *is;
-                                    ZALLOC_OBJECT_OR_DIE(is, input_stream, GENERIC_TAG);
+                                    ZALLOC_OBJECT_OR_DIE(is, input_stream, ISTREAMP_TAG);
                                     input_stream_create_from_base64_text(is, parser_text(&parser), &parser_text(&parser)[parser_text_length(&parser)]);
                                     node->value = is;
                                 }
@@ -920,7 +895,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                                         node->key = name;
 
                                         input_stream *is;
-                                        ZALLOC_OBJECT_OR_DIE(is, input_stream, GENERIC_TAG);
+                                        ZALLOC_OBJECT_OR_DIE(is, input_stream, ISTREAMP_TAG);
                                         input_stream_create_from_base64_text(is, parser_text(&parser), &parser_text(&parser)[parser_text_length(&parser)]);
 
                                         node->value = is;
@@ -947,7 +922,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             break;
                         }
                     }
-                    else if((n == 6) && (memcmp(command, "update", 6) == 0))
+                    else if(equals_static_string(command, "update"))
                     {
                         // the list of nsupdate commands (add and delete)
 
@@ -962,11 +937,11 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
 
                         int subcommand_type;
 
-                        if((n == 3) && (memcmp(subcommand, "add", 3) == 0))
+                        if(equals_static_string(subcommand, "add"))
                         {
                             subcommand_type = UPDATE_SUBCOMMAND_ADD;
                         }
-                        else if((n == 6) && (memcmp(subcommand, "delete", 6) == 0))
+                        else if(equals_static_string(subcommand, "delete"))
                         {
                             subcommand_type = UPDATE_SUBCOMMAND_DELETE;
                         }
@@ -1174,7 +1149,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             break;
                         }
                     }
-                    else if((n == 6) && (memcmp(command, "expect", 6) == 0))
+                    else if(equals_static_string(command, "expect"))
                     {
                         // if the master is queried after this step,
                         // these are the records that should be returned in the answer
@@ -1195,7 +1170,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             break;
                         }
                     }
-                    else if((n == 9) && (memcmp(command, "endresult", 9) == 0))
+                    else if(equals_static_string(command, "endresult"))
                     {
                         // if the master is queried after this step,
                         // these are the records that should be returned in the answer
@@ -1430,8 +1405,18 @@ keyroll_plan_load(keyroll_t *keyroll)
                 log_err("failed to load '%s' : %r", file, ret);
                 break;
             }
+
+            ++keyroll->steps_count;
+
+            if(keyroll->steps_count > KEYROLL_STEPS_MAX)
+            {
+                keyroll_finalize(keyroll);
+
+                return BUFFER_WOULD_OVERFLOW;
+            }
         }
     }
+
     for(int i = 0; i <= ptr_vector_last_index(&files); ++i)
     {
         char *file = (char*)ptr_vector_get(&files, i);
@@ -1745,11 +1730,7 @@ keyroll_dnskey_state_query(const keyroll_t *keyroll, ptr_vector *current_dnskey_
                         break;
                     }
 
-                    if(rr->tctr.qtype == TYPE_DNSKEY)
-                    {
-                        ptr_vector_append(current_dnskey_rrsig_rr, rr);
-                    }
-                    else if((rr->tctr.qtype == TYPE_RRSIG) && (rrsig_get_type_covered_from_rdata(rr->rdata, rr->rdata_size) == TYPE_DNSKEY))
+                    if((rr->tctr.qtype == TYPE_DNSKEY) || ((rr->tctr.qtype == TYPE_RRSIG) && (rrsig_get_type_covered_from_rdata(rr->rdata, rr->rdata_size) == TYPE_DNSKEY)))
                     {
                         ptr_vector_append(current_dnskey_rrsig_rr, rr);
                     }
@@ -1877,7 +1858,7 @@ keyroll_step_play(const keyroll_step_t *step, bool delete_all_dnskey)
     {
         const char *name = (char*)ptr_vector_get(&step->file_del, i);
 
-        // delete the file from he right directory
+        // delete the file from the right directory
 
         log_info("%{dnsname}: deleting file: '%s'", step->keyroll->domain, name);
 
@@ -2424,6 +2405,11 @@ keyroll_generate_dnskey(keyroll_t *keyroll, s64 publication_epochus, bool ksk)
                  dnskey_get_delete_epoch(key));
 */
         dnskey_release(key); // the original reference
+
+        if(keyroll->steps_count > KEYROLL_STEPS_MAX)
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
     }
     else
     {
@@ -2595,7 +2581,16 @@ keyroll_generate_dnskey_ex(keyroll_t *keyroll, u32 size, u8 algorithm,
         break;
     } // while(!dnscore_isshuttingdown())
 
-    if(ISOK(ret) && (out_keyp != NULL))
+    if(dnscore_shuttingdown())
+    {
+        ret = STOPPED_BY_APPLICATION_SHUTDOWN;
+
+        if(key != NULL)
+        {
+            dnskey_release(key);
+        }
+    }
+    else if(ISOK(ret) && (out_keyp != NULL))
     {
         dnskey_acquire(key);
         *out_keyp = key;
@@ -2615,7 +2610,8 @@ keyroll_plan_with_policy(keyroll_t *keyroll, s64 generate_from, s64 generate_unt
 
     if(policy == NULL)
     {
-        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+        log_err("couldn't load '%s' policy", policy_name);
+        return INVALID_ARGUMENT_ERROR;
     }
 
     ya_result ret;
@@ -3504,7 +3500,7 @@ keyroll_get_state_find_match_and_play(const keyroll_t *keyrollp, s64 now, const 
         }
         else
         {
-            log_warn("zone %{dnsname} expectations are NOT matched", current_step->keyroll->domain);
+            log_notice("zone %{dnsname} expectations are NOT matched", current_step->keyroll->domain);
 
             bool nameserver_has_no_dnskey = (ptr_vector_last_index(&current_dnskey_rrsig_rr) < 0);
 

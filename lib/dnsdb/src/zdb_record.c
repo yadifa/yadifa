@@ -59,7 +59,7 @@
 
 #include "dnsdb/btree.h"
 
-#if HAS_NSEC3_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3_types.h"
 #endif
 

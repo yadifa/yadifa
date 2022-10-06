@@ -324,7 +324,7 @@ static void server_mm_set_cpu_affinity(int index)
         cpuset_set((cpuid_t)affinity_with, mycpu);
         if(pthread_setaffinity_np(thread_self(), cpuset_size(mycpu), mycpu) != 0)
         {
-#pragma message("TODO: report errors")
+#pragma message("TODO: report errors") // NetBSD
         }
         cpuset_destroy(mycpu);
 }
@@ -332,13 +332,15 @@ static void server_mm_set_cpu_affinity(int index)
     {
     }
 #elif defined(WIN32)
-#pragma message("TODO: implement")
+#pragma message("TODO: implement") // WIN32
 #else
     cpu_set_t mycpu;
     CPU_ZERO(&mycpu);
     CPU_SET(affinity_with, &mycpu);
     pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
 #endif
+#else
+    (void)index;
 #endif
 }
 
@@ -1025,7 +1027,7 @@ server_mm_query_loop(struct service_worker_s *worker)
 
                         debug_bench_logdump_all();
 #endif
-#if HAS_LIBC_MALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
                         debug_malloc_hook_caller_dump();
 #endif
                     }
@@ -1096,7 +1098,7 @@ server_mm_query_loop(struct service_worker_s *worker)
 
                     static const u8 dummy[12] =
                     {
-                        0xff, 0xff, 0xff, 0xff,
+                        0xff, 0xff, 0xff, 0xff, // 15<<OPCODE_SHIFT
                         0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00,
                     };

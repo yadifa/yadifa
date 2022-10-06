@@ -46,7 +46,7 @@
 
 #include "dnsdb/dictionary.h"
 
-#if HAS_NSEC3_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3_types.h"
 #include "dnsdb/nsec3_item.h"
 #endif

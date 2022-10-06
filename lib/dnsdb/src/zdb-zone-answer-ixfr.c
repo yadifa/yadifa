@@ -95,6 +95,8 @@ extern logger_handle* g_database_logger;
 #define TCP_BUFFER_SIZE     4096
 #define FILE_BUFFER_SIZE    4096
 
+#define IXFR_RECORD_SENDING_DEBUG 0
+
 #define RECORD_MODE_DELETE  0
 #define RECORD_MODE_ADD     1
 
@@ -774,7 +776,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
         
         if(record_length > 0)
         {
-            if(tctrl.qtype == TYPE_SOA) // scan-build (7) false positive: the path allegedly leading here lies on an incoherence (record_length <= 0)
+            if(tctrl.qtype == TYPE_SOA) // scan-build (7) false positive: the path allegedly leading here lies on an incoherence (assuming record_length < 0 followed by assuming record_length <= 0)
             {
                 ++soa_count;
 
@@ -895,7 +897,7 @@ zdb_zone_answer_ixfr_thread(void* data_)
             packet_records_countdown = packet_records_limit;
         }
         
-#if  DEBUG
+#if IXFR_RECORD_SENDING_DEBUG
         {
             rdata_desc rr_desc = {tctrl.qtype, rdata_size, rdata_buffer};                            
             log_debug("zone write ixfr: %{dnsname}: sending: %{dnsname} %{typerdatadesc}", origin, fqdn, &rr_desc);

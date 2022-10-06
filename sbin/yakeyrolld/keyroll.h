@@ -125,6 +125,8 @@ typedef struct keyroll_s
     u32 match_verify_retries;               // if there is not match, retry checking this amount of times
     u32 match_verify_retries_delay;         // time between the above retries
 
+    u32 steps_count;
+
     bool generation_mode;
 
     // current key records

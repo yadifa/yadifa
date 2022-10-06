@@ -348,7 +348,6 @@ dnskey_signature_sign(dnskey_signature *ds, const dnssec_key *key, void **out_rr
         log_debug("dnskey_signature_sign: signature value");
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, signature, signature_size, 32);
 #endif
-    
         u16 rrsig_rdata_size = RRSIG_RDATA_HEADER_LEN + owner_fqdn_len + signature_size;
 
         void *rrsig_rr = view_vtbl->new_instance(data, fqdn, TYPE_RRSIG, tctr.rclass, view_vtbl->get_ttl(data, rr0), rrsig_rdata_size, hdr.rdata);
@@ -542,7 +541,10 @@ dnskey_signature_verify(dnskey_signature *ds, const dnssec_key *key, void *in_rr
 void
 dnskey_signature_finalize(dnskey_signature *ds)
 {
-    (void)ds;
+    if(ds->has_digest)
+    {
+        digest_finalise(&ds->digest_ctx);
+    }
 }
 
 ya_result
@@ -554,14 +556,22 @@ dnskey_sign_rrset_with_maxinterval(const dnssec_key *key, ptr_vector *rrset, boo
         dnskey_signature ds;
         dnskey_signature_init(&ds);
 
-        s32 from_epoch = MAX(time(NULL) - 86400, 0);
+#if 1
+        s32 from_epoch = MAX(((s64)time(NULL)) - DNSKEY_SIGN_TIME_LENIENCY, 0);
+        if(dnskey_has_explicit_activate(key))
+        {
+            from_epoch = MAX(from_epoch, dnskey_get_activate_epoch(key));
+        }
+#else
+        s32 from_epoch = MAX(time(NULL) - DNSKEY_SIGN_TIME_LENIENCY, 0);
+#endif
         s32 to_epoch = dnskey_get_inactive_epoch(key);
 
         // if the key will be inactive well after the maxinterval, use maxinterval to the life-time of the signature
 
         if(to_epoch - from_epoch > maxinterval + DNSKEY_SIGN_TIME_LENIENCY) // + 86400 : don't limit down for a small period of overhead
         {
-            if(((s64)from_epoch + (s64)maxinterval) <= MAX_S32)
+            if(((s64)from_epoch + (s64)maxinterval) <= MAX_S32) // check for doomsday
             {
                 to_epoch = from_epoch + maxinterval;
             }
@@ -573,7 +583,9 @@ dnskey_sign_rrset_with_maxinterval(const dnssec_key *key, ptr_vector *rrset, boo
         }
         // else limit to the expiration time of the signature
 
+#if 0
         from_epoch -= DNSKEY_SIGN_TIME_LENIENCY;    // give some leniency for the validity start
+#endif
 
         dnskey_signature_set_validity(&ds, from_epoch, to_epoch);
         dnskey_signature_set_view(&ds, view);

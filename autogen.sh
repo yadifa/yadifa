@@ -118,14 +118,14 @@ then
 	$SED -i "s/^AC_PREREQ.*/AC_PREREQ([$AC_VER_HI.$AC_VER_LO])/" configure.ac
 
 	if [ $AC_VER_LO -lt 60 ]; then
-		for f in $(find -name \*.m4)
+		for f in $(find . -name \*.m4)
 		do
 			grep AS_HELP_STRING $f > /dev/null 2>&1
 			if [ $? -eq 0 ]; then debug "patching $f for AC_HELP_STRING usage";fi
 			$SED -i 's/AS_HELP_STRING/AC_HELP_STRING/' $f
 		done
 	else
-		for f in $(find -name \*.m4)
+		for f in $(find . -name \*.m4)
 		do
 			grep AC_HELP_STRING $f > /dev/null 2>&1
 			if [ $? -eq 0 ]; then debug "patching $f for AS_HELP_STRING usage";fi

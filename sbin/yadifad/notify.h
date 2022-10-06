@@ -46,7 +46,7 @@
 
 #include "server-config.h"
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 #endif
 
@@ -103,6 +103,8 @@ void notify_wait_servicing();
 ya_result notify_service_stop();
 
 ya_result notify_service_finalize();
+
+bool notify_has_candidates_for_zone(zone_desc_s *zone_desc);
 
 #endif /* _NOTIFY_H */
 

@@ -64,7 +64,6 @@
 #include <dnscore/base32hex.h>
 
 #include "dnsdb/zdb_zone_label_iterator.h"
-
 #include "dnsdb/zdb-zone-maintenance.h"
 
 extern logger_handle* g_database_logger;
@@ -144,7 +143,7 @@ zdb_zone_maintenance_validate_sign_chain_store(zdb_zone_maintenance_ctx *mctx, z
         ptr_vector ksks = PTR_VECTOR_EMPTY;
         ptr_vector zsks = PTR_VECTOR_EMPTY;
 
-        s32 mandatory_changes = zone_diff_get_changes(diff, rrset_to_sign, &ksks, &zsks, remove, add);
+        s32 mandatory_changes = zone_diff_get_changes(diff, rrset_to_sign, &ksks, &zsks, remove, add, zone->sig_validity_regeneration_seconds);
 
         // sign the records, store the changes in vectors
         
@@ -164,6 +163,8 @@ zdb_zone_maintenance_validate_sign_chain_store(zdb_zone_maintenance_ctx *mctx, z
 
             log_debug("before-diff-sign: %{dnsname}: + %{dnsname} %9i %{typerdatadesc} ; (W+R)", zone->origin, rr->fqdn, rr->ttl, &rd);
         }
+
+        log_debug("maintenance: mandatory-changes: %i", mandatory_changes);
 #endif
 
         bool relevant_update = (mandatory_changes > 0);
@@ -220,7 +221,6 @@ zdb_zone_maintenance_validate_sign_chain_store(zdb_zone_maintenance_ctx *mctx, z
 
         dnssec_keystore_release_keys_from_vector(&zsks);
         dnssec_keystore_release_keys_from_vector(&ksks);
-
         ptr_vector_destroy(&zsks);
         ptr_vector_destroy(&ksks);
 
@@ -381,7 +381,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
 
     ptr_vector_init(&mctx.ksks);
     ptr_vector_init(&mctx.zsks);
-    zone_diff_store_diff_dnskey_get_keys(&diff, &mctx.ksks, &mctx.zsks);
+    zone_diff_store_diff_dnskey_get_keys(&diff, &mctx.ksks, &mctx.zsks, zone->sig_validity_regeneration_seconds);
 
     u64 ksk_mask = 0;
     u64 zsk_mask = 0;
@@ -392,14 +392,16 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
     {
         const dnssec_key *key = (const dnssec_key*)ptr_vector_get(&mctx.ksks, i);
 
-        if(dnskey_is_private(key) && dnskey_is_activated(key, mctx.now))
-        {
-            ksk_mask |= 1ULL << i;
-            log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d is a private KSK", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
-        }
-        else
+        if(dnskey_is_private(key))
         {
             log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d is not a private KSK", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
+            continue;
+        }
+
+        if(dnskey_is_activated_lenient(key, mctx.now, zone->sig_validity_regeneration_seconds))
+        {
+            ksk_mask |= 1ULL << i;
+            log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d will be used for KSK signatures", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
         }
     }
 
@@ -407,14 +409,16 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
     {
         const dnssec_key *key = (const dnssec_key*)ptr_vector_get(&mctx.zsks, i);
 
-        if(dnskey_is_private(key) && dnskey_is_activated(key, mctx.now))
-        {
-            zsk_mask |= 1ULL << i;
-            log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d is a private ZSK", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
-        }
-        else
+        if(!dnskey_is_private(key))
         {
             log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d is not a private ZSK", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
+            continue;
+        }
+
+        if(dnskey_is_activated_lenient(key, mctx.now, zone->sig_validity_regeneration_seconds))
+        {
+            zsk_mask |= 1ULL << i;
+            log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d will be used for ZSK signatures", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
         }
     }
 
@@ -484,8 +488,6 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
             zdb_zone_label_iterator_init_from(&iter, zone, from_fqdn);
         }
     }
-
-    // get the nsec status
 
     nsec_zone_get_status(zone, &mctx.nsec_chain_status);
     dnssec_chain_add_chain(&mctx.nsec_chain_updater, (dnssec_chain_head_t)zone->nsec.nsec, (mctx.nsec_chain_status & NSEC_ZONE_REMOVING) != 0);
@@ -578,6 +580,12 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                 maintenance_rrsig_count += zdb_zone_maintenance_rrsig(&mctx, diff_fqdn, &rrset_to_sign);
                 maintenance_nsec_count += zdb_zone_maintenance_nsec(&mctx, diff_fqdn, &rrset_to_sign);
                 maintenance_nsec3_count += zdb_zone_maintenance_nsec3(&mctx, diff_fqdn);                // only affects the chain structure, hence the lack of "rrset_to_sign"
+
+#if DEBUG
+                log_debug2("maintenance: %{dnsname}: at %{dnsnamestack} %i + %i + %i = %i", zone->origin, &mctx.fqdn_stack,
+                         maintenance_rrsig_count, maintenance_nsec_count, maintenance_nsec3_count,
+                         maintenance_rrsig_count + maintenance_nsec_count + maintenance_nsec3_count);
+#endif
 
                 if(maintenance_rrsig_count + maintenance_nsec_count + maintenance_nsec3_count > 0)
                 {
@@ -888,6 +896,10 @@ zdb_zone_maintenance_from_chain_iteration_loop_break:
               zone->origin, last_label_of_zone_reached, ptr_vector_size(&rrset_to_sign));
 #endif
 
+    diff.nsec_change_count = maintenance_nsec_count;
+    diff.nsec3_change_count = maintenance_nsec3_count;
+
+    diff_has_changes |= maintenance_nsec_count > 0;
     diff_has_changes |= zone_diff_has_changes(&diff, &rrset_to_sign);
 
 #if ZDB_ZONE_MAINTENANCE_DETAILED_LOG
@@ -962,17 +974,27 @@ zdb_zone_maintenance_from_chain_iteration_loop_break:
                 while(nsec3chainstate != NULL);
 
                 yassert(apex != NULL);
+
                 zone_diff_fqdn_rr_set *nsec3chainstate_rrset = zone_diff_fqdn_rr_set_get(apex, TYPE_NSEC3CHAINSTATE);
                 yassert(nsec3chainstate_rrset != NULL);
-
                 zone_diff_fqdn_rr_set_set_state(nsec3chainstate_rrset, ZONE_DIFF_RR_REMOVE);
+                ptr_vector_append(&rrset_to_sign, nsec3chainstate_rrset);
+
+                zone_diff_fqdn_rr_set *nsec3paramqueued_rrset = zone_diff_fqdn_rr_set_get(apex, TYPE_NSEC3PARAMQUEUED);
+                if(nsec3paramqueued_rrset != NULL)
+                {
+                    yassert(nsec3paramqueued_rrset != NULL);
+                    zone_diff_fqdn_rr_set_set_state(nsec3paramqueued_rrset, ZONE_DIFF_RR_REMOVE);
+                    ptr_vector_append(&rrset_to_sign, nsec3paramqueued_rrset);
+                }
+
                 zone_diff_fqdn_rr_set *nsec3param_rrset = zone_diff_fqdn_rr_set_get(apex, TYPE_NSEC3PARAM);
-                yassert(nsec3param_rrset != NULL);
-#if DEBUG
-                log_debug("maintenance: %{dnsname}: NSEC3PARAM should be signed", zone->origin);
-#endif
-                nsec3param_rrset->key_mask = zsk_mask;
-                ptr_vector_append(&rrset_to_sign, nsec3param_rrset);
+                if(nsec3param_rrset != NULL)
+                {
+                    yassert(nsec3param_rrset != NULL);
+                    nsec3param_rrset->key_mask = zsk_mask;
+                    ptr_vector_append(&rrset_to_sign, nsec3param_rrset);
+                }
 
                 ++maintenance_generate_nsec3param_rrsig_count;
                 updated = TRUE;

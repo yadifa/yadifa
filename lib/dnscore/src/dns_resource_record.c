@@ -409,7 +409,6 @@ static const u8* dns_resource_record_view_get_rdata(void *data, const void *rr_)
     return rr->rdata;
 }
 
-/// @todo 20190820 edf -- replace the malloc by a zalloc, check for usage first.
 static void *dns_resource_record_view_new_instance(void *data, const u8 *fqdn, u16 rtype, u16 rclass, s32 ttl, u16 rdata_size, const u8 *rdata)
 {
     (void)data;

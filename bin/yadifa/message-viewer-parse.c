@@ -126,7 +126,7 @@ message_viewer_parse_header(message_viewer *mv, const u8 *buffer)
 
 
     /* 5. get opcode and rcode.
-     *    opcode is needed for for knowing the difference between a regular message and a update message
+     *    opcode is needed for knowing the difference between a regular message and an update message
      */
     u8 opcode              = MESSAGE_OP(buffer);
     opcode               >>= OPCODE_SHIFT;

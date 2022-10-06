@@ -72,6 +72,11 @@ static s32 digest_sha256_get_digest(digest_s* ctx, void **ptr)
     return SHA256_DIGEST_LENGTH;
 }
 
+static void digest_sha256_finalise(struct digest_s* ctx)
+{
+    (void)ctx;
+}
+
 static const struct digest_vtbl sha256_vtbl =
 {
     digest_sha256_update,
@@ -79,6 +84,7 @@ static const struct digest_vtbl sha256_vtbl =
     digest_sha256_final_copy_bytes,
     digest_sha256_get_size,
     digest_sha256_get_digest,
+    digest_sha256_finalise,
     "SHA256"
 };
 

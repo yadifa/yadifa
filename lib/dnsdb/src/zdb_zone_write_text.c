@@ -51,6 +51,7 @@
 
 #include <dnscore/file_output_stream.h>
 #include <dnscore/buffer_output_stream.h>
+#include <dnscore/checked_output_stream.h>
 #include <dnscore/format.h>
 #include <dnscore/typebitmap.h>
 #include <dnscore/base32hex.h>
@@ -330,6 +331,11 @@ zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, boo
     zdb_zone_label_iterator iter;
     btree_iterator records_iter;
 
+    checked_output_stream_data_t chkosd;
+    output_stream chkos;
+    checked_output_stream_init(&chkos, fos, &chkosd);
+    fos = &chkos;
+
     zdb_zone_label_iterator_init(&iter, zone);
 
     /*
@@ -337,7 +343,12 @@ zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, boo
      */
 
     while(zdb_zone_label_iterator_hasnext(&iter))
-    {       
+    {
+        if(checked_output_stream_failed(fos))
+        {
+            return checked_output_stream_error(fos);
+        }
+
         u32 len = zdb_zone_label_iterator_nextname_to_cstr(&iter, label_cstr);
         
         if(len != dot_origin_len)
@@ -570,6 +581,11 @@ zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, boo
     {
         u8 rdata[TYPE_BIT_MAPS_MAX_RDATA_SIZE];
 
+        if(checked_output_stream_failed(fos))
+        {
+            return checked_output_stream_error(fos);
+        }
+
         u32 rdata_hash_offset = NSEC3_ZONE_RDATA_SIZE(n3);
 
         MEMCOPY(rdata, &n3->rdata[0], NSEC3_ZONE_RDATA_SIZE(n3));
@@ -754,6 +770,11 @@ zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, boo
     } /* while n3 != NULL */
 
 #endif
+
+    if(checked_output_stream_failed(fos))
+    {
+        return checked_output_stream_error(fos);
+    }
 
     zone->text_serial = stored_serial;
     zone->wire_size = wire_size;

@@ -654,7 +654,7 @@ server_context_new_socket(struct addrinfo *addr, int sock_type, bool reuse_port)
              */
 
 #if __FreeBSD__
-            if(host_address_is_any(addr))
+            if(addr_info_is_any(addr))
             {
 #endif
                 socket_server_opensocket_setopt_ignore_error(&ctx, IPPROTO_IP, DSTADDR_SOCKOPT, &on, sizeof(on));
@@ -664,7 +664,7 @@ server_context_new_socket(struct addrinfo *addr, int sock_type, bool reuse_port)
 
             //
 #if __FreeBSD__
-            if(host_address_is_any(addr))
+            if(addr_info_is_any(addr))
             {
                 socket_server_opensocket_setopt_ignore_error(&ctx, IPPROTO_IPV6, DSTADDR_SOCKOPT, &on, sizeof(on));
             }

@@ -117,6 +117,7 @@ static inline ya_result database_query_with_rrl(zdb *db, message_data *mesg)
 }
 #endif
 
+ya_result       database_apply_nsec3paramqueued(zdb_zone *zone, zdb_packed_ttlrdata *rrset, u8 lock_owner);
 ya_result       database_update(zdb *database, message_data *mesg);
 
 ya_result       database_print_zones(zone_desc_s *, char *);

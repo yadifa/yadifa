@@ -118,6 +118,25 @@ AC_SUBST(HAS_$2)
 
 dnl ####################################################
 dnl
+dnl AC_FORCE_ENABLE(var)
+dnl
+dnl Forces --enable-var
+dnl
+dnl ####################################################
+
+AC_DEFUN([AC_FORCE_DISABLE], [
+#
+# AC_FORCE_DISABLE $1
+#
+enable_[$1]=no
+AC_DEFINE_UNQUOTED([HAS_$2], [0], [$1 = $2 enabled])
+AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
+AC_SUBST(HAS_$2)
+# AC_FORCE_DISABLE $1 DONE
+])
+
+dnl ####################################################
+dnl
 dnl AC_HAS_DISABLE(low-case --disable-*, up-case HAS_*, text, config.h text,ifyes,ifno)
 dnl
 dnl This macro creates a parameter with

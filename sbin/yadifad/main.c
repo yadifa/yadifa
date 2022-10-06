@@ -391,20 +391,13 @@ main_config(int argc, char *argv[])
 static bool
 main_final_tests_is_directory_writable(const char* dir)
 {
-    char tempfile[PATH_MAX];
-    
-    snformat(tempfile, sizeof(tempfile), "%s/ydf.XXXXXX", dir);
-    int tempfd;
-    if((tempfd = mkstemp_ex(tempfile)) < 0)
+    ya_result ret;
+    if(FAIL(ret = access_check(dir, ACCESS_CHECK_READWRITE)))
     {
-        int err = ERRNO_ERROR;
-        ttylog_err("error: '%s' is not writable as (%d:%d): %r", dir, getuid(), getgid(), err);
-        
+        ttylog_err("error: '%s' is not writable as (%d:%d): %r", dir, getuid(), getgid(), ret);
         return FALSE;
     }
-    unlink(tempfile);
-    close_ex(tempfd);
-    
+
     return TRUE;    
 }
 
@@ -473,7 +466,7 @@ main_exit()
     notify_service_finalize();
     database_service_finalize();
 
-#if HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
     dnssec_policy_finalize();
 #endif
     class_ch_set_hostname(NULL);    
@@ -509,7 +502,7 @@ main_exit()
         flushout();
         flusherr();
 
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
         acl_definitions_free();
 #endif
         dnscore_finalize();

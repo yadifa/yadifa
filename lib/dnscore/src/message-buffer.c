@@ -94,7 +94,20 @@ message_buffer_processor(message_viewer *mv, const u8 *buffer, u16 length)
 
             if(section_idx == 3)
             {
-                const u8 *p = record_wire + dnsname_len(record_wire);
+                s32 len = dnsname_len_checked_with_size(record_wire, sizeof(record_wire));
+
+                if(FAIL(len))
+                {
+                    return len;
+                }
+
+                if(return_value - len < 10) // type class ttl rdata_size
+                {
+                    return MAKE_RCODE_ERROR(FP_RCODE_FORMERR);
+                }
+
+                const u8 *p = record_wire + len;
+
                 u16 record_type = GET_U16_AT_P(p);
                 if(record_type == TYPE_OPT)
                 {
@@ -135,7 +148,19 @@ message_buffer_processor(message_viewer *mv, const u8 *buffer, u16 length)
             return return_value;
         }
 
-        const u8 *p = record_wire + dnsname_len(record_wire);
+        s32 len = dnsname_len_checked_with_size(record_wire, sizeof(record_wire));
+
+        if(FAIL(len))
+        {
+            return len;
+        }
+
+        if(return_value - len != 4)
+        {
+            return MAKE_RCODE_ERROR(FP_RCODE_FORMERR);
+        }
+
+        const u8 *p = record_wire + len;
 
         /* Retrieve QTYPE from packet reader */
         u16 rtype = GET_U16_AT_P(p);

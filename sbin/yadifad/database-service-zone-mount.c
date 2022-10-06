@@ -61,7 +61,7 @@
 
 #include "database-service.h"
 
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_DNSSEC_SUPPORT
 #include "database-service-zone-resignature.h"
 #endif
 
@@ -126,13 +126,15 @@ database_service_zone_mount(zone_desc_s *zone_desc)
 
     zdb *db = g_config->database;
 
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
     zone->acl = &zone_desc->ac;
     zone->query_access_filter = acl_get_query_access_filter(&zone_desc->ac.allow_query);
 #endif
 
     zdb_zone *old_zone = zdb_set_zone(db, zone); // RC++, because the zone is put into the database
-    
+
+    log_debug2("%{dnsname}: previous zone @%p, new zone @%p", zone->origin, old_zone, zone);
+
     bool send_notify_to_slaves = TRUE;
     
     if(old_zone != NULL)
@@ -140,11 +142,12 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         if(zone != old_zone)
         {
             // there is already a different zone mounted
-
+            log_debug2("%{dnsname}: locking previous zone to invalidate and swap", zone->origin);
             zdb_zone_lock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
             // set old zone as invalid
             zdb_zone_set_invalid(old_zone);
             zdb_zone_unlock(old_zone, ZDB_ZONE_MUTEX_REPLACE);
+            log_debug2("%{dnsname}: unlocking previous zone", zone->origin);
         }
         else
         {
@@ -161,7 +164,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
     
     if(send_notify_to_slaves)
     {
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
         if(zone_desc->type == ZT_MASTER)
         {
             log_debug("%{dnsname}: will notify slaves", zone_origin(zone_desc));
@@ -174,7 +177,10 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         {
             log_debug("%{dnsname}: will notify explicit slaves", zone_origin(zone_desc));
 
-            notify_slaves(zone_origin(zone_desc)); // RC++
+            if(notify_has_candidates_for_zone(zone_desc))
+            {
+                notify_slaves(zone_origin(zone_desc)); // RC++
+            }
             
             if(((zone_desc->flags & ZONE_FLAG_NO_MASTER_UPDATES) == 0))
             {
@@ -197,7 +203,7 @@ database_service_zone_mount(zone_desc_s *zone_desc)
         log_debug("%{dnsname}: no need to send notify to slaves", zone_origin(zone_desc));
     }
 
-#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT && DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
     if(zone_desc->type == ZT_MASTER)
     {
         if(zone_maintains_dnssec(zone_desc))

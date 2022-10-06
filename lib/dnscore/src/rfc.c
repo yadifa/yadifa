@@ -510,7 +510,7 @@ dns_type_get_name(u16 t)
         case TYPE_DLV:
             return TYPE_DLV_NAME;
             
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
         case TYPE_CTRL_SRVSHUTDOWN:
             return TYPE_CTRL_SHUTDOWN_NAME;
         case TYPE_CTRL_ZONEFREEZE:
@@ -803,7 +803,7 @@ static u32_set server_port_to_name_set = U32_SET_EMPTY;
 static void
 protocol_name_to_id_init()
 {
-#ifndef WIN32
+#if __unix__
     if(ptr_set_isempty(&protocol_name_to_id_set))
     {
         struct protoent *ent;
@@ -904,7 +904,7 @@ protocol_id_to_name(int proto, char *name, size_t name_len)
 static void
 server_name_to_port_init()
 {
-#ifndef WIN32
+#if __unix__
     if(ptr_set_isempty(&server_name_to_port_set))
     {
         struct servent *ent;

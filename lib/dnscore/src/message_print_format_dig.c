@@ -179,7 +179,6 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u32 length
 
             /* Print everything from QUESTION SECTION */
 
-
             if(message_viewer_requires_section(section_idx, view_mode_with))
             {
                 u64 next = counters.write_count + 24 + 8;
@@ -211,7 +210,6 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u32 length
         osprintln(os, "");
     }
 
-    
     for(u32 section_idx = 1; section_idx < 4; section_idx++)
     {
         if(message_viewer_requires_section(section_idx, view_mode_with))
@@ -229,11 +227,8 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u32 length
 
             /* Initialize the values needed for printing */
             u8 *rname      = record_wire;
-            u8 *rdata      = rname + dnsname_len(rname);
+            u8 *rdata      = rname + dnsname_len(rname); // points to {type class ttl rdata_size}
             u16 rtype      = GET_U16_AT(rdata[0]);
-            u16 rclass     = GET_U16_AT(rdata[2]);
-            u32 rttl       = ntohl(GET_U32_AT(rdata[4]));
-            u16 rdata_size = ntohs(GET_U16_AT(rdata[8]));
 
             if(section_idx == 3)
             {
@@ -247,9 +242,20 @@ message_print_format_dig_buffer(output_stream *os_, const u8 *buffer, u32 length
                 }
             }
 
-            /** @todo 20130530 gve -- test that rdata_size matches the record size */
-            
-            rdata         += 10;
+            u16 rclass     = GET_U16_AT(rdata[2]);
+            u32 rttl       = ntohl(GET_U32_AT(rdata[4]));
+            u16 rdata_size = ntohs(GET_U16_AT(rdata[8]));
+
+            rdata         += 10; // skip the type class ttl rdata_len
+
+            // test that rdata_size matches the record size
+
+            if(&rdata[rdata_size] != &record_wire[return_value])
+            {
+                // rdata_size doesn't exactly matches the returned size
+                osformatln(os, ";; error reading the message");
+                return MAKE_RCODE_ERROR(RCODE_FORMERR);
+            }
 
             u64 next       = counters.write_count + 24;
 

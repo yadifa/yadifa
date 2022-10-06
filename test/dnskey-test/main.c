@@ -507,11 +507,10 @@ parse_private_key_record(struct dnskey_private_inputs_s *input)
             dnskey_signature_set_rrset_reference(&ds_back, &rrset);
             dnskey_signature_set_canonised(&ds_back, FALSE);
             ret = dnskey_signature_sign(&ds_back, key, (void **) &rrsig_rr);
+            ya_result ret_verify = dnskey_signature_verify(&ds_back, key, rrsig_rr);
             dnskey_signature_finalize(&ds_back);
 
-            ret = dnskey_signature_verify(&ds_back, key, rrsig_rr);
-
-            if(ISOK(ret))
+            if(ISOK(ret_verify))
             {
                 println("signature verified");
             }
@@ -527,13 +526,12 @@ parse_private_key_record(struct dnskey_private_inputs_s *input)
             dnskey_signature_set_rrset_reference(&ds_other, &rrset_different);
             dnskey_signature_set_canonised(&ds_other, FALSE);
             ret = dnskey_signature_sign(&ds_other, key, (void **) &rrsig_rr);
+            ret_verify = dnskey_signature_verify(&ds_other, key, rrsig_rr);
             dnskey_signature_finalize(&ds_other);
 
-            ret = dnskey_signature_verify(&ds_other, key, rrsig_rr);
-
-            if(FAIL(ret))
+            if(FAIL(ret_verify))
             {
-                println("signature not verified as it should");
+                println("signature not verified (as it should)");
                 ret = SUCCESS;
             }
             else

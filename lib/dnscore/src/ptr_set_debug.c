@@ -169,10 +169,12 @@ ptr_set_debug_ptr_node_compare(const void *node_a, const void *node_b)
     ssize_t a = (ssize_t)node_a;
     ssize_t b = (ssize_t)node_b;
     ssize_t d = b - a;
+#if __SIZEOF_POINTER__ == 8
     if((d & 0xffffffffULL) == 0)
     {
         d >>= 32;
     }
+#endif
     return (int)d;
 }
 

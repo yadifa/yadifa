@@ -87,7 +87,7 @@ logger_handle *g_server_logger = LOGGER_HANDLE_SINK;
 #if HAS_DYNUPDATE_SUPPORT
 #include "dynupdate_query_service.h"
 #endif
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 #include "ctrl_query.h"
 
@@ -1080,7 +1080,7 @@ server_process_tcp_task(message_data *mesg, int sockfd, u16 svr_sockfd)
                 }
                 break;
             } // case update
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
             case OPCODE_CTRL:
             {
 #if DNSCORE_HAS_TCP_MANAGER
@@ -1973,7 +1973,7 @@ server_service_main(struct service_worker_s *worker)
                 service_clear_reconfigure(worker);
 
                 /// @todo 20210304 edf -- instead of a sleep, wait for a reconfigured/shutdown event
-                sleep(1);
+                sleep(1); // used to pace the system if something wrong happens
 
                 continue;
             }

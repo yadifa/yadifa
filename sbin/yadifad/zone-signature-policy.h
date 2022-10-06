@@ -435,11 +435,14 @@ dnssec_policy *dnssec_policy_acquire_from_name(const char *id);
 void dnssec_policy_acquire(dnssec_policy *dp);
 void dnssec_policy_release(dnssec_policy *dp);
 
+bool dnssec_policy_is_key_matching(dnssec_policy *dp, dnssec_key *key);
+bool dnssec_policy_defines_ksk(dnssec_policy *dp);
+
 #define CONFIG_DNSSEC_POLICY(fieldname_) {#fieldname_,offsetof(CONFIG_TYPE, fieldname_), (config_set_field_function*)dnssec_policy_zone_desc_config, NULL,{._intptr=0}, sizeof(dnssec_policy), sizeof(((CONFIG_TYPE*)0)->fieldname_), CONFIG_TABLE_SOURCE_NONE, CONFIG_FIELD_ALLOCATION_DIRECT },
 
 ya_result dnssec_policy_zone_desc_config(const char *value, void *dest, anytype sizeoftarget);
 
-void  dnssec_policy_initialise();
+void dnssec_policy_initialise();
 
 // remove all previously defined policies
 void dnssec_policy_finalize();

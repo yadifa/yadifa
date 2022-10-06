@@ -229,8 +229,6 @@ service_on_main_thread(void *args)
     logger_handle_clear_thread_tag();
 #endif
 
-
-
     return NULL;
 }
 
@@ -727,7 +725,7 @@ service_wait(struct service_s *desc)
             {
                 if(tid != 0)
                 {
-#ifndef WIN32
+#if __unix__
                     if(thread_kill(tid, 0) != 0)
                     {
                         log_err("service: %s thread %p died on us", desc->name, tid);
@@ -759,7 +757,7 @@ service_wait(struct service_s *desc)
 #if DEBUG
                                     logger_flush();
 #endif
-#ifndef WIN32
+#if __unix__
                                     thread_kill(tid, SIGINT);
 #endif
                                 }

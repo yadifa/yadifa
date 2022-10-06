@@ -91,7 +91,7 @@ nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_
 
         u16 type = node->hash; /** @note : NATIVETYPE */
         
-#if ZDB_HAS_NSEC3_SUPPORT
+#if ZDB_HAS_NSEC3_SUPPORT && defined(TYPE_NSEC3PARAMADD)
         if(type == TYPE_NSEC3PARAMADD) type = TYPE_NSEC3PARAM; // we are generating an NSEC3 chain : let's get the real types right
 #endif
         /**

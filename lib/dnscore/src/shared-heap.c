@@ -202,7 +202,6 @@ static inline void shared_heap_notify_unlock(shared_heap_ctx *ctx)
 
 #endif
 
-
 void
 shared_heap_check_bloc(u8 id, void *bloc_, u8 allocated)
 {
@@ -1260,6 +1259,10 @@ shared_heap_print_map(u8 id, size_t* totalp, size_t* countp)
     }
 
     formatln("shared-heap[%i] total=%llu count=%llu", id, total, count);
+#else
+    (void)id;
+    (void)totalp;
+    (void)countp;
 #endif
 }
 

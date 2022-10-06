@@ -169,7 +169,7 @@ dnskey_record_build_from_key(const u8 *domain, u16 keyflags, u8 keyproto, u8 key
     
     if(BASE64_DECODED_SIZE(len) > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
-        osformatln(termout,"ds_record_build_from_key: key size too big");
+        osformatln(termout,"dnskey_record_build_from_key: key size too big");
         return NULL;
     }
         
@@ -177,7 +177,7 @@ dnskey_record_build_from_key(const u8 *domain, u16 keyflags, u8 keyproto, u8 key
     
     if(FAIL(keyrdata_size))
     {
-        osformatln(termout,"ds_record_build_from_key: base64 decode failed: %r", keyrdata_size);
+        osformatln(termout,"dnskey_record_build_from_key: base64 decode failed: %r", keyrdata_size);
         
         if(keyrdata_size == PARSEB64_ERROR)
         {

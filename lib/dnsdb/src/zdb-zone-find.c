@@ -98,7 +98,7 @@ zdb_zone_find(zdb *db, dnsname_vector *exact_match_origin) // INTERNAL mutex che
 {
     /* Find label */
 
-    yassert(group_mutex_islocked(&db->mutex));
+    yassert(zdb_ismutexlocked(db));
     
     zdb_zone_label *zone_label = zdb_zone_label_find(db, exact_match_origin); // zdb_zone_find
 
@@ -180,7 +180,7 @@ zdb_zone_find_from_dnsname(zdb* db, const u8 *dns_name) // INTERNAL mutex checke
 {
     dnsname_vector origin;
     
-    yassert(group_mutex_islocked(&db->mutex));
+    yassert(zdb_ismutexlocked(db));
 
     dnsname_to_dnsname_vector(dns_name, &origin);
 

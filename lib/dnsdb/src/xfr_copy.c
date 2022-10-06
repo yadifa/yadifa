@@ -63,10 +63,10 @@
 
 #ifndef WIN32
 /* it depends if host is DARWIN or LINUX */
-#ifdef HAVE_SYS_SYSLIMITS_H
-#include        <sys/syslimits.h>
+#if HAVE_SYS_SYSLIMITS_H
+#include <sys/syslimits.h>
 #elif HAVE_LINUX_LIMITS_H
-#include        <linux/limits.h>
+#include <linux/limits.h>
 #endif /* HAVE_SYS_SYSLIMITS_H */
 #endif
 

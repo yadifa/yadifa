@@ -73,7 +73,7 @@ struct threaded_queue_slg_s
     cond_t read_cond;
     intptr read_index;
     threaded_queue_slg_page_t *page_pool;
-#ifndef WIN32
+#if __unix__
     threaded_queue_slg_page_t *read_page __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
     threaded_queue_slg_page_t *write_page __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
 #else

@@ -68,8 +68,9 @@ struct logger_handle;
 #define DYNUPDATE_DIFF_RETURN_DNSKEY_UPDATED 4  // the reported ZSK status was actually applied
 #define DYNUPDATE_DIFF_RETURN_MASK           7
 
-#define DYNUPDATE_DIFF_DRYRUN   TRUE
-#define DYNUPDATE_DIFF_RUN      FALSE
+#define DYNUPDATE_DIFF_DRYRUN   0x00000001
+#define DYNUPDATE_DIFF_RUN      0x00000000
+#define DYNUPDATE_DIFF_EXTERNAL 0x00000002      // comes from the network interface
 
 #define ZDLABELT_TAG 0x544c4542414c445a
 #define ZDFFLABL_TAG 0x4c42414c4646445a
@@ -102,6 +103,8 @@ struct zone_diff
     s32 rrsig_validity_regeneration;
     s32 rrsig_validity_jitter;
     s32 nttl;
+    s32 nsec_change_count;
+    s32 nsec3_change_count;
     bool rrsig_update_allowed;
     bool has_active_zsk;
     bool has_active_ksk;
@@ -303,6 +306,7 @@ struct zone_diff_fqdn
         will_have_ds:1,
         will_be_non_empty:1,
         will_have_children:1,
+        will_have_new_nsec:1,
         
         was_at_delegation:1,
         was_under_delegation:1,
@@ -313,6 +317,8 @@ struct zone_diff_fqdn
         rrsig_removed:1,
         rrsig_added:1,
         rrsig_kept:1,
+        rrsig_expect_new_rrsig:1,
+        rrsig_expect_no_rrsig:1,
         is_nsec3:1,
 
         children_added:1,               // tells that the children are available in the diff, else it means that had_children = will_have_children
@@ -367,10 +373,11 @@ ya_result zone_diff_validate(zone_diff *diff);
  * @param rrset_to_sign_vector can be NULL
  * @param remove
  * @param add
+ * @param regeneration_seconds
  * @return TRUE iff there is a DNSKEY rrset in the diff
  */
 
-s32 zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vector *ksks, ptr_vector *zsks, ptr_vector *remove, ptr_vector *add);
+s32 zone_diff_get_changes(zone_diff *diff, ptr_vector *rrset_to_sign_vector, ptr_vector *ksks, ptr_vector *zsks, ptr_vector *remove, ptr_vector *add, s32 regeneration_seconds);
 
 /**
  * Returns TRUE iff there are changes in the diff
@@ -739,13 +746,24 @@ static inline s32 diff_generate_signature_interval(zone_diff *diff)
 
 ya_result dynupdate_diff_write_to_journal_and_replay(zdb_zone *zone, u8 secondary_lock, ptr_vector *del_vector, ptr_vector *add_vector);
 
-void zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vector *zsks);
+/**
+ * A format writer for the zone_diff_label state field
+ *
+ * Usage example:
+ * format_writer state_flags = {zone_diff_label_state_flags_long_format, &rr->state};
+ * Then:
+ * format("%w", &state_flags);
+ */
+
+void zone_diff_label_state_flags_long_format(const void *value, output_stream *os, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters);
+
+void zone_diff_store_diff_dnskey_get_keys(zone_diff *diff, ptr_vector *ksks, ptr_vector *zsks, s32 regeneration_seconds);
 
 /**
  * 
  */
 
-ya_result dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 secondary_lock, bool dryrun);
+ya_result dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 secondary_lock, u32 flags);
 /*
 ya_result dynupdate_diff_chain(zdb_zone *zone, u8 secondary_lock)
 {
@@ -766,7 +784,7 @@ ya_result dynupdate_diff_chain(zdb_zone *zone, u8 secondary_lock)
  * @return number of operations counted
  */
 
-int dnssec_chain_add_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn* diff_fqdn, u16 rtype);
+int dnssec_chain_add_from_diff_fqdn(dnssec_chain *dc, zone_diff_fqdn* diff_fqdn, u16 rtype);
 
 /**
  * Removes a node from the chain from a zone_diff_fqdn
@@ -778,7 +796,7 @@ int dnssec_chain_add_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn* diff
  * @return number of operations counted
  */
 
-int dnssec_chain_del_from_diff_fqdn(dnssec_chain *dc, const zone_diff_fqdn* diff_fqdn, u16 rtype);
+int dnssec_chain_del_from_diff_fqdn(dnssec_chain *dc, zone_diff_fqdn* diff_fqdn, u16 rtype);
 
 void zone_diff_record_state_format(const void* data, output_stream* os, s32 a, char b , bool c, void* reserved_for_method_parameters);
 

@@ -79,7 +79,7 @@ extern logger_handle *g_system_logger;
 #define SOCKET_SERVER_OPERATION_ERROR_BEHAVIOUR_WARNING 1
 #define SOCKET_SERVER_OPERATION_ERROR_BEHAVIOUR_ERROR 2 // will stop the socket creation
 
-#ifndef WIN32
+#if __unix__
 
 static pid_t socket_server_pid = 0;
 static pid_t socket_server_parent_pid = 0;
@@ -838,7 +838,7 @@ socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addrinfo *
         }
     }
 
-#ifndef WIN32
+#if __unix__
     if(socket_server_pid != 0)
     {
         u8 *p = ctx->buffer_out;
@@ -889,7 +889,7 @@ socket_server_opensocket_init(socket_server_opensocket_s *ctx, struct addrinfo *
 
 void socket_server_opensocket_setopt(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen)
 {
-#ifndef WIN32
+#if __unix__
     if(socket_server_pid != 0)
     {
         u8 *p = ctx->p;
@@ -940,7 +940,7 @@ void socket_server_opensocket_setopt(socket_server_opensocket_s *ctx, int level,
 
 void socket_server_opensocket_setopt_ignore_result(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen)
 {
-#ifndef WIN32
+#if __unix__
     if(socket_server_pid != 0)
     {
         u8 *p = ctx->p;
@@ -990,7 +990,7 @@ void socket_server_opensocket_setopt_ignore_result(socket_server_opensocket_s *c
 
 void socket_server_opensocket_setopt_ignore_error(socket_server_opensocket_s *ctx, int level, int optname, const void* opt, socklen_t optlen)
 {
-#ifndef WIN32
+#if __unix__
     if(socket_server_pid != 0)
     {
         u8 *p = ctx->p;
@@ -1048,7 +1048,7 @@ void socket_server_opensocket_setopt_ignore_error(socket_server_opensocket_s *ct
 
 int socket_server_opensocket_open(socket_server_opensocket_s *ctx)
 {
-#ifndef WIN32
+#if __unix__
     if(socket_server_pid != 0) // the socket server is up
     {
 
@@ -1123,7 +1123,7 @@ int socket_server_opensocket_open(socket_server_opensocket_s *ctx)
 ya_result
 socket_server_finalize()
 {
-#ifndef WIN32
+#if __unix__
     if(socket_server_pid != 0)
     {
         // send stop command
@@ -1148,7 +1148,7 @@ ya_result
 socket_server_init(int argc, char **argv)
 {
     log_info("socket-server: init");
-#ifndef WIN32
+#if __unix__
     if(socket_server_parent_pid != 0)
     {
         log_err("socket-server: already initialised");

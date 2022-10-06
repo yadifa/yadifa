@@ -195,7 +195,7 @@ extern "C"
 #define SIZEOF_TIMEVAL 16
     
 #ifndef HAS_DYNAMIC_PROVISIONING
-#define HAS_DYNAMIC_PROVISIONING 1
+#define HAS_DYNAMIC_PROVISIONING 0
 #endif
     
 #ifndef PATH_MAX
@@ -682,7 +682,7 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 
 typedef u32 process_flags_t;
 
-#ifdef WORDS_BIGENDIAN
+#if WORDS_BIGENDIAN
 #define NU16(value)     ((u16)(value))
 #define NU32(value)     ((u32)(value))
 #else

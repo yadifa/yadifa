@@ -219,7 +219,7 @@ protocol_test_message_udp_with_timeout(message_data *mesg, const host_address *s
                         }
                         else
                         {
-                            formatln("ERROR: %{hostaddr} replied instead of %{hostaddr}", message_get_sender_sa(mesg), server);
+                            formatln("ERROR: %{sockaddr} replied instead of %{hostaddr}", message_get_sender_sa(mesg), server);
                             
                             ret = INVALID_MESSAGE;
                         }

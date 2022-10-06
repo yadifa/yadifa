@@ -332,7 +332,28 @@ output_stream_decode_base16(output_stream* os, const char * string, u32 length)
      * alternatively we could just return "success"
      */
 
-    return string - string_start;
+    return (ya_result)(string - string_start);
+}
+
+ya_result
+output_stream_write_pu16(output_stream* os, u16 value)
+{
+    u8 v;
+
+    if(value > 127)
+    {
+        v = (u8)value;
+        value >>= 7;
+        v |= 0x80;
+
+        /* I'll only check the error for the last byte */
+
+        output_stream_write(os, &v, 1);
+    }
+
+    v = (u8)value;
+
+    return output_stream_write(os, &v, 1);
 }
 
 ya_result
@@ -410,7 +431,7 @@ output_stream_write_dnsname_text(output_stream* os, const u8 *name)
         output_stream_write(os, &dot, 1);
     }
     
-    return name - base + 1;
+    return (ya_result)(name - base + 1);
 }
 
 ya_result
@@ -688,7 +709,7 @@ output_stream_write_fully(output_stream* stream, const void* buffer_start, u32 l
         return UNABLE_TO_COMPLETE_FULL_WRITE;
     }
 
-    return buffer - (u8*)buffer_start;
+    return (ya_result)(buffer - (u8*)buffer_start);
 }
 
 /** @} */

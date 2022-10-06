@@ -363,6 +363,7 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
         }
         else
         {
+
 #if DEBUG
             log_debug2("maintenance: rrsig: %{dnsname}: %{dnsname}: contains no signatures", mctx->zone->origin, diff_fqdn->fqdn);
 #endif
@@ -382,6 +383,11 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
             int modified_rrset = zdb_zone_maintenance_rrsig_coverage_finalize(mctx, diff_fqdn, rrset_to_sign, &type_coverage);
 
             signatures_to_add_or_remove += modified_rrset;
+
+            if(modified_rrset > 0)
+            {
+                diff_fqdn->rrsig_expect_new_rrsig = (rrsig_set == NULL);
+            }
         }
         else // opt-out zone and not apex nor delegation with a DS record
         {

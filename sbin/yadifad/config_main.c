@@ -158,6 +158,7 @@ CONFIG_ACL_PTR(  allow_control               , S_ALLOW_CONTROL            ) // d
 CONFIG_HOST_LIST(listen                      , S_LISTEN                   ) // doc
 CONFIG_HOST_LIST(do_not_listen               , S_DO_NOT_LISTEN            ) // doc
 CONFIG_HOST_LIST(known_hosts                 , S_LISTEN                   )
+CONFIG_HOST_LIST(transfer_source             , S_TRANSFER_SOURCE          )
 /* size of an EDNS0 packet */
 CONFIG_U32_RANGE(edns0_max_size              , S_EDNS0_MAX_SIZE          ,EDNS0_MIN_LENGTH, EDNS0_MAX_LENGTH ) // doc
 // overrides the cpu detection
@@ -176,7 +177,7 @@ CONFIG_OBSOLETE(dnssec_thread_count) /// @note 20180712 edf -- THIS PARAMETER IS
 #endif
 
 CONFIG_U32_RANGE(zone_load_thread_count      , S_ZONE_LOAD_THREAD_COUNT, ZONE_LOAD_THREAD_COUNT_MIN, ZONE_LOAD_THREAD_COUNT_MAX) // doc
-CONFIG_U32_RANGE(zone_store_thread_count      , S_ZONE_SAVE_THREAD_COUNT, ZONE_SAVE_THREAD_COUNT_MIN, ZONE_SAVE_THREAD_COUNT_MAX) // doc
+CONFIG_U32_RANGE(zone_store_thread_count     , S_ZONE_SAVE_THREAD_COUNT, ZONE_SAVE_THREAD_COUNT_MIN, ZONE_SAVE_THREAD_COUNT_MAX) // doc
 CONFIG_U32_RANGE(zone_download_thread_count  , S_ZONE_DOWNLOAD_THREAD_COUNT , ZONE_DOWNLOAD_THREAD_COUNT_MIN, ZONE_DOWNLOAD_THREAD_COUNT_MAX) // doc
 CONFIG_U32_RANGE(zone_unload_thread_count    , S_ZONE_UNLOAD_THREAD_COUNT, ZONE_UNLOAD_THREAD_COUNT_MIN, ZONE_UNLOAD_THREAD_COUNT_MAX  ) // doc
 CONFIG_ENUM(     network_model               ,S_NETWORK_MODEL, network_model_enum) // doc
@@ -198,7 +199,7 @@ CONFIG_U32(      statistics_max_period       , S_STATISTICS_MAX_PERIOD    ) // d
 CONFIG_U32(      xfr_connect_timeout         , S_XFR_CONNECT_TIMEOUT      ) // doc
 CONFIG_U32(      queries_log_type            , S_QUERIES_LOG_TYPE         ) // doc
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #if CONFIG_SIGNATURE_TYPE_CONFIGURABLE
 CONFIG_U16(      sig_signing_type            , S_SIG_SIGNING_TYPE          )
 #endif
@@ -211,9 +212,10 @@ CONFIG_ALIAS(sig_jitter, sig_validity_jitter) // doc
 CONFIG_U32_RANGE(axfr_max_record_by_packet   , S_AXFR_MAX_RECORD_BY_PACKET , AXFR_RECORD_BY_PACKET_MIN , AXFR_RECORD_BY_PACKET_MAX ) // doc
 CONFIG_U32_RANGE(axfr_max_packet_size        , S_AXFR_PACKET_SIZE_MAX      , AXFR_PACKET_SIZE_MIN      , AXFR_PACKET_SIZE_MAX      ) // doc
 CONFIG_BOOL(axfr_compress_packets            , S_AXFR_COMPRESS_PACKETS    ) // doc
-CONFIG_BOOL(axfr_strict_authority, S_AXFR_STRICT_AUTHORITY) // doc
+CONFIG_BOOL(axfr_strict_authority            , S_AXFR_STRICT_AUTHORITY) // doc
 CONFIG_U32_RANGE(axfr_retry_delay            , S_AXFR_RETRY_DELAY          , AXFR_RETRY_DELAY_MIN      , AXFR_RETRY_DELAY_MAX      ) // doc
-CONFIG_U32(      axfr_retry_jitter           , S_AXFR_RETRY_JITTER        ) // doc
+CONFIG_U32(axfr_retry_jitter                 , S_AXFR_RETRY_JITTER        ) // doc
+CONFIG_U32_RANGE(axfr_memory_threshold       , S_AXFR_MEMORY_THREHOLD, AXFR_MEMORY_THREHOLD_MIN, AXFR_MEMORY_THREHOLD_MAX)
 CONFIG_U32_RANGE(axfr_retry_failure_delay_multiplier, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX) // doc
 CONFIG_U32_RANGE(axfr_retry_failure_delay_max, S_AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MIN, AXFR_RETRY_FAILURE_DELAY_MULTIPLIER_MAX_MAX) // doc
 CONFIG_U32_RANGE(worker_backlog_queue_size   , S_SERVER_RW_BACKLOG_QUEUE_SIZE, SERVER_RW_BACKLOG_QUEUE_SIZE_MIN, SERVER_RW_BACKLOG_QUEUE_SIZE_MAX ) // doc
@@ -226,6 +228,10 @@ CONFIG_ALIAS(module, dynamic_modules)
 #endif
 
 CONFIG_BOOL(hidden_master, "0") // doc
+
+#if DEBUG
+CONFIG_BOOL(print_config, "0") // debug build only, prints the loaded configuration
+#endif
 
 //CONFIG_U32_RANGE(multimaster_
 
@@ -250,7 +256,7 @@ CONFIG_ALIAS(axfr_maxrecordbypacket, axfr_max_record_by_packet) // doc
 CONFIG_ALIAS(axfr_maxpacketsize, axfr_max_packet_size) // doc
 CONFIG_ALIAS(axfr_compresspackets, axfr_compress_packets) // doc
 
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 CONFIG_ALIAS(signature_validity_interval, sig_validity_interval)
 CONFIG_ALIAS(signature_regeneration, sig_validity_regeneration)
 CONFIG_ALIAS(signature_jitter, sig_validity_jitter)
@@ -272,12 +278,15 @@ CONFIG_ALIAS(network_model_worker_backlog_size, worker_backlog_queue_size)
 CONFIG_END(config_main_desc)
 #undef CONFIG_TYPE
 
+/**
+ * Note : *dirp has been mallocated
+ */
+
 static ya_result
 config_main_verify_and_update_directory(const char *base_path, char **dirp)
 {
     char fullpath[PATH_MAX];
-    char tempfile[PATH_MAX];
-    
+
     if(dirp == NULL)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
@@ -333,22 +342,14 @@ config_main_verify_and_update_directory(const char *base_path, char **dirp)
         
         return INVALID_PATH;
     }
-    
-    snformat(tempfile, sizeof(tempfile), "%s/ydf.XXXXXX", fullpath);
-    int tempfd;
-    if((tempfd = mkstemp_ex(tempfile)) < 0)
+
+    ya_result ret;
+    if(FAIL(ret = access_check(fullpath, ACCESS_CHECK_READWRITE)))
     {
-        int ret = ERRNO_ERROR;
-#ifndef WIN32
         ttylog_err("error: '%s' is not writable as (%d:%d): %r", fullpath, getuid(), getgid(), ret);
-#else
-        ttylog_err("error: '%s' is not writable: %r", fullpath, ret);
-#endif
         return ret;
     }
-    unlink(tempfile);
-    close_ex(tempfd);
-    
+
     free(dir);
 #ifndef WIN32
     *dirp = strdup(fullpath);
@@ -534,6 +535,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     
     host_address_set_default_port_value(g_config->listen, ntohs(port));
     host_address_set_default_port_value(g_config->do_not_listen, ntohs(port));
+    host_address_set_port_value(g_config->transfer_source, 0);
 
     if(g_config->max_tcp_queries_per_address > g_config->max_tcp_queries)
     {
@@ -652,7 +654,7 @@ config_main_section_postprocess(struct config_section_descriptor_s *csd)
     g_config->tcp_query_min_rate_us = 0.000001 * g_config->tcp_query_min_rate;
     message_set_minimum_troughput_default(g_config->tcp_query_min_rate_us);
     
-#if HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
 #if DATABASE_ZONE_RRSIG_THREAD_POOL
     g_config->dnssec_thread_count = BOUND(1, g_config->dnssec_thread_count, sys_get_cpu_count());
 #endif

@@ -44,6 +44,7 @@
 #include "dnscore/dnscore-config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <dnscore/base32hex.h>
 
 #include "dnscore/packet_writer.h"
 #include "dnscore/dnsname.h"
@@ -404,6 +405,15 @@ packet_writer_add_rdata(packet_writer* pc, u16 rr_type, const u8* rdata, u16 rda
     } /* switch(type) */
 
     return pc->packet_offset;
+}
+
+ya_result
+packet_writer_encode_base32hex_digest(packet_writer *pw, const u8 *digest)
+{
+    pw->packet[pw->packet_offset++] = BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH);
+    /*u32 b32_len =*/ base32hex_encode(digest, SHA_DIGEST_LENGTH, (char*)&pw->packet[pw->packet_offset]);
+    pw->packet_offset += BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH);
+    return BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH) + 1;
 }
 
 /**

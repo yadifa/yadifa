@@ -236,7 +236,7 @@ dynupdate_message_del_dnskey(dynupdate_message *dmsg, const dnssec_key *key)
  */
 
 ya_result
-dynupdate_message_add_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, void *rdata)
+dynupdate_message_add_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, const void *rdata)
 {
     ya_result ret;
     if(ISOK(ret = packet_writer_add_record(&dmsg->pw, fqdn, rtype, dmsg->rclass, ttl, rdata, rdata_size)))
@@ -260,7 +260,7 @@ dynupdate_message_add_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype,
  */
 
 ya_result
-dynupdate_message_del_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, void *rdata)
+dynupdate_message_del_record(dynupdate_message *dmsg, const u8 *fqdn, u16 rtype, s32 ttl, u16 rdata_size, const void *rdata)
 {
     ya_result ret;
     if(ISOK(ret = packet_writer_add_record(&dmsg->pw, fqdn, rtype, TYPE_NONE, ttl, rdata, rdata_size)))

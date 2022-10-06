@@ -115,7 +115,7 @@ ya_result zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_f
  * @return the number of actions counted
  */
 
-int zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *diff_fqdn, ptr_vector *rrset_to_sign);
+int zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_fqdn, ptr_vector *rrset_to_sign);
 
 /**
  * Called by zdb_zone_maintenance
@@ -129,7 +129,7 @@ int zdb_zone_maintenance_nsec(zdb_zone_maintenance_ctx* mctx, const zone_diff_fq
  * @return the number of actions counted
  */
 
-int zdb_zone_maintenance_nsec3(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *diff_fqdn);
+int zdb_zone_maintenance_nsec3(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_fqdn);
 
 void zdb_zone_maintenance_nsec3_add_rrsig_type(zone_diff *diff, zdb_zone *zone, ptr_vector *rrset_to_sign_vector, ptr_vector *ksks, ptr_vector *zsks, ptr_vector *remove, ptr_vector* add, zone_diff_fqdn *covered_diff_fqdn);
 

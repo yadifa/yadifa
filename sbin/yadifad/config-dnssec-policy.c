@@ -78,7 +78,7 @@ CONFIG_STRING_ARRAY(  key_suite,            NULL,   DP_KEY_SUITE_SIZE           
 CONFIG_U32_RANGE(     ds_ttl,               "3600", 0, MAX_S32                  )
 CONFIG_FLAG8(         weaker_key_removal,   "0",    flags, DP_FLAGS_WEAKER_KEY  )
 CONFIG_FLAG8(         stronger_key_removal, "0",    flags, DP_FLAGS_STRONGER_KEY)
-CONFIG_U8(            max_key,              "2"                                 ) /// @todo 20160520 gve -- check if this per key or key_suite
+CONFIG_U8(            max_key,              "2"                                 ) // it's the number of key suites
 
          /*           alias,                aliased */
 CONFIG_ALIAS(         max_keys,             max_key                             )
@@ -103,10 +103,11 @@ config_section_dnssec_policy_set_wild(struct config_section_descriptor_s *csd, c
 
 
 static ya_result
-config_section_dnssec_policy_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_dnssec_policy_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
+    (void)context;
     
     if(key != NULL)
     {
@@ -215,16 +216,33 @@ config_section_dnssec_policy_stop(struct config_section_descriptor_s *csd)
         ttylog_err("config: dnssec-policy: id not set");
         return CONFIG_SECTION_ERROR;
     }
-    
+
     if(dnssec_policy->denial == NULL)
     {
         ttylog_err("config: dnssec-policy: %s: denial not set", dnssec_policy->id);
         return CONFIG_SECTION_ERROR;
     }
-    
+
+    if(strcmp(dnssec_policy->denial, "nsec") != 0)
+    {
+        dnssec_denial *denial = dnssec_policy_denial_acquire(dnssec_policy->denial);
+        if(denial == NULL)
+        {
+            ttylog_err("config: dnssec-policy: denial '%s' is undefined", dnssec_policy->denial);
+            return CONFIG_SECTION_ERROR;
+        }
+        dnssec_policy_denial_release(denial);
+    }
+
     if(ptr_vector_size(&dnssec_policy->key_suite) < 1)
     {
         ttylog_err("config: dnssec-policy: %s: no key-suite has been set", dnssec_policy->id);
+        return CONFIG_SECTION_ERROR;
+    }
+
+    if(ptr_vector_size(&dnssec_policy->key_suite) > dnssec_policy->max_key)
+    {
+        ttylog_err("config: dnssec-policy: %s: too many key-suite have been set", dnssec_policy->id);
         return CONFIG_SECTION_ERROR;
     }
     
@@ -281,8 +299,7 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
         }
 
         // get the <denial> section from <dnssec-policy> configuration
-        dnssec_denial *dd = dnssec_policy_denial_acquire(dnssec_policy_desc->denial);
-        /// @todo 20160614 gve -- check if 'dd' can be zero (I think not) before release 2.2.0
+        dnssec_denial *dd = dnssec_policy_denial_acquire(dnssec_policy_desc->denial); // note that dd is allowed to be NULL
         
         bool has_zsk = FALSE;
                 
@@ -322,7 +339,6 @@ config_section_dnssec_policy_postprocess(struct config_section_descriptor_s *csd
         // set the dnssec-policy structure for 'dnssec_policy_desc->id' with 'dd' and 'key_suites'
 
         // the value returned by dnssec_policy_create is also added to key_suites
-
 
         dnssec_policy_create(dnssec_policy_desc->id, dd, &key_suites);
 

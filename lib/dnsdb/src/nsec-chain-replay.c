@@ -202,7 +202,6 @@ nsec_chain_replay_execute(chain_replay *cr)
         ptr_node *node = ptr_set_insert(&del_nsec_set, (u8*)nsec_chain_replay_record_fqdn(record));
         if(node->value == NULL)
         {
-            
             node->value = record;
         }
         else
@@ -257,7 +256,7 @@ nsec_chain_replay_execute(chain_replay *cr)
             {
                 if(RR_LABEL_IRRELEVANT(label))  // irrelevant and RR_LABEL_EMPTY_TERMINAL should be equivalent here
                 {
-                    ya_result ret;
+                    ya_result ret; // the zdb_rr_label_delete_record checks that the label has no children, no records and no entry in the DNSSEC chain
                     if(FAIL(ret = zdb_rr_label_delete_record(crd->zone, labels, labels_top - crd->zone->origin_vector.size - 1, TYPE_ANY)))
                     {
                         log_err("nsec-chain: - %{dnsname} could not be removed from the zone: %r", nsec_chain_replay_record_fqdn(record), ret);

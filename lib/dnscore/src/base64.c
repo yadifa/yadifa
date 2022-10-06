@@ -44,6 +44,7 @@
 #include "dnscore/dnscore-config.h"
 
 #include <stdio.h>
+#include <dnscore/output_stream.h>
 
 #include "dnscore/base64.h"
 
@@ -145,6 +146,55 @@ base64_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
     }
 
     return (u32)(ptr - buffer_out);
+}
+
+u32
+base64_print(const u8* buffer_in, u32 size_in, output_stream *os)
+{
+    uint32_t count = BASE64_ENCODED_SIZE(size_in);
+    char buffer[4];
+
+    while(size_in >= 3)
+    {
+        u8 b0 = *buffer_in++;
+        u8 b1 = *buffer_in++;
+        u8 b2 = *buffer_in++;
+
+        buffer[0] = __BASE64__[ b0 >> 2 ];
+        buffer[1] = __BASE64__[(u8)((b0 << 4) | (b1 >> 4))];
+        buffer[2] = __BASE64__[(u8)((b1 << 2) | (b2 >> 6))];
+        buffer[3] = __BASE64__[ b2 ];
+        output_stream_write(os, buffer, sizeof(buffer));
+
+        size_in -= 3;
+    }
+
+    switch(size_in)
+    {
+        case 2:
+        {
+            u8 b0 = *buffer_in++;
+            u8 b1 = *buffer_in;
+            buffer[0] = __BASE64__[ b0 >> 2 ];
+            buffer[1] = __BASE64__[(u8)((b0 << 4) | (b1 >> 4))];
+            buffer[2] = __BASE64__[(u8)(b1 << 2) ];
+            buffer[3] = BASE64_PADDING;
+            output_stream_write(os, buffer, sizeof(buffer));
+            break;
+        }
+        case 1:
+        {
+            u8 b0 = *buffer_in;
+            buffer[0] = __BASE64__[ b0 >> 2 ];
+            buffer[1] = __BASE64__[ (u8)(b0 << 4) ];
+            buffer[2] = BASE64_PADDING;
+            buffer[3] = BASE64_PADDING;
+            output_stream_write(os, buffer, sizeof(buffer));
+            break;
+        }
+    }
+
+    return count;
 }
 
 #define __DEBASE64__STOP__ 0x80

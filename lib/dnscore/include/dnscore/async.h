@@ -171,7 +171,7 @@ void async_wait(async_wait_s *aw);
  * @return true if and only if the wait counter reached 0
  */
 
-bool async_wait_timeout(async_wait_s *aw, u64 usec);
+bool async_wait_timeout(async_wait_s *aw, s64 usec);
 
 /**
  * Waits until the count has be reduced to 0 (or below if something bad is going on)
@@ -182,7 +182,7 @@ bool async_wait_timeout(async_wait_s *aw, u64 usec);
  * @return true if and only if the wait counter reached 0
  */
 
-bool async_wait_timeout_absolute(async_wait_s *aw, u64 epoch_usec);
+bool async_wait_timeout_absolute(async_wait_s *aw, s64 epoch_usec);
 
 /**
  * Returns the current value of the counter

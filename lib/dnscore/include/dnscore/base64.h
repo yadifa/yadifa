@@ -45,6 +45,7 @@
 #define	_BASE64_H
 
 #include <dnscore/sys_types.h>
+#include <dnscore/output_stream.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -66,6 +67,8 @@ bool base64_character_set_contains(char c);
  */
 
 u32 base64_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
+
+u32 base64_print(const u8* buffer_in, u32 size_in, output_stream *os);
 
 /**
  * Decodes base64 into bytes

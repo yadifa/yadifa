@@ -44,8 +44,9 @@
  *
  * USE INCLUDES */
 #include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore-config-features.h"
 
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,11 +67,11 @@
 // EVP_PKEY_new_raw_public_key
 #include "dnscore/logger.h"
 #include "dnscore/dnskey.h"
-#if HAS_EDDSA_SUPPORT
+#if DNSCORE_HAS_EDDSA_SUPPORT
 #include "dnscore/dnskey_eddsa.h"
 #endif
-#include "dnscore/dnssec_errors.h"
 
+#include "dnscore/dnssec_errors.h"
 #include "dnscore/zalloc.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
@@ -82,8 +83,21 @@
 #error "SSL_API not defined"
 #endif
 
+#ifdef NID_ED25519
 #define DNSKEY_ALGORITHM_ED25519_NID NID_ED25519
+#elif defined(NID_Ed25519)
+#define DNSKEY_ALGORITHM_ED25519_NID NID_Ed25519
+#else
+#error "ED25519 not defined"
+#endif
+
+#ifdef NID_ED448
 #define DNSKEY_ALGORITHM_ED448_NID NID_ED448
+#elif defined(NID_Ed448)
+#define DNSKEY_ALGORITHM_ED448_NID NID_Ed448
+#else
+#error "ED448 not defined"
+#endif
 
 /*
  * Intermediary key
@@ -395,7 +409,8 @@ dnskey_eddsa_print_fields(dnssec_key *key, output_stream *os)
     struct dnskey_eddsa yeddsa;
     dnskey_eddsa_from_eddsa(&yeddsa, key->key.ed);
 
-    PEM_write_PrivateKey(stdout, key->key.ed, NULL, NULL, 0, NULL, NULL);
+    // @note 20220802 edf -- prints the private key on stdout for some test, disabled, obviously
+    // PEM_write_PrivateKey(stdout, key->key.ed, NULL, NULL, 0, NULL, NULL);
 
     size_t buffer_size;
     u8 buffer[256];

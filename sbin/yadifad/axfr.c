@@ -141,7 +141,7 @@ axfr_process(message_data *mesg, int sockfd)
                 zdb_zone_release(zone);
 
                 return SUCCESS;
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
             }
             else
             {
@@ -236,8 +236,12 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
      */
 
     ya_result return_value;
-
     char data_path[PATH_MAX];
+
+    if(host_address_is_any(servers))
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
     
     log_info("axfr: %{dnsname}: querying servers", origin);
     
@@ -261,7 +265,6 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
     if(servers->tsig != NULL)
     {
         log_info("axfr: %{dnsname}: transfer will be signed with key '%{dnsname}'", origin, servers->tsig->name);
-
         message_sign_query(axfr_query, servers->tsig);
     }
 #endif
@@ -274,8 +277,14 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
     output_stream os;
 
     // connect
-    
-    if(ISOK(return_value = tcp_input_output_stream_connect_host_address(servers, &is, &os, g_config->xfr_connect_timeout)))
+
+    host_address *transfer_source = zone_transfer_source_copy(origin);
+    host_address *current_transfer_source;
+    current_transfer_source = transfer_source;
+
+    return_value = zone_transfer_source_tcp_connect(servers, &current_transfer_source, &is, &os, g_config->xfr_connect_timeout);
+
+    if(ISOK(return_value))
     {
         // send
 
@@ -287,13 +296,13 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
 
             tcp_set_sendtimeout(fd, 30, 0);
             tcp_set_recvtimeout(fd, 30, 0);
-            
+
             log_info("axfr: %{dnsname}: truncating journal", origin);
 
             /* delete ix files */
 
             journal_truncate(origin);
-            
+
             zdb_zone *zone = zdb_acquire_zone_write_lock_from_fqdn(g_config->database, origin, ZDB_ZONE_MUTEX_XFR);
             if(zone != NULL)
             {
@@ -313,7 +322,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
                         log_err("axfr: %{dnsname}: zone already marked as being dumped", origin);
                     }
                 }
-                
+
                 zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_XFR);
             }
 
@@ -344,7 +353,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
                 {
                     log_warn("axfr: %{dnsname}: AXFR stream copy in '%s' failed: %r", origin, data_path, return_value);
                 }
-                
+
                 input_stream_close(&xfris);
             }
             else
@@ -354,7 +363,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
 
             output_stream_close(&os);
             output_stream_close(&is);
-            
+
             zone = zdb_acquire_zone_write_lock_from_fqdn(g_config->database, origin, ZDB_ZONE_MUTEX_XFR);
             if(zone != NULL)
             {
@@ -362,7 +371,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
                 {
                     zdb_zone_clear_dumping_axfr(zone);
                 }
-                
+
                 zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_XFR);
             }
         }
@@ -373,7 +382,19 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
     }
     else
     {
-        log_warn("axfr: %{dnsname}: AXFR stream connection to %{hostaddr} failed: %r", origin, servers, return_value);
+        if((transfer_source != NULL) && (current_transfer_source == NULL))
+        {
+            log_warn("axfr: %{dnsname}: %{hostaddr}: could not find a valid bind point to query a transfer from", origin, servers);
+        }
+        else
+        {
+            log_info("axfr: %{dnsname}: %{hostaddr}: stream connection failed: %r", origin, servers, return_value);
+        }
+    }
+
+    if(transfer_source != NULL)
+    {
+        host_address_delete_list(transfer_source);
     }
 
     return return_value;

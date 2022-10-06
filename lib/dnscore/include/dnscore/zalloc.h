@@ -149,7 +149,18 @@ static inline void free_erases(void *ptr, size_t size)
  */
    
 #define ZALLOC_PG_SIZE_COUNT         256 // 2K
-#define ZALLOC_PG_PAGEABLE_MAXSIZE   (ZALLOC_PG_SIZE_COUNT * 8) /* x 8 because we are going by 8 increments */
+
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+#define ZALLOC_PG_SIZE_COUNT_EFFECTIVE (ZALLOC_PG_SIZE_COUNT - 2)
+#else
+#define ZALLOC_PG_SIZE_COUNT_EFFECTIVE (ZALLOC_PG_SIZE_COUNT - 1)
+#endif
+#else
+#define ZALLOC_PG_SIZE_COUNT_EFFECTIVE ZALLOC_PG_SIZE_COUNT
+#endif
+
+#define ZALLOC_PG_PAGEABLE_MAXSIZE   (ZALLOC_PG_SIZE_COUNT_EFFECTIVE * 8) /* x 8 because we are going by 8 increments */
 #define ZALLOC_SIZE_TO_PAGE(size_)  ((s32)(((size_)-1)>>3))
 #define ZALLOC_CANHANDLE(size_)      (((s32)(size_))<=ZALLOC_PG_PAGEABLE_MAXSIZE)
 
@@ -174,7 +185,7 @@ void zalloc_finalize();
  */
 
 void* zalloc_line(u32 page_index
-#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
     ,u64 tag
 #endif
 );
@@ -208,7 +219,7 @@ u64 zheap_line_avail(u32 page);
 static inline void zalloc_set_owner_thread(thread_t owner) {(void)owner;}
 
 static inline void* zalloc(s32 size
-#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
     ,u64 tag
 #endif
 )
@@ -216,10 +227,10 @@ static inline void* zalloc(s32 size
     u32 page = ZALLOC_SIZE_TO_PAGE(size);
     void* ptr;
 
-    if(page < ZALLOC_PG_SIZE_COUNT)
+    if(page < ZALLOC_PG_SIZE_COUNT_EFFECTIVE)
     {
         ptr = zalloc_line(ZALLOC_SIZE_TO_PAGE(size)
-#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
             ,tag
 #endif
             );
@@ -236,7 +247,13 @@ static inline void zfree(void* ptr, s32 size)
 {
     u32 page = ZALLOC_SIZE_TO_PAGE(size);
 
-    if(page < ZALLOC_PG_SIZE_COUNT)
+#if DEBUG
+#if DNSCORE_DEBUG_MALLOC_TRASHMEMORY
+    memset(ptr, 0xfe, size);
+#endif
+#endif
+
+    if(page < ZALLOC_PG_SIZE_COUNT_EFFECTIVE)
     {
         zfree_line(ptr,ZALLOC_SIZE_TO_PAGE(size));
     }
@@ -266,7 +283,7 @@ s64 zallocatedtotal();
  */
 
 void* zalloc_unaligned(u32 size
-#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
     ,u64 tag
 #endif
 );
@@ -293,31 +310,34 @@ static inline size_t zalloc_memory_block_size(size_t size)
 
 #define ZALLOC_SIZE_TO_LINE(size__) ((((size__) + 7) >> 3)-1)
 #define ZALLOC_TYPE_TO_LINE(object__) ZALLOC_SIZE_TO_LINE(sizeof(object__))
-#define ZALLOC_TYPE_HAS_LINE(object__) (ZALLOC_TYPE_TO_LINE(object__) < ZALLOC_PG_SIZE_COUNT)
-#define ZALLOC_SIZE_HAS_LINE(size__) (ZALLOC_SIZE_TO_LINE((size__)) < ZALLOC_PG_SIZE_COUNT)
+#define ZALLOC_TYPE_HAS_LINE(object__) (ZALLOC_TYPE_TO_LINE(object__) < ZALLOC_PG_SIZE_COUNT_EFFECTIVE)
+#define ZALLOC_SIZE_HAS_LINE(size__) (ZALLOC_SIZE_TO_LINE((size__)) < ZALLOC_PG_SIZE_COUNT_EFFECTIVE)
 
-#if HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
 
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 void* debug_malloc(size_t size_,const char* file, int line, u64 tag);
 #define ZALLOC_OBJECT(object__,tag__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__), (tag__)):debug_malloc(sizeof(object__), __FILE__, __LINE__, (tag__))
 #define ZALLOC_BYTES(size__,tag__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__), (tag__)):debug_malloc((size__), __FILE__, __LINE__, (tag__)))
-#else
+#define ZFREE_BYTES(ptr__,size__) {if(ZALLOC_SIZE_HAS_LINE(size__)) zfree_line((ptr__),ZALLOC_SIZE_TO_LINE(size__)); else debug_free((ptr__), __FILE__, __LINE__);}
+#else // DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 #define ZALLOC_OBJECT(object__,tag__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__), (tag__)):malloc(sizeof(object__))
 #define ZALLOC_BYTES(size__,tag__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__), (tag__)):malloc((size__)))
-#endif
+#define ZFREE_BYTES(ptr__,size__) {if(ZALLOC_SIZE_HAS_LINE(size__)) zfree_line((ptr__),ZALLOC_SIZE_TO_LINE(size__)); else free((ptr__));}
+#endif // DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 
 #define ZALLOC_ARRAY_OR_DIE(cast__,label__,size__,tag__) if((label__ = (cast__)zalloc((size__),(tag__))) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
 // preferred way of allocating one instance of a type (struct, ...)
 #define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC_OBJECT(object__,(tag__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
 #define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC_BYTES(sizeof(object__)*(count__), (tag__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
-#else
-#define ZALLOC_OBJECT(object__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__)):malloc(sizeof(object__))
-#define ZALLOC_BYTES(size__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__)):malloc((size__)))
-#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
+#else // HAS_ZALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#define ZALLOC_OBJECT(object__,tag__) ZALLOC_TYPE_HAS_LINE(object__)?zalloc_line(ZALLOC_TYPE_TO_LINE(object__)):malloc(sizeof(object__))
+#define ZALLOC_BYTES(size__,tag__) (ZALLOC_SIZE_HAS_LINE(size__)?zalloc_line(ZALLOC_SIZE_TO_LINE(size__)):malloc((size__)))
+#define ZFREE_BYTES(ptr__,size__) {if(ZALLOC_SIZE_HAS_LINE(size__)) zfree_line((ptr__),ZALLOC_SIZE_TO_LINE(size__)); else free((ptr__));}
+#define ZALLOC_ARRAY_OR_DIE(cast,label,size_,tag__) if((label = (cast)zalloc(size_)) == NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label) != NULL)
 // preferred way of allocating one instance of a type (struct, ...)
-#define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC_OBJECT(object__))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
-#define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC_BYTES(sizeof(object__)*(count__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#define ZALLOC_OBJECT_OR_DIE(label__,object__,tag__) if((label__=(object__*)ZALLOC_OBJECT(object__,tag__))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
+#define ZALLOC_OBJECT_ARRAY_OR_DIE(label__,object__,count__,tag__) if((label__=(object__*)ZALLOC_BYTES(sizeof(object__)*(count__),(tag__)))==NULL) {DIE(ZALLOC_ERROR_OUTOFMEMORY); } assert((label__) != NULL)
 #endif
 
 #define ZFREE(ptr,object__) ZALLOC_TYPE_HAS_LINE(object__)?zfree_line(ptr,ZALLOC_TYPE_TO_LINE(object__)):free(ptr)

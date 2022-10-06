@@ -253,9 +253,10 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 @HAS_LTO_SUPPORT_TRUE@@USES_GCC_TRUE@	-Wl,--cref
 @USES_GCC_TRUE@am__append_36 = -DUSES_GCC
 @USES_GCC_TRUE@am__append_37 = -DMODE_DEBUG_GCC -fstack-check -fstack-protector-strong
-@IS_LINUX_FAMILY_TRUE@@USES_GCC_TRUE@am__append_38 = -Wl,-z,stack-size=8388608
-@USES_SUNC_TRUE@am__append_39 = -DUSES_SUNC
-@USES_SUNC_TRUE@am__append_40 = -DMODE_DEBUG_SUNC
+@HAS_BFD_DEBUG_SUPPORT_TRUE@@USES_GCC_TRUE@am__append_38 = -rdynamic
+@IS_LINUX_FAMILY_TRUE@@USES_GCC_TRUE@am__append_39 = -Wl,-z,stack-size=8388608
+@USES_SUNC_TRUE@am__append_40 = -DUSES_SUNC
+@USES_SUNC_TRUE@am__append_41 = -DMODE_DEBUG_SUNC
 
 # Note: add a _d suffix for debug builds ?
 
@@ -265,16 +266,16 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 ###############################################################################
 
 # if an unknown compiler is used, it should have its own section
-@USES_UNKNOWN_TRUE@am__append_41 = -DUSES_UNKNOWN_COMPILER
-@USES_UNKNOWN_TRUE@am__append_42 = -DMODE_DEBUG_UNKNOWN
+@USES_UNKNOWN_TRUE@am__append_42 = -DUSES_UNKNOWN_COMPILER
+@USES_UNKNOWN_TRUE@am__append_43 = -DMODE_DEBUG_UNKNOWN
 
 #
 # Some BSD-based OSes need this
 #
-@IS_BSD_FAMILY_TRUE@am__append_43 = -I./include
-@IS_SOLARIS_FAMILY_TRUE@am__append_44 = -D_POSIX_PTHREAD_SEMANTICS
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@@HAS_YADIFA_TRUE@am__append_45 = -DHAS_YADIFA=1
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@am__append_46 = -I$(top_srcdir)/lib/dnscore/include \
+@IS_BSD_FAMILY_TRUE@am__append_44 = -I./include
+@IS_SOLARIS_FAMILY_TRUE@am__append_45 = -D_POSIX_PTHREAD_SEMANTICS
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@@HAS_YADIFA_TRUE@am__append_46 = -DHAS_YADIFA=1
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@am__append_47 = -I$(top_srcdir)/lib/dnscore/include \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	-I$(top_builddir)/lib/dnscore/include \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	-I$(top_srcdir)/lib/dnsdb/include \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	-I$(top_builddir)/lib/dnsdb/include \
@@ -283,12 +284,12 @@ DIST_COMMON = $(srcdir)/../../mk/common-settings.mk \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	-I$(top_srcdir)/lib/dnstcl/include \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	-I$(top_builddir)/lib/dnstcl/include
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@bin_PROGRAMS = yadifa$(EXEEXT)
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@@HAS_ZONESIGN_TRUE@am__append_47 = module/zonesign.c
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@@HAS_ZONESIGN_TRUE@am__append_48 = module/zonesign.h
-@HAS_CTRL_TRUE@@HAS_KEYGEN_TRUE@@HAS_TOOLS_TRUE@am__append_49 = module/keygen.c
-@HAS_CTRL_TRUE@@HAS_KEYGEN_TRUE@@HAS_TOOLS_TRUE@am__append_50 = module/keygen.h
-@HAS_CTRL_TRUE@@HAS_DNSSEC_TOOLS_TRUE@@HAS_TOOLS_TRUE@am__append_51 = module/dnssec-tool.c
-@HAS_CTRL_TRUE@@HAS_DNSSEC_TOOLS_TRUE@@HAS_TOOLS_TRUE@am__append_52 = module/dnssec-tool.h
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@@HAS_ZONESIGN_TRUE@am__append_48 = module/zonesign.c
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@@HAS_ZONESIGN_TRUE@am__append_49 = module/zonesign.h
+@HAS_CTRL_TRUE@@HAS_KEYGEN_TRUE@@HAS_TOOLS_TRUE@am__append_50 = module/keygen.c
+@HAS_CTRL_TRUE@@HAS_KEYGEN_TRUE@@HAS_TOOLS_TRUE@am__append_51 = module/keygen.h
+@HAS_CTRL_TRUE@@HAS_DNSSEC_TOOLS_TRUE@@HAS_TOOLS_TRUE@am__append_52 = module/dnssec-tool.c
+@HAS_CTRL_TRUE@@HAS_DNSSEC_TOOLS_TRUE@@HAS_TOOLS_TRUE@am__append_53 = module/dnssec-tool.h
 subdir = bin/yadifa
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
@@ -618,16 +619,17 @@ AM_CFLAGS = -D_THREAD_SAFE -D_REENTRANT -D_FILE_OFFSET_BITS=64 \
 	$(am__append_14) $(am__append_15) $(am__append_17) \
 	$(am__append_23) $(am__append_25) $(am__append_26) \
 	$(am__append_28) $(am__append_30) $(am__append_33) \
-	$(am__append_34) $(am__append_36) $(am__append_39) \
-	$(am__append_41) $(am__append_43) $(am__append_44) \
-	$(LOCALFLAGS) $(am__append_45) $(am__append_46)
+	$(am__append_34) $(am__append_36) $(am__append_38) \
+	$(am__append_40) $(am__append_42) $(am__append_44) \
+	$(am__append_45) $(LOCALFLAGS) $(am__append_46) \
+	$(am__append_47)
 AM_LDFLAGS = $(am__append_16) $(am__append_18) $(am__append_24) \
 	$(am__append_29) $(am__append_32) $(am__append_35) \
-	$(am__append_38)
+	$(am__append_39)
 DEBUGFLAGS = $(am__append_1) $(am__append_2) $(am__append_19) \
 	$(am__append_20) $(am__append_21) $(am__append_22) \
 	$(am__append_27) $(am__append_31) $(am__append_37) \
-	$(am__append_40) $(am__append_42)
+	$(am__append_41) $(am__append_43)
 LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATEDIR='"$(localstatedir)"' -DDATAROOTDIR='"$(datarootdir)"' -DDATADIR='"$(datadir)"' -DLOCALEDIR='"$(localedir)"' -DLOGDIR='"$(logdir)"' -DTCLDIR='"$(tcldir)"'
 @HAS_LTO_SUPPORT_FALSE@@USES_CLANG_TRUE@AM_AR = ar
 @HAS_LTO_SUPPORT_FALSE@@USES_GCC_TRUE@AM_AR = ar
@@ -660,9 +662,9 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	message-viewer-xml.c \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	query-result.c common.c \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	module.c ya-conf.c \
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	module/ctrl.c $(am__append_47) \
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_49) \
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_51)
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	module/ctrl.c $(am__append_48) \
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_50) \
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_52)
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@noinst_HEADERS = main.h client_error.h \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	common-config.h \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	message-viewer-dig.h \
@@ -672,9 +674,9 @@ LOCALFLAGS = -DPREFIX='"$(prefix)"' -DSYSCONFDIR='"$(sysconfdir)"' -DLOCALSTATED
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	message-viewer-xml.h \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	query-result.h common.h \
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	module.h ya-conf.h \
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	module/ctrl.h $(am__append_48) \
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_50) \
-@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_52)
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	module/ctrl.h $(am__append_49) \
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_51) \
+@HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@	$(am__append_53)
 @HAS_CTRL_TRUE@@HAS_TOOLS_TRUE@BUILT_SOURCES = client-config.h buildinfo.h
 @HAS_TOOLS_TRUE@CLEANFILES = buildinfo.h client-config.h
 all: $(BUILT_SOURCES)

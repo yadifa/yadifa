@@ -46,8 +46,9 @@
 #include <stdlib.h>
 #include "dnscore/mt_output_stream.h"
 #include "dnscore/mutex.h"
-#include "dnscore/ptr_set.h"
 #include "dnscore/bytearray_output_stream.h"
+#include "dnscore/ptr_vector.h"
+#include "dnscore/ptr_set_debug.h"
 
 #define MT_OUTPUT_STREAM_TAG 0x534F544D /* MTOS */
 #define MTOSSTRM_TAG 0x4d525453534f544d
@@ -55,12 +56,25 @@
 #define MT_OUTPUT_STREAM_BUFFER_INITIAL_SIZE 128U
 
 typedef struct mt_output_stream_data mt_output_stream_data;
+/*
+struct delayed_write_entry_s
+{
+    pthread_t thread;
+    size_t size;
+    u8 buffer[1];
+};
 
+typedef struct delayed_write_entry_s delayed_write_entry_t;
+*/
 struct mt_output_stream_data
 {
     output_stream filtered;
     mutex_t mutex;
-    ptr_set writers;
+    ptr_set_debug writers;
+    /*
+    mutex_t delayed_mutex;
+    ptr_vector delayed_writes;
+    */
 };
 
 static ya_result
@@ -71,7 +85,7 @@ mt_write(output_stream *stream, const u8 *buffer, u32 len)
     mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
 
     mutex_lock(&data->mutex);
-    ptr_node *writer_node = ptr_set_insert(&data->writers, (void*)pthread_self());
+    ptr_node_debug *writer_node = ptr_set_debug_insert(&data->writers, (void*)pthread_self());
     output_stream* osp;
     if(writer_node->value != NULL)
     {
@@ -172,7 +186,7 @@ mt_flush(output_stream *stream)
 
     mutex_lock(&data->mutex);
 
-    FOREACH_PTR_SET(output_stream*,osp, &data->writers)
+    FOREACH_PTR_SET_DEBUG(output_stream*,osp, &data->writers)
     {
         if(bytearray_output_stream_size(osp) > 0)
         {
@@ -195,7 +209,7 @@ mt_close(output_stream *stream)
 
     mutex_lock(&data->mutex);
 
-    FOREACH_PTR_SET(output_stream*,osp, &data->writers)
+    FOREACH_PTR_SET_DEBUG(output_stream*,osp, &data->writers)
     {
         if(bytearray_output_stream_size(osp) > 0)
         {
@@ -205,7 +219,7 @@ mt_close(output_stream *stream)
             free(osp);
         }
     }
-    ptr_set_destroy(&data->writers);
+    ptr_set_debug_destroy(&data->writers);
     output_stream_set_void(stream);
     output_stream_close(&data->filtered);
     mutex_unlock(&data->mutex);
@@ -235,7 +249,7 @@ mt_output_stream_init(output_stream *stream, output_stream *filtered)
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
-    data->writers.compare = ptr_set_ptr_node_compare;
+    data->writers.compare = ptr_set_debug_ptr_node_compare;
     data->writers.root = NULL;
 
     filtered->data = NULL;            /* Clean the filtered BEFORE setting up the stream */

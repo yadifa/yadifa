@@ -73,7 +73,7 @@
 #include "signals.h"
 #include "server_context.h"
 #include "server.h"
-#if HAS_RRSIG_MANAGEMENT_SUPPORT && HAS_DNSSEC_SUPPORT
+#if DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && DNSCORE_HAS_DNSSEC_SUPPORT
 #include "database-service-zone-resignature.h"
 #endif
 
@@ -134,7 +134,7 @@ signal_task_reconfigure_reopen_log()
             log_try_debug1("network configuration has not changed");
         }
         
-#if HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT && DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
         database_service_zone_dnskey_set_alarms_on_all_zones();
 #endif
     }

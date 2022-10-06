@@ -65,7 +65,7 @@ extern logger_handle* g_database_logger;
  */
 
 int
-zdb_zone_maintenance_nsec3(zdb_zone_maintenance_ctx* mctx, const zone_diff_fqdn *diff_fqdn)
+zdb_zone_maintenance_nsec3(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_fqdn)
 {
     int ret = dnssec_chain_add_from_diff_fqdn(&mctx->nsec3_chains_updater, diff_fqdn, 0);
 

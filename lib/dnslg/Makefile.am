@@ -37,7 +37,7 @@ AM_CFLAGS += -DDNSLG_BUILD=1
 
 AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/include
 AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
-#AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
+AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
 #AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
 
 dist_noinst_DATA = VERSION
@@ -58,16 +58,13 @@ FEATURESSRC=$(top_builddir)/$(FEATURESDIR)/dnslg-config.h
 # alphabetically please
 
 pkgincludedir = $(includedir)/dnslg
-
-# NOTE: the first one on this list must always be the one used to trigger $(FEATURES)
 pkginclude_HEADERS = \
-		     include/dnslg/config-load.h \
-		     include/dnslg/config-resolver.h \
-		     include/dnslg/dns.h \
-		     include/dnslg/resolv-conf.h \
-		     include/dnslg/resolv.h
+	include/dnslg/config-load.h \
+	include/dnslg/config-resolver.h \
+	include/dnslg/dns.h \
+	include/dnslg/resolv-conf.h \
+	include/dnslg/resolv.h
 
-nodist_include_HEADERS = $(FEATURES)
 
 libdnslg_la_SOURCES = \
 		      src/config-load.c \
@@ -76,6 +73,7 @@ libdnslg_la_SOURCES = \
 		      src/resolv-conf.c \
 		      src/resolv.c
 
+BUILT_SOURCES = $(FEATURES)
 
 include ../../mk/common-labels.mk
 
@@ -116,3 +114,8 @@ VP=DNSLG
 	fi
 	echo "// $(FEATURES)" >> $(FEATURES)
 	echo >> $(FEATURES)
+
+install-data-local: $(FEATURES)
+	mkdir -p $(DESTDIR)$(prefix)/include/dnslg
+	/usr/bin/install -c -m 644 $(FEATURES) $(DESTDIR)$(prefix)/$(FEATURES)
+

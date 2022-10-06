@@ -84,10 +84,11 @@ config_section_key_suite_set_wild(struct config_section_descriptor_s *csd, const
 
 
 static ya_result
-config_section_key_suite_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+config_section_key_suite_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
+    (void)context;
 
     if(key != NULL)
     {

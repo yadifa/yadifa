@@ -872,7 +872,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
     }
     else
     {
-        /* There was a AVL_CHILD, now there is two */
+        /* There was an AVL_CHILD, now there is two */
         /* balance */
         AVL_BALANCE(node) = MIDDLE;
 
@@ -907,7 +907,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 
         if(AVL_BALANCE(node) == MIDDLE) /* this branch will exit */
         {
-            /* AVL_BALANCE(node)==MIDDLE and we are  balanced
+            /* AVL_BALANCE(node)==MIDDLE and we are balanced
              *  balanced -> done
              */
 
@@ -1372,12 +1372,12 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
          * balance became 0 : It was -1 or +1 : the tree's height decreased.
          * It is  balanced but a propagation is required.
          *
-         * balance became -1 or +1 : It was 0 : the tree's height didn't changed.
-         * (One of its branch is shorter but the other one's size didn't changed.)
+         * balance became -1 or +1 : It was 0 : the tree's height didn't change.
+         * (One of its branch is shorter but the other one's size didn't change.)
          * It is a valid AVL and the propagation can stop.
          *
          * balance became -2 or +2 : it was -1 or +1 : the tree is un balanced.
-         * It needs to be re balanced and then a propagation is required.
+         * It needs to be rebalanced and then a propagation is required.
          */
 
         if(AVL_BALANCE(node) == MIDDLE)

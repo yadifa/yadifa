@@ -208,6 +208,10 @@ cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *
    return return_code;
 }
 
+/**
+ * Returns 1 if the argument has been eaten, 0 if not.
+ */
+
 ya_result
 cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char *arg)
 {
@@ -246,7 +250,12 @@ cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char 
                             }
                         }
                     }
-
+                    /*
+                    if(ISOK(return_code))
+                    {
+                        return_code = desc->flags & CMDLINE_FLAG_ARGUMENTS;
+                    }
+                    */
                     return return_code;
                 }
                 else
@@ -271,8 +280,7 @@ cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char 
         name++;
     }
 
-   return return_code;
-
+    return return_code;
 }
 
 ya_result
@@ -315,11 +323,12 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
             if(i < argc - 1)
             {
                 val = argv[i + 1];
-                
+                /*
                 if(val[0] == '-')
                 {
                     val = NULL;
                 }
+                */
             }
             
             // check opt(long/short) or add
@@ -336,7 +345,7 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
                     }
                     return return_code;
                 }
-                
+
                 i += return_code;
                 
                 continue;

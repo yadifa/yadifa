@@ -66,7 +66,7 @@ struct zone_data_set
     u32 set_count;
 };
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 #endif
 #include "zone_desc.h"
@@ -295,7 +295,7 @@ ya_result zone_setwithzone(zone_desc_s *zone_desc, zone_desc_s *src);
  * @return TRUE iff zone has ZONE_FLAG_MAINTAIN_DNSSEC.
  */
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 static inline bool
 zone_maintains_dnssec(zone_desc_s *zone_desc)
 {
@@ -303,7 +303,7 @@ zone_maintains_dnssec(zone_desc_s *zone_desc)
 }
 #endif
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 static inline void
 zone_maintains_dnssec_set(zone_desc_s *zone_desc, bool enable)
 {
@@ -343,7 +343,7 @@ zone_is_drop_before_load(zone_desc_s *zone_desc)
     return (zone_desc->flags & ZONE_FLAG_DROP_BEFORE_LOAD) != 0;
 }
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
 static inline bool
 zone_rrsig_nsupdate_allowed(zone_desc_s *zone_desc)
 {
@@ -402,6 +402,9 @@ void zone_set_status(zone_desc_s *zone_desc, u32 flags);
 u32 zone_get_set_status(zone_desc_s *zone_desc, u32 flags);
 void zone_clear_status(zone_desc_s *zone_desc, u32 flags);
 u32 zone_get_status(const zone_desc_s *zone_desc);
+
+host_address* zone_transfer_source_copy(const u8 *domain);
+ya_result zone_transfer_source_tcp_connect(const host_address *server, host_address **current_transfer_sourcep, input_stream *is, output_stream *os, int to_sec);
 
 void zone_dnssec_status_update(zdb_zone *zone);
 

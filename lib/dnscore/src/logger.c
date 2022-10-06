@@ -121,14 +121,14 @@ log_memdump(logger_handle* hndl, u32 level, const void* data_pointer_, ssize_t s
     log_memdump_ex(hndl, level, data_pointer_, size_, line_size, OSPRINT_DUMP_HEXTEXT);
 }
 
-#ifndef WIN32
+#if __unix__
 void log_msghdr(logger_handle* hndl, u32 level, struct msghdr *hdr)
 {
     logger_handle_msg(hndl, level, "udp message header:");
 
     if(hdr->msg_name != NULL )
     {
-        logger_handle_msg(hndl, level, "msg_name: %{sockaddr}", hdr->msg_name);
+        logger_handle_msg(hndl, level, "msg_name: %{sockaddr}", (struct sockaddr*)hdr->msg_name);
         log_memdump_ex(hndl, level, hdr->msg_name, hdr->msg_namelen, 32, OSPRINT_DUMP_BUFFER);
         
     }
@@ -139,7 +139,7 @@ void log_msghdr(logger_handle* hndl, u32 level, struct msghdr *hdr)
 
     if(hdr->msg_iov != NULL)
     {
-        for(size_t i = 0; i < hdr->msg_iovlen; i++)
+        for(size_t i = 0; i < (size_t)hdr->msg_iovlen; i++)
         {
             struct iovec *msg_iov = &hdr->msg_iov[i];
             if(msg_iov->iov_base != NULL)

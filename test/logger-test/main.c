@@ -353,7 +353,7 @@ main(int argc, char *argv[])
 
             async_wait(aw);
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
             logger_init_ex(16384);
             logger_start_client();
 #endif
@@ -421,7 +421,7 @@ main(int argc, char *argv[])
             flushout();
         }
 #endif
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         logger_start_server();
 #endif
 
@@ -494,7 +494,7 @@ main(int argc, char *argv[])
         
 #undef MODULE_MSG_HANDLE
         
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         logger_stop_server();
 #endif
         logger_stop();

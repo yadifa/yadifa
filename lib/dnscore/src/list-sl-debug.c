@@ -126,7 +126,7 @@ list_sl_debug_remove(list_sl_debug_s *list, void *data)
         node = node->next;
     }
     
-    return NULL;
+    return FALSE;
 }
 
 /**

@@ -325,13 +325,14 @@ is_fd_input_stream(input_stream* stream_)
 void
 file_input_steam_advise_sequential(input_stream* stream_)
 {
-    file_input_stream* stream = (file_input_stream*)stream_;
-    
 #if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu_hurd__)
+    file_input_stream* stream = (file_input_stream*)stream_;
     if(stream->data.fd >= 0)
     {
         posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);
     }
+#else
+    (void)stream_;
 #endif
 }
 

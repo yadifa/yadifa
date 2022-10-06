@@ -317,8 +317,6 @@ nsec3_zone_destroy(zdb_zone *zone, nsec3_zone *n3)
     }
 }
 
-
-
 /*
  * Adds the nsec3_zone (NSEC3PARAM "alter-ego") to the zone.
  *

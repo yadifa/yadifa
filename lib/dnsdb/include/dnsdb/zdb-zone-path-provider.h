@@ -92,6 +92,7 @@ struct zdb_zone_path_provider_buffer
 
 typedef struct zdb_zone_path_provider_buffer zdb_zone_path_provider_buffer;
 
+#if BYTE_ORDER == LITTLE_ENDIAN
 union zdb_zone_info_provider_data
 {
     bool _bool;
@@ -103,6 +104,21 @@ union zdb_zone_info_provider_data
     void *_ptr;
     zdb_zone_path_provider_buffer _buffer;
 };
+#elif BYTE_ORDER == BIG_ENDIAN
+union zdb_zone_info_provider_data
+{
+    struct { u8  _bool_0, _bool_1, _bool_2, _bool_3, _bool_4, _bool_5, _bool_6,_bool; };
+    struct { u8  _u8_0, _u8_1, _u8_2, _u8_3, _u8_4, _u8_5, _u8_6,_u8; };
+    struct { u16 _u16_0, _u16_1, _u16_2, _u16; };
+    struct { u32 _u32_0, _u32; };
+    u64 _u64;
+    struct { ya_result _result_0, _result; }
+    void *_ptr;
+    zdb_zone_path_provider_buffer _buffer;
+};
+#else
+#error "BYTE_ORDER value not supported"
+#endif
 
 typedef union zdb_zone_info_provider_data zdb_zone_info_provider_data;
 

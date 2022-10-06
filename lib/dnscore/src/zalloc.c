@@ -75,7 +75,7 @@
 extern logger_handle* g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
 
 #include "dnscore/ptr_set_debug.h"
 
@@ -86,7 +86,7 @@ extern logger_handle* g_system_logger;
 #define DNSCORE_DEBUG_ZALLOC_TRASHMEMORY 0
 #endif
 
-#if HAS_ZALLOC_STATISTICS_SUPPORT
+#if DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT
 #define ZALLOC_STATISTICS            1
 #else
 #define ZALLOC_STATISTICS            0
@@ -204,7 +204,7 @@ static inline void zalloc_line_head_set(u32 page_index, void *ptr)
 }
 
 
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
 
 struct zalloc_range_s
 {
@@ -246,7 +246,7 @@ zalloc_init()
         return SUCCESS;
     }
 
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
     zalloc_memory_by_tag_ctx = debug_memory_by_tag_new_instance("zalloc");
 #endif
@@ -255,7 +255,7 @@ zalloc_init()
     zalloc_init_done = TRUE;
     
     // lcm is in this file
-#ifndef WIN32
+#if __unix__
     system_page_size = getpagesize();
 #else
     system_page_size = 4096;
@@ -295,7 +295,7 @@ zalloc_init()
 void
 zalloc_finalize()
 {
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
     debug_memory_by_tag_delete(zalloc_memory_by_tag_ctx);
     zalloc_memory_by_tag_ctx = NULL;
@@ -329,7 +329,7 @@ zalloc_lines(u32 page_index)
 
         map_pointer = (page)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
         zalloc_range_s *range = malloc(sizeof(zalloc_range_s));
         range->from = (intptr)map_pointer;
         range->to = range->from + size - 1;
@@ -357,12 +357,12 @@ zalloc_lines(u32 page_index)
             int err = errno;
             if(err != EINVAL)
             {
-                osformatln(termerr, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
+                printf("zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %x", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
             }
 #if DEBUG
             else
             {
-                osformatln(termout, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
+                printf("zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %x", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
             }
 #endif
         }
@@ -580,7 +580,7 @@ zfree_line(void* ptr, u32 page_index)
         
         mutex_lock(&line_mutex[page_index]);
         
-#if HAS_ZALLOC_DEBUG_SUPPORT
+#if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
         u64* hdr = (u64*)ptr;

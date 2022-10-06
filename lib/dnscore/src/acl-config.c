@@ -52,7 +52,7 @@
 #include <dnscore/format.h>
 #include <dnscore/config_settings.h>
 
-#if !HAS_ACL_SUPPORT
+#if !DNSCORE_HAS_ACL_SUPPORT
 #error "ACL support should not be compiled in"
 #endif
 
@@ -139,13 +139,27 @@ acl_config_section_set_wild(struct config_section_descriptor_s *csd, const char 
 }
 
 static ya_result
-acl_config_section_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key)
+acl_config_section_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
     (void)key;
 
-    return FEATURE_NOT_IMPLEMENTED_ERROR;
+    *context = NULL;
+
+    ptr_set_iterator iter;
+    acl_entry_iterator_init(&iter);
+    while(ptr_set_iterator_hasnext(&iter))
+    {
+        ptr_node *node = ptr_set_iterator_next_node(&iter);
+        //const char *name = (const char*)node->key;
+        acl_entry *entry = (acl_entry*)node->value;
+        osformat(os, "%10s", entry->name);
+        acl_match_items_print((const address_match_item **)entry->list.items, (const address_match_item **)entry->list.limit, os);
+        output_stream_write_u8(os, '\n');
+    }
+
+    return SUCCESS;
 }
 
 static const config_section_descriptor_vtbl_s acl_config_section_descriptor_vtbl =

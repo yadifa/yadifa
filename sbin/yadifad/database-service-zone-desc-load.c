@@ -60,7 +60,7 @@
 #include "zone-signature-policy.h"
 #include "zone.h"
 
-#if HAS_CTRL
+#if DNSCORE_HAS_CTRL
 #include "ctrl.h"
 #include "zone-signature-policy.h"
 #endif
@@ -95,7 +95,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
         {
             database_zone_load(zone_origin(zone_desc)); // before this I should set the file name
 
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
             if(zone_desc->type == ZT_MASTER)
             {
 
@@ -213,7 +213,20 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                         host_address_delete_list(current_zone_desc->notifies);
                         current_zone_desc->notifies = zone_desc->notifies;
                     }
+
                     zone_desc->notifies = NULL;
+
+                    if(host_address_list_equals(current_zone_desc->transfer_source, zone_desc->transfer_source))
+                    {
+                        host_address_delete_list(zone_desc->transfer_source);
+                    }
+                    else
+                    {
+                        host_address_delete_list(current_zone_desc->transfer_source);
+                        current_zone_desc->transfer_source = zone_desc->transfer_source;
+                    }
+
+                    zone_desc->transfer_source = NULL;
                     
 #if DNSCORE_HAS_DYNAMIC_PROVISIONING
                     
@@ -221,7 +234,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     
                     if(host_address_list_equals(current_zone_desc->slaves, zone_desc->slaves))
                     {
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
                         if((current_zone_desc->type == ZT_MASTER) || (zone_desc->type == ZT_MASTER))
                         {
                             notify_slaves_then_delete = zone_desc->slaves;
@@ -234,7 +247,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     }
                     else
                     {
-#if HAS_MASTER_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT
                         if(current_zone_desc->type == ZT_MASTER)
                         {
                             notify_slaves_then_delete = current_zone_desc->slaves;
@@ -262,7 +275,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     log_debug7("updating %p (%u) with %p (%u): type", current_zone_desc, current_zone_desc->lock_owner, zone_desc, zone_desc->lock_owner);
                     current_zone_desc->type = zone_desc->type;
                     
-#if HAS_ACL_SUPPORT
+#if DNSCORE_HAS_ACL_SUPPORT
                     // ac : apply the new one, update the zone access
                                         
                     log_debug7("updating %p (%u) with %p (%u): ac@%p with ac@%p",
@@ -296,8 +309,8 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     
                     log_debug7("updating %p (%u) with %p (%u): notify", current_zone_desc, current_zone_desc->lock_owner, zone_desc, zone_desc->lock_owner);
                     memcpy(&current_zone_desc->notify, &zone_desc->notify, sizeof(zone_notify_s));
-#if HAS_DNSSEC_SUPPORT                    
-#if HAS_RRSIG_MANAGEMENT_SUPPORT
+#if DNSCORE_HAS_DNSSEC_SUPPORT
+#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
                     // signature : reset, restart
                     
                     log_debug7("updating %p (%u) with %p (%u): signature", current_zone_desc, current_zone_desc->lock_owner, zone_desc, zone_desc->lock_owner);
@@ -316,13 +329,12 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                     log_debug7("updating %p (%u) with %p (%u): refresh", current_zone_desc, current_zone_desc->lock_owner, zone_desc, zone_desc->lock_owner);
 
                     memcpy(&current_zone_desc->refresh, &zone_desc->refresh, sizeof(zone_refresh_s));
-                                        
+
+#if HAS_DYNAMIC_PROVISIONING
                     // dynamic_provisioning : ?
-                    
                     log_debug7("updating %p (%u) with %p (%u): dynamic_provisioning", current_zone_desc, current_zone_desc->lock_owner, zone_desc, zone_desc->lock_owner);
-                    
                     memcpy(&current_zone_desc->dynamic_provisioning, &zone_desc->dynamic_provisioning, sizeof(dynamic_provisioning_s));
-                    
+#endif
                     // slaves : update the list
                     
                     zone_unlock(current_zone_desc, ZONE_LOCK_REPLACE_DESC);
@@ -354,7 +366,7 @@ database_load_zone_desc(zone_desc_s *zone_desc)
                 }
 #endif
                 
-#if HAS_MASTER_SUPPORT && HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
+#if ZDB_HAS_MASTER_SUPPORT && HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT
                 
                 if(current_zone_desc->dnssec_policy != zone_desc->dnssec_policy)
                 {

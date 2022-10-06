@@ -81,7 +81,7 @@
 #include "dnscore/ptr_set.h"
 #include "dnscore/thread_pool.h"
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 #include "dnscore/shared-circular-buffer.h"
 #include "dnscore/shared-heap.h"
 #include "dnscore/shared-heap-bytearray-output-stream.h"
@@ -199,7 +199,7 @@ struct logger_message_text_s
     
     const u8* prefix;               // 24 32
     u16 prefix_length;              // 28 40
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     s16 rc;                         // 30 42   reference count for the repeats   
     
 #if DEBUG || HAS_LOG_PID
@@ -207,7 +207,7 @@ struct logger_message_text_s
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     thread_t thread_id;            // 36 48
 #endif
                                     // 40 56
@@ -381,7 +381,7 @@ struct logger_message_thread_clear_tag_s
 
 struct logger_message
 {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     u8 reserved_for_the_queue;
     u8 align0;
     u16 align1;
@@ -418,7 +418,7 @@ static ptr_set logger_channels = PTR_SET_ASCIIZ_EMPTY;
 static ptr_vector logger_handles = PTR_VECTOR_EMPTY;
 static mutex_t logger_mutex = MUTEX_INITIALIZER;
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 struct shared_circular_buffer* logger_shared_queue = NULL;
 #else
 static threaded_queue logger_commit_queue = THREADED_QUEUE_EMPTY;
@@ -444,7 +444,7 @@ static const char acewnid[16 + 1] = "!ACEWNID1234567";
 static volatile pid_t logger_handle_owner_pid = 0;
 static volatile bool _logger_started = FALSE;
 static volatile bool _logger_initialised = FALSE;
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 static volatile bool logger_is_client = FALSE;
 #endif
 static volatile bool logger_queue_initialised = FALSE;
@@ -503,7 +503,7 @@ logger_message_alloc()
     (void)sizeof_logger_message;
 #endif
     logger_message* message;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message = (logger_message*)shared_circular_buffer_prepare_enqueue(logger_shared_queue);
 #if DEBUG
     memset(((u8*)message) + 1, 'Q', sizeof(logger_message) - 1);
@@ -522,7 +522,7 @@ logger_message_alloc()
     return message;
 }
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 static inline logger_message*
 logger_message_try_alloc()
 {
@@ -538,7 +538,7 @@ logger_message_try_alloc()
 }
 #endif
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 static inline void
 logger_message_free(logger_message *message)
 {
@@ -553,7 +553,7 @@ logger_message_free(logger_message *message)
 static inline void
 logger_message_post(void* message)
 {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_circular_buffer_commit_enqueue(logger_shared_queue, message);
 #else
     threaded_queue_enqueue(&logger_commit_queue, message);
@@ -639,19 +639,19 @@ logger_handle_free(void* ptr)
 #if DEBUG
     memset((char*)handle->formatted_name, 0xfe, strlen(handle->formatted_name));
 #endif
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     free((char*)handle->formatted_name);
 #endif
 #if DEBUG
     memset((char*)handle->name, 0xfe, strlen(handle->name));
 #endif
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     free((char*)handle->name);
 #endif
 #if DEBUG
     memset(handle, 0xfe, sizeof(logger_handle));
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     //shared_heap_free(handle);
 #else
     free(handle);
@@ -738,7 +738,7 @@ logger_channel_alloc()
                     chan->data = NULL;
                     chan->vtbl = NULL;
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     /* dummy to avoid a NULL test */
                     logger_message* last_message = logger_message_alloc();
                     last_message->pid = getpid_ex();
@@ -791,7 +791,7 @@ logger_channel_free(logger_channel *channel)
     assert(channel->linked_handles == 0); // don't yassert
     assert(logger_handle_owner_pid == getpid_ex());
     
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     logger_message* last_message = channel->last_message;
     
     if(--last_message->text.rc == 0)
@@ -1355,7 +1355,7 @@ logger_handle_exit_level(u32 level)
     exit_level = level;
 }
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 static void*
 logger_client_dispatcher_thread(void* context)
 {
@@ -1531,7 +1531,7 @@ logger_server_dispatcher_client_thread(void* context)
             case LOGGER_MESSAGE_TYPE_CHANNEL_CLOSE_ALL:
             case LOGGER_MESSAGE_TYPE_CHANNEL_SINK_ALL:
             {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
                 message->channel_flush_all.aw = aw;
 #else
@@ -1543,7 +1543,7 @@ logger_server_dispatcher_client_thread(void* context)
                 
                 while(logger_initialised_and_started())
                 {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     if(async_wait_timeout(aw, ONE_SECOND_US))
                     {
                         async_wait_destroy_shared(aw);
@@ -1643,7 +1643,7 @@ logger_dispatcher_thread(void* context)
      */
     output_stream_write_method *baos_write = baos.vtbl->write;
     
-#if !HAS_SHARED_QUEUE_SUPPORT    
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     char repeat_text[128];
     
 #if DNSCORE_HAS_LOG_THREAD_TAG
@@ -1666,7 +1666,7 @@ logger_dispatcher_thread(void* context)
         flushout();
 #endif
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         struct shared_circular_buffer_slot* slot = shared_circular_buffer_prepare_dequeue(logger_shared_queue);
         logger_message* message = (logger_message*)slot;
 
@@ -1781,7 +1781,7 @@ logger_dispatcher_thread(void* context)
 
                 if(channel_count < 0)
                 {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     shared_heap_free(message->text.text);
                     shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
@@ -1813,7 +1813,7 @@ logger_dispatcher_thread(void* context)
                     
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     format_dec_u64(message->pid, &baos, 6, ' ', FALSE);
                     baos_write(&baos, (const u8*)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
 #else
@@ -1867,7 +1867,7 @@ logger_dispatcher_thread(void* context)
 
                 baos_write(&baos, message->text.text, message->text.text_length);
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_heap_free(message->text.text);
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #endif
@@ -1885,7 +1885,7 @@ logger_dispatcher_thread(void* context)
 
                     ya_result return_code;
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     if((channel->last_message->text.text_length == message->text.text_length) && (memcmp(channel->last_message->text.text, message->text.text, message->text.text_length) == 0))
                     {
                         /* match, it's a repeat */
@@ -2053,7 +2053,7 @@ logger_dispatcher_thread(void* context)
                         flushout();
 #endif
                         
-#endif // !HAS_SHARED_QUEUE_SUPPORT (no repeat compression)
+#endif // !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED (no repeat compression)
 
                         while(FAIL(return_code = logger_channel_msg(channel, level, buffer, size, date_header_len)))
                         {
@@ -2121,7 +2121,7 @@ logger_dispatcher_thread(void* context)
 
                             sleep(1);
                         }
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     }
 #endif
 
@@ -2129,7 +2129,7 @@ logger_dispatcher_thread(void* context)
                 }
                 while(--channel_count >= 0);
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 if(message->text.rc == 0)
                 {
 #if DEBUG_LOG_HANDLER
@@ -2149,7 +2149,7 @@ logger_dispatcher_thread(void* context)
             {
                 async_wait_s *awp = message->channel_flush_all.aw;
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2166,13 +2166,13 @@ logger_dispatcher_thread(void* context)
             
             case LOGGER_MESSAGE_TYPE_STOP:
             {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 must_run = shared_circular_buffer_size(logger_shared_queue) > 1;
                 if(must_run)
                 {
                     // repost
                     logger_message* new_message = (logger_message*)shared_circular_buffer_prepare_enqueue(logger_shared_queue);
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                     new_message->pid = getpid_ex();
 #endif
                     new_message->type = LOGGER_MESSAGE_TYPE_STOP;
@@ -2208,7 +2208,7 @@ logger_dispatcher_thread(void* context)
             {
                 async_wait_s *awp = message->channel_flush_all.aw;
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2237,7 +2237,7 @@ logger_dispatcher_thread(void* context)
 
                     async_wait_progress(awp, 1);
                 }
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2262,7 +2262,7 @@ logger_dispatcher_thread(void* context)
                     async_wait_progress(awp, 1);
                 }
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2272,7 +2272,7 @@ logger_dispatcher_thread(void* context)
             
             case LOGGER_MESSAGE_TYPE_IGNORE:
             {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2289,7 +2289,7 @@ logger_dispatcher_thread(void* context)
                 
                 assert(countp != NULL);
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2316,7 +2316,7 @@ logger_dispatcher_thread(void* context)
                 const char *channel_name = message->channel_register.channel_name;
                 logger_channel *channel = message->channel_register.channel;
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2333,7 +2333,7 @@ logger_dispatcher_thread(void* context)
                 async_wait_s *awp = message->channel_unregister.aw;
                 const char *channel_name = message->channel_unregister.channel_name;
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2354,7 +2354,7 @@ logger_dispatcher_thread(void* context)
                 handle->global_reference = handlep;
                 *handlep = handle;
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2370,7 +2370,7 @@ logger_dispatcher_thread(void* context)
                 //u32 name_len = message->text_length;              
                 logger_service_handle_close(name);
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2394,7 +2394,7 @@ logger_dispatcher_thread(void* context)
                     logger_service_handle_add_channel(handle, level, channel_name);
                 }
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2417,7 +2417,7 @@ logger_dispatcher_thread(void* context)
                     logger_service_handle_remove_channel(handle, channel_name);
                 }
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2442,7 +2442,7 @@ logger_dispatcher_thread(void* context)
                     *message->handle_count_channels.countp = logger_service_handle_count_channels(handle);
                 }
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2477,7 +2477,7 @@ logger_dispatcher_thread(void* context)
 #endif
                 thread_set_tag_with_pid_and_tid(message->pid, message->thread_set_tag.tid, message->thread_set_tag.tag);
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2492,7 +2492,7 @@ logger_dispatcher_thread(void* context)
                 
                 thread_clear_tag_with_pid_and_tid(message->pid, message->thread_clear_tag.tid);
                 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 shared_circular_buffer_commit_dequeue(logger_shared_queue);
 #else
                 logger_message_free(message);
@@ -2562,17 +2562,17 @@ logger_channel_get_usage_count(const char* channel_name)
 
         // ZEROMEMORY(message, sizeof(logger_message));
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
         async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_GET_USAGE_COUNT;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->get_usage_count.aw = aw;
 #else
         message->get_usage_count.aw = &aw;
@@ -2582,7 +2582,7 @@ logger_channel_get_usage_count(const char* channel_name)
 
         logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait(aw);
         async_wait_destroy_shared(aw);
 #else
@@ -2592,7 +2592,7 @@ logger_channel_get_usage_count(const char* channel_name)
     }
     else
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_lock(logger_shared_queue);
 #else
         mutex_lock(&logger_commit_queue.mutex);
@@ -2609,7 +2609,7 @@ logger_channel_get_usage_count(const char* channel_name)
             count = -1;
         }
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_unlock(logger_shared_queue);
 #else
         mutex_unlock(&logger_commit_queue.mutex);
@@ -2636,17 +2636,17 @@ logger_channel_register(const char* channel_name, struct logger_channel *channel
     {
         logger_message *message = logger_message_alloc();
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
         async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_REGISTER;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->channel_register.aw = aw;
 #else
         message->channel_register.aw = &aw;
@@ -2656,7 +2656,7 @@ logger_channel_register(const char* channel_name, struct logger_channel *channel
 
         logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait(aw);
         async_wait_destroy_shared(aw);
 #else
@@ -2666,14 +2666,14 @@ logger_channel_register(const char* channel_name, struct logger_channel *channel
     }
     else
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_lock(logger_shared_queue);
 #else
         mutex_lock(&logger_commit_queue.mutex);
 #endif
         logger_service_channel_register(channel_name, channel);
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_unlock(logger_shared_queue);
 #else
         mutex_unlock(&logger_commit_queue.mutex);
@@ -2691,18 +2691,18 @@ logger_channel_unregister(const char* channel_name)
     
     logger_message *message = logger_message_alloc();
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
     async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_CHANNEL_UNREGISTER;
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->channel_unregister.aw = aw;
 #else
     message->channel_unregister.aw = &aw;
@@ -2711,7 +2711,7 @@ logger_channel_unregister(const char* channel_name)
     
     logger_message_post(message);
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw);
 #else
@@ -2732,17 +2732,17 @@ logger_handle_create(const char *logger_name, logger_handle **handle_holder)
     {
         logger_message *message = logger_message_alloc();
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
         async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_HANDLE_CREATE;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->handle_create.aw = aw;
 #else
         message->handle_create.aw = &aw;
@@ -2752,7 +2752,7 @@ logger_handle_create(const char *logger_name, logger_handle **handle_holder)
 
         logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait(aw);
         async_wait_destroy_shared(aw);
 #else
@@ -2762,7 +2762,7 @@ logger_handle_create(const char *logger_name, logger_handle **handle_holder)
     }
     else
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_lock(logger_shared_queue);
 #else
         mutex_lock(&logger_commit_queue.mutex);
@@ -2771,7 +2771,7 @@ logger_handle_create(const char *logger_name, logger_handle **handle_holder)
         handle->global_reference = handle_holder;
         *handle_holder = handle;
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_unlock(logger_shared_queue);
 #else
         mutex_unlock(&logger_commit_queue.mutex);
@@ -2789,17 +2789,17 @@ logger_handle_close(const char *logger_name)
     
     logger_message *message = logger_message_alloc();
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
     async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_HANDLE_CLOSE;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->handle_close.aw = aw;
 #else
     message->handle_close.aw = &aw;
@@ -2808,7 +2808,7 @@ logger_handle_close(const char *logger_name)
     
     logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw);
 #else
@@ -2829,17 +2829,17 @@ logger_handle_add_channel(const char *logger_name, int level, const char *channe
     {
         logger_message *message = logger_message_alloc();
         ZEROMEMORY(message, sizeof(logger_message));
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
         async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_HANDLE_NAME_ADD_CHANNEL;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->handle_add_channel.aw = aw;
 #else
         message->handle_add_channel.aw = &aw;
@@ -2850,7 +2850,7 @@ logger_handle_add_channel(const char *logger_name, int level, const char *channe
 
         logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait(aw);
         async_wait_destroy_shared(aw);
 #else
@@ -2860,7 +2860,7 @@ logger_handle_add_channel(const char *logger_name, int level, const char *channe
     }
     else
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_lock(logger_shared_queue);
 #else
         mutex_lock(&logger_commit_queue.mutex);
@@ -2871,7 +2871,7 @@ logger_handle_add_channel(const char *logger_name, int level, const char *channe
             logger_service_handle_add_channel(handle, level, channel_name);
         }
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_unlock(logger_shared_queue);
 #else
         mutex_unlock(&logger_commit_queue.mutex);
@@ -2889,18 +2889,18 @@ logger_handle_remove_channel(const char *logger_name, const char *channel_name)
     
     logger_message *message = logger_message_alloc();
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
     async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_HANDLE_NAME_REMOVE_CHANNEL;
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->handle_remove_channel.aw = aw;
 #else
     message->handle_remove_channel.aw = &aw;
@@ -2911,7 +2911,7 @@ logger_handle_remove_channel(const char *logger_name, const char *channel_name)
     
     logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw);
 #else
@@ -2953,17 +2953,17 @@ logger_handle_count_channels(const char *logger_name)
     logger_message *message = logger_message_alloc();
     s32 ret = -2;
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
     async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_HANDLE_NAME_COUNT_CHANNELS;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->handle_count_channels.aw = aw;
 #else
     message->handle_count_channels.aw = &aw;
@@ -2973,7 +2973,7 @@ logger_handle_count_channels(const char *logger_name)
     
     logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw);
 #else
@@ -2998,17 +2998,17 @@ logger_handle_set_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid, const cha
 #endif
 
     logger_message *message = logger_message_alloc();
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
     async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_THREAD_SET_TAG;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->thread_set_tag.aw = aw;
 #else
     message->thread_set_tag.aw = &aw;
@@ -3025,7 +3025,7 @@ logger_handle_set_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid, const cha
     flushout();
 #endif
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw); // does the finalize call
 #else
@@ -3051,17 +3051,17 @@ logger_handle_clear_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid)
     
     logger_message *message = logger_message_alloc();
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
     async_wait_init(&aw, 1);
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_THREAD_CLEAR_TAG;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->thread_clear_tag.aw = aw;
 #else
     message->thread_clear_tag.aw = &aw;
@@ -3070,7 +3070,7 @@ logger_handle_clear_thread_tag_with_pid_and_tid(pid_t pid, thread_t tid)
     
     logger_message_post(message);
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw);
 #else
@@ -3113,7 +3113,7 @@ logger_handle_clear_thread_tag()
 
 static u32 logger_queue_size = LOG_QUEUE_DEFAULT_SIZE;
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 u32 
 logger_set_queue_size(u32 n)
 {
@@ -3148,7 +3148,7 @@ logger_init_ex(u32 queue_size, size_t shared_heap_size)
     {
         logger_thread_pid = getpid_ex();
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_heap_init();
         
         if(shared_heap_size == 0)
@@ -3196,7 +3196,7 @@ logger_init_ex(u32 queue_size, size_t shared_heap_size)
         
         if(!logger_queue_initialised)
         {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
             if(queue_size == 0)
             {
                 logger_queue_size = 1024 * 1024;
@@ -3231,7 +3231,7 @@ logger_init_ex(u32 queue_size, size_t shared_heap_size)
             format_class_init();
         }
 
-#ifndef WIN32
+#if __unix__
         logger_set_uid(getuid());
         logger_set_gid(getgid());
 #endif
@@ -3325,7 +3325,7 @@ logger_start()
 #endif     
 }
 
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 static thread_t logger_server_id = 0;
 
 void
@@ -3415,7 +3415,7 @@ logger_send_message_stop_wait()
     flushout();
 #endif
             
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
     async_wait_s aw;
@@ -3423,11 +3423,11 @@ logger_send_message_stop_wait()
 #endif
     
     logger_message* message = logger_message_alloc();
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_STOP;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->stop.aw = aw;
 #else
     message->stop.aw = &aw;
@@ -3440,7 +3440,7 @@ logger_send_message_stop_wait()
     flushout();
 #endif
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     async_wait(aw);
     async_wait_destroy_shared(aw);
 #else
@@ -3538,7 +3538,7 @@ logger_finalize()
         return;
     }
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     if(!shared_circular_buffer_empty(logger_shared_queue))
     {
 #if DEBUG_LOG_HANDLER
@@ -3583,7 +3583,7 @@ logger_finalize()
      * Ensure there is nothing left at all in the queue
      */
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     while(!shared_circular_buffer_empty(logger_shared_queue))
     {
         logger_message* message = (logger_message*)shared_circular_buffer_prepare_dequeue(logger_shared_queue);
@@ -3645,7 +3645,7 @@ logger_finalize()
     
     if(logger_queue_initialised)
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_circular_buffer_destroy(logger_shared_queue);
 #else
         threaded_queue_finalize(&logger_commit_queue);
@@ -3677,7 +3677,7 @@ logger_flush()
     {
         if(logger_thread_id != thread_self())
         {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
             async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
             async_wait_s aw;
@@ -3688,13 +3688,13 @@ logger_flush()
             message->align0 = 0xde;
             message->align1 = 0xf00d;
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
             message->pid = getpid_ex();
 #endif
             message->channel_flush_all.tid = thread_self();
             message->type = LOGGER_MESSAGE_TYPE_CHANNEL_FLUSH_ALL;
             
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
             message->channel_flush_all.aw = aw;
 #else
             message->channel_flush_all.aw = &aw;
@@ -3705,7 +3705,7 @@ logger_flush()
 
             while(logger_initialised_and_started())
             {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
                 if(async_wait_timeout(aw, ONE_SECOND_US))
                 {
                     //async_wait_destroy_shared(aw);
@@ -3746,7 +3746,7 @@ logger_channel_close_all()
     
     if(logger_initialised_and_started())
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
@@ -3758,11 +3758,11 @@ logger_channel_close_all()
 #if DEBUG        
         ZEROMEMORY(message, sizeof(logger_message));
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_CLOSE_ALL;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->channel_flush_all.aw = aw;
 #else
         message->channel_flush_all.aw = &aw;
@@ -3774,7 +3774,7 @@ logger_channel_close_all()
         
         while(logger_initialised_and_started())
         {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
             formatln("logger_channel_close_all");
             if(async_wait_timeout(aw, ONE_SECOND_US))
             {
@@ -3815,7 +3815,7 @@ logger_reopen()
         // 1) it activates the service
         // 2) synchronises the memory between the threads (memory wall)
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
@@ -3827,11 +3827,11 @@ logger_reopen()
 #if DEBUG
         ZEROMEMORY(message, sizeof(logger_message));
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_REOPEN_ALL;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->channel_reopen_all.aw = aw;
 #else
         message->channel_reopen_all.aw = &aw;
@@ -3844,7 +3844,7 @@ logger_reopen()
         
         while(logger_initialised_and_started())
         {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 #if DEBUG_LOG_HANDLER
             formatln("logger_reopen");
 #endif
@@ -3895,7 +3895,7 @@ logger_sink()
         // 1) it activates the service
         // 2) synchronises the memory between the threads (memory wall)
         
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         async_wait_s *aw = async_wait_create_shared(logger_shared_heap_id, 1);
 #else
         async_wait_s aw;
@@ -3905,11 +3905,11 @@ logger_sink()
 #if DEBUG
         ZEROMEMORY(message, sizeof(logger_message));
 #endif
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->pid = getpid_ex();
 #endif
         message->type = LOGGER_MESSAGE_TYPE_CHANNEL_SINK_ALL;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         message->channel_sink_all.aw = aw;
 #else
         message->channel_sink_all.aw = &aw;
@@ -3922,7 +3922,7 @@ logger_sink()
 
         while(logger_initialised_and_started())
         {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
 #if DEBUG
             formatln("logger_sink");
 #endif
@@ -4025,7 +4025,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
      */
     
     output_stream baos;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_context shos_context;
 #else
     bytezarray_output_stream_context baos_context;
@@ -4040,7 +4040,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
      */
 
     /* Will use the tmp buffer, but alloc a bigger one if required. */
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_init_ex_static(&baos, logger_shared_heap_id, NULL, 48, SHARED_HEAP_DYNAMIC, &shos_context);
 #else
     bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
@@ -4048,7 +4048,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_heap_output_stream_reset(&baos);
 #else
         bytezarray_output_stream_reset(&baos);
@@ -4060,14 +4060,14 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
 
     logger_message* message = logger_message_alloc();
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
     message->text.level = level;
     message->text.flags = 0;
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text_length = shared_heap_output_stream_size(&baos) - 1;
     message->text.text_buffer_length = shared_heap_output_stream_buffer_size(&baos);
 #else
@@ -4077,7 +4077,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
     
     message->text.handle = handle;
     
-#if HAS_SHARED_QUEUE_SUPPORT    
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text = shared_heap_output_stream_detach(&baos);
 #else
     message->text.text = bytezarray_output_stream_detach(&baos);
@@ -4089,7 +4089,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
     message->text.timestamp = timeus();
 #endif
     
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     // prefix
     // prefix_len
     
@@ -4100,7 +4100,7 @@ logger_handle_vmsg(logger_handle* handle, u32 level, const char* fmt, va_list ar
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
@@ -4146,7 +4146,7 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
 #endif
 
     output_stream baos;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_context shos_context;
 #else
     bytezarray_output_stream_context baos_context;
@@ -4163,7 +4163,7 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
     va_start(args, fmt);
 
     /* Will use the tmp buffer, but alloc a bigger one if required. */
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_init_ex_static(&baos, logger_shared_heap_id, NULL, 48, SHARED_HEAP_DYNAMIC, &shos_context);
 #else
     bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
@@ -4171,7 +4171,7 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_heap_output_stream_reset(&baos);
 #else
         bytezarray_output_stream_reset(&baos);
@@ -4183,14 +4183,14 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
 
     logger_message* message = logger_message_alloc();
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
     message->text.level = level;
     message->text.flags = 0;
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text_length = shared_heap_output_stream_size(&baos) - 1;
     message->text.text_buffer_length = shared_heap_output_stream_buffer_size(&baos);
 #else
@@ -4200,7 +4200,7 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
     
     message->text.handle = handle;
 
-#if HAS_SHARED_QUEUE_SUPPORT    
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text = shared_heap_output_stream_detach(&baos);
 #else
     message->text.text = bytezarray_output_stream_detach(&baos);
@@ -4217,7 +4217,7 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
     // prefix
     // prefix_len
    
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.rc = 0;
    
 #if DEBUG || HAS_LOG_PID
@@ -4225,7 +4225,7 @@ logger_handle_msg_nocull(logger_handle* handle, u32 level, const char* fmt, ...)
 #endif
 #endif
 
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
@@ -4296,7 +4296,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
      */
 
     output_stream baos;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_context baos_context;
 #else
     bytezarray_output_stream_context baos_context;
@@ -4314,7 +4314,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     va_start(args, fmt);
 
     /* Will use the tmp buffer, but alloc a bigger one if required. */
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_init_ex_static(&baos, logger_shared_heap_id, NULL, DEFAULT_MAX_LINE_SIZE, SHARED_HEAP_DYNAMIC, &baos_context);
 #else
     bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
@@ -4322,7 +4322,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_heap_output_stream_reset(&baos);
 #else
         bytezarray_output_stream_reset(&baos);
@@ -4334,14 +4334,14 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 
     logger_message* message = logger_message_alloc();
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
     message->text.level = level;
     message->text.flags = 0;
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text_length = shared_heap_output_stream_size(&baos) - 1;
     message->text.text_buffer_length = shared_heap_output_stream_buffer_size(&baos);
 #else
@@ -4351,7 +4351,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     
     message->text.handle = handle;
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text = shared_heap_output_stream_detach(&baos);
 #else
     message->text.text = bytezarray_output_stream_detach(&baos);
@@ -4368,7 +4368,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     // prefix
     // prefix_len
    
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.rc = 0;
    
 #if DEBUG || HAS_LOG_PID
@@ -4376,7 +4376,7 @@ logger_handle_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
@@ -4452,7 +4452,7 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
  
     logger_message* message = logger_message_alloc();
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
@@ -4463,7 +4463,7 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
     message->text.text_buffer_length = text_len;
     message->text.handle = handle;
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text = (u8*)shared_heap_wait_alloc(logger_shared_heap_id, text_len);
 #else
     ZALLOC_ARRAY_OR_DIE(u8*, message->text. text, text_len, LOGRTEXT_TAG);
@@ -4481,7 +4481,7 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
     // prefix
     // prefix_len
     
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.rc = 0;
 
 #if DEBUG || HAS_LOG_PID
@@ -4489,7 +4489,7 @@ logger_handle_msg_text(logger_handle* handle, u32 level, const char* text, u32 t
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
@@ -4557,7 +4557,7 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
  
     logger_message* message = logger_message_alloc();
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
@@ -4581,7 +4581,7 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
     message->text.prefix = (const u8*)prefix;
     message->text.prefix_length = prefix_len;
     
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.rc = 0;
     
 #if DEBUG || HAS_LOG_PID
@@ -4589,7 +4589,7 @@ logger_handle_msg_text_ext(logger_handle* handle, u32 level, const char* text, u
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
@@ -4667,7 +4667,7 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
      */
 
     output_stream baos;
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_context baos_context;
 #else
     bytezarray_output_stream_context baos_context;
@@ -4685,7 +4685,7 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     va_start(args, fmt);
 
     /* Will use the tmp buffer, but alloc a bigger one if required. */
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     shared_heap_output_stream_init_ex_static(&baos, logger_shared_heap_id, NULL, DEFAULT_MAX_LINE_SIZE, SHARED_HEAP_DYNAMIC, &baos_context);
 #else
     bytezarray_output_stream_init_ex_static(&baos, NULL, DEFAULT_MAX_LINE_SIZE, BYTEARRAY_DYNAMIC, &baos_context);
@@ -4693,7 +4693,7 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 
     if(FAIL(vosformat(&baos, fmt, args)))
     {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
         shared_heap_output_stream_reset(&baos);
 #else
         bytezarray_output_stream_reset(&baos);
@@ -4703,14 +4703,14 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 
     output_stream_write_u8(&baos, 0);
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
     message->text.level = level;
     message->text.flags = 0;
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text_length = shared_heap_output_stream_size(&baos) - 1;
     message->text.text_buffer_length = shared_heap_output_stream_buffer_size(&baos);
 #else
@@ -4720,7 +4720,7 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     
     message->text.handle = handle;
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text = shared_heap_output_stream_detach(&baos);
 #else
     message->text.text = bytezarray_output_stream_detach(&baos);
@@ -4737,7 +4737,7 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
     // prefix
     // prefix_len
    
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.rc = 0;
    
 #if DEBUG || HAS_LOG_PID
@@ -4745,11 +4745,11 @@ logger_handle_try_msg(logger_handle* handle, u32 level, const char* fmt, ...)
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     logger_message_post(message);
 #else
     if(!threaded_queue_try_enqueue(&logger_commit_queue, message))
@@ -4828,13 +4828,13 @@ logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u
         return;
     }
  
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     logger_message* message = logger_message_try_alloc();
 #else
     logger_message* message = logger_message_alloc();
 #endif
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->pid = getpid_ex();
 #endif
     message->type = LOGGER_MESSAGE_TYPE_TEXT;
@@ -4845,7 +4845,7 @@ logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u
     message->text.text_buffer_length = text_len;
     message->text.handle = handle;
 
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.text = (u8*)shared_heap_wait_alloc(logger_shared_heap_id, text_len);
 #else
     ZALLOC_ARRAY_OR_DIE(u8*, message->text.text, text_len, LOGRTEXT_TAG);
@@ -4864,7 +4864,7 @@ logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u
     // prefix
     // prefix_len
     
-#if !HAS_SHARED_QUEUE_SUPPORT
+#if !DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     message->text.rc = 0;
 
 #if DEBUG || HAS_LOG_PID
@@ -4872,11 +4872,11 @@ logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u
 #endif
 #endif
     
-#if DEBUG || HAS_SHARED_QUEUE_SUPPORT || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
+#if DEBUG || DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED || HAS_LOG_THREAD_ID || DNSCORE_HAS_LOG_THREAD_TAG
     message->text.thread_id = thread_self();
 #endif
     
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     logger_message_post(message);
 #else
     if(!threaded_queue_try_enqueue(&logger_commit_queue, message))
@@ -4896,7 +4896,7 @@ logger_handle_try_msg_text(logger_handle* handle, u32 level, const char* text, u
 bool
 logger_queue_fill_critical()
 {
-#if HAS_SHARED_QUEUE_SUPPORT
+#if DNSCORE_LOGGER_SHARED_QUEUE_SUPPORT_ENABLED
     int size = shared_circular_buffer_size(logger_shared_queue);
     int room = shared_circular_buffer_avail(logger_shared_queue);
 #else

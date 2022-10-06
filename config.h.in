@@ -126,13 +126,16 @@
    and is allowed to fetch some information disabled. */
 #undef HAS_EVENT_DYNAMIC_MODULE
 
+/* Has EVP_PKEY_new_raw_public_key */
+#undef HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY
+
 /* acceptance of ASCII7 characters in DNS names (not recommended) disabled. */
 #undef HAS_FULL_ASCII7
 
 /* yadifa keygen tool disabled. */
 #undef HAS_KEYGEN
 
-/* libc malloc debug support monitors program-wide allocations disabled. */
+/* libc_malloc_debug = LIBC_MALLOC_DEBUG_SUPPORT enabled */
 #undef HAS_LIBC_MALLOC_DEBUG_SUPPORT
 
 /* zone lock debug support disabled. */

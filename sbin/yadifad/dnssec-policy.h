@@ -56,7 +56,7 @@ struct dnssec_policy_desc_s
     s32                                                          ds_ttl;
 
     u8                                                            flags;  // weaker-key & stronger-key
-    u8                                                          max_key;
+    u8                                                          max_key;  // not used
 };
 
 

@@ -712,9 +712,7 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 txt = TYPE_DLV_NAME;
                 break;
 
-
-/// @todo 20150219 gve -- HAS_CTRL is the correct if statement and not 1, must be changed before release
-#if 1 // HAS_CTRL
+#if HAS_CTRL
             case TYPE_CTRL_SRVCFGRELOAD:
                 len = 9;
                 txt = TYPE_CTRL_SRVCFGRELOAD_NAME;
@@ -771,9 +769,6 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 6;
                 txt = TYPE_CTRL_ZONENOTIFY_NAME;
                 break;
-
-
-
 #endif // 1 HAS_CTRL
             default:
                 output_stream_write(stream, (u8 *)"TYPE", 4); /* rfc 3597 */

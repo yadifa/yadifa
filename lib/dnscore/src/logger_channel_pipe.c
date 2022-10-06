@@ -209,7 +209,7 @@ logger_channel_pipe_close(logger_channel* chan)
 
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
-#ifndef WIN32
+#if __unix__
     chroot_unmanage_path(&sd->command);
 #endif
     free(sd->command);

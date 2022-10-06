@@ -75,7 +75,7 @@
 ya_result
 identity_change(uid_t new_uid, gid_t new_gid)
 {
-#ifndef WIN32
+#if __unix__
     ya_result return_code;
 
     uid_t uid = getuid();

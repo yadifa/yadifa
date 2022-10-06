@@ -131,7 +131,10 @@ dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
         AC_SEARCH_LIBS([SSL_library_init],[ssl],,[
             AC_SEARCH_LIBS([OPENSSL_init_ssl],[ssl],,[exit 1])
             ])
-        AC_CHECK_FUNC(EVP_PKEY_new_raw_public_key,HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY,)
+        AC_CHECK_FUNC(EVP_PKEY_new_raw_public_key,
+            [AC_DEFINE_UNQUOTED([HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY],[1],[Has EVP_PKEY_new_raw_public_key])],
+            [AC_DEFINE_UNQUOTED([HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY],[0],[Has EVP_PKEY_new_raw_public_key])],
+            )
 
         AC_DEFINE_UNQUOTED(HAS_OPENSSL, [1], [linked with an OpenSSL compatible API])
     else
@@ -378,7 +381,8 @@ AC_HAS_ENABLE(malloc_debug,MALLOC_DEBUG_SUPPORT,[malloc debug support for yadifa
 dnl LIBC MALLOC DEBUG
 dnl ============
 
-AC_HAS_ENABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT,[libc malloc debug support monitors program-wide allocations])
+dnl AC_HAS_ENABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT,[libc malloc debug support monitors program-wide allocations (DEPRECATED)])
+AC_FORCE_DISABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT)
 
 dnl BFD STACKTRACE DEBUG
 dnl ====================
