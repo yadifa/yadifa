@@ -112,7 +112,7 @@ union zdb_zone_info_provider_data
     struct { u16 _u16_0, _u16_1, _u16_2, _u16; };
     struct { u32 _u32_0, _u32; };
     u64 _u64;
-    struct { ya_result _result_0, _result; }
+    struct { ya_result _result_0, _result; };
     void *_ptr;
     zdb_zone_path_provider_buffer _buffer;
 };
