@@ -1992,14 +1992,6 @@ message_make_ixfr_query(message_data *mesg, u16 id, const u8 *qname, u32 soa_ttl
 #if DNSCORE_HAS_TSIG_SUPPORT
 
 ya_result
-message_sign_answer_by_name(message_data *mesg, const u8 *tsig_name)
-{
-    const tsig_item *key = tsig_get(tsig_name);
-
-    return message_sign_answer(mesg, key);
-}
-
-ya_result
 message_sign_query_by_name(message_data *mesg, const u8 *tsig_name)
 {
     const tsig_item *key = tsig_get(tsig_name);
@@ -2016,30 +2008,10 @@ message_sign_query_by_name_with_epoch_and_fudge(message_data *mesg, const u8 *ts
 }
 
 ya_result
-message_sign_answer(message_data *mesg, const tsig_item *key)
+message_sign_answer(message_data *mesg)
 {
-    if(key != NULL)
-    {
-        ZEROMEMORY(&mesg->_tsig, sizeof(message_tsig));
-
-        mesg->_tsig.tsig = key;
-        mesg->_tsig.mac_size = mesg->_tsig.tsig->mac_size;
-
-        u64 now = time(NULL);
-        mesg->_tsig.timehi = htons((u16)(now >> 32));
-        mesg->_tsig.timelo = htonl((u32)now);
-
-        mesg->_tsig.fudge  = htons(300);    /* 5m */
-
-        mesg->_tsig.mac_algorithm = key->mac_algorithm;
-
-        mesg->_tsig.original_id = message_get_id(mesg);
-        
-        ya_result ret = tsig_sign_answer(mesg);
-        return ret;
-    }
-
-    return TSIG_BADKEY;
+    ya_result ret = tsig_sign_answer(mesg);
+    return ret;
 }
 
 ya_result

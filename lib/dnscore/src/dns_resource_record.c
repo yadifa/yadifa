@@ -115,7 +115,7 @@ dns_resource_record_set_record(dns_resource_record *rr, const u8* fqdn, u16 rtyp
                 // do the computations into 32 bits words
 
                 u32 rdata_size_32 = rr->rdata_size;
-                u32 buffer_size_32 = MIN((rdata_size_32 + 15) & 0xfff0, 0xffff);
+                u32 buffer_size_32 = MIN(((rdata_size_32 + 15) & ~15), 0xffff);
 #if DEBUG
                 if(rr->rdata != NULL)
                 {

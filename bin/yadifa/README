@@ -29,22 +29,9 @@
 # 
 ################################################################################
 
-20221004:
-    YADIFA 2.6.0-public
+20221130:
+    YADIFA 2.6.1-public
 
-    The server can optionally load the locally stored zone before asking for the last version to its primary (load-local-first)
+    Fixes an issue where the answer of an TSIG-signed IXFR query over an undefined domain would not be properly signed.
 
-    The server now avoids storing temporary zone transfer images to disk if the zone is small enough (axfr-memory-threshold)
-
-    zone transfers source address can now be specified in the configuration (transfer-source)
-
-    The server now allows to sign a zone using only zone signing keys.
-
-    Fixes online chain generation started from an zone that is not covered by DNSSEC.
-
-    Fixes OpenBSD builds.
-
-    Fixes an issue where a generated DNSKEY could be missing smart fields if the storage became full right before they needed to be written.
-
-    Fixes an issue that could occur using EDDSA on big-enough data sets.
-
+    Fixes an issue building for big-endian architectures.

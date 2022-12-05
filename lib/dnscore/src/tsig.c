@@ -1236,7 +1236,7 @@ tsig_sign_answer(message_data *mesg)
     else
     {
         log_err("tsig_digest_answer() called on a message without TSIG");
-        return INVALID_STATE_ERROR;
+        return TSIG_BADKEY;
     }
 }
 

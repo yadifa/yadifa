@@ -238,7 +238,7 @@ ixfr_process(message_data *mesg, int sockfd)
 #if DNSCORE_HAS_TSIG_SUPPORT
     if(message_has_tsig(mesg))
     {
-        message_sign_answer(mesg, message_tsig_get_key(mesg));
+        message_sign_answer(mesg);
     }
 #endif
 

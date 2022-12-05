@@ -3189,7 +3189,7 @@ logger_init_ex(u32 queue_size, size_t shared_heap_size)
         {
             for(int j = 0; j < MSG_LEVEL_COUNT; ++j)
             {
-                ptr_vector_init(&g_logger_handle_shared_table[i].channels[j]);
+                ptr_vector_init_empty(&g_logger_handle_shared_table[i].channels[j]);
             }
         }
 #endif
@@ -3652,7 +3652,8 @@ logger_finalize()
 #endif
         logger_queue_initialised = FALSE;
     }
-    
+
+    memset(g_logger_handle_shared_table, 0U,  LOGGER_HANDLE_SHARED_TABLE_SIZE);
     logger_set_path(NULL);
 
     mutex_lock(&logger_mutex);

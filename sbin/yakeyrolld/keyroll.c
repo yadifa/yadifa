@@ -651,8 +651,6 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                     break;
                 }
 
-                int n = ret;
-
                 if(step == NULL)
                 {
                     if(equals_static_string(command, "epochus"))
@@ -664,7 +662,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             break;
                         }
 
-                        n = ret;
+                        int n = ret;
 
                         if(FAIL(ret = parse_u64_check_range_len_base10(epochus_buffer, n, (u64*)&epochus, 0, MAX_S64)))
                         {
@@ -763,7 +761,7 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                             return INVALID_STATE_ERROR;
                         }
 
-                        n = ret;
+                        int n = ret;
 
     //                  line += n;
 
@@ -932,8 +930,6 @@ keyroll_plan_step_load(keyroll_t *keyroll, const char *file)
                         {
                             break;
                         }
-
-                        n = ret;
 
                         int subcommand_type;
 

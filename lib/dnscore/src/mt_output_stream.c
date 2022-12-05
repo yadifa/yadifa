@@ -56,16 +56,7 @@
 #define MT_OUTPUT_STREAM_BUFFER_INITIAL_SIZE 128U
 
 typedef struct mt_output_stream_data mt_output_stream_data;
-/*
-struct delayed_write_entry_s
-{
-    pthread_t thread;
-    size_t size;
-    u8 buffer[1];
-};
 
-typedef struct delayed_write_entry_s delayed_write_entry_t;
-*/
 struct mt_output_stream_data
 {
     output_stream filtered;
@@ -215,9 +206,9 @@ mt_close(output_stream *stream)
         {
             output_stream_write(&data->filtered, bytearray_output_stream_buffer(osp), bytearray_output_stream_size(osp));
             bytearray_output_stream_reset(osp);
-            output_stream_close(osp);
-            free(osp);
         }
+        output_stream_close(osp);
+        free(osp);
     }
     ptr_set_debug_destroy(&data->writers);
     output_stream_set_void(stream);

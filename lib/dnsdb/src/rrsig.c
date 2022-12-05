@@ -48,8 +48,6 @@
 #include <stdlib.h>
 
 #include <arpa/inet.h>
-#include <openssl/sha.h>
-#include <openssl/engine.h>
 
 #include <dnscore/sys_types.h>
 #include <dnscore/logger.h>
@@ -69,7 +67,6 @@
 #include "dnsdb/zdb-packed-ttlrdata.h"
 
 #include "dnsdb/nsec.h"
-
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
 

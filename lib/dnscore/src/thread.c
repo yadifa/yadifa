@@ -148,8 +148,9 @@ static void* pthead_create_wrapper(void* args_)
 
     struct pthead_create_wrapper_s *args = (struct pthead_create_wrapper_s*)args_;
     log_debug1("thread: %p (%i) started (%s)", (void*)pthread_self(), gettid(), name_buffer);
-    void *thread_ret = args->function_thread(args->function_args);
+    struct pthead_create_wrapper_s targs = *args;
     free(args);
+    void *thread_ret = targs.function_thread(targs.function_args);
     log_debug1("thread: %p (%i) stopped (%s) with %p", (void*)pthread_self(), gettid(), name_buffer, thread_ret);
     return thread_ret;
 }
@@ -161,7 +162,7 @@ ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *func
     int ret;
 #if !DEBUG
     ret = pthread_create(t, NULL, function_thread, function_args);
-#else
+#else // DEBUG
     struct pthead_create_wrapper_s *pthead_create_wrapper_args;
     MALLOC_OBJECT_OR_DIE(pthead_create_wrapper_args, struct pthead_create_wrapper_s, PTHCWRAP_TAG);
     pthead_create_wrapper_args->function_thread = function_thread;

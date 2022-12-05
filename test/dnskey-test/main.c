@@ -454,7 +454,11 @@ parse_private_key_record(struct dnskey_private_inputs_s *input)
             formatln("tag mismatch '%s': expected %hu, got %hu", input->file_text, input->tag, tag);
             osformatln(termerr, "tag mismatch '%s': expected %hu, got %hu", input->file_text, input->tag, tag);
             ret = INVALID_STATE_ERROR;
+            return;
         }
+
+        key->vtbl->dnssec_key_print_fields(key, termout);
+        flushout();
 
         ptr_vector rrset;
         ptr_vector_init_empty(&rrset);
@@ -499,6 +503,7 @@ parse_private_key_record(struct dnskey_private_inputs_s *input)
         {
             rdata_desc rrsig_desc = { rrsig_rr->tctr.qtype, rrsig_rr->rdata_size, rrsig_rr->rdata };
             formatln("signature: %{typerdatadesc}", &rrsig_desc);
+            flushout();
 
             dnskey_signature ds_back;
             dnskey_signature_init(&ds_back);

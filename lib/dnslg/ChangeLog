@@ -29,6 +29,13 @@
 # 
 ################################################################################
 
+20221130:
+    YADIFA 2.6.1-public
+
+    Fixes an issue where the answer of an TSIG-signed IXFR query over an undefined domain would not be properly signed.
+
+    Fixes an issue building for big-endian architectures.
+
 20221004:
     YADIFA 2.6.0-public
 
