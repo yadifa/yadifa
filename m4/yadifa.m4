@@ -167,6 +167,8 @@ AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
 AC_SEARCH_LIBS([socket],[socket],,[exit 1])
 AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
 AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
+AC_SEARCH_LIBS([backtrace],[execinfo],,[exit 1])
+AC_SEARCH_LIBS([backtrace_symbols],[execinfo],,[exit 1])
 dnl AC_GETHOSTBYNAME_CHECK
 
 if [[ $requires_tcl -eq 1 ]]

@@ -29,9 +29,8 @@
 # 
 ################################################################################
 
-20221130:
-    YADIFA 2.6.1-public
+20221209:
+    YADIFA 2.6.2-public
 
-    Fixes an issue where the answer of an TSIG-signed IXFR query over an undefined domain would not be properly signed.
+    Fixes an issue trying to link the backtrace call while building yadifad on FreeBSD
 
-    Fixes an issue building for big-endian architectures.

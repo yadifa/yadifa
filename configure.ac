@@ -35,11 +35,11 @@ configure_base_path="$0/"
 
 dnl Do NOT change this block of comments
 dnl ====================================
-dnl YADIFA VERSION 2.6.1 DATE 2022-11-30
+dnl YADIFA VERSION 2.6.2 DATE 2022-12-09
 dnl ====================================
 
 AC_PREREQ([2.69])
-AC_REVISION([$Revision: 10810 $])
+AC_REVISION([$Revision: 10816 $])
 define(YADIFA_VERSION, [m4_esyscmd(
         svn info 2> /dev/null |
         grep 'Last Changed Rev: ' |
