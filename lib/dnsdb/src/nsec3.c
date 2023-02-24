@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -299,6 +299,14 @@ nsec3_get_closest_provable_encloser_optout(const zdb_rr_label *apex, const_dnsla
     return provable;
 }
 
+static int
+zdb_label_wild_match(const void *label, const dictionary_node *node)
+{
+    (void)label;
+    zdb_rr_label* rr_label = (zdb_rr_label*) node;
+    return IS_WILD_LABEL(rr_label->name);
+}
+
 void
 nsec3_get_wild_match_and_closest_provable_encloser_optin(const zdb_rr_label *apex, const_dnslabel_vector_reference sections, s32 sections_top,
                                           const zdb_rr_label** wild_matchp, s32 *wild_topp,
@@ -325,28 +333,42 @@ nsec3_get_wild_match_and_closest_provable_encloser_optin(const zdb_rr_label *ape
         const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
-        rr_label = (zdb_rr_label*) dictionary_find(&rr_label->sub, hash, label, nsec3_get_closest_provable_encloser_match);
+        const zdb_rr_label* sub_rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, nsec3_get_closest_provable_encloser_match);
 
-        if(rr_label == NULL)
+        if(sub_rr_label == NULL)
         {
+            if(rr_label == apex)
+            {
+                zdb_rr_label *rr_label_sub_wild = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_LABEL_HASH, NULL, zdb_label_wild_match);
+                *wild_matchp =  rr_label_sub_wild;
+                *wild_topp = sections_top - 1;
+
+                if(zdb_rr_label_flag_matches(rr_label, ZDB_RR_LABEL_N3COVERED))
+                {
+                    *provable_matchp = rr_label;
+                    *provable_topp = index;
+                }
+            }
+
             break;
         }
 
+        rr_label = sub_rr_label;
+
         if(zdb_rr_label_flag_matches(rr_label, ZDB_RR_LABEL_GOT_WILD))
         {
-            dictionary_iterator iter;
-            dictionary_iterator_init(&rr_label->sub, &iter);
-            if(dictionary_iterator_hasnext(&iter))
-            {
-                *wild_matchp =  *(zdb_rr_label**)dictionary_iterator_next(&iter);
-                *wild_topp = index - 1;
-            }
+            zdb_rr_label *rr_label_sub_wild = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_LABEL_HASH, NULL, zdb_label_wild_match);
+            *wild_matchp =  rr_label_sub_wild;
+            *wild_topp = index - 1;
+
         }
         if(zdb_rr_label_flag_matches(rr_label, ZDB_RR_LABEL_N3COVERED))
         {
             *provable_matchp = rr_label;
             *provable_topp = index;
         }
+
+        index--;
     }
 }
 
@@ -373,22 +395,34 @@ nsec3_get_wild_match_and_closest_provable_encloser_optout(const zdb_rr_label *ap
         const u8* label = sections[index];
         hashcode hash = hash_dnslabel(label);
 
-        rr_label = (zdb_rr_label*) dictionary_find(&rr_label->sub, hash, label, nsec3_get_closest_provable_encloser_match);
+        const zdb_rr_label* sub_rr_label = (zdb_rr_label*)dictionary_find(&rr_label->sub, hash, label, nsec3_get_closest_provable_encloser_match);
 
-        if(rr_label == NULL)
+        if(sub_rr_label == NULL)
         {
+            if(rr_label == apex)
+            {
+                zdb_rr_label *rr_label_sub_wild = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_LABEL_HASH, NULL, zdb_label_wild_match);
+                *wild_matchp =  rr_label_sub_wild;
+                *wild_topp = sections_top - 1;
+
+                if(zdb_rr_label_flag_matches(rr_label, ZDB_RR_LABEL_N3OCOVERED))
+                {
+                    *provable_matchp = rr_label;
+                    *provable_topp = index;
+                }
+            }
+
             break;
         }
 
+        rr_label = sub_rr_label;
+
         if(zdb_rr_label_flag_matches(rr_label, ZDB_RR_LABEL_GOT_WILD))
         {
-            dictionary_iterator iter;
-            dictionary_iterator_init(&rr_label->sub, &iter);
-            if(dictionary_iterator_hasnext(&iter))
-            {
-                *wild_matchp =  *(zdb_rr_label**)dictionary_iterator_next(&iter);
-                *wild_topp = index - 1;
-            }
+            zdb_rr_label *rr_label_sub_wild = (zdb_rr_label*)dictionary_find(&rr_label->sub, WILD_LABEL_HASH, NULL, zdb_label_wild_match);
+            *wild_matchp =  rr_label_sub_wild;
+            *wild_topp = index - 1;
+
         }
         if(zdb_rr_label_flag_matches(rr_label, ZDB_RR_LABEL_N3OCOVERED))
         {
@@ -412,6 +446,8 @@ nsec3_get_wild_match_and_closest_provable_encloser_optout(const zdb_rr_label *ap
  * @param closest_provable_encloser_nsec3p will point to the closest provable encloser
  * @param wild_closest_provable_encloser_nsec3p will point to the *.closest provable encloser
  *
+ *
+ * https://www.ietf.org/rfc/rfc7129.txt
  */
 
 void
@@ -482,7 +518,7 @@ nsec3_wild_closest_encloser_proof(
 
             // add the interval for the fqdn at the * level
 
-            dnsname_vector_sub_to_dnsname(qname, wild_top, tmp_fqdn);
+            dnsname_vector_sub_to_dnsname(qname, wild_top, tmp_fqdn); // wild top here must be 0
             digestname(tmp_fqdn, dnsname_len(tmp_fqdn), salt, salt_len, iterations, &digest[1], FALSE);
             qname_encloser_nsec3 = nsec3_find_interval_start(&n3->items, digest);
 
@@ -723,12 +759,8 @@ nsec3_check_item(nsec3_zone_item *item, u32 param_index_base)
 
         yassert(n3le != NULL);
 
-
         // the nsec3 structure reference to the item linked to the label does not links back to the item
-#if 0 /* fix */
-#else
         yassert(n3le->_self == item);
-#endif
     }
 
     n = nsec3_star_count(item);
@@ -1514,7 +1546,7 @@ nsec3_item_resource_record_view_data_item_set(nsec3_item_rrv_data_t *rrv_data, n
     }
 
     rrv_data->rdata_size = nsec3_zone_item_to_rdata(rrv_data->n3, item, rrv_data->rdata, rrv_data->rdata_buffer_size);
-    u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), NSEC3_NODE_DIGEST_SIZE(item), (char*)&rrv_data->fqdn[1]);
+    u32 b32_len = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), NSEC3_NODE_DIGEST_SIZE(item), (char*)&rrv_data->fqdn[1]);
     rrv_data->fqdn[0] = b32_len;
     dnsname_copy(&rrv_data->fqdn[b32_len + 1], rrv_data->origin);
     rrv_data->item = item;

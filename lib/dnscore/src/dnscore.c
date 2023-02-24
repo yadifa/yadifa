@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -704,6 +704,13 @@ dnscore_init_ex(u32 features, int argc, char **argv)
     {
         dnscore_arch_checkup();
         dnscore_arch_checked = TRUE;
+
+        const u32 wild_label_hash = hash_dnslabel((const u8*)"\001*");
+        if(wild_label_hash != WILD_LABEL_HASH)
+        {
+            puts(ARCH_RECOMPILE_WARNING);
+            DIE(ERROR);
+        }
     }
 
     dnscore_meminfo_get(NULL);

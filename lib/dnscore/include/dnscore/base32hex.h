@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,7 @@ extern "C" {
 #define BASE32HEX_DECODED_LEN(b32_size_) ((((b32_size_)/BASE32HEX_ENCODED_CHUNK))*BASE32HEX_DECODED_CHUNK)
 
 /**
- * Encodes bytes into base32hex
+ * Encodes bytes into lower case base32hex
  * The output size must be at least size_in * 8/5
  * 
  * @param buffer_in     bytes to convert
@@ -69,6 +69,19 @@ extern "C" {
  * @return output size
  */
     
+u32 base32hex_lc_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
+
+/**
+ * Encodes bytes into base32hex
+ * The output size must be at least size_in * 8/5
+ *
+ * @param buffer_in     bytes to convert
+ * @param size_in       number of bytes
+ * @param buffer_out    output buffer of a size >= size_in * 8/5
+ *
+ * @return output size
+ */
+
 u32 base32hex_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
 
 /**

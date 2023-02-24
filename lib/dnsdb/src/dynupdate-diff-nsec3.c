@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -434,7 +434,7 @@ static void dnssec_chain_node_nsec3_publish_record(nsec3_zone *n3,
     // generate the label
 
     hash_len = digest[0];
-    b32_len = base32hex_encode(&digest[1], hash_len, (char*)&digest_fqdn[1]);
+    b32_len = base32hex_lc_encode(&digest[1], hash_len, (char*)&digest_fqdn[1]);
     digest_fqdn[0] = b32_len;
     fqdn_len = dnsname_len(diff->origin);
     memcpy(&digest_fqdn[b32_len + 1], diff->origin, fqdn_len );

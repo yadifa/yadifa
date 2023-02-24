@@ -1,6 +1,6 @@
 ################################################################################
 # 
-#  Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+#  Copyright (c) 2011-2023, EURid vzw. All rights reserved.
 #  The YADIFA TM software product is provided under the BSD 3-clause license:
 # 
 #  Redistribution and use in source and binary forms, with or without 
@@ -29,8 +29,14 @@
 # 
 ################################################################################
 
-20221209:
-    YADIFA 2.6.2-public
+20230213:
+    YADIFA 2.6.3-public
 
-    Fixes an issue trying to link the backtrace call while building yadifad on FreeBSD
+    Fixes an issue where the answer to a DNSSEC query to a wild record right below the apex in a DNSSEC3 zone would not return all the relevant NSEC3 records
+
+    Fixes an issue where the answer to a DNSSEC query to a wild record in an NSEC zone would incorrectly use the name of the query in the answer
+
+    Fixes an issue where NSEC3-owning labels were not compressed
+
+    Complies with Fedora https://fedoraproject.org/wiki/Changes/PortingToModernC (see m4/contributions/20230118-fedora-toolchain-porting-to-modern-c.patch)
 

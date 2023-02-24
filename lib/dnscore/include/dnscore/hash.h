@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,6 +56,9 @@ extern "C"
 #endif
 
 #define DNSCORE_HASH_TABLE_CHAR_SET_SIZE 37
+
+// the result of hash_dnslabel((const u8*)"\001*");
+#define WILD_LABEL_HASH 3479673052
 
 extern const u32 DNSCORE_HASH_TABLE[256][DNSCORE_HASH_TABLE_CHAR_SET_SIZE];
 extern const u32 DNSCORE_HASH_TABLE_MAP[256];

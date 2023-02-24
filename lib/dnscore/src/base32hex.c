@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -93,6 +93,49 @@ static const char __BASE32_HEX__[256] = {
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
     'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
 };
+
+static const char __BASE32_HEX_LC__[256] = {
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+};
+
 
 /**
  * Encodes bytes into base32hex
@@ -202,6 +245,105 @@ base32hex_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
 
     return (u32)(ptr - buffer_out);
 }
+
+u32
+base32hex_lc_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
+{
+    char* ptr = buffer_out;
+
+    while(size_in >= 5)
+    {
+        u8 b0 = *buffer_in++;
+        u8 b1 = *buffer_in++;
+        u8 b2 = *buffer_in++;
+        u8 b3 = *buffer_in++;
+        u8 b4 = *buffer_in++;
+
+        *ptr++ = __BASE32_HEX_LC__[ b0 >> 3 ];
+        *ptr++ = __BASE32_HEX_LC__[(u8)((b0 << 2) | (b1 >> 6))];
+        *ptr++ = __BASE32_HEX_LC__[ b1 >> 1 ];
+        *ptr++ = __BASE32_HEX_LC__[(u8)((b1 << 4) | (b2 >> 4))];
+        *ptr++ = __BASE32_HEX_LC__[(u8)((b2 << 1) | (b3 >> 7))];
+        *ptr++ = __BASE32_HEX_LC__[ b3 >> 2 ];
+        *ptr++ = __BASE32_HEX_LC__[(u8)((b3 << 3) | (b4 >> 5))];
+        *ptr++ = __BASE32_HEX_LC__[ b4 ];
+
+        size_in -= 5;
+    }
+
+    switch(size_in)
+    {
+        case 4:
+        {
+            u8 b0 = *buffer_in++;
+            u8 b1 = *buffer_in++;
+            u8 b2 = *buffer_in++;
+            u8 b3 = *buffer_in++;
+
+            *ptr++ = __BASE32_HEX_LC__[ b0 >> 3 ];
+            *ptr++ = __BASE32_HEX_LC__[(u8)((b0 << 2) | (b1 >> 6))];
+            *ptr++ = __BASE32_HEX_LC__[ b1 >> 1 ];
+            *ptr++ = __BASE32_HEX_LC__[(u8)((b1 << 4) | (b2 >> 4))];
+            *ptr++ = __BASE32_HEX_LC__[(u8)((b2 << 1) | (b3 >> 7))];
+            *ptr++ = __BASE32_HEX_LC__[ b3 >> 2 ];
+
+            *ptr++ = __BASE32_HEX_LC__[(u8)(b3 << 3)];
+            *ptr++ = BASE32_HEX_PADDING;
+            break;
+        }
+        case 3:
+        {
+            u8 b0 = *buffer_in++;
+            u8 b1 = *buffer_in++;
+            u8 b2 = *buffer_in++;
+
+            *ptr++ = __BASE32_HEX_LC__[ b0 >> 3 ];
+            *ptr++ = __BASE32_HEX_LC__[(u8)((b0 << 2) | (b1 >> 6))];
+            *ptr++ = __BASE32_HEX_LC__[ b1 >> 1 ];
+            *ptr++ = __BASE32_HEX_LC__[(u8)((b1 << 4) | (b2 >> 4))];
+
+            *ptr++ = __BASE32_HEX_LC__[(u8)(b2 << 1)];
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            break;
+        }
+        case 2:
+        {
+            u8 b0 = *buffer_in++;
+            u8 b1 = *buffer_in++;
+
+            *ptr++ = __BASE32_HEX_LC__[ b0 >> 3 ];
+            *ptr++ = __BASE32_HEX_LC__[(u8)((b0 << 2) | (b1 >> 6))];
+            *ptr++ = __BASE32_HEX_LC__[ b1 >> 1 ];
+
+            *ptr++ = __BASE32_HEX_LC__[(u8)(b1 << 4)];
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            break;
+        }
+        case 1:
+        {
+            u8 b0 = *buffer_in++;
+
+            *ptr++ = __BASE32_HEX_LC__[ b0 >> 3 ];
+            *ptr++ = __BASE32_HEX_LC__[(u8)(b0 << 2) ];
+
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            *ptr++ = BASE32_HEX_PADDING;
+            break;
+        }
+    }
+
+    return (u32)(ptr - buffer_out);
+}
+
 
 #define __DEBASE32_HEX__STOP__ 0x80
 

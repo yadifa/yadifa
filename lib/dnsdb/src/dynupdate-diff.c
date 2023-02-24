@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1925,7 +1925,7 @@ zone_diff_add_nsec3(zone_diff *diff, const nsec3_zone* n3, const nsec3_node *ite
     u8 digest_len = NSEC3_NODE_DIGEST_SIZE(item);
     u8 fqdn[MAX_DOMAIN_LENGTH];
 
-    fqdn[0] = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
+    fqdn[0] = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
     dnsname_copy(&fqdn[fqdn[0] + 1], diff->origin);
 
     ptr_node *node = ptr_set_insert(&diff->fqdn, fqdn);
@@ -2015,7 +2015,7 @@ zone_diff_add_nsec3_ex(zone_diff *diff, const ptr_vector *zsk_keys, const nsec3_
     u8 digest_len = NSEC3_NODE_DIGEST_SIZE(item);
     u8 fqdn[MAX_DOMAIN_LENGTH];
 
-    fqdn[0] = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
+    fqdn[0] = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
     dnsname_copy(&fqdn[fqdn[0] + 1], diff->origin);
 
     ptr_node *node = ptr_set_insert(&diff->fqdn, fqdn);

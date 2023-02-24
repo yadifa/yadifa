@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -299,7 +299,7 @@ nsec3_zone_item_to_zdb_packed_ttlrdata(const nsec3_zone* n3,
 
     MEMCOPY(p, item->type_bit_maps, item->type_bit_maps_size);
 
-    u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)& out_owner[1]);
+    u32 b32_len = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)& out_owner[1]);
     out_owner[0] = b32_len;
 
     u32 origin_len = dnsname_len(origin);
@@ -400,7 +400,7 @@ nsec3_zone_item_to_new_zdb_packed_ttlrdata(
     u8 *out_owner = *pool;
     *out_owner_p = out_owner;
     
-    u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&out_owner[1]);
+    u32 b32_len = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&out_owner[1]);
     out_owner[0] = b32_len;
 
     const u8 *origin = nsec3_parms->origin;
@@ -476,7 +476,7 @@ nsec3_zone_item_get_label(const nsec3_zone_item* item,
     yassert(buffer_size >= 128);
     (void)buffer_size;
     u8 hash_len = NSEC3_NODE_DIGEST_SIZE(item);
-    u32 b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&output_buffer[1]);
+    u32 b32_len = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&output_buffer[1]);
     output_buffer[0] = b32_len;
 
     return b32_len + 1;
@@ -543,7 +543,7 @@ nsec3_zone_item_to_output_stream(output_stream* os,
     /* Whatever the editor says: rdata_size is used. */
     rdata_size = param_rdata_size + 1 + hash_len + type_bit_maps_size;
     
-    b32_len = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&tmp[1]);
+    b32_len = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), hash_len, (char*)&tmp[1]);
     tmp[0] = b32_len;
 
     /* NAME */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -392,7 +392,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
     {
         const dnssec_key *key = (const dnssec_key*)ptr_vector_get(&mctx.ksks, i);
 
-        if(dnskey_is_private(key))
+        if(!dnskey_is_private(key))
         {
             log_debug("maintenance: DNSKEY: %{dnsname}+%03d+%05d/%d is not a private KSK", dnskey_get_domain(key), dnskey_get_algorithm(key), dnskey_get_tag_const(key), ntohs(dnskey_get_flags(key)));
             continue;
@@ -704,7 +704,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                               zone->origin, dt, item->digest, zone->origin);
 #endif
                     u8 digest_len = NSEC3_NODE_DIGEST_SIZE(item);
-                    mctx.fqdn[0] = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&mctx.fqdn[1]);
+                    mctx.fqdn[0] = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&mctx.fqdn[1]);
                     dnsname_copy(&mctx.fqdn[mctx.fqdn[0] + 1], zone->origin);
 
                     /************************************
@@ -725,7 +725,7 @@ zdb_zone_maintenance_from(zdb_zone* zone, u8 *from_fqdn, size_t from_fqdn_size, 
                               zone->origin, dt, item->digest, zone->origin);
 #endif
                     u8 digest_len = NSEC3_NODE_DIGEST_SIZE(item);
-                    mctx.fqdn[0] = base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&mctx.fqdn[1]);
+                    mctx.fqdn[0] = base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&mctx.fqdn[1]);
                     dnsname_copy(&mctx.fqdn[mctx.fqdn[0] + 1], zone->origin);
 
                     /************************************

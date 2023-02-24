@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -411,7 +411,7 @@ ya_result
 packet_writer_encode_base32hex_digest(packet_writer *pw, const u8 *digest)
 {
     pw->packet[pw->packet_offset++] = BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH);
-    /*u32 b32_len =*/ base32hex_encode(digest, SHA_DIGEST_LENGTH, (char*)&pw->packet[pw->packet_offset]);
+    /*u32 b32_len =*/ base32hex_lc_encode(digest, SHA_DIGEST_LENGTH, (char*)&pw->packet[pw->packet_offset]);
     pw->packet_offset += BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH);
     return BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH) + 1;
 }

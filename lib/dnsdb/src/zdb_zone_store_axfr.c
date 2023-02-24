@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -252,7 +252,7 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
                 /* FQDN */
 
                 fqdn[0] = encoded_digest_len;
-                base32hex_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
+                base32hex_lc_encode(NSEC3_NODE_DIGEST_PTR(item), digest_len, (char*)&fqdn[1]);
 
                 if(FAIL(err = output_stream_write(os, fqdn, encoded_digest_len + 1)))
                 {

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -114,8 +114,14 @@ struct ptr_node
     union
     {
         void *value;  /* ie: label linked to the nsec3 item */
+        intptr value_intptr;
+        void (*void_function_void)();
+#if __SIZEOF_POINTER__ == 8
         s64 value_s64;
         u64 value_u64;
+#endif
+        s32 value_s32;
+        u32 value_u32;
     };
     
     s8 balance;

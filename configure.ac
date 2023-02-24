@@ -1,6 +1,6 @@
 dnl ############################################################################
 dnl
-dnl Copyright (c) 2011-2022, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2023, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -35,11 +35,11 @@ configure_base_path="$0/"
 
 dnl Do NOT change this block of comments
 dnl ====================================
-dnl YADIFA VERSION 2.6.2 DATE 2022-12-09
+dnl YADIFA VERSION 2.6.3 DATE 2023-02-20
 dnl ====================================
 
 AC_PREREQ([2.69])
-AC_REVISION([$Revision: 10816 $])
+AC_REVISION([$Revision: 10860 $])
 define(YADIFA_VERSION, [m4_esyscmd(
         svn info 2> /dev/null |
         grep 'Last Changed Rev: ' |
@@ -101,7 +101,7 @@ dnl AC_PROG_EGREP
 #
 # 
 
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h sys/time.h syslog.h unistd.h stdatomic.h])
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h stdio.h string.h sys/time.h syslog.h unistd.h stdatomic.h])
 
 # Check for Darwin or Linux
 AC_CHECK_HEADERS([linux/limits.h sys/syslimits.h i386/limits.h ppc/limits.h])

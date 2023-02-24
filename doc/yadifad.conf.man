@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2022\-12\-09" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2023\-02\-20" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -1831,7 +1831,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.6.2 of 2022\-12\-09. 
+Version: 2.6.3 of 2023\-02\-20. 
 .PP
 .SH MAILING LISTS
 
@@ -1863,7 +1863,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2011\-2021, EURid
+(C)2011\-2023, EURid
 .br
 B\-1831 Diegem, Belgium
 .br
