@@ -116,10 +116,8 @@ struct ptr_node
         void *value;  /* ie: label linked to the nsec3 item */
         intptr value_intptr;
         void (*void_function_void)();
-#if __SIZEOF_POINTER__ == 8
         s64 value_s64;
         u64 value_u64;
-#endif
         s32 value_s32;
         u32 value_u32;
     };

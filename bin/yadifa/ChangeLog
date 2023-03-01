@@ -29,6 +29,11 @@
 # 
 ################################################################################
 
+20230301:
+    YADIFA 2.6.4-public
+
+    Fixes an issue building for 32 bits targets.
+
 20230213:
     YADIFA 2.6.3-public
 

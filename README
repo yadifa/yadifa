@@ -29,14 +29,8 @@
 # 
 ################################################################################
 
-20230213:
-    YADIFA 2.6.3-public
+20230301:
+    YADIFA 2.6.4-public
 
-    Fixes an issue where the answer to a DNSSEC query to a wild record right below the apex in a DNSSEC3 zone would not return all the relevant NSEC3 records
-
-    Fixes an issue where the answer to a DNSSEC query to a wild record in an NSEC zone would incorrectly use the name of the query in the answer
-
-    Fixes an issue where NSEC3-owning labels were not compressed
-
-    Complies with Fedora https://fedoraproject.org/wiki/Changes/PortingToModernC (see m4/contributions/20230118-fedora-toolchain-porting-to-modern-c.patch)
+    Fixes an issue building for 32 bits targets.
 

@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YAKEYROLLD\-CONF" "5" "2023\-02\-20" "YAKEYROLLD " "YADIFA "
+.TH "YAKEYROLLD\-CONF" "5" "2023\-03\-01" "YAKEYROLLD " "YADIFA "
 .SH NAME
 
 .PP
@@ -722,7 +722,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.6.3 of 2023\-02\-20. 
+Version: 2.6.4 of 2023\-03\-01. 
 .PP
 .SH MAILING LISTS
 
