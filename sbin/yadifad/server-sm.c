@@ -507,8 +507,6 @@ ya_result
 server_sm_query_loop(struct service_worker_s *worker)
 {
     ya_result ret;
-    s32 server_run_loop_timeout_countdown = 0;
-    int maxfd = -1;
 
     if(g_config->total_interfaces == 0 )
     {
@@ -525,17 +523,8 @@ server_sm_query_loop(struct service_worker_s *worker)
         return INVALID_STATE_ERROR;
     }
 
-    fd_set read_set;
-    fd_set read_set_init;
-
-    struct timespec timeout;
-
-    //u32 previous_tick = 0;
-    
     log_query_set_mode(g_config->queries_log_type);
 
-    server_run_loop_timeout_countdown = g_config->statistics_max_period;
-    
     bool log_statistics_enabled = (g_statistics_logger != NULL) && (g_config->server_flags & SERVER_FL_STATISTICS) != 0;
     
     log_debug("server-sm: statistics are %s", (log_statistics_enabled)?"enabled":"disabled");
@@ -547,21 +536,10 @@ server_sm_query_loop(struct service_worker_s *worker)
 
     /* There's a timeout each second, for checking the SA_SHUTDOWN flag */
 
-    timeout.tv_sec = 1;
-    timeout.tv_nsec = 0;
-
     /**
      * For each interface ...
      */
 
-    /* compute maxfd plus one once and for all : begin */
-
-    /* Set sockets on a "template" var, so we will copy it
-     * in the one we will use in pselect.  This increases
-     * the speed a bit.
-     */
-
-    FD_ZERO(&read_set_init);    
     s32 reader_by_fd = g_server_context.udp_socket_count / g_server_context.udp_unit_per_interface;
     s32 cpu_count = sys_get_cpu_count();
     if(reader_by_fd > cpu_count)
@@ -579,7 +557,7 @@ server_sm_query_loop(struct service_worker_s *worker)
     if(server_udp_thread_pool == NULL)
     {
         log_err("server-sm: unable to allocate working threads pool");
-        return INVALID_STATE_ERROR;
+        return THREAD_CREATION_ERROR;
     }
     
     size_t backlog_queue_slots = g_server_context.worker_backlog_queue_size;
@@ -595,6 +573,10 @@ server_sm_query_loop(struct service_worker_s *worker)
     thread_pool_task_counter running_threads_counter;
     thread_pool_counter_init(&running_threads_counter, 0);
 
+    server_statistics_t **statistics_array = NULL;
+    u32 statistics_array_size = g_server_context.udp_interface_count * g_server_context.udp_unit_per_interface;
+    MALLOC_OBJECT_ARRAY_OR_DIE(statistics_array, server_statistics_t*, statistics_array_size, GENERIC_TAG);
+
     u32 initialised_context_indexes = 0;
     
     for(u32 udp_interface_index = 0; udp_interface_index < g_server_context.udp_interface_count; ++udp_interface_index)
@@ -602,6 +584,7 @@ server_sm_query_loop(struct service_worker_s *worker)
         for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
         {
             network_thread_context_s *ctx = ctxa.contextes[initialised_context_indexes];
+            statistics_array[initialised_context_indexes] = &ctxa.contextes[initialised_context_indexes]->statistics;
 
             yassert(ctx != NULL);
 
@@ -634,207 +617,14 @@ server_sm_query_loop(struct service_worker_s *worker)
     if(ISOK(ret))
     {
         log_info("server-sm: UDP threads up");
-
-        for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
-        {
-            int sockfd = g_server_context.tcp_socket[i];
-
-            if(sockfd >= 0)
-            {
-                maxfd = MAX(maxfd, sockfd);
-                FD_SET(sockfd, &read_set_init);
-            }
-            else
-            {
-                log_err("server-sm: invalid socket value (%i) in tcp listening sockets", sockfd);
-            }
-        }
-
-        ++maxfd; /* pselect actually requires maxfd + 1 */
-
-        /* compute maxfd plus one once and for all : done */
-
-        log_info("server-sm: running");
-
-        while(!service_should_reconfigure_or_stop(worker))
-        {
-            server_statistics.input_loop_count++;
-
-            /* Reset the pselect read set */
-
-            MEMCOPY(&read_set, &read_set_init, sizeof(fd_set));
-
-            /* At this moment waits only for READ SET or timeout of x seconds */
-
-            /*
-             * @note (p)select has known bugs on Linux & glibc
-             *
-             */
-
-            ret = pselect(maxfd,
-                    &read_set,
-                    NULL,
-                    NULL,
-                    &timeout,
-                    0);
-
-            if(ret > 0) /* Are any bit sets by pselect ? */
-            {
-                /* If pselect check for the correct sock file descriptor,
-                 * at this moment only READ SET
-                 */
-
-                /*
-                 * This variable will contain the pointer to the processing function.
-                 * It has been removed from the mesg structure at the time the latter
-                 * has been moved to the core.
-                 *
-                 * Reasons being: zdb *dependency & server dependency -> dependency loop
-                 *
-                 * Since the call is only local it should not have side effects.
-                 */
-
-                for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
-                {
-                    int sockfd = g_server_context.tcp_socket[i];
-
-                    if(FD_ISSET(sockfd, &read_set))
-                    {
-                        /* Jumps to the TCP processing function */
-                        server_process_tcp(sockfd);
-                        server_statistics.loop_rate_counter++;
-                    }
-                }
-            }
-            else /* ret <= 0 */
-            {
-                if(ret == -1)
-                {
-                    int err = errno;
-                    if((err != EINTR) && (err != EBADF))
-                    {
-                        /**
-                         *  From the man page, what we can expect is EBADF (bug) EINVAL (bug) or ENOMEM (critical)
-                         *  So I we can kill and notify.
-                         */
-                        log_err("server-sm: pselect: %r", ERRNO_ERROR);
-                    }
-                    /*else if(err == EBADF)
-                    {
-                        break;
-                    }*/
-                }
-                /*else if(dnscore_shuttingdown())
-                {
-                    break;
-                }*/
-
-                /* ret == 0 => no fd set at all and no error => timeout */
-
-                server_run_loop_timeout_countdown--;
-                server_statistics.input_timeout_count++;
-            }
-
-#if HAS_RRL_SUPPORT
-            rrl_cull();
-#endif
-        
-#if ZDB_HAS_LOCK_DEBUG_SUPPORT
-            zdb_zone_lock_monitor_log();
-#endif
-#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
-            zdb_zone_lock_set_monitor();
-#endif
-        
-            /* handles statistics logging */
-
-            if(log_statistics_enabled)
-            {
-                u32 tick = dnscore_timer_get_tick();
-
-                if((tick - previous_tick) >= g_config->statistics_max_period)
-                {
-                    u64 now = timems();
-                    u64 delta = now - server_run_loop_rate_tick;
-
-                    if(delta > 0)
-                    {
-                        /* log_info specifically targeted to the g_statistics_logger handle */
-
-                        server_statistics.loop_rate_elapsed = delta;
-
-                        memcpy(&server_statistics_sum, &server_statistics, sizeof(server_statistics_t));
-
-                        for(u32 udp_interface_index = 0, context_index = 0; udp_interface_index < g_server_context.udp_interface_count; ++udp_interface_index)
-                        {
-                            for(u32 unit_index = 0; unit_index < g_server_context.udp_unit_per_interface; unit_index++)
-                            {
-                                server_statistics_t *stats = &(ctxa.contextes[context_index]->statistics);
-
-                                assert(stats != NULL);
-
-                                server_statistics_sum.input_loop_count += stats->input_loop_count;
-                                /* server_statistics_sum.input_timeout_count += stats->input_timeout_count; */
-
-                                server_statistics_sum.udp_output_size_total += stats->udp_output_size_total;
-                                server_statistics_sum.udp_referrals_count += stats->udp_referrals_count;
-                                server_statistics_sum.udp_input_count += stats->udp_input_count;
-                                server_statistics_sum.udp_dropped_count += stats->udp_dropped_count;
-                                server_statistics_sum.udp_queries_count += stats->udp_queries_count;
-                                server_statistics_sum.udp_notify_input_count += stats->udp_notify_input_count;
-                                server_statistics_sum.udp_updates_count += stats->udp_updates_count;
-
-                                server_statistics_sum.udp_undefined_count += stats->udp_undefined_count;
-#if HAS_RRL_SUPPORT
-                                server_statistics_sum.rrl_slip += stats->rrl_slip;
-                                server_statistics_sum.rrl_drop += stats->rrl_drop;
-#endif
-                                for(u32 j = 0; j < SERVER_STATISTICS_ERROR_CODES_COUNT; j++)
-                                {
-                                    server_statistics_sum.udp_fp[j] += stats->udp_fp[j];
-                                }
-
-                                ++context_index;
-                            }
-                        }
-
-#if HAS_EVENT_DYNAMIC_MODULE
-                        if(dynamic_module_statistics_interface_chain_available())
-                        {
-                            dynamic_module_on_statistics_update(&server_statistics_sum, now);
-                        }
-#endif
-                        log_statistics(&server_statistics_sum);
-
-                        server_run_loop_rate_tick = now;
-                        server_run_loop_timeout_countdown = g_config->statistics_max_period;
-                        server_statistics.loop_rate_counter = 0;
-#if DEBUG
-#if HAS_ZALLOC_STATISTICS_SUPPORT
-                        zalloc_print_stats(termout);
-#endif
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT||DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT||DNSCORE_HAS_MMAP_DEBUG_SUPPORT
-                        debug_stat(DEBUG_STAT_TAGS|DEBUG_STAT_MMAP); // do NOT enable the dump
-#endif
-                        journal_log_status();
-
-                        debug_bench_logdump_all();
-#endif
-#if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
-                        debug_malloc_hook_caller_dump();
-#endif
-                    }
-
-                    previous_tick = tick;
-                }
-            } // if log_statistics_enabled
-        }
+        server_tcp_accept_loop(worker, statistics_array, statistics_array_size);
     }
     else
     {
         log_err("server-sm: initialisation failed");
     }
 
+    free(statistics_array);
 
 #if DEBUG
     {

@@ -67,6 +67,7 @@ struct logger_handle;
 #define DYNUPDATE_DIFF_RETURN_DNSKEY_REMOVED 2  // only covers ZSK
 #define DYNUPDATE_DIFF_RETURN_DNSKEY_UPDATED 4  // the reported ZSK status was actually applied
 #define DYNUPDATE_DIFF_RETURN_MASK           7
+#define DYNUPDATE_DIFF_RETURN_NSEC3PARAM     8
 
 #define DYNUPDATE_DIFF_DRYRUN   0x00000001
 #define DYNUPDATE_DIFF_RUN      0x00000000
@@ -167,9 +168,8 @@ typedef struct dnssec_chain_node_vtbl dnssec_chain_node_vtbl;
 struct dnssec_chain
 {
     zone_diff *diff;
-
-    ptr_set chain_diff;
     const dnssec_chain_node_vtbl *chain;
+    ptr_set chain_diff[DNSSEC_CHAIN_SUPPORTED_MAX];
     dnssec_chain_head_t chains[DNSSEC_CHAIN_SUPPORTED_MAX];
     bool chain_being_deleted[DNSSEC_CHAIN_SUPPORTED_MAX];
     int chains_count;

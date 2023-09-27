@@ -458,6 +458,15 @@ server_tcp(const host_address *ha, const host_address *client)
     // start tcp thread
 
     struct thread_pool_s *tp = thread_pool_init_ex(4, 4, "tcp-thread");
+
+    if(tp == NULL)
+    {
+        log_err("%r", THREAD_CREATION_ERROR);
+        close(sockfd);
+        free(addr);
+        return THREAD_CREATION_ERROR;
+    }
+
     thread_pool_task_counter counter;
     thread_pool_counter_init(&counter, 0);
 

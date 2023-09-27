@@ -29,8 +29,10 @@
 # 
 ################################################################################
 
-20230301:
-    YADIFA 2.6.4-public
+20230906:
+    YADIFA 2.6.5-public
 
-    Fixes an issue building for 32 bits targets.
+    Secondaries will nolonger enforce the TTL value of the NSEC3PARAM record.
+
+    Fixes an issue caused by a limitation of the select system call.
 

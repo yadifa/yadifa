@@ -510,7 +510,7 @@ main(int argc, char *argv[])
     }
     else
     {
-        struct thread_pool_s *tp = thread_pool_init_ex(g_config.workers, g_config.workers, "dnskey geneartors");
+        struct thread_pool_s *tp = thread_pool_init_ex(g_config.workers, g_config.workers, "dnskey generators");
         if(tp != NULL)
         {
             for(int i = 0; i < g_config.workers; ++i)

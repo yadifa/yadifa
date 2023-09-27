@@ -73,6 +73,7 @@
 #include "server_context.h"
 
 #include "server.h"
+#include "dnsdb/zdb_zone_load.h"
 
 #if HAS_EVENT_DYNAMIC_MODULE
 #include "dynamic-module-handler.h"
@@ -169,7 +170,7 @@ CONFIG_S32(      thread_count_by_address     , S_THREAD_COUNT_BY_ADDRESS  ) // d
 CONFIG_U32_RANGE(thread_affinity_base        , "0", 0, 3  )                 // first virtual cpu // doc
 CONFIG_U32_RANGE(thread_affinity_multiplier  , "0", 0, 4  )                 // dual thread // doc
 
-// how many threads for the dnssec processing)
+// how many threads for the dnssec processing
 #if DATABASE_ZONE_RRSIG_THREAD_POOL
 CONFIG_U32(      dnssec_thread_count         , S_DNSSEC_THREAD_COUNT      ) /// @note 20180712 edf -- THIS PARAMETER IS OBSOLETE
 #else

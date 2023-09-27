@@ -1401,13 +1401,18 @@ database_update(zdb *database, message_data *mesg)
 					                        log_info("database: update: %{dnsname}: DEBUG: key updated and added => maintenance will start", zone_origin(zone_desc));
                                             database_service_zone_dnssec_maintenance_start = zdb_zone_is_maintained(zone);
                                         }
-
                                         else if((ret & (DYNUPDATE_DIFF_RETURN_DNSKEY_UPDATED|DYNUPDATE_DIFF_RETURN_DNSKEY_REMOVED)) == (DYNUPDATE_DIFF_RETURN_DNSKEY_UPDATED|DYNUPDATE_DIFF_RETURN_DNSKEY_REMOVED))
                                         {
                                             zdb_zone_set_maintained(zone, TRUE);
                                             zdb_zone_set_maintenance_paused(zone, FALSE);
 
                                             log_info("database: update: %{dnsname}: DEBUG: key updated and removed => maintenance will start", zone_origin(zone_desc));
+                                            database_service_zone_dnssec_maintenance_start = zdb_zone_is_maintained(zone);
+                                        }
+                                        else if(ret & DYNUPDATE_DIFF_RETURN_NSEC3PARAM)
+                                        {
+                                            zdb_zone_set_maintained(zone, TRUE);
+                                            zdb_zone_set_maintenance_paused(zone, FALSE);
                                             database_service_zone_dnssec_maintenance_start = zdb_zone_is_maintained(zone);
                                         }
 #endif

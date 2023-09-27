@@ -152,6 +152,7 @@ static u32 thread_memory_size = 0;
 #endif
 
 #include "server.h"
+#include "log_statistics.h"
 
 #if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
 static debug_bench_s debug_accept;
@@ -1427,7 +1428,200 @@ server_process_tcp_finalize()
 }
 
 void
-server_process_tcp(int servfd)
+server_tcp_allocate_poll(struct pollfd **pollfdsp, unsigned int *pollfds_sizep)
+{
+    assert((pollfdsp != NULL) && (pollfds_sizep != NULL));
+
+    struct pollfd *pollfds;
+    unsigned int pollfds_size = 0;
+    pollfds = (struct pollfd*)malloc(sizeof(struct pollfd) * g_server_context.tcp_socket_count);
+    ZEROMEMORY(pollfds, sizeof(struct pollfd) * g_server_context.tcp_socket_count);
+
+    for(u32 i = 0; i < g_server_context.tcp_socket_count; ++i)
+    {
+        int sockfd = g_server_context.tcp_socket[i];
+
+        if(sockfd >= 0)
+        {
+            pollfds[pollfds_size].fd = sockfd;
+            pollfds[pollfds_size].events = POLLIN;
+            ++pollfds_size;
+        }
+        else
+        {
+            log_err("server-mm: invalid socket value (%i) in tcp listening sockets", sockfd);
+        }
+    }
+
+    *pollfdsp = pollfds;
+    *pollfds_sizep = pollfds_size;
+}
+
+void
+server_tcp_accept_loop(struct service_worker_s *worker, server_statistics_t **statistics_array, u32 statistics_array_size)
+{
+    ya_result ret;
+    struct pollfd *pollfds;
+    unsigned int pollfds_size;
+    server_tcp_allocate_poll(&pollfds, &pollfds_size);
+
+    u64 server_run_loop_rate_tick = 0;
+    u32 previous_tick = 0;
+    u32 server_run_loop_timeout_countdown = g_config->statistics_max_period;
+    bool log_statistics_enabled = (g_statistics_logger != NULL) && (g_config->server_flags & SERVER_FL_STATISTICS) != 0;
+
+    static server_statistics_t server_statistics_sum;
+
+    log_info("server-tcp: running");
+
+    while(!service_should_reconfigure_or_stop(worker))
+    {
+        server_statistics.input_loop_count++;
+
+        ret = poll(pollfds, pollfds_size, 1000); // timeout is 1000 ms
+
+        if(ret > 0)
+        {
+            /*
+             * ret is the number of entries to check
+             */
+
+            for(u32 i = 0; i < pollfds_size; ++i)
+            {
+                if(pollfds[i].revents & POLLIN)
+                {
+                    pollfds[i].revents = 0;
+                    server_tcp_process(pollfds[i].fd);
+                    server_statistics.loop_rate_counter++;
+                }
+                if(--ret == 0)
+                {
+                    break;
+                }
+            }
+        }
+        else /* ret <= 0 */
+        {
+            if(ret == -1)
+            {
+                int err = errno;
+                if((err != EINTR) && (err != EBADF))
+                {
+                    /**
+                     *  From the man page, what we can expect is EBADF (bug) EINVAL (bug) or ENOMEM (critical)
+                     *  So I we can kill and notify.
+                     */
+                    log_err("server-mm: poll: %r", ERRNO_ERROR);
+                }
+                /*else if(err == EBADF)
+                {
+                    break;
+                }*/
+            }
+            /*else if(dnscore_shuttingdown())
+            {
+                break;
+            }*/
+
+            /* ret == 0 => no fd set at all and no error => timeout */
+
+            server_run_loop_timeout_countdown--;
+            server_statistics.input_timeout_count++;
+        }
+
+#if HAS_RRL_SUPPORT
+        rrl_cull();
+#endif
+
+#if ZDB_HAS_LOCK_DEBUG_SUPPORT
+        zdb_zone_lock_monitor_log();
+#endif
+#if ZDB_HAS_OLD_MUTEX_DEBUG_SUPPORT
+        zdb_zone_lock_set_monitor();
+#endif
+
+        /* handles statistics logging */
+
+        if(log_statistics_enabled)
+        {
+            u32 tick = dnscore_timer_get_tick();
+
+            if((tick - previous_tick) >= g_config->statistics_max_period)
+            {
+                u64 now = timems();
+                u64 delta = now - server_run_loop_rate_tick;
+
+                if(delta > 0)
+                {
+                    /* log_info specifically targeted to the g_statistics_logger handle */
+
+                    server_statistics.loop_rate_elapsed = delta;
+
+                    memcpy(&server_statistics_sum, &server_statistics, sizeof(server_statistics_t));
+
+                    for(u32 i = 0; i < statistics_array_size; ++i)
+                    {
+                        server_statistics_t *stats = statistics_array[i];
+
+                        assert(stats != NULL);
+
+                        server_statistics_sum.input_loop_count += stats->input_loop_count;
+                        /* server_statistics_sum.input_timeout_count += stats->input_timeout_count; */
+
+                        server_statistics_sum.udp_output_size_total += stats->udp_output_size_total;
+                        server_statistics_sum.udp_referrals_count += stats->udp_referrals_count;
+                        server_statistics_sum.udp_input_count += stats->udp_input_count;
+                        server_statistics_sum.udp_dropped_count += stats->udp_dropped_count;
+                        server_statistics_sum.udp_queries_count += stats->udp_queries_count;
+                        server_statistics_sum.udp_notify_input_count += stats->udp_notify_input_count;
+                        server_statistics_sum.udp_updates_count += stats->udp_updates_count;
+
+                        server_statistics_sum.udp_undefined_count += stats->udp_undefined_count;
+#if HAS_RRL_SUPPORT
+                        server_statistics_sum.rrl_slip += stats->rrl_slip;
+                        server_statistics_sum.rrl_drop += stats->rrl_drop;
+#endif
+                        for(u32 j = 0; j < SERVER_STATISTICS_ERROR_CODES_COUNT; j++)
+                        {
+                            server_statistics_sum.udp_fp[j] += stats->udp_fp[j];
+                        }
+                    }
+
+#if HAS_EVENT_DYNAMIC_MODULE
+                    if(dynamic_module_statistics_interface_chain_available())
+                        {
+                            dynamic_module_on_statistics_update(&server_statistics_sum, now);
+                        }
+#endif
+                    log_statistics(&server_statistics_sum);
+
+                    server_run_loop_rate_tick = now;
+                    server_run_loop_timeout_countdown = g_config->statistics_max_period;
+                    server_statistics.loop_rate_counter = 0;
+#if DEBUG
+#if HAS_ZALLOC_STATISTICS_SUPPORT
+                    zalloc_print_stats(termout);
+#endif
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT || DNSCORE_HAS_MMAP_DEBUG_SUPPORT
+                    debug_stat(DEBUG_STAT_TAGS|DEBUG_STAT_MMAP); // do NOT enable the dump
+#endif
+                    debug_bench_logdump_all();
+#endif
+#if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
+                    debug_malloc_hook_caller_dump();
+#endif
+                }
+
+                previous_tick = tick;
+            }
+        } // if log_statistics_enabled
+    }
+
+    free(pollfds);
+}
+
+void
+server_tcp_process(int sockfd)
 {
     server_process_tcp_thread_parm* parm;
 
@@ -1449,7 +1643,7 @@ server_process_tcp(int servfd)
     ya_result ret;
     tcp_manager_socket_context_t* sctx = (tcp_manager_socket_context_t*)(intptr)0x5a5a5a5a;
 
-    if((ret = tcp_manager_accept(servfd, &sctx)) >= 0)
+    if((ret = tcp_manager_accept(sockfd, &sctx)) >= 0)
     {
         TCPSTATS(tcp_input_count++);
 
@@ -1461,7 +1655,7 @@ server_process_tcp(int servfd)
 
         ZALLOC_OBJECT_OR_DIE(parm, server_process_tcp_thread_parm, TPROCPRM_TAG);
         parm->sctx = sctx;
-        parm->svr_sockfd = servfd;
+        parm->svr_sockfd = sockfd;
 
         thread_pool_enqueue_call(server_tcp_thread_pool, server_process_tcp_thread, parm, NULL, "server_process_tcp_thread_start");
     }
@@ -1501,7 +1695,7 @@ server_process_tcp(int servfd)
 #if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
         u64 bench = debug_bench_start(&debug_accept_reject);
 #endif
-        int rejected_fd = accept(servfd, &addr.sa, &addr_len);
+        int rejected_fd = accept(sockfd, &addr.sa, &addr_len);
 #if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
         debug_bench_stop(&debug_accept_reject, bench);
 #endif
@@ -1524,7 +1718,7 @@ server_process_tcp(int servfd)
 #if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
         u64 bench = debug_bench_start(&debug_accept);
 #endif
-        parm->sockfd = accept(servfd, &addr.sa, &addr_len);
+        parm->sockfd = accept(sockfd, &addr.sa, &addr_len);
 #if DEBUG_BENCH_FD && !DNSCORE_HAS_TCP_MANAGER
         debug_bench_stop(&debug_accept, bench);
 #endif
@@ -1588,7 +1782,7 @@ server_process_tcp(int servfd)
 
     memcpy(&parm->sa, &addr, addr_len);
     parm->addr_len = addr_len;
-    parm->svr_sockfd = servfd;
+    parm->svr_sockfd = sockfd;
     
     if(poll_add(parm->sockfd))
     {
@@ -1909,6 +2103,15 @@ server_service_main(struct service_worker_s *worker)
                     break;
                 }
 
+                if(ret == MAKE_ERRNO_ERROR(ENFILE))
+                {
+                    u32 count = host_address_count(g_config->listen) * g_config->thread_count_by_address;
+
+                    log_err("insufficient file open limit. It should be bigger than %u", count + 1024);
+                    dnscore_shutdown();
+                    break;
+                }
+
                 if((now - network_setup_complain_last) > ONE_SECOND_US * 60)
                 {
                     log_err("failed to setup the network: %r", ret);
@@ -1984,6 +2187,9 @@ server_service_main(struct service_worker_s *worker)
         if(FAIL(ret = server_run(worker)))
         {
             log_err("failed to start the server workers: %r", ret);
+
+            dnscore_shutdown();
+            break;
         }
 
         if(!service_should_run(worker))

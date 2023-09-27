@@ -661,6 +661,18 @@ nsec3_chain_replay_execute(chain_replay *cr)
                     }
 
                     nsec3_delete(&n3->items, tmp_digest);
+
+                    if(n3->items == NULL)
+                    {
+                        // remove the chain
+                        log_info("%{dnsname} NSEC3 chain emptied", crd->zone->origin);
+
+                        if(n3->next != NULL)
+                        {
+                            nsec3_zone_detach(crd->zone, n3);
+                            nsec3_zone_free(n3);
+                        }
+                    }
                 }
                 else
                 {

@@ -293,8 +293,7 @@ static const struct resource_record_view_vtbl zone_diff_label_rr_rrv_vtbl =
 void dnssec_chain_init(dnssec_chain *dc, const dnssec_chain_node_vtbl *chain_functions, zone_diff *diff)
 {
     dc->diff = diff;
-    ptr_set_init(&dc->chain_diff);
-    dc->chain_diff.compare = chain_functions->compare;
+
     dc->chain = chain_functions;
     dc->chains_count = 0;
 }
@@ -313,6 +312,8 @@ void dnssec_chain_add_chain(dnssec_chain *dc, dnssec_chain_head_t chain, bool be
 {
     if(dc->chains_count < DNSSEC_CHAIN_SUPPORTED_MAX)
     {
+        ptr_set_init(&dc->chain_diff[dc->chains_count]);
+        dc->chain_diff[dc->chains_count].compare = dc->chain->compare;
         dc->chains[dc->chains_count] = chain;
         dc->chain_being_deleted[dc->chains_count] = being_deleted;
         ++dc->chains_count;
@@ -341,7 +342,7 @@ static void dnssec_chain_add_node(dnssec_chain *dc, const u8 *fqdn, u16 rtype, u
 #endif
         void *chain_node = dc->chain->node_new(fqdn, chain);
 
-        ptr_node *node = ptr_set_insert(&dc->chain_diff, chain_node);
+        ptr_node *node = ptr_set_insert(&dc->chain_diff[chain_index], chain_node);
         
         // if chain is not empty, edit it, else create it with one node
         
@@ -360,7 +361,7 @@ static void dnssec_chain_add_node(dnssec_chain *dc, const u8 *fqdn, u16 rtype, u
                 // zone_diff_add_fqdn(dc->diff, node->fqdn, rr_label);
                 
                 yassert(chain_begin != NULL);
-                ptr_node *node_prev = ptr_set_insert(&dc->chain_diff, chain_begin);
+                ptr_node *node_prev = ptr_set_insert(&dc->chain_diff[chain_index], chain_begin);
                 if(node_prev->value == NULL)
                 {
                     node_prev->value = chain_begin;
@@ -372,7 +373,7 @@ static void dnssec_chain_add_node(dnssec_chain *dc, const u8 *fqdn, u16 rtype, u
 
                 void *chain_end = dc->chain->node_next(chain_node);
                 yassert(chain_end != NULL);
-                ptr_node *node_next = ptr_set_insert(&dc->chain_diff, chain_end);
+                ptr_node *node_next = ptr_set_insert(&dc->chain_diff[chain_index], chain_end);
                 if(node_next->value == NULL)
                 {
                     node_next->value = chain_end;
@@ -407,7 +408,6 @@ static void dnssec_chain_add_node(dnssec_chain *dc, const u8 *fqdn, u16 rtype, u
 static void dnssec_chain_add_node_neighbours(dnssec_chain *dc, const zone_diff_fqdn *diff_fqdn, void *chain_node, int chain_index)
 {
     (void)diff_fqdn;
-    (void)chain_index;
 
     void *chain_begin = dc->chain->node_prev(chain_node);
     yassert(chain_begin != NULL);
@@ -415,7 +415,7 @@ static void dnssec_chain_add_node_neighbours(dnssec_chain *dc, const zone_diff_f
     format_writer chain_node_prev_fw;
     dc->chain->format_writer_init(chain_begin, &chain_node_prev_fw);
 #endif
-    ptr_node *node_prev = ptr_set_insert(&dc->chain_diff, chain_begin);
+    ptr_node *node_prev = ptr_set_insert(&dc->chain_diff[chain_index], chain_begin);
     if(node_prev->value == NULL)
     {
         node_prev->value = chain_begin;
@@ -441,7 +441,7 @@ static void dnssec_chain_add_node_neighbours(dnssec_chain *dc, const zone_diff_f
     format_writer chain_node_next_fw;
     dc->chain->format_writer_init(chain_end, &chain_node_next_fw);
 #endif
-    ptr_node *node_next = ptr_set_insert(&dc->chain_diff, chain_end);
+    ptr_node *node_next = ptr_set_insert(&dc->chain_diff[chain_index], chain_end);
     if(node_next->value == NULL)
     {
 #if DEBUG
@@ -521,7 +521,7 @@ dnssec_chain_add_node_from_diff_fqdn(dnssec_chain *dc, zone_diff_fqdn *diff_fqdn
         log_debug2("dnssec-chain: %{dnsname}: chain[%i]: node is %w", diff_fqdn->fqdn, chain_index, &chain_node_fw);
 #endif
 
-        ptr_node *node = ptr_set_insert(&dc->chain_diff, chain_node);
+        ptr_node *node = ptr_set_insert(&dc->chain_diff[chain_index], chain_node);
         
         if(!dc->chain->isempty(chain))
         {
@@ -740,20 +740,24 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
     for(int chain_index = 0; chain_index < dc->chains_count; ++chain_index)
     {
         void *chain = dc->chains[chain_index];
-        
+
+        // clear the nodes (from a previous chain)
+
         ptr_vector_clear(&nodes);
 
         // gather all the nodes in the chain in an array
         // they are inserted in sorted order (ptr_set_iterator does this)
 
         ptr_set_iterator iter;
-        ptr_set_iterator_init(&dc->chain_diff, &iter);
+        ptr_set_iterator_init(&dc->chain_diff[chain_index], &iter);
         while(ptr_set_iterator_hasnext(&iter))
         {
             ptr_node *node = ptr_set_iterator_next_node(&iter);
             yassert(node->value != NULL);
             ptr_vector_append(&nodes, node->value);
         }
+
+        // "nodes" is the list of all the nodes
 
         // look in a circular pattern for all the nodes that have the "delete" status
         
@@ -781,20 +785,26 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
         int last_end;
 
         bool whole_chain = FALSE; // does the operation covers the whole chain
-        
+
+        // if the chain isn't empty
+
         if(!dc->chain->isempty(chain))
         {
             // chain is not empty but may be too small (1 item)
             
             if(ptr_vector_last_index(&nodes) > 0) // if true, then it has more than one item
             {
+                // the chain has more than one item
+
                 int exists = 0;
                 int begin = 0;
                 int end = 0;
                 int both = 0;
                 
                 bool prev_does_not_alter_the_chain = FALSE;
-                
+
+                // note: this block is the initial step of the loop that follows
+                // check if the last node of the chain exists already
                 {
                     void *node = ptr_vector_last(&nodes);
                     u8 state = dc->chain->state_get(node);
@@ -803,11 +813,17 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                     {
                         ++exists;
                         // if the node exists and is not deleted
+                        // 00 != 01 = 1
+                        // 01       = 0
+                        // 10       = 1
+                        // 11       = 1
+                        // only false if the node exists, hasn't been added and is being deleted
+
                         prev_does_not_alter_the_chain = ((state & (DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_DELETE)) != DNSSEC_CHAIN_DELETE);
                     }
                     else // the node did not exist (and thus will be added, as there is no other reason being here)
                     {
-                        prev_does_not_alter_the_chain = FALSE;
+                        prev_does_not_alter_the_chain = FALSE; // the chain will be altered
                     }
                 }
                 
@@ -839,18 +855,21 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                     {
                         ++exists;
                         // if the node exists and is not deleted
+                        // only false if the node exists, hasn't been added and is being deleted (same as on the previous block)
                         does_not_alter_the_chain = ((state & (DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_DELETE)) != DNSSEC_CHAIN_DELETE);
                     }
                     else // the node did not exist (and thus will be added, as there is no other reason being here)
                     {
-                        does_not_alter_the_chain = FALSE;
+                        does_not_alter_the_chain = FALSE; // the chain will be altered
                     }
-                    
-                    if(!does_not_alter_the_chain && prev_does_not_alter_the_chain) // since this one is added and not the previous one, the previous one has to be
-                    {                                          // updated
+
+                    // if the current node alters the chain but not the previous one
+
+                    if(!does_not_alter_the_chain && prev_does_not_alter_the_chain) // since this one is added and not the previous one, the previous one has to be updated
+                    {
                         void *prev_node = ptr_vector_get_mod(&nodes, i - 1);
                         u8 prev_state = dc->chain->state_get(prev_node);
-                        dc->chain->state_set(prev_node, prev_state | (DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_DELETE));
+                        dc->chain->state_set(prev_node, prev_state | (DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_DELETE));   // means "updated"
                     }
                     
                     prev_does_not_alter_the_chain = does_not_alter_the_chain;
@@ -858,32 +877,56 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                 
                 int chain_loops = 0;
                 
-                if(begin + end == 0)
+                if(begin + end == 0) // there are no blocks marked as "begin" nor "end"
                 {
                     // the chain is looping on itself, take the first exist and mark it as begin & end
-                    
+
+                    int delete = 0;
                     for(int i = 0; i <= ptr_vector_last_index(&nodes); ++i)
                     {
                         void *node = ptr_vector_get(&nodes, i);
                         u8 state = dc->chain->state_get(node);
                         u8 masked_state = state & (DNSSEC_CHAIN_EXISTS|DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_DELETE);
+
+                        // if the node exists, exists and is added or exists and is updated
+
                         if((masked_state == DNSSEC_CHAIN_EXISTS) ||
                            (masked_state == (DNSSEC_CHAIN_EXISTS | DNSSEC_CHAIN_ADD)) ||
                            (masked_state == (DNSSEC_CHAIN_EXISTS | DNSSEC_CHAIN_ADD | DNSSEC_CHAIN_DELETE)))
                         {
+                            // then mark it as the "begin" and the "end" as well
                             dc->chain->state_set(node, state | (DNSSEC_CHAIN_BEGIN|DNSSEC_CHAIN_END));
-                            first_begin = i;
-                            chain_loops = 1;
+                            first_begin = i; // this node is the first (and last) "begin" node
+                            chain_loops = 1; // one loop on this whole chain
                             break;
                         }
+
+                        if(masked_state == (DNSSEC_CHAIN_EXISTS | DNSSEC_CHAIN_DELETE))
+                        {
+                            ++delete;
+                        }
+                    }
+
+                    // are all nodes deleted?
+
+                    if(delete == ptr_vector_size(&nodes))
+                    {
+                        void *node = ptr_vector_get(&nodes, 0);
+                        u8 state = dc->chain->state_get(node);
+                        dc->chain->state_set(node, state | (DNSSEC_CHAIN_BEGIN|DNSSEC_CHAIN_END));
+                        first_begin = 0;
+                        chain_loops = 1;
                     }
                 }
-                else if((begin == 1) && (end == 1) && (both == 1))
+                else if((begin == 1) && (end == 1) && (both == 1)) // there is exactly one "begin", one "end" and one that's both
                 {
                     whole_chain = TRUE;
                 }
 
                 yassert(first_begin >= 0);
+
+                // chain_loops is 1 iff one node was set as begin & end manually
+                // the last "end" is at (modulo) the first "begin" + the number of nodes
 
                 last_end = first_begin + ptr_vector_last_index(&nodes) + chain_loops;
             }
@@ -892,7 +935,7 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                 log_debug("update: %{dnsname}: chain #%i update has only one item", diff->origin, chain_index);
                 
                 first_begin = 0;
-                last_end = ptr_vector_last_index(&nodes);
+                last_end = ptr_vector_last_index(&nodes); // should be 0
             }
         }
         else // chain is empty, we add everything
@@ -920,38 +963,50 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
         
         if(dc->chain->isempty(chain) || whole_chain || ((first_begin == 0) && (last_end == 0)))
         {
-            // we are processing a new/whole chain, or the chain chain is made of one record
-            
+            // we are processing a new/whole chain, or the chain is made of one record
+
+            // for all nodes from the first to the last (modulo)
             for(int i = first_begin; i <= last_end; ++i)
             {
                 int j = i + 1;
+
+                // get the node and its follower
+
                 void *node = ptr_vector_get_mod(&nodes, i);
                 void *node_next = ptr_vector_get_mod(&nodes, j);
+
                 u8 state = dc->chain->state_get(node);
+
+                // if the node exists
 
                 if(state & DNSSEC_CHAIN_EXISTS)
                 {
+                    // if the node is remapped (bitmask change) or the node is updated
                     if((state & DNSSEC_CHAIN_REMAP) || ((state & (DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_ADD)) == (DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_ADD)))
                     {
 #if DEBUG
                         log_debug3("update: %{dnsname}: chain %i state (%02x) del/add", diff->origin, chain_index, state);
 #endif
+                        // delete then add the node
                         dc->chain->publish_delete(chain, node, node_next, diff, del);
                         dnssec_chain_store_diff_publish_chain_node(dc, diff, keys, chain, node, node_next, add);
-                    }
+                    } // if the node is deleted
                     else if(state & DNSSEC_CHAIN_DELETE)
                     {
 #if DEBUG
                         log_debug3("update: %{dnsname}: chain %i state (%02x) del", diff->origin, chain_index, state);
 #endif
+                        // delete the node
                         dc->chain->publish_delete(chain, node, node_next, diff, del);
                     }
                 }
-                else
+                else // if the node doesn't exists
                 {
-                    if((state & DNSSEC_CHAIN_EXISTS) == 0)
+                    if((state & DNSSEC_CHAIN_EXISTS) == 0) // always true at this point
                     {
+                        // remove any delete mark
                         state &= ~DNSSEC_CHAIN_DELETE;      // cannot delete what does not exists
+                        // if the node was marked as a remap (bitmap change)
                         if(state & DNSSEC_CHAIN_REMAP)
                         {
                             state &= ~DNSSEC_CHAIN_REMAP;   // do not remap, create
@@ -961,11 +1016,14 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                         dc->chain->state_set(node, state);
                     }
 
+                    // if the node is being added
+
                     if(state & DNSSEC_CHAIN_ADD)
                     {
 #if DEBUG
                         log_debug3("update: %{dnsname}: chain %i state (%02x) add", diff->origin, chain_index, state);
 #endif
+                        // publish the node
                         dnssec_chain_store_diff_publish_chain_node(dc, diff, keys, chain, node, node_next, add);
                     }
                 }
@@ -980,45 +1038,78 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
         void *next_will_exist_node = NULL;
         int next_did_exist_index = -1;
         int next_will_exist_index = -1;
+
+        // for all nodes from the first to the last (modulo)
         
         for(int i = first_begin; i < last_end; ++i)
         {
             void *node = ptr_vector_get_mod(&nodes, i);
             u8 state = dc->chain->state_get(node);
 
+#if DEBUG
+            {
+                format_writer chain_node_fw;
+                dc->chain->format_writer_init(node, &chain_node_fw);
+                format_writer temp_fw_0 = {zone_diff_chain_state_format, &state};
+                log_debug1("dnssec-chain: %{dnsname}: chain %i node %w with state %w", diff->origin, chain_index, &chain_node_fw, &temp_fw_0);
+            }
+#endif
+
+            // if the node doesn't exists
+
             if((state & DNSSEC_CHAIN_EXISTS) == 0)
             {
+                // remove any delete mark
                 state &= ~DNSSEC_CHAIN_DELETE;      // cannot delete what does not exists
+
+                // if the is marked as remap
                 if(state & DNSSEC_CHAIN_REMAP)
                 {
+                    // remove the remap mark and add it instead
                     state &= ~DNSSEC_CHAIN_REMAP;   // do not remap, create
                     state |= DNSSEC_CHAIN_ADD;
                 }
 
                 dc->chain->state_set(node, state);
             }
-            
+
+            // if the node is marked as deleted or remapped (note: the node must be marked as "exists" too)
+
             if(state & (DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_REMAP))
             {
 #if DEBUG
-                if((state & DNSSEC_CHAIN_EXISTS) == 0)
+                if((state & DNSSEC_CHAIN_EXISTS) == 0) // impossible, given the previous block
                 {
                     format_writer chain_node_fw;
                     dc->chain->format_writer_init(node, &chain_node_fw);
                     format_writer temp_fw_0 = {zone_diff_chain_state_format, &state};
-                    log_err("dnssec-chain: %{dnsname}: chain %i node %w with state %w should be remapped or deleted but does not exist ?",
+                    log_err("dnssec-chain: %{dnsname}: chain %i node %w with state %w should be remapped or deleted but does not exist?",
                         diff->origin, chain_index, &chain_node_fw, &temp_fw_0);
                     logger_flush();
                 }
 #endif
                 yassert(state & DNSSEC_CHAIN_EXISTS); // trips on an empty terminal : the node to delete does not exists.
                 
-                if(next_did_exist_index <= i)
+                if(next_did_exist_index <= i) // always true on the first iteration
                 {
+                    // for all nodes following this one (modulo)
+
                     for(int j = i + 1; j <= last_end; ++j)
                     {
                         void *next_node = ptr_vector_get_mod(&nodes, j);
                         u8 next_state = dc->chain->state_get(next_node);
+
+#if DEBUG
+                        {
+                            format_writer chain_node_fw;
+                            dc->chain->format_writer_init(next_node, &chain_node_fw);
+                            format_writer temp_fw_0 = {zone_diff_chain_state_format, &next_state};
+                            log_debug1("dnssec-chain: %{dnsname}: chain %i next-node [%i] %w with state %w (delete/remap loop)",
+                                    diff->origin, chain_index, j, &chain_node_fw, &temp_fw_0);
+                        }
+#endif
+                        // if the following node exists, then keep it aside
+
                         if(next_state & DNSSEC_CHAIN_EXISTS)
                         {
                             next_did_exist_node = next_node;
@@ -1027,26 +1118,56 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                         }
                     }
                 }
-                
+
+#if DEBUG
+                logger_flush();
+#endif
                 yassert(next_did_exist_index > i);
+
+                // publish that interval being deleted ...
                 
                 dc->chain->publish_delete(chain, node, next_did_exist_node, diff, del);
             }
+
+            // if the node is ...
             
             switch(state & (DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_EXISTS|DNSSEC_CHAIN_REMAP))
             {
+                // added
+                // added with a remapped
+                // updated
+                // existing and added with a remap
+                // existing, updated with a remap
                 case DNSSEC_CHAIN_ADD:
                 case DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_REMAP:
                 case DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_EXISTS:
                 case DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_EXISTS|DNSSEC_CHAIN_REMAP:
                 case DNSSEC_CHAIN_DELETE|DNSSEC_CHAIN_ADD|DNSSEC_CHAIN_EXISTS|DNSSEC_CHAIN_REMAP:
                 {
-                    if(next_will_exist_index <= i)
+                    if(next_will_exist_index <= i) // always true on the first iteration
                     {
+                        // for all nodes following this one (modulo)
+
                         for(int j = i + 1; j <= last_end; ++j)
                         {
                             void *next_node = ptr_vector_get_mod(&nodes, j);
                             u8 next_state = dc->chain->state_get(next_node);
+
+#if DEBUG
+                            {
+                                format_writer chain_node_fw;
+                                dc->chain->format_writer_init(next_node, &chain_node_fw);
+                                format_writer temp_fw_0 = {zone_diff_chain_state_format, &next_state};
+                                log_debug1("dnssec-chain: %{dnsname}: chain %i next-node [%i] %w with state %w (add/update/remap loop)",
+                                           diff->origin, chain_index, j, &chain_node_fw, &temp_fw_0);
+                            }
+#endif
+                            // if the node is added, or exist (and will keep existing)
+                            // a.k.a
+                            // if the node will exist after this operation ...
+                            //
+                            // then keep it aside
+
                             if((next_state & DNSSEC_CHAIN_ADD) || ((next_state & (DNSSEC_CHAIN_DELETE | DNSSEC_CHAIN_EXISTS)) == DNSSEC_CHAIN_EXISTS))
                             {
                                 next_will_exist_node = next_node;
@@ -1055,12 +1176,17 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                             }
                         }
                     }
-                    
+
+#if DEBUG
+                    logger_flush();
+#endif
+
                     yassert(next_will_exist_index > i);
 
 #if DEBUG
                     log_debug3("update: %{dnsname}: chain %i state (%02x) publish chain node", diff->origin, chain_index, state);
 #endif
+                    // publish that interval
                     
                     dnssec_chain_store_diff_publish_chain_node(dc, diff, keys, chain, node, next_will_exist_node, add);
                     
@@ -1072,7 +1198,7 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
                 }
             }
         } // for all items in [begin;end[
-    }
+    } // for all chains
     
     ptr_vector_destroy(&nodes);
 }
@@ -1083,7 +1209,10 @@ void dnssec_chain_store_diff(dnssec_chain *dc, zone_diff *diff, ptr_vector *keys
 
 void dnssec_chain_finalize(dnssec_chain *dc)
 {
-    ptr_set_callback_and_destroy(&dc->chain_diff, dc->chain->ptr_set_node_delete_callback);
+    for(int chain_index = 0; chain_index < dc->chains_count; ++chain_index)
+    {
+        ptr_set_callback_and_destroy(&dc->chain_diff[chain_index], dc->chain->ptr_set_node_delete_callback);
+    }
 }
 
 static int zone_diff_label_rr_compare(const void *node_a, const void *node_b)
@@ -6127,8 +6256,10 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     ///       This condition is tested later.
 
                     check_for_last_nsec3param_removal = TRUE;
+                    ret_status |= DYNUPDATE_DIFF_RETURN_NSEC3PARAM;
+                    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
                 }
-                else
+                else // add one
                 {
                     // scan-build false positive : assumes rdata_size < 0 => impossible
                     //                                  or ((rdata_size == 0) & (rclass == CLASS_ANY)) => this would branch in the first "if" a few lines above
@@ -6140,6 +6271,8 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
                     continue;
 #else
                     rtype = TYPE_NSEC3PARAMQUEUED;
+                    ret_status |= DYNUPDATE_DIFF_RETURN_NSEC3PARAM;
+                    zdb_zone_set_status(zone, ZDB_ZONE_STATUS_GENERATE_CHAIN);
 #endif
                 }
             }
@@ -6551,6 +6684,8 @@ dynupdate_diff(zdb_zone *zone, packet_unpack_reader_data *reader, u16 count, u8 
 
                 return RCODE_ERROR_CODE(RCODE_REFUSED);
             }
+
+            // remove the record, create the removal placeholder
         }
         // else there was no NSEC3PARAM to begin with
     }

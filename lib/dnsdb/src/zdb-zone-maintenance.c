@@ -65,6 +65,7 @@
 
 #include "dnsdb/zdb_zone_label_iterator.h"
 #include "dnsdb/zdb-zone-maintenance.h"
+#include "dnsdb/zdb_zone_load.h"
 
 extern logger_handle* g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
@@ -959,7 +960,7 @@ zdb_zone_maintenance_from_chain_iteration_loop_break:
                     // find the nsec3param matching nsec3chainstate in nsec3param_rrset
                     // if no match has been found, add a new nsec3param
 
-                    zone_diff_label_rr *rr = zone_diff_record_add(&diff, zone->apex, zone->origin, TYPE_NSEC3PARAM, 0,
+                    zone_diff_label_rr *rr = zone_diff_record_add(&diff, zone->apex, zone->origin, TYPE_NSEC3PARAM, 0 /* TTL value enforced to 0 */,
                             ZDB_PACKEDRECORD_PTR_RDATASIZE(nsec3chainstate) - 1,
                             ZDB_PACKEDRECORD_PTR_RDATAPTR(nsec3chainstate)
                             );
@@ -1145,7 +1146,6 @@ zdb_zone_maintenance_from_chain_iteration_loop_break:
         }
         else
         {
-
             if(mctx.zone->progressive_signature_update.labels_at_once > 1)
             {
                 mctx.zone->progressive_signature_update.labels_at_once /= 2;

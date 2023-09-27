@@ -608,10 +608,10 @@ static inline void SET_U64_AT_P(void* p, u64 v)
 #define MAX_S32 ((s32)0x7fffffffL)
 #define MAX_S64 ((s64)0x7fffffffffffffffLL)
 
-#define MIN_S8  ((s8)0xff)
-#define MIN_S16 ((s16)0xffff)
-#define MIN_S32 ((s32)0xffffffffL)
-#define MIN_S64 ((s64)0xffffffffffffffffLL)
+#define MIN_S8  ((s8)0x80)
+#define MIN_S16 ((s16)0x8000)
+#define MIN_S32 ((s32)0x80000000L)
+#define MIN_S64 ((s64)0x8000000000000000LL)
 
 #define CLEARED_SOCKET (-1)
 

@@ -46,6 +46,8 @@
  *
  * USE INCLUDES */
 
+#include <poll.h>
+
 #include <dnscore/message.h>
 #include <dnscore/logger.h>
 #include <dnscore/service.h>
@@ -177,9 +179,11 @@ int server_process_message_udp(network_thread_context_base_t *ctx, message_data 
 extern server_statistics_t server_statistics;
 #endif
 
+void server_tcp_allocate_poll(struct pollfd **pollfdsp, unsigned int *pollfds_sizep);
 
+void server_tcp_accept_loop(struct service_worker_s *worker, server_statistics_t **statistics_array, u32 statistics_array_size);
 
-void server_process_tcp(int sockfd);
+void server_tcp_process(int sockfd);
 
 /**
  * Initialises the DNS service.

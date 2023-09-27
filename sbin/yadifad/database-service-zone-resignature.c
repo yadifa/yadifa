@@ -1750,7 +1750,7 @@ database_service_zone_resignature_init()
     }
     mutex_unlock(&database_service_zone_resignature_publish_dnskey_mtx);
     
-    return (database_service_zone_resignature_publish_dnskey_tp != NULL)?SUCCESS:ERROR;
+    return (database_service_zone_resignature_publish_dnskey_tp != NULL)?SUCCESS:THREAD_CREATION_ERROR;
 }
 
 ya_result

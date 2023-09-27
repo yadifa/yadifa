@@ -1279,6 +1279,10 @@ program_mode_play_all(bool does_loop, bool daemonise)
 
         free(args);
     }
+    else
+    {
+        log_err("failed to create the thread pool: %r", THREAD_CREATION_ERROR);
+    }
 
     if(does_loop)
     {

@@ -78,6 +78,8 @@ extern "C"
 #define ZDB_ZONE_NSEC3             0x0020
 #define ZDB_ZONE_NSEC3_OPTOUT      0x0030
 
+#define ZDB_ZONE_NSEC3PARAM_TTL_NO_OVERRIDE 0x1000   // if set, the NSEC3PARAM TTL will not be set to 0 automatically
+
 #if BYTE_ORDER == LITTLE_ENDIAN
 struct zdb_zone_load_dnskey_id_fields
 {

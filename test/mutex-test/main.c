@@ -287,6 +287,13 @@ exclusion_group_test(int workers, s64 loops)
 {
     struct exclusion_group_arg parms = {GROUP_MUTEX_INITIALIZER, loops, 0, 0};
     struct thread_pool_s *tp = thread_pool_init(workers, 8);
+
+    if(tp == NULL)
+    {
+        formatln("%r", THREAD_CREATION_ERROR);
+        return FALSE;
+    }
+
     thread_pool_task_counter task_counter;
     thread_pool_counter_init(&task_counter, 0);
 

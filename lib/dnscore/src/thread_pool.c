@@ -693,7 +693,6 @@ struct thread_pool_s*
 thread_pool_init(u32 thread_count, u32 queue_size)
 {
     struct thread_pool_s* tp = thread_pool_init_ex(thread_count, queue_size, NULL);
-    
     return tp;
 }
 

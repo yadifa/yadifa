@@ -377,6 +377,11 @@ static ssize_t socket_server_recv(int fd, int *sockfdp)
         int* cmsg_data = (int*)CMSG_DATA(cmptr);
         
         *sockfdp = *cmsg_data;
+
+        if(*sockfdp < 0)
+        {
+            ret = MAKE_ERRNO_ERROR(ENFILE);
+        }
         
         log_info("socket-server: received: socket %i: %i", fd, *sockfdp);
 
@@ -385,13 +390,20 @@ static ssize_t socket_server_recv(int fd, int *sockfdp)
     else if((msg.msg_iovlen == 1) && (msg.msg_iov != NULL) && (msg.msg_iov->iov_len == sizeof(u32)) && (msg.msg_iov->iov_base != NULL))
     {
         ret = (s32)GET_U32_AT_P(msg.msg_iov->iov_base);
+        if(ISOK(ret))
+        {
+            ret = MAKE_ERRNO_ERROR(ENFILE);
+        }
         *sockfdp = -1;
         return ret;
     }
     else
     {
         log_err("socket-server: receiving: socket %i: invalid message", fd);
-        
+        if(ISOK(ret))
+        {
+            ret = INVALID_STATE_ERROR;
+        }
         *sockfdp = -1;
         return ret;
     }

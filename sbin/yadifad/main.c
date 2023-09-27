@@ -204,13 +204,16 @@ main_dump_info()
 #endif
     log_info("------------------------------------------------");
     log_info("YADIFA is maintained by EURid");
-    log_info("Source code is available at http://www.yadifa.eu");
+    log_info("Source code is available at https://www.yadifa.eu");
     log_info("------------------------------------------------");
     log_info("got %u CPUs", sys_get_cpu_count());
     log_info("using %u UDP listeners per interface", g_config->thread_count_by_address);
     log_info("accepting up to %u TCP queries", g_config->max_tcp_queries);
 #if DNSCORE_HAS_ZALLOC_SUPPORT
     log_info("self-managed memory enabled"); // ZALLOC
+#endif
+#if HAS_RRL_SUPPORT
+    log_info("response rate limiter enabled"); // RRL
 #endif
 }
 

@@ -541,7 +541,9 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
                 break;
             }
 
-            ZDB_RECORD_ZALLOC(ttlrdata, /*entry.ttl*/0, rdata_len, rdata);
+            // ALWAYS accept the value of the TTL that's being given.
+            ZDB_RECORD_ZALLOC(ttlrdata, entry.ttl, rdata_len, rdata);
+
             zdb_zone_record_add(zone, entry_name.labels, entry_name.size, entry.type, ttlrdata); // verified
 
             // has_nsec3 ?
@@ -712,11 +714,6 @@ zdb_zone_load_ex(struct zdb_zone_load_parms *parms)
 #else
                 has_rrsig = TRUE;
 #endif
-                if((GET_U16_AT(*rdata)) == TYPE_NSEC3PARAM) // RRSIG covered type
-                {
-                    entry.ttl = 0;
-                }
-
                 u32 rrsig_expiration = rrsig_get_valid_until_from_rdata(rdata, rdata_len);
 
                 if(rrsig_expiration < earliest_signature_expiration)

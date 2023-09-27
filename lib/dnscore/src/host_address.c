@@ -359,20 +359,22 @@ host_address_set_with_sockaddr(host_address *address, const socketaddress *sa)
         {
             const struct sockaddr_in *sain = (const struct sockaddr_in*)sa;
 
+            address->tsig = NULL;
             address->version = HOST_ADDRESS_IPV4;
             address->port = sain->sin_port;
             address->ip.v4.value = sain->sin_addr.s_addr;
-                        
+
             return SUCCESS;
         }
         case AF_INET6:
         {
             const struct sockaddr_in6 *sain6 = (const struct sockaddr_in6*)sa;
 
+            address->tsig = NULL;
             address->version = HOST_ADDRESS_IPV6;
             address->port = sain6->sin6_port;
             memcpy(address->ip.v6.bytes, &sain6->sin6_addr, 16);
-            
+
             return SUCCESS;
         }
         default:

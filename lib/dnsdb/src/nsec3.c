@@ -473,7 +473,7 @@ nsec3_wild_closest_encloser_proof(
 #if DEBUG
     if((n3 == NULL) || (n3->items == NULL))
     {
-        log_err("zone %{dnsname} has invalid NSEC3 data");
+        log_err("zone %{dnsname} has invalid NSEC3 data", zone->origin);
         return;
     }
 #endif
@@ -598,7 +598,7 @@ nsec3_closest_encloser_proof(
 #if DEBUG
     if((n3 == NULL) || (n3->items == NULL))
     {
-        log_err("zone %{dnsname} has invalid NSEC3 data");
+        log_err("zone %{dnsname} has invalid NSEC3 data", zone->origin);
         return;
     }
 #endif

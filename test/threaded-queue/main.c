@@ -674,7 +674,8 @@ int main(int argc, char *argv[])
 
     if(tp == NULL)
     {
-        println("tp");
+        formatln("thread pool: %r", THREAD_CREATION_ERROR);
+        exit(EXIT_FAILURE);
     }
     
     formatln("waiting for all threads to be running");
