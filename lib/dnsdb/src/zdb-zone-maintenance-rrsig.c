@@ -105,6 +105,24 @@ zdb_zone_maintenance_rrsig_coverage_finalize(zdb_zone_maintenance_ctx* mctx, zon
             intptr mask = (intptr)node->value;                              // what is really covering
             intptr key_mask = (node->key != TYPE_DNSKEY)?zsk_mask:ksk_mask; // what it should be covered by
 
+#if EXPERIMENTAL
+            if(node->key != TYPE_DNSKEY)
+            {
+                key_mask = zsk_mask;
+            }
+            else
+            {
+                if(ptr_vector_size(&mctx->ksks) > 0)
+                {
+                    key_mask = ksk_mask;
+                }
+                else
+                {
+                    key_mask = zsk_mask;
+                }
+            }
+#endif
+
             if((key_mask & mask) != key_mask)
             {
                 // there are holes : set has to be updated
@@ -280,6 +298,24 @@ zdb_zone_maintenance_rrsig(zdb_zone_maintenance_ctx* mctx, zone_diff_fqdn *diff_
                 }
 
                 ptr_vector *keys = (type_covered!= TYPE_DNSKEY)?&mctx->zsks:&mctx->ksks;
+
+#if EXPERIMENTAL
+                if(type_covered != TYPE_DNSKEY)
+                {
+                    keys = &mctx->zsks;
+                }
+                else
+                {
+                    if(ptr_vector_size(&mctx->ksks) > 0)
+                    {
+                        keys = &mctx->ksks;
+                    }
+                    else
+                    {
+                        keys = &mctx->zsks;
+                    }
+                }
+#endif
 
                 s32 key_index = -2;
                 if(rrsig_should_remove_signature_from_rdata(

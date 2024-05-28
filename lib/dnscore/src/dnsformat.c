@@ -399,6 +399,10 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 5;
                 txt = TYPE_CNAME_NAME;
                 break;
+            case TYPE_CSYNC:
+                len = 5;
+                txt = TYPE_CSYNC_NAME;
+                break;
             case TYPE_SOA:
                 len = 3;
                 txt = TYPE_SOA_NAME;
@@ -661,8 +665,6 @@ dnstype_format_handler_method(const void *val, output_stream *stream, s32 paddin
                 len = 5;
                 txt = TYPE_EUI64_NAME;
                 break;
-
-
             case TYPE_TKEY:
                 len = 4;
                 txt = TYPE_TKEY_NAME;

@@ -249,27 +249,38 @@ config_section_key_suite_postprocess(struct config_section_descriptor_s *csd)
     {
         ptr_node *key_suite_node = ptr_set_iterator_next_node(&iter);
         key_suite_desc_s *key_suite_desc = (key_suite_desc_s *)key_suite_node->value;
-        dnssec_policy_key *dpk = dnssec_policy_key_acquire_from_name(key_suite_desc->key_template);
-        if(dpk != NULL)
+        if(key_suite_desc->key_template != NULL)
         {
-            dnssec_policy_roll *dpr = dnssec_policy_roll_acquire_from_name(key_suite_desc->key_roll);
-            if(dpr != NULL)
+            dnssec_policy_key *dpk = dnssec_policy_key_acquire_from_name(key_suite_desc->key_template);
+            if(dpk != NULL)
             {
-                /*dnssec_policy_key_suite *dpks =*/ dnssec_policy_key_suite_create(key_suite_desc->id,
-                                                                               dpk,
-                                                                               dpr);
-
-                dnssec_policy_roll_release(dpr);
-            }            
+                if(key_suite_desc->key_roll != NULL)
+                {
+                    dnssec_policy_roll *dpr = dnssec_policy_roll_acquire_from_name(key_suite_desc->key_roll);
+                    if(dpr != NULL)
+                    {
+                        /*dnssec_policy_key_suite *dpks =*/ dnssec_policy_key_suite_create(key_suite_desc->id, dpk, dpr);
+                        dnssec_policy_roll_release(dpr);
+                    }
+                    else
+                    {
+                        ttylog_err("config: key-suite: %s: key-roll %s not defined", key_suite_desc->id, key_suite_desc->key_roll);
+                    }
+                }
+                else
+                {
+                    ttylog_err("config: key-suite: %s: key-roll not set", key_suite_desc->id);
+                }
+                dnssec_policy_key_release(dpk);
+            }
             else
             {
-                ttylog_err("config: key-suite: %s: key-template %s not defined", key_suite_desc->id, key_suite_desc->key_roll);
+                ttylog_err("config: key-suite: %s: key-template %s not defined", key_suite_desc->id, key_suite_desc->key_template);
             }
-            dnssec_policy_key_release(dpk);
         }
         else
         {
-            ttylog_err("config: key-suite: %s: key-template %s not defined", key_suite_desc->id, key_suite_desc->key_template);
+            ttylog_err("config: key-suite: %s: key-template not set", key_suite_desc->id);
         }
     }
 

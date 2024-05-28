@@ -108,7 +108,9 @@ static const u8* STREOL = (const u8*)"\n";
 static const u8* STRMINUS = (const u8*)"-";
 static const u8* STRESCAPE = (const u8*)"\\";
 static const u8* STRQUOTE = (const u8*)"\"";
+static const uint8_t STRSPACE[] = {' '};
 static const u8 STRSEPARATOR[] = {' ', '|', ' '};
+static const uint8_t QUOTE_SPACE_QUOTE[3] = {'"', ' ', '"'};
 
 #if 0
 static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', ' ', '\t'};
@@ -116,7 +118,7 @@ static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', ' ', '\t'};
 
 #define TXT_ESCAPE_TYPE_NONE 0
 #define TXT_ESCAPE_TYPE_CHAR 1
-#define TXT_ESCAPE_TYPE_OCTL 2
+#define TXT_ESCAPE_TYPE_OCTL 2 // octal: e.g. \001
 
 static const u8 TXT_ESCAPE_TYPE[256] =
 {
@@ -1701,6 +1703,64 @@ loc_coordinate_init(struct loc_coordinate* c, s32 val)
     c->deg = val;
 }
 
+/**
+ * Print a text (char*, len) between quotes, escaping when required.
+ *
+ * @param os the output stream
+ * @param text a pointer to the text
+ * @param text_len the lenght of the text
+ * @return an error code
+ */
+
+ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text_len)
+{
+    output_stream_write(os, STRQUOTE, 1);
+
+    for(int i = 0; i < text_len; ++i)
+    {
+        u8 escape_type = TXT_ESCAPE_TYPE[text[i]];
+
+        switch(escape_type)
+        {
+            case TXT_ESCAPE_TYPE_NONE:
+            {
+                output_stream_write(os, &text[i], 1);
+                break;
+            }
+            case TXT_ESCAPE_TYPE_CHAR:
+            {
+                output_stream_write(os, STRESCAPE, 1);
+                output_stream_write(os, &text[i], 1);
+                break;
+            }
+            case TXT_ESCAPE_TYPE_OCTL:
+            {
+                u8 decimal[4];
+                decimal[0] = '\\';
+                decimal[1] = ((text[i] / 100) % 10) + '0';
+                decimal[2] = ((text[i] / 10) % 10) + '0';
+                decimal[3] = (text[i] % 10) + '0';
+                output_stream_write(os, decimal, 4);
+                break;
+            }
+        }
+    }
+
+    int ret = output_stream_write(os, STRQUOTE, 1);
+    return ret;
+}
+
+/**
+ * Prints the TEXT representation of the rdata of a record of a given type.
+ *
+ * @param os the output stream
+ * @param type the record type
+ * @param rdata_pointer a pointer to the rdata
+ * @param rdata_size the size of the rdata
+ *
+ * returns an error code.
+ */
+
 ya_result
 osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)
 {
@@ -1734,8 +1794,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             return INCORRECT_RDATA;
         }
         case TYPE_MX:
-
-
         case TYPE_KX:
         case TYPE_LP:
         case TYPE_AFSDB:
@@ -1756,6 +1814,17 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             /* ONE NAME record */
             if(rdata_size > 0)
             {
+                output_stream_write_dnsname_text(os, rdata_pointer);
+                return SUCCESS;
+            }
+            return INCORRECT_RDATA;
+        }
+        case TYPE_RP:
+        {
+            if(rdata_size > 0)
+            {
+                rdata_pointer += output_stream_write_dnsname_text(os, rdata_pointer);
+                output_stream_write(os, STRSPACE, sizeof(STRSPACE));
                 output_stream_write_dnsname_text(os, rdata_pointer);
                 return SUCCESS;
             }
@@ -1824,7 +1893,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 for(int index = 0; index < rdata_size; ++index)
                 {
                     u8 m;
-                    if((m = *rdata_pointer) != 0)
+                    if((m = rdata_pointer[index]) != 0)
                     {
                         for(int i = 7; i >= 0; --i)
                         {
@@ -1958,16 +2027,14 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return SUCCESS;
         }
-
         case TYPE_CSYNC:
         {
-            if(rdata_size > 6)
+            if(rdata_size >= 6)
             {
-                osformat(os, "%u %hu ",
-                         ntohl(GET_U32_AT(rdata_pointer[0])),
-                         ntohs(GET_U16_AT(rdata_pointer[4]))
-                );
-
+                format_dec_u64(ntohl(GET_U32_AT(rdata_pointer[0])), os, 0, 0, FALSE);
+                output_stream_write_u8(os, ' ');
+                format_dec_u64(ntohl(GET_U16_AT(rdata_pointer[4])), os, 0, 0, FALSE);
+                output_stream_write_u8(os, ' ');
                 rdata_pointer += 6;
                 rdata_size -= 6;
 
@@ -1997,22 +2064,28 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
              *
              */
 
-            int i;
-
-            for(i = 0; i < 2; i++)
+            u32 len;
+            len = *rdata_pointer;
+            --rdata_size;
+            if(len > rdata_size)
             {
-                u32 len = (*rdata_pointer) + 1;
-
-                if(len > rdata_size)
-                {
-                    return INCORRECT_RDATA;
-                }
-
-                osformat(os, "%{dnslabel}", rdata_pointer);
-
-                rdata_size -= len;
-                rdata_pointer += len;
+                return INCORRECT_RDATA;
             }
+            ++rdata_pointer;
+            osprint_quoted_text_escaped(os, rdata_pointer, len);
+            output_stream_write(os, STRSPACE, sizeof(STRSPACE));
+            rdata_pointer += len;
+            rdata_size -= len;
+            len = *rdata_pointer;
+            --rdata_size;
+            if(len > rdata_size)
+            {
+                return INCORRECT_RDATA;
+            }
+            ++rdata_pointer;
+            osprint_quoted_text_escaped(os, rdata_pointer, len);
+            rdata_size -= len;
+            rdata_pointer += len;
 
             return SUCCESS;
         }
@@ -2145,6 +2218,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         }
         case TYPE_DS:
         case TYPE_CDS:
+        case TYPE_DLV:
         {
             osformat(os, "%u %u %u ",
                      ntohs(GET_U16_AT(rdata_pointer[0])),
@@ -2317,7 +2391,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return INCORRECT_RDATA;
         }
-
         case TYPE_SRV:
         {
             u16 priority = GET_U16_AT(rdata_pointer[0]);
@@ -2422,35 +2495,100 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_TXT:
         case TYPE_SPF:
         {
-            u8 c;
+            u8 pascal_string_size;
+            int space_len = 0;
 
-            if(rdata_size > 0)
+            while(rdata_size > 0)
             {
-                for(;;)
+                pascal_string_size = *rdata_pointer++;
+
+                if(pascal_string_size > 0)
                 {
-                    c = *rdata_pointer++;
-
-                    if(c > 0)
-                    {
-                        c = MIN(c, rdata_size);
-                        output_stream_write(os, (u8*)"\"", 1);
-                        output_stream_write(os, rdata_pointer, c);
-                        output_stream_write(os, (u8*)"\"", 1);
-                    }
-
-                    rdata_size--;
-                    rdata_pointer += c;
-                    rdata_size -= c;
-
-                    if(rdata_size == 0)
-                    {
-                        break;
-                    }
-
-                    output_stream_write(os, (u8*)" ", 1);
+                    output_stream_write(os, STRSPACE, space_len); // 0 at first, then 1
+                    pascal_string_size = MIN(pascal_string_size, rdata_size);
+                    osprint_quoted_text_escaped(os, rdata_pointer, pascal_string_size);
                 }
+                else
+                {
+                    output_stream_write(os, "\"\"", 2);
+                }
+
+                space_len = 1;
+
+                rdata_size--;
+                rdata_pointer += pascal_string_size;
+                rdata_size -= pascal_string_size;
             }
 
+            return SUCCESS;
+        }
+        case TYPE_CAA:
+        {
+            if(rdata_size > 3)
+            {
+                uint8_t flags = *rdata_pointer++;
+                --rdata_size;
+                format_dec_u64(flags, os, 0, 0, FALSE);
+                output_stream_write_u8(os, ' ');
+
+                uint8_t tag_size = *rdata_pointer++;
+                --rdata_size;
+                if(rdata_size >= tag_size)
+                {
+                    output_stream_write(os, rdata_pointer, tag_size);
+                    rdata_pointer += tag_size;
+                    rdata_size -= tag_size;
+                    static char space_doublequote[2] = {' ', '"'};
+                    output_stream_write(os, space_doublequote, sizeof(space_doublequote));
+                    output_stream_write(os, rdata_pointer, rdata_size);
+                    output_stream_write_u8(os, '"');
+                    return SUCCESS;
+                }
+            }
+            return INCORRECT_RDATA;
+        }
+        case TYPE_CERT:
+        {
+            if(rdata_size < 6)
+            {
+                return INCORRECT_RDATA;
+            }
+
+            uint16_t type_id = ntohs(GET_U16_AT_P(rdata_pointer));
+            rdata_pointer += 2;
+            const char *mnemonic = dns_cert_type_name_from_id(type_id);
+            if(mnemonic != NULL)
+            {
+                output_stream_write(os, mnemonic, strlen(mnemonic));
+            }
+            else
+            {
+                format_dec_u64(type_id, os, 0, ' ', FALSE);
+            }
+
+            output_stream_write_u8(os, ' ');
+            uint16_t tag = ntohs(GET_U16_AT_P(rdata_pointer));
+            rdata_pointer += 2;
+            format_dec_u64(tag, os, 0, 0, FALSE);
+            output_stream_write_u8(os, ' ');
+            uint8_t algorithm = *rdata_pointer++;
+            const char *algorithm_name = dns_encryption_algorithm_get_name(algorithm);
+            if(algorithm_name != NULL)
+            {
+                osprint(os, algorithm_name);
+            }
+            else
+            {
+                format_dec_u64(algorithm, os, 0, 0, FALSE);
+            }
+            output_stream_write_u8(os, ' ');
+            rdata_size -= 5;
+            osprint_base64(os, rdata_pointer, rdata_size);
+            return SUCCESS;
+        }
+        case TYPE_DHCID:
+        {
+            osprint_base64(os, rdata_pointer, rdata_size);
             return SUCCESS;
         }
         case TYPE_CTRL_ZONEFREEZE:
@@ -2501,7 +2639,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             return SUCCESS;
         }
-        
         case TYPE_TSIG:
         {
             const u8 *limit = &rdata_pointer[rdata_size];
@@ -2582,27 +2719,19 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
     return INCORRECT_RDATA;
 }
 
-#if 0
-static int
-osprint_rdata_count_escapes(const u8* name, size_t name_len)
-{
-    int ret = 0;
-    for(size_t i = 0; i < name_len; ++i)
-    {
-        const char c = name[i];
-
-        for(size_t j = 0; j < sizeof(ESCAPE_CHARS); ++j)
-        {
-            if(c == ESCAPE_CHARS[j])
-            {
-                ++ret;
-            }
-        }
-    }
-
-    return ret;
-}
-#endif
+/**
+ * Prints the TEXT representation of the rdata of a record of a given type.
+ * FQDN containing '@', '$', '\\' and ';' are escaped.
+ *
+ * Uses osprint_rdata for types not requiring escapes.
+ *
+ * @param os the output stream
+ * @param type the record type
+ * @param rdata_pointer a pointer to the rdata
+ * @param rdata_size the size of the rdata
+ *
+ * returns an error code.
+ */
 
 ya_result
 osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)
@@ -2659,39 +2788,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
 
             return INCORRECT_RDATA;
         }
-
-        case TYPE_HINFO:
-        case TYPE_MINFO:
-        {
-            /* Two Pascal String records */
-
-            /*
-             * <character-string> is a single length octet followed by that number
-             * of characters.  <character-string> is treated as binary information,
-             * and can be up to 256 characters in length (including the length octet).
-             *
-             */
-
-            int i;
-
-            for(i = 0; i < 2; i++)
-            {
-                u32 len = (*rdata_pointer) + 1;
-
-                if(len > rdata_size)
-                {
-                    return INCORRECT_RDATA;
-                }
-
-                output_stream_write_dnslabel_text_escaped(os, rdata_pointer);
-
-                rdata_size -= len;
-                rdata_pointer += len;
-            }
-
-            return SUCCESS;
-        }
-
         case TYPE_SOA:
         {
             output_stream_write_dnsname_text_escaped(os, rdata_pointer);
@@ -2799,70 +2895,6 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
             return ret;
         }
 
-        case TYPE_TXT:
-        case TYPE_SPF:
-        {
-            u8 pascal_string_size;
-            int space_len = 0;
-
-            while(rdata_size > 0)
-            {
-                pascal_string_size = *rdata_pointer++;
-
-                if(pascal_string_size > 0)
-                {
-                    output_stream_write(os, (u8*)" ", space_len);
-
-                    pascal_string_size = MIN(pascal_string_size, rdata_size);
-
-                    output_stream_write(os, STRQUOTE, 1);
-
-                    for(int i = 0; i < pascal_string_size; ++i)
-                    {
-                        u8 escape_type = TXT_ESCAPE_TYPE[rdata_pointer[i]];
-
-                        switch(escape_type)
-                        {
-                            case TXT_ESCAPE_TYPE_NONE:
-                            {
-                                output_stream_write(os, &rdata_pointer[i], 1);
-                                break;
-                            }
-                            case TXT_ESCAPE_TYPE_CHAR:
-                            {
-                                output_stream_write(os, STRESCAPE, 1);
-                                output_stream_write(os, &rdata_pointer[i], 1);
-                                break;
-                            }
-                            case TXT_ESCAPE_TYPE_OCTL:
-                            {
-                                u8 decimal[4];
-                                decimal[0] = '\\';
-                                decimal[1] = ((rdata_pointer[i] / 100) % 10) + '0';
-                                decimal[2] = ((rdata_pointer[i] / 10) % 10) + '0';
-                                decimal[3] = (rdata_pointer[i] % 10) + '0';
-                                output_stream_write(os, decimal, 4);
-                                break;
-                            }
-                        }
-                    }
-
-                    output_stream_write(os, STRQUOTE, 1);
-                }
-                else
-                {
-                    output_stream_write(os, "\"\"", 2);
-                }
-
-                space_len = 1;
-
-                rdata_size--;
-                rdata_pointer += pascal_string_size;
-                rdata_size -= pascal_string_size;
-            }
-
-            return SUCCESS;
-        }
         default:
         {
             ya_result ret = osprint_rdata(os, type, rdata_pointer, rdata_size);

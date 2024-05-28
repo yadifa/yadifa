@@ -410,7 +410,7 @@ journal_cjf_create_file(journal_cjf **jnlp, const u8 *origin, const char *filena
     else
     {
         ret = ERRNO_ERROR;
-        log_err("cjf: %s: failed to create %s: %r", origin, filename, ret);
+        log_err("cjf: %{dnsname}: failed to create %s: %r", origin, filename, ret);
         
         *jnlp = NULL;
         

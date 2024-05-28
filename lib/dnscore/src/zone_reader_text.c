@@ -322,9 +322,12 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 rdata[0] = (u8) protocol;
                 rdata++;
-                
-                ZEROMEMORY(rdata, rdata_size - 1);
-                int port_limit = (rdata_size - 5) << 3;
+                rdata_size -= 5;
+
+                uint32_t rdata_size_available = MIN(rdata_size, 8192);
+                ZEROMEMORY(rdata, rdata_size_available);
+
+                int port_limit = MIN(rdata_size_available << 3, UINT16_MAX);
                 int max_index = -1;
                 
                 for(;;)
@@ -332,6 +335,13 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     int service_port;
                     if(FAIL(return_code = parser_get_network_service_port_from_next_word(p, &service_port)))
                     {
+                        if((return_code == PARSER_REACHED_END_OF_LINE) || (return_code == PARSER_REACHED_END_OF_FILE))
+                        {
+                            if(max_index >= 0)
+                            {
+                                return_code = SUCCESS;
+                            }
+                        }
                         break;
                     }
                     
@@ -342,7 +352,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     }
                     
                     int index = service_port >> 3;
-                    
+
                     rdata[index] |= 0x80 >> (service_port & 7);
 
                     if(index > max_index)
@@ -362,9 +372,9 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                return_code = max_index + 6; // ipv4 + proto + index=>+1
+                return_code = 4 + 1 + 1 + max_index; // ipv4 + proto + index=>+1
 
-                parser_set_eol(p);  // @todo 20150608 timh -- is this necessary?
+                parser_set_eol(p);
                 break;
             }
 #endif
@@ -639,7 +649,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             
             case TYPE_NSEC3:
             {
-                u8 *rdata_start = rdata;
+                const u8 *rdata_start = rdata;
                 // hash algorithm
 
                 if(FAIL(return_code = parser_get_u8(text, text_len, rdata)))
@@ -736,7 +746,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             
             case TYPE_NSEC:
             {
-                u8 *rdata_start = rdata;
+                const u8 *rdata_start = rdata;
 
                 if(FAIL(return_code = zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin, p)))
                 {
@@ -817,7 +827,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_TXT:
             case TYPE_SPF:  // discontinued
             {
-                u8 *rdata_start = rdata;
+                const u8 *rdata_start = rdata;
 
                 for(;;)
                 {
@@ -982,7 +992,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             
             case TYPE_NAPTR:
             {
-                u8 *rdata_start = rdata;
+                const u8 *rdata_start = rdata;
                 u16 tmp16;
 
                 // order
@@ -1097,7 +1107,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             // 2. txt-dname
             case TYPE_RP:
             {
-                u8 *rdata_start = rdata;
+                const u8 *rdata_start = rdata;
 
                 // 1.mbox-name1
                 //s32 total_size;
@@ -1122,7 +1132,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
             case TYPE_HINFO: // should not be supported anymore
             {
-                u8 *rdata_start = rdata;
+                const u8 *rdata_start = rdata;
 
                 if(text_len > 255)
                 {
@@ -1158,12 +1168,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
 
-                if(FAIL(return_code = parser_copy_next_fqdn_with_origin(p, rdata, origin)))
-                {
-                    break;
-                }
-
-                return_code += rdata - rdata_start;
+                return_code = rdata - rdata_start;
 
                 break;
             }
@@ -1312,7 +1317,265 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code = 8;
                 break;
             }
+            case TYPE_CAA:
+            {
+                const u8 *rdata_start = rdata;
+
+                u8 flags;
+
+                if(FAIL(return_code = parser_get_u8(text, text_len, &flags)))
+                {
+                    break;
+                }
+
+                *rdata = flags;
+                ++rdata;
+
+                if(FAIL(return_code = parser_next_token(p)))
+                {
+                    break;
+                }
+
+                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                {
+                    // stop
+
+                    break;
+                }
+                text = parser_text(p);
+                text_len = parser_text_length(p);
+
+                if((text_len < 1) || (text_len > 255))
+                {
+                    return_code = ZONEFILE_RDATA_PARSE_ERROR;
+                    break;
+                }
+
+                *rdata = text_len;
+                ++rdata;
+
+                for(uint32_t i = 0; i < text_len; ++i)
+                {
+                    char c = text[i];
+                    if(((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z')) || ((c >= '0') && (c <= '9')))
+                    {
+                        rdata[i] = c;
+                    }
+                    else
+                    {
+                        return_code = ZONEFILE_RDATA_PARSE_ERROR;
+                        break;
+                    }
+                }
+
+                rdata += text_len;
+
+                if(ISOK(return_code))
+                {
+                    if(FAIL(return_code = parser_next_token(p)))
+                    {
+                        break;
+                    }
+
+                    if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                    {
+                        // stop
+
+                        break;
+                    }
+
+                    text = parser_text(p);
+                    text_len = parser_text_length(p);
+
+                    memcpy(rdata, text, text_len);
+                    rdata += text_len;
+
+                    return_code = rdata - rdata_start;
+                }
+
+                break;
+            }
+            case TYPE_CERT:
+            {
+                const u8 *rdata_start = rdata;
+
+                u16 cert_type;
+
+                char mnemonic[16];
+
+                if(text_len > sizeof(mnemonic))
+                {
+                    return_code = INVALID_RECORD;
+                    break;
+                }
+
+                memcpy(mnemonic, text, text_len);
+                mnemonic[text_len] = '\0';
+
+                if(FAIL(dns_cert_type_value_from_name(mnemonic, &cert_type)))
+                {
+                    if(FAIL(return_code = parser_get_u16(text, text_len, &cert_type)))
+                    {
+                        break;
+                    }
+                }
+
+                SET_U16_AT_P(rdata, htons(cert_type));
+                rdata += 2;
+
+                if(FAIL(return_code = parser_next_token(p)))
+                {
+                    break;
+                }
+
+                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                {
+                    // stop
+
+                    break;
+                }
+                text = parser_text(p);
+                text_len = parser_text_length(p);
+
+                u16 key_tag;
+
+                if(FAIL(return_code = parser_get_u16(text, text_len, &key_tag)))
+                {
+                    break;
+                }
+
+                SET_U16_AT_P(rdata, htons(key_tag));
+                rdata += 2;
+
+                if(FAIL(return_code = parser_next_token(p)))
+                {
+                    break;
+                }
+
+                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                {
+                    // stop
+
+                    break;
+                }
+
+                text = parser_text(p);
+                text_len = parser_text_length(p);
+
+                u8 algorithm;
+
+                if(FAIL(return_code = parser_get_u8(text, text_len, &algorithm)))
+                {
+                    // maybe it's a mnemonic
+
+                    if(text_len >= sizeof(mnemonic))
+                    {
+                        break;
+                    }
+
+                    memcpy(mnemonic, text, text_len);
+                    mnemonic[text_len] = '\0';
+
+                    if(FAIL(return_code = dns_encryption_algorithm_from_name(mnemonic, &algorithm)))
+                    {
+                        break;
+                    }
+                }
+
+                *rdata = algorithm;
+                ++rdata;
+
+                if(FAIL(return_code = parser_concat_next_tokens_nospace(p)))
+                {
+                    break;
+                }
+
+                if(FAIL(return_code = base64_decode(parser_text(p), parser_text_length(p), rdata)))
+                {
+                    break;
+                }
+
+                rdata += return_code;
+
+                return_code = rdata - rdata_start;
+
+                break;
+            }
+            case TYPE_CSYNC:
+            {
+                const u8 *rdata_start = rdata;
+
+                u32 serial;
+
+                if(FAIL(return_code = parser_get_u32(text, text_len, &serial)))
+                {
+                    break;
+                }
+
+                SET_U32_AT_P(rdata, htonl(serial));
+                rdata += 4;
+
+                if(FAIL(return_code = parser_next_token(p)))
+                {
+                    break;
+                }
+
+                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                {
+                    // stop
+
+                    break;
+                }
+                text = parser_text(p);
+                text_len = parser_text_length(p);
+
+                u16 flags;
+
+                if(FAIL(return_code = parser_get_u16(text, text_len, &flags)))
+                {
+                    break;
+                }
+
+                SET_U16_AT_P(rdata, htons(flags));
+                rdata += 2;
+
+                // type bitmap
+
+                if(FAIL(return_code = parser_type_bit_maps_initialise(p, &tbmctx)))
+                {
+                    break;
+                }
+
+                if(return_code > 0)
+                {
+                    type_bit_maps_write(&tbmctx, rdata);
+                    rdata += return_code;
+                }
+
+                return_code = rdata - rdata_start;
+
+                parser_set_eol(p);
+
+                break;
+            }
+            case TYPE_DHCID:
+            {
+                const uint8_t *rdata_start = rdata;
+
+                if(FAIL(return_code = parser_concat_current_and_next_tokens_nospace(p)))
+                {
+                    break;
+                }
+
+                if(FAIL(return_code = base64_decode(parser_text(p), parser_text_length(p), rdata)))
+                {
+                    break;
+                }
+
+                break;
+            }
             case TYPE_TSIG:
+            {
                 for(;;)
                 {
                     return_code = parser_next_token(p);
@@ -1321,6 +1584,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                         break;
                     }
                 }
+            }
             case TYPE_OPT:
             case TYPE_IXFR:
             case TYPE_AXFR:
@@ -2003,7 +2267,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zfr->error_message_code = return_code;
 
                             format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
-                            if(ISOK(asformat(&zfr->error_message_buffer, "could not parse rdata for %{dnsname} %{dnsclass} %{dnstype} from line \"%w\"", entry->name, &entry->class, &entry->type, &escaped_text)))
+                            if(ISOK(asformat(&zfr->error_message_buffer, "could not parse rdata for %{dnsname} %{dnsclass} %{dnstype} from line %i: \"%w\"", entry->name, &entry->class, &entry->type, parser_get_line_number(p), &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
                             }

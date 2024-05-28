@@ -160,8 +160,6 @@ const type_table qtype[] = {
     { TYPE_EUI48,      TYPE_EUI48_NAME      }, // 108
     { TYPE_EUI64,      TYPE_EUI64_NAME      }, // 109
 
-
-
     { TYPE_TKEY,       TYPE_TKEY_NAME       }, // 249
     { TYPE_TSIG,       TYPE_TSIG_NAME       }, // 250
     { TYPE_IXFR,       TYPE_IXFR_NAME       }, // 251
@@ -214,8 +212,9 @@ const dnssec_algo_table dnssec_algo[] = {
     { DNSKEY_ALGORITHM_ED25519,         DNSKEY_ALGORITHM_ED25519_NAME         },     // 15
     { DNSKEY_ALGORITHM_ED448,           DNSKEY_ALGORITHM_ED448_NAME           },     // 16
 #ifdef DNSKEY_ALGORITHM_DUMMY
-    { DNSKEY_ALGORITHM_DUMMY,           DNSKEY_ALGORITHM_DUMMY_NAME           },     // 254
+    { DNSKEY_ALGORITHM_DUMMY,           DNSKEY_ALGORITHM_DUMMY_NAME           },     // 122
 #endif
+    {DNSKEY_ALGORITHM_PRIVATEOID,       DNSKEY_ALGORITHM_PRIVATEOID_NAME      },     // 254
     { 0,                                NULL                                  }
 };
 
@@ -580,6 +579,8 @@ dns_encryption_algorithm_get_name(u16 d)
         case DNSKEY_ALGORITHM_DUMMY:
             return DNSKEY_ALGORITHM_DUMMY_NAME;
 #endif
+        case DNSKEY_ALGORITHM_PRIVATEOID:
+            return DNSKEY_ALGORITHM_PRIVATEOID_NAME;
         default:
             return NULL;
     }
@@ -707,7 +708,6 @@ dns_encryption_algorithm_from_name(const char *src, u8 *dst)
     return DNSSEC_ALGORITHM_UNKOWN;
 }
 
-
 int
 dns_class_from_case_name(const char *src, u16 *dst)
 {
@@ -793,6 +793,91 @@ dns_type_from_case_name_length(const char *src, int src_len, u16 *dst)
     ya_result ret = dns_type_from_name(txt, dst);
     
     return ret;
+}
+
+static ptr_set dns_cert_type_name_to_id_set = PTR_SET_ASCIIZCASE_EMPTY;
+static u32_set dns_cert_type_id_to_name_set = U32_SET_EMPTY;
+
+const value_name_table dns_cert_id_type_name_table[] = {
+    {   1, "PKIX"},
+    {   2, "SPKI"},
+    {   3, "PGP"},
+    {   4, "IPKIX"},
+    {   5, "ISPKI"},
+    {   6, "IPGP"},
+    {   7, "ACPKIX"},
+    {   8, "IACPKIX"},
+    { 253, "URI"},
+    { 254, "OID"},
+    {   0, NULL}
+};
+
+static void dns_cert_type_value_from_name_init()
+{
+    for(int i = 0; dns_cert_id_type_name_table[i].data != NULL; ++i)
+    {
+        {
+            ptr_node *node = ptr_set_insert(&dns_cert_type_name_to_id_set, dns_cert_id_type_name_table[i].data);
+            node->value = (void*)(intptr)dns_cert_id_type_name_table[i].id;
+        }
+        {
+            u32_node *node = u32_set_insert(&dns_cert_type_id_to_name_set, dns_cert_id_type_name_table[i].id);
+            node->value = dns_cert_id_type_name_table[i].data;
+        }
+    }
+}
+
+static void dns_cert_type_value_from_name_finalise()
+{
+    ptr_set_destroy(&dns_cert_type_name_to_id_set);
+    u32_set_destroy(&dns_cert_type_id_to_name_set);
+}
+
+/**
+ * For CERT type parsing
+ * Obtain the type from the mnemonic
+ *
+ * @param name the mnemonic
+ * @param type_value a pointer that will receive the mnemonic value
+ *
+ * @return the mnemonic value or an error code
+ */
+
+int dns_cert_type_value_from_name(const char *name, uint16_t *type_value)
+{
+    ptr_node *node = ptr_set_find(&dns_cert_type_name_to_id_set, name);
+
+    if(node != NULL)
+    {
+        *type_value = (int)(intptr)node->value;
+        return *type_value;
+    }
+    else
+    {
+        return ERROR;
+    }
+}
+
+/**
+ * For CERT type printing
+ * Obtain the mnemonic from the type id
+ *
+ * @param id the type id
+ *
+ * @return the mnemonic or NULL
+ */
+
+const char* dns_cert_type_name_from_id(uint16_t id)
+{
+    u32_node *node = u32_set_find(&dns_cert_type_id_to_name_set, id);
+    if(node != NULL)
+    {
+        return (const char*)node->value;
+    }
+    else
+    {
+        return NULL;
+    }
 }
 
 static ptr_set protocol_name_to_id_set = PTR_SET_ASCIIZCASE_EMPTY;
@@ -1071,6 +1156,7 @@ rfc_init()
     protocol_name_to_id_init();
     server_name_to_port_init();
     rfc_dnssec_algo_init();
+    dns_cert_type_value_from_name_init();
     
     mutex_unlock(&rfc_init_mtx);
 }
@@ -1086,7 +1172,8 @@ rfc_finalize()
     }
     
     rfc_init_done = FALSE;
-    
+
+    dns_cert_type_value_from_name_finalise();
     rfc_dnssec_algo_finalize();
     server_name_to_port_finalize();
     protocol_name_to_id_finalize();

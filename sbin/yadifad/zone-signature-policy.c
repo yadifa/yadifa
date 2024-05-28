@@ -2493,18 +2493,21 @@ dnssec_policy_roll_acquire_from_name(const char *id)
 {
     dnssec_policy_roll *dpr = NULL;
 
-    group_mutex_read_lock(&dnssec_policy_roll_set_mtx);
-    
-    ptr_node *node = ptr_set_find(&dnssec_policy_roll_set, id);
-    if(node != NULL)
+    if(id != NULL)
     {
-        dpr = (dnssec_policy_roll*)node->value;
-        group_mutex_write_lock(&dnssec_policy_roll_mtx);
-        ++dpr->rc;
-        group_mutex_write_unlock(&dnssec_policy_roll_mtx);
+        group_mutex_read_lock(&dnssec_policy_roll_set_mtx);
+
+        ptr_node *node = ptr_set_find(&dnssec_policy_roll_set, id);
+        if(node != NULL)
+        {
+            dpr = (dnssec_policy_roll*)node->value;
+            group_mutex_write_lock(&dnssec_policy_roll_mtx);
+            ++dpr->rc;
+            group_mutex_write_unlock(&dnssec_policy_roll_mtx);
+        }
+
+        group_mutex_read_unlock(&dnssec_policy_roll_set_mtx);
     }
-    
-    group_mutex_read_unlock(&dnssec_policy_roll_set_mtx);
 
     return dpr;
 }
@@ -2728,17 +2731,19 @@ dnssec_policy_key *
 dnssec_policy_key_acquire_from_name(const char *id)
 {
     dnssec_policy_key *dpk = NULL;
-
-    group_mutex_read_lock(&dnssec_policy_key_set_mtx);
-    ptr_node *node = ptr_set_find(&dnssec_policy_key_set, id);
-    if(node != NULL && node->value != NULL)
+    if(id != NULL)
     {
-        dpk = (dnssec_policy_key*)node->value;
-        group_mutex_write_lock(&dnssec_policy_key_mtx);
-        ++dpk->rc;
-        group_mutex_write_unlock(&dnssec_policy_key_mtx);
+        group_mutex_read_lock(&dnssec_policy_key_set_mtx);
+        ptr_node *node = ptr_set_find(&dnssec_policy_key_set, id);
+        if(node != NULL && node->value != NULL)
+        {
+            dpk = (dnssec_policy_key*)node->value;
+            group_mutex_write_lock(&dnssec_policy_key_mtx);
+            ++dpk->rc;
+            group_mutex_write_unlock(&dnssec_policy_key_mtx);
+        }
+        group_mutex_read_unlock(&dnssec_policy_key_set_mtx);
     }
-    group_mutex_read_unlock(&dnssec_policy_key_set_mtx);
     return dpk;
 }
 

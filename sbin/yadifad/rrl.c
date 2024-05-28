@@ -390,14 +390,12 @@ rrl_make_key(const message_data *mesg, const zdb_query_ex_answer *ans_auth_add, 
         case FP_RCODE_NOERROR:
         {
             // take the answer
-            if(ans_auth_add->delegation == 0)
+            if((ans_auth_add->delegation == 0) || (ans_auth_add->authority == NULL))
             {
                 src = message_get_canonised_fqdn(mesg); // query name
             }
             else
             {
-                yassert(ans_auth_add->authority != NULL);
-                
                 src = ans_auth_add->authority->name;
             }
             break;

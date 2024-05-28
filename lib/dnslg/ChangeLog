@@ -29,6 +29,11 @@
 # 
 ################################################################################
 
+20240507:
+    YADIFA 2.6.6
+
+    Fixes an issue in the resource rate limiter that could crash the server on some condition.
+
 20230906:
     YADIFA 2.6.5-public
 

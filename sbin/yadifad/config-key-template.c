@@ -85,8 +85,10 @@ static value_name_table dnssec_algorithm_enum[] =
     {DNSKEY_ALGORITHM_ED448          , "16"                                 },
 #ifdef DNSKEY_ALGORITHM_DUMMY
     {DNSKEY_ALGORITHM_DUMMY          , DNSKEY_ALGORITHM_DUMMY_NAME          },
-    {DNSKEY_ALGORITHM_DUMMY          , "254"                                },
+    {DNSKEY_ALGORITHM_DUMMY          , "122"                                },
 #endif
+    {DNSKEY_ALGORITHM_PRIVATEOID     , DNSKEY_ALGORITHM_PRIVATEOID_NAME     },
+    {DNSKEY_ALGORITHM_PRIVATEOID     , "254"     },
     {0, NULL}
 };
 
@@ -342,9 +344,6 @@ config_section_key_template_stop(struct config_section_descriptor_s *csd)
 
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
     }
-
-
-
 
     ptr_node *node = ptr_set_insert(&key_template_desc_set, key_template->id);
 

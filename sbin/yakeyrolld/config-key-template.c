@@ -85,8 +85,10 @@ static value_name_table dnssec_algorithm_enum[] =
     {DNSKEY_ALGORITHM_ED448          , "16"                                 },
 #ifdef DNSKEY_ALGORITHM_DUMMY
     {DNSKEY_ALGORITHM_DUMMY          , DNSKEY_ALGORITHM_DUMMY_NAME},
-    {DNSKEY_ALGORITHM_DUMMY          , "254"},
+    {DNSKEY_ALGORITHM_DUMMY          , "122"},
 #endif
+    {DNSKEY_ALGORITHM_PRIVATEOID     , DNSKEY_ALGORITHM_PRIVATEOID_NAME     },
+    {DNSKEY_ALGORITHM_PRIVATEOID     , "254"                                },
     {0, NULL}
 };
 

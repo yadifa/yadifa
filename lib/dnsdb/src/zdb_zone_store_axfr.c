@@ -107,7 +107,7 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
     u32 fqdn_len;
     ya_result err = SUCCESS;
 
-    u8 fqdn[MAX_DOMAIN_LENGTH];
+    u8 fqdn[MAX_DOMAIN_LENGTH + 1];
 
     zdb_zone_label_iterator iter;
     btree_iterator type_iter;
@@ -150,7 +150,6 @@ zdb_zone_store_axfr(zdb_zone* zone, output_stream* os)
 #if DEBUG_SLOW_STORAGE_MS > 0
         usleep(DEBUG_SLOW_STORAGE_MS * 1000);
 #endif
-        
         fqdn_len = zdb_zone_label_iterator_nextname(&iter, fqdn);
 
         label = zdb_zone_label_iterator_next(&iter);

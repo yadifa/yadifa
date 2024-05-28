@@ -1236,6 +1236,7 @@
 #define     DNSKEY_ALGORITHM_ECDSAP384SHA384   14       /* RFC 6605 */
 #define     DNSKEY_ALGORITHM_ED25519           15       /* RFC 8080 */
 #define     DNSKEY_ALGORITHM_ED448             16       /* RFC 8080 */
+#define     DNSKEY_ALGORITHM_PRIVATEOID       254
 
 #define     DS_DIGEST_SHA1                      1
 #define     DS_DIGEST_SHA256                    2
@@ -1258,6 +1259,8 @@
 
 #define     DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME2     "NSEC3DSA"
 #define     DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME2     "NSEC3RSASHA1"
+
+#define     DNSKEY_ALGORITHM_PRIVATEOID_NAME         "PRIVATEOID"
 
 #ifdef DNSKEY_ALGORITHM_DUMMY
 #define     DNSKEY_ALGORITHM_DUMMY_NAME "DUMMY"
@@ -1423,6 +1426,16 @@ extern const class_table qclass[];
 
 #define     OPT_NSID                        3       // the option value for NSID
 
+#define     CERT_PKIX   NU16(1)
+#define     CERT_SPKI   NU16(2)
+#define     CERT_PGP    NU16(3)
+#define     CERT_IPKIX  NU16(4)
+#define     CERT_IPGP   NU16(5)
+#define     CERT_ACPKIX NU16(6)
+#define     CERT_IACPKIX NU16(7)
+#define     CERT_URI    NU16(253)
+#define     CERT_OID    NU16(254)
+
 extern const type_table qtype[];
 
 /**
@@ -1520,6 +1533,29 @@ const char *dns_message_opcode_get_name(u16 c);
  * @return the c-string
  */
 const char *dns_message_rcode_get_name(u16 c);
+
+/**
+ * For CERT type parsing
+ * Obtain the type from the mnemonic
+ *
+ * @param name the mnemonic
+ * @param type_value a pointer that will receive the mnemonic value
+ *
+ * @return the mnemonic value or an error code
+ */
+
+int dns_cert_type_value_from_name(const char *name, uint16_t *type_value);
+
+/**
+ * For CERT type printing
+ * Obtain the mnemonic from the type id
+ *
+ * @param id the type id
+ *
+ * @return the mnemonic or NULL
+ */
+
+const char* dns_cert_type_name_from_id(uint16_t id);
 
 #if DNSCORE_HAS_NSID_SUPPORT
 

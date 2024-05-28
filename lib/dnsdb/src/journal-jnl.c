@@ -670,7 +670,7 @@ journal_jnl_create_file(journal_jnl **jnlp, const u8 *origin, const char *filena
     }
     else
     {
-        log_err("jnl: %s: failed to create %s: %r", origin, filename, ret);
+        log_err("jnl: %{dnsname}: failed to create %s: %r", origin, filename, ret);
 
         *jnlp = NULL;
     }

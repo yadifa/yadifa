@@ -686,7 +686,7 @@ database_service_zone_resignature_publish_dnskey_thread(void *args_)
 
                 // has private KSK keys available now ?
 
-                if(dnssec_keystore_has_usable_ksk(dnskey_get_domain(key), now))
+                if(dnssec_keystore_has_usable_ksk(dnskey_get_domain(key), now)) // prevents publishing without a KSK
                 {
                     if(ISOK(ret = database_service_zone_update_published_keys(dnskey_get_domain(key))))
                     {

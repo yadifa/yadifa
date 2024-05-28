@@ -136,7 +136,7 @@ static const char *ed25619_names[] = { DNSKEY_ALGORITHM_ED25519_NAME, "15", NULL
 static const char *ed448_names[] = { DNSKEY_ALGORITHM_ED448_NAME, "16", NULL};
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
-static const char *dnskey_dummy_names[] = {DNSKEY_ALGORITHM_DUMMY_NAME,"254", NULL};
+static const char *dnskey_dummy_names[] = {DNSKEY_ALGORITHM_DUMMY_NAME,"122", NULL};
 #endif
 //static const char *empty_names[] = {NULL};
 

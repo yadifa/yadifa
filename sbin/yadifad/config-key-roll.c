@@ -222,35 +222,71 @@ config_section_key_roll_stop(struct config_section_descriptor_s *csd)
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->generate, &krl_generate, KR_ACTION_GENERATE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'generate' (%r)", key_roll->id, return_code);
+        if(key_roll->generate != NULL)
+        {
+            ttylog_err("config: key-roll: %s: error in 'generate' (%r)", key_roll->id, return_code);
+        }
+        else
+        {
+            ttylog_err("config: key-roll: %s: 'generate' field not set", key_roll->id);
+        }
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->publish, &krl_publish, KR_ACTION_GENERATE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'publish' (%r)", key_roll->id, return_code);
+        if(key_roll->publish != NULL)
+        {
+            ttylog_err("config: key-roll: %s: error in 'publish' (%r)", key_roll->id, return_code);
+        }
+        else
+        {
+            ttylog_err("config: key-roll: %s: 'publish' field not set", key_roll->id);
+        }
+
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->activate, &krl_activate, KR_ACTION_PUBLISH)))
     {
-        ttylog_err("config: key-roll: %s: error in 'activate' (%r)", key_roll->id, return_code);
+        if(key_roll->activate != NULL)
+        {
+            ttylog_err("config: key-roll: %s: error in 'activate' (%r)", key_roll->id, return_code);
+        }
+        else
+        {
+            ttylog_err("config: key-roll: %s: 'activate' field not set", key_roll->id);
+        }
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->inactive, &krl_inactive, KR_ACTION_ACTIVATE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'inactive' (%r)", key_roll->id, return_code);
+        if(key_roll->inactive != NULL)
+        {
+            ttylog_err("config: key-roll: %s: error in 'inactive' (%r)", key_roll->id, return_code);
+        }
+        else
+        {
+            ttylog_err("config: key-roll: %s: 'inactive' field not set", key_roll->id);
+        }
 
         return PARSE_INVALID_ARGUMENT;
     }
 
     if(FAIL(return_code = config_key_roll_parser_line(key_roll->remove, &krl_remove, KR_ACTION_INACTIVE)))
     {
-        ttylog_err("config: key-roll: %s: error in 'remove' (%r)", key_roll->id, return_code);
+        if(key_roll->remove != NULL)
+        {
+            ttylog_err("config: key-roll: %s: error in 'remove' (%r)", key_roll->id, return_code);
+        }
+        else
+        {
+            ttylog_err("config: key-roll: %s: 'remove' field not set", key_roll->id);
+        }
 
         return PARSE_INVALID_ARGUMENT;
     }

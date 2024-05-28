@@ -29,10 +29,8 @@
 # 
 ################################################################################
 
-20230906:
-    YADIFA 2.6.5-public
+20240507:
+    YADIFA 2.6.6
 
-    Secondaries will nolonger enforce the TTL value of the NSEC3PARAM record.
-
-    Fixes an issue caused by a limitation of the select system call.
+    Fixes an issue in the resource rate limiter that could crash the server on some condition.
 

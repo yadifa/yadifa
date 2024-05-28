@@ -277,7 +277,45 @@ void osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t
 void osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags);
 
 ya_result osprint_type_bitmap(output_stream *os, const u8 *rdata_pointer, u16 rdata_size);
+
+/**
+ * Print a text (char*, len) between quotes, escaping when required.
+ *
+ * @param os the output stream
+ * @param text a pointer to the text
+ * @param text_len the lenght of the text
+ * @return an error code
+ */
+
+ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text_len);
+
+/**
+ * Prints the TEXT representation of the rdata of a record of a given type.
+ *
+ * @param os the output stream
+ * @param type the record type
+ * @param rdata_pointer a pointer to the rdata
+ * @param rdata_size the size of the rdata
+ *
+ * returns an error code.
+ */
+
 ya_result osprint_rdata(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
+
+/**
+ * Prints the TEXT representation of the rdata of a record of a given type.
+ * FQDN containing '@', '$', '\\' and ';' are escaped.
+ *
+ * Uses osprint_rdata for types not requiring escapes.
+ *
+ * @param os the output stream
+ * @param type the record type
+ * @param rdata_pointer a pointer to the rdata
+ * @param rdata_size the size of the rdata
+ *
+ * returns an error code.
+ */
+
 ya_result osprint_rdata_escaped(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
 ya_result print_rdata(u16 type, u8 *rdata, u16 rdata_size);
 

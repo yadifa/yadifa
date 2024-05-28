@@ -346,13 +346,18 @@ zdb_zone_answer_axfr_thread(void* data_)
     input_stream fis;
     u64 total_bytes_sent = 0;
     ya_result ret;
+    char *buffer;
+    size_t buffer_size;
     u32 serial = 0;
     u32 now = time(NULL);
     u32 journal_from = data->journal_from;
     u32 journal_to = data->journal_to;
     int path_len;
     u8   data_zone_origin[MAX_DOMAIN_LENGTH];
-    char buffer[PATH_MAX + 8];
+    char buffer_static[PATH_MAX + 8];
+
+    buffer = buffer_static;
+    buffer_size = sizeof(buffer_static);
 
 #if DNSCORE_HAS_TCP_MANAGER
     if(!tcp_manager_is_valid(data->sctx))
@@ -621,7 +626,7 @@ zdb_zone_answer_axfr_thread(void* data_)
             
             if(FAIL(ret = zdb_zone_path_get_provider()(
                     data_zone_origin, 
-                    buffer, sizeof(buffer),
+                    buffer, buffer_size,
                     ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
             {
                 // failed to get the name
@@ -703,7 +708,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 
                 unlink(buffer);
     
-                yassert((path_len > 0) && ((u32)path_len < sizeof(buffer) - 6));
+                yassert((path_len > 0) && ((u32)path_len < (buffer_size - 6)));
                 
                 memcpy(&buffer[path_len], ".part", 6);
                 unlink(buffer); // trigger a new update
@@ -962,7 +967,6 @@ zdb_zone_answer_axfr_thread(void* data_)
     message_set_answer_count_ne(mesg, NETWORK_ONE_16);
 
     packet_writer pw;
-    u32 packet_count = 0;
     u16 an_count = 0;
 
     // @note 20091223 edf -- With TSIG enabled this limit will be dynamic and change to a lower bound for every 100th packet
@@ -976,7 +980,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
     packet_writer_init(&pw, message_get_buffer(mesg), message_base_size, packet_size_limit);
 
-    for(;; packet_count--) /* using path as the buffer */
+    for(;;) /* using path as the buffer */
     {
         struct type_class_ttl_rdlen tctrl;
         ya_result qname_len;
@@ -1088,13 +1092,36 @@ zdb_zone_answer_axfr_thread(void* data_)
         
         // if for any reason the rdata_len is bigger than the 4K buffer size (not supposed to happen as even keys are not bigger than 1K)
         
-        if(rdata_len > sizeof(buffer))
+        if(rdata_len > buffer_size)
         {
-            log_err("zone write axfr: %{dnsname}: record data length is too big (%i)", data_zone_origin, rdata_len);
+            if(rdata_len <= UINT16_MAX)
+            {
+                // implicitly, buffer_size < UINT16_MAX
+
+                char *tmp_buffer = (char*)malloc(UINT16_MAX);
+                if(tmp_buffer == NULL)
+                {
+                    log_err("zone write axfr: %{dnsname}: %{dnstype} record data length is too big (%i > %i) and failed to allocate a bigger buffer", data_zone_origin, &tctrl.qtype, rdata_len, buffer_size);
 #if DEBUG
-            log_memdump(g_database_logger, MSG_DEBUG, &tctrl, 10, 16);
+                    log_memdump(g_database_logger, MSG_DEBUG, &tctrl, 10, 16);
 #endif
-            break;
+                    break;
+                }
+
+                memcpy(tmp_buffer, buffer, qname_len);
+                buffer = tmp_buffer;
+                buffer_size = UINT16_MAX;
+
+                // bigger buffer allocated
+            }
+            else
+            {
+                log_err("zone write axfr: %{dnsname}: %{dnstype} record data length is too big (%i > %i)", data_zone_origin, &tctrl.qtype, rdata_len, buffer_size);
+#if DEBUG
+                log_memdump(g_database_logger, MSG_DEBUG, &tctrl, 10, 16);
+#endif
+                break;
+            }
         }
 
         s32 record_len = qname_len + 10 + rdata_len;
@@ -1258,7 +1285,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 case TYPE_MG:
                 case TYPE_MR:
                 {
-                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < buffer_size
                     {
                         log_err("zone write axfr: %{dnsname}: error reading %{dnstype} record: %r", data_zone_origin, &tctrl.qtype, n);
                         
@@ -1299,7 +1326,7 @@ zdb_zone_answer_axfr_thread(void* data_)
                 }
                 case TYPE_SOA:
                 {
-                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < buffer_size
                     {
                         log_err("zone write axfr: %{dnsname}: error reading SOA record: %r", data_zone_origin, n);
                         
@@ -1364,7 +1391,7 @@ zdb_zone_answer_axfr_thread(void* data_)
 
                 case TYPE_RRSIG:
                 {
-                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < sizeof(buffer)
+                    if(FAIL(n = input_stream_read_fully(&fis, buffer, rdata_len))) // rdata_len < buffer_size
                     {
                         log_err("zone write axfr: %{dnsname}: error reading RRSIG record: %r", data_zone_origin, n);
 
@@ -1421,7 +1448,7 @@ zdb_zone_answer_axfr_thread(void* data_)
         
         while(rdata_len > 0)
         {
-            if((n = input_stream_read(&fis, (u8*)buffer, MIN(rdata_len, sizeof(buffer)))) <= 0)
+            if((n = input_stream_read(&fis, (u8*)buffer, MIN(rdata_len, buffer_size))) <= 0)
             {
                 if(n == 0)
                 {
@@ -1467,6 +1494,11 @@ zdb_zone_answer_axfr_thread(void* data_)
      */
 
 scheduler_queue_zone_write_axfr_thread_exit:
+
+    if(buffer != buffer_static)
+    {
+        free(buffer);
+    }
 
 #if DNSCORE_HAS_TCP_MANAGER
     if(sctx != NULL)

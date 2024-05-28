@@ -35,22 +35,12 @@ configure_base_path="$0/"
 
 dnl Do NOT change this block of comments
 dnl ====================================
-dnl YADIFA VERSION 2.6.5 DATE 2023-09-06
+dnl YADIFA VERSION 2.6.6 DATE 2024-05-28
 dnl ====================================
 
-AC_PREREQ([2.69])
-AC_REVISION([$Revision: 11168 $])
-define(YADIFA_VERSION, [m4_esyscmd(
-        svn info 2> /dev/null |
-        grep 'Last Changed Rev: ' |
-        sed -re 's/.*: (.*)/Revision: \1 $/' -e 's/^/$/' >> revision.txt ;
-        echo $(cat "${configure_base_path}VERSION")-$(grep -r \$Revision: revision.txt configure.ac Makefile.am sbin/* lib/*/* bin/* doc/* etc/* |
-        sed -e 's/^.*\$Revision: *//' -e 's/\$.*//' -e 's/ *//' |
-        sort -n |
-        /usr/bin/tail -1 |
-        tr -d '\n') |
-        tr -d '\n'
-	)])
+AC_PREREQ([2.71])
+AC_REVISION([$Revision$])
+define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(/usr/bin/cat "${configure_base_path}VERSION") $(/usr/bin/expr 54 + 11201))])
 
 AC_INIT([yadifa],YADIFA_VERSION,[info@yadifa.eu])
 
@@ -75,7 +65,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_PROG_AR
 
 # automake version < 1.14
-AM_PROG_CC_C_O
+# AM_PROG_CC_C_O
 
 LT_INIT([disable-shared])
 
