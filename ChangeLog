@@ -29,6 +29,12 @@
 # 
 ################################################################################
 
+20240626:
+    YADIFA 2.6.7
+
+    Adds -fno-strict-aliasing to the build options, fixes -flto
+
+
 20240507:
     YADIFA 2.6.6
 

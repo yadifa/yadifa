@@ -69,6 +69,10 @@ if HAS_CC_MISSING_FIELD_INITIALIZERS
 AM_CFLAGS += -Werror=missing-field-initializers
 endif
 
+if HAS_CC_NO_STRICT_ALIASING
+AM_CFLAGS += -fno-strict-aliasing
+endif
+
 if HAS_CC_STD_GNU11
 AM_CFLAGS += -std=gnu11
 else

@@ -58,35 +58,19 @@ extern logger_handle *g_system_logger;
 
 extern error_state_t nospace_error_state;
 
-/*
- * This structure is supposed to match the output_stream one
- * It helps using the void* data as an int without a INT_AT(x) kind of macro
- */
-
-typedef struct file_output_stream file_output_stream;
-
-struct file_output_stream
-{
-
-    union
-    {
-        void *voidp;
-        int fd;
-    } data;
-
-    const output_stream_vtbl* vtbl;
-};
+#define FILE_OUTPUT_STREAM_FD_GET(stream___) ((int)(intptr_t)((stream___)->data))
+#define FILE_OUTPUT_STREAM_FD_SET(stream___,fd___) (stream___)->data = (void*)(intptr_t)fd___;
 
 static ya_result
 file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
 {
-    const file_output_stream* stream = (file_output_stream*)stream_;
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
 
     const u8* start = buffer;
 
     while(len > 0)
     {
-        ssize_t ret = write(stream->data.fd, buffer, len);
+        ssize_t ret = write(fd, buffer, len);
 
         if(ret <= 0)
         {
@@ -100,7 +84,7 @@ file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
             if(err == EAGAIN)
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
-                int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
+                int oldflags = fcntl(fd, F_GETFL, 0);
                 if(oldflags < 0)
                 {
                      return MAKE_ERRNO_ERROR(err);
@@ -123,13 +107,13 @@ file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
 static ya_result
 file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
 {
-    const file_output_stream* stream = (file_output_stream*)stream_;
     const u8* start = buffer;
     bool nospace = FALSE;
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
 
     while(len > 0)
     {
-        ssize_t ret = write(stream->data.fd, buffer, len);
+        ssize_t ret = write(fd, buffer, len);
 
         if(ret <= 0)
         {
@@ -143,7 +127,7 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
             if(err == EAGAIN)
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
-                int oldflags = fcntl (stream->data.fd, F_GETFL, 0);
+                int oldflags = fcntl(fd, F_GETFL, 0);
                 if(oldflags < 0)
                 {
                      return MAKE_ERRNO_ERROR(err);
@@ -183,9 +167,9 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
 static ya_result
 file_output_stream_flush(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
 
-    if(fsync_ex(stream->data.fd) == 0) /* or fdatasync ... maybe it would be slightly better */
+    if(fsync_ex(fd) == 0) /* or fdatasync ... maybe it would be slightly better */
     {
         return SUCCESS;
     }
@@ -196,13 +180,13 @@ file_output_stream_flush(output_stream* stream_)
 static void
 file_output_stream_close(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
     
-    /* don't, it's only for a test that I did this assert((stream->data.fd < 0)||(stream->data.fd >2)); */
+    /* don't, it's only for a test that I did this assert((fd < 0)||(fd >2)); */
     
-    if(stream->data.fd != -1)   /* harmless close but still ... */
+    if(fd != -1)   /* harmless close but still ... */
     {
-        close_ex(stream->data.fd);
+        close_ex(fd);
     }
 
     output_stream_set_void(stream_);
@@ -211,8 +195,6 @@ file_output_stream_close(output_stream* stream_)
 static void
 file_output_stream_noclose(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
-    stream->data.fd = -1;
     output_stream_set_void(stream_);
 }
 
@@ -298,10 +280,8 @@ file_output_stream_open_ex(output_stream* stream_, const char* filename, int fla
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 
-    file_output_stream* stream = (file_output_stream*)stream_;
-    stream->data.fd = fd;
-
-    stream->vtbl = &file_output_stream_vtbl;
+    FILE_OUTPUT_STREAM_FD_SET(stream_, fd);
+    stream_->vtbl = &file_output_stream_vtbl;
 
     return SUCCESS;
 }
@@ -322,10 +302,8 @@ file_output_stream_open_ex_nolog(output_stream* stream_, const char* filename, i
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 
-    file_output_stream* stream = (file_output_stream*)stream_;
-    stream->data.fd = fd;
-
-    stream->vtbl = &file_output_stream_vtbl;
+    FILE_OUTPUT_STREAM_FD_SET(stream_, fd);
+    stream_->vtbl = &file_output_stream_vtbl;
 
     return SUCCESS;
 }
@@ -333,14 +311,13 @@ file_output_stream_open_ex_nolog(output_stream* stream_, const char* filename, i
 void
 file_output_stream_close_nolog(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
     
-    /* don't, it's only for a test that I did this assert((stream->data.fd < 0)||(stream->data.fd >2)); */
+    /* don't, it's only for a test that I did this assert((fd < 0)||(fd >2)); */
     
-    if(stream->data.fd != -1)   /* harmless close but still ... */
+    if(fd != -1)   /* harmless close but still ... */
     {
-        close_ex(stream->data.fd);
-        stream->data.fd = -1;
+        close_ex(fd);
     }
 
     output_stream_set_void(stream_);
@@ -351,10 +328,8 @@ fd_output_stream_attach(output_stream* stream_, int fd)
 {
     yassert(sizeof(void*) >= sizeof(int));
 
-    file_output_stream* stream = (file_output_stream*)stream_;
-    stream->data.fd = fd;
-
-    stream->vtbl = &file_output_stream_vtbl;
+    FILE_OUTPUT_STREAM_FD_SET(stream_, fd);
+    stream_->vtbl = &file_output_stream_vtbl;
 
     return SUCCESS;
 }
@@ -364,10 +339,8 @@ fd_output_stream_attach_noclose(output_stream* stream_, int fd)
 {
     yassert(sizeof(void*) >= sizeof(int));
 
-    file_output_stream* stream = (file_output_stream*)stream_;
-    stream->data.fd = fd;
-
-    stream->vtbl = &file_output_stream_noclose_vtbl;
+    FILE_OUTPUT_STREAM_FD_SET(stream_, fd);
+    stream_->vtbl = &file_output_stream_noclose_vtbl;
 
     return SUCCESS;
 }
@@ -377,31 +350,27 @@ fd_output_stream_detach(output_stream* stream_)
 {
     yassert(sizeof(void*) >= sizeof(int));
 
-    file_output_stream* stream = (file_output_stream*)stream_;
-    stream->data.fd = -1;
+    FILE_OUTPUT_STREAM_FD_SET(stream_, -1);
 }
 
 ya_result
 fd_output_stream_get_filedescriptor(output_stream* stream)
 {
-    file_output_stream *fos = (file_output_stream*)stream;
-    return fos->data.fd;
+    return FILE_OUTPUT_STREAM_FD_GET(stream);
 }
 
 bool
 is_fd_output_stream(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
-    return (stream != NULL) && ((stream->vtbl == &file_output_stream_vtbl) || (stream->vtbl == &file_full_output_stream_vtbl));
+    return (stream_ != NULL) && ((stream_->vtbl == &file_output_stream_vtbl) || (stream_->vtbl == &file_full_output_stream_vtbl));
 }
 
 s64 fd_output_stream_get_size(output_stream* stream_)
 {
-    file_output_stream* stream = (file_output_stream*)stream_;
-    
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
     struct stat s;
     
-    if(fstat(stream->data.fd, &s) >= 0)
+    if(fstat(fd, &s) >= 0)
     {
         if(S_ISREG(s.st_mode))
         {
@@ -415,10 +384,10 @@ s64 fd_output_stream_get_size(output_stream* stream_)
 void file_output_steam_advise_sequential(output_stream* stream_)
 {
 #if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
-    file_output_stream* stream = (file_output_stream*)stream_;
-    if(stream->data.fd >= 0)
+    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
+    if(fd >= 0)
     {
-        posix_fadvise(stream->data.fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+        posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
     }
 #else
     (void)stream_;

@@ -823,7 +823,7 @@ timeus_from_smarttime_ex(const char *text, s64 now)
             memset(&tm, 0, sizeof(struct tm));
             tm.tm_year = year - 1900;
             tm.tm_mon = month - 1;
-            tm.tm_mday = day - 1;
+            tm.tm_mday = day;
             tm.tm_hour = hours;
             tm.tm_min = minutes;
             tm.tm_sec = seconds;

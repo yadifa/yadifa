@@ -29,8 +29,8 @@
 # 
 ################################################################################
 
-20240507:
-    YADIFA 2.6.6
+20240626:
+    YADIFA 2.6.7
 
-    Fixes an issue in the resource rate limiter that could crash the server on some condition.
+    Adds -fno-strict-aliasing to the build options, fixes -flto
 

@@ -61,6 +61,9 @@
 #undef HAS_CC_NO_OMIT_FRAME_POINTER
 
 /* Compiler supports feature */
+#undef HAS_CC_NO_STRICT_ALIASING
+
+/* Compiler supports feature */
 #undef HAS_CC_PEDANTIC
 
 /* Compiler supports feature */

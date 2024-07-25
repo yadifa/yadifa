@@ -108,8 +108,3 @@ void      file_output_steam_advise_sequential(output_stream* os);
 
 #endif	/* _FILE_OUTPUT_STREAM_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-
-
-
