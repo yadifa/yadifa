@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #pragma once
@@ -49,22 +47,52 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-/** \brief Read \b pid \b file, program quits on log_quit
+/**
+ * Read pid file, program quits on log_quit
  *
- *  Made available again for a project still using it.
+ * Made available again for a project still using it.
  *
- *  @param[in] path
- *  @param[in] file_name
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid from inside the file
  *
- *  @retval pid
- *  @retval NOK (negative number),
- *  @return otherwise log_quit will stop the program with correct exit code
+ * @return SUCCESS or an error code
  */
-pid_t pid_file_read(const char *pid_file_path);
 
-ya_result pid_file_create(pid_t *pid, const char *pid_file_path, uid_t uid, gid_t gid);
-// pid_t pid_file_read(const char *pid_file_path);
-ya_result pid_check_running_program(const char *pid_file_path, pid_t* out_pid);
+ya_result pid_file_read(const char *pid_file_path, pid_t *pidp);
+
+/**
+ * Creates or overwrites a pid file with its new process id
+ * Doesn't work if another program has already created the pid file
+ *
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid of the running instance of the program
+ * @param new_uid the user owner of the file (if the program runs as root), it's doing a fchown
+ * @param new_gid the group owner of the file (if the program runs as root), it's doing a fchown
+ *
+ * @return SUCCESS or an error code
+ */
+
+ya_result pid_file_create(const char *pid_file_path, pid_t *pidp, uid_t uid, gid_t gid);
+
+/**
+ * Check if program is already running checking the existence of a pid file.
+ *
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid from inside the file
+ *
+ * @return SUCCESS if the program doesn't appear to be running.
+ * @return an error code (INVALID_PATH or PID_LOCKED)
+ */
+
+ya_result pid_check_running_program(const char *pid_file_path, pid_t *out_pid);
+
+/**
+ * Deletes a pid file.
+ * File is being opened and locked while the deletion occurs. This is to avoid race conditions.
+ *
+ * @param pid_file_path the path of the pid file
+ */
+
 void pid_file_destroy(const char *pid_file_path);
 
 /** @} */

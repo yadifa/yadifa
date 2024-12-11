@@ -1,0 +1,5 @@
+These files are originally from: https://github.com/imneme/pcg-c-basic
+
+These are the originals c & h files.
+They have been copied unmodified in lib/dnscore/src and lib/dnscore/include to be directly included into
+the dnscore library.

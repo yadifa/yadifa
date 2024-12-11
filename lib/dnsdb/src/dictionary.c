@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Hash-based collection designed to change it's structure to improve speed.
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Hash-based collection designed to change it's structure to improve speed.
  *
  *  Hash-based collection designed to change it's structure to improve speed.
  *
  * @{
- */
-#include "dnsdb/dnsdb-config.h"
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -49,28 +48,27 @@
 
 #define ZDB_HASHTABLE_THRESHOLD_DISABLE (~0)
 
-void dictionary_btree_init(dictionary* dico);
+void dictionary_btree_init(dictionary_t *dico);
 
-void dictionary_htbt_init(dictionary* dico);
+void dictionary_htbt_init(dictionary_t *dico);
 
 struct dictionary_mutation_table_entry
 {
-    u32 threshold; /* Up to that number of items in the collection */
-    dictionary_init_method* init;
+    uint32_t                threshold; /* Up to that number of items in the collection */
+    dictionary_init_method *init;
 };
 
 static struct dictionary_mutation_table_entry dictionary_mutation_table[2] = {
-    { ZDB_HASHTABLE_THRESHOLD, dictionary_btree_init},
-    { MAX_U32, dictionary_htbt_init},
+    {ZDB_HASHTABLE_THRESHOLD, dictionary_btree_init},
+    {U32_MAX, dictionary_htbt_init},
 };
 
-
-static struct dictionary_mutation_table_entry*
-dictionary_get_mutation_entry(dictionary* dico)
+static struct dictionary_mutation_table_entry *dictionary_get_mutation_entry(dictionary_t *dico)
 {
-    struct dictionary_mutation_table_entry* entry = dictionary_mutation_table;
+    struct dictionary_mutation_table_entry *entry = dictionary_mutation_table;
 
-    for(; dico->count > entry->threshold; entry++);
+    for(; dico->count > entry->threshold; entry++)
+        ;
 
     return entry;
 }
@@ -79,31 +77,24 @@ dictionary_get_mutation_entry(dictionary* dico)
  * I could avoid this hook, the signature is almost the same
  *
  */
-static void
-dictionary_bucket_record_callback(void* bucket_data, hashcode key, dictionary_node* node)
-{
-    dictionary_fills((dictionary*)bucket_data, key, node);
-}
+static void dictionary_bucket_record_callback(void *bucket_data, hashcode key, dictionary_node *node) { dictionary_fills((dictionary_t *)bucket_data, key, node); }
 
-static void
-dictionary_destroy_record_callback(dictionary_node* node)
+static void dictionary_destroy_record_callback(dictionary_node *node)
 {
     (void)node;
     /* This should NEVER be called */
-    assert(FALSE); /* NOT zassert ! */
+    assert(false); /* NOT zassert ! */
 }
 
-void
-dictionary_init(dictionary* dico)
+void dictionary_init(dictionary_t *dico)
 {
     dictionary_mutation_table[0].init(dico);
     dico->threshold = dictionary_mutation_table[0].threshold;
 }
 
-void
-dictionary_mutate(dictionary* dico)
+void dictionary_mutate(dictionary_t *dico)
 {
-    struct dictionary_mutation_table_entry* entry = dictionary_get_mutation_entry(dico);
+    struct dictionary_mutation_table_entry *entry = dictionary_get_mutation_entry(dico);
 
     /* Check the mutation condition */
 
@@ -114,7 +105,7 @@ dictionary_mutate(dictionary* dico)
 
     /* Mutate */
 
-    dictionary new_dico;
+    dictionary_t new_dico;
     entry->init(&new_dico);
 
     /* Update the default (MAX_UNSIGNED_INT) threshold */
@@ -124,33 +115,23 @@ dictionary_mutate(dictionary* dico)
     dictionary_empties(dico, &new_dico, dictionary_bucket_record_callback);
     dictionary_destroy(dico, dictionary_destroy_record_callback);
 
-    MEMCOPY(dico, &new_dico, sizeof(dictionary));
+    MEMCOPY(dico, &new_dico, sizeof(dictionary_t));
 }
 
-static bool
-dictionary_empty_iterator_hasnext(dictionary_iterator* dico)
+static bool dictionary_empty_iterator_hasnext(dictionary_iterator_t *dico)
 {
     (void)dico;
-    return FALSE;
+    return false;
 }
 
-static void**
-dictionary_empty_iterator_next(dictionary_iterator* dico)
+static void **dictionary_empty_iterator_next(dictionary_iterator_t *dico)
 {
     (void)dico;
     return NULL;
 }
 
-static const struct dictionary_iterator_vtbl no_element_iterator = 
-{
-    dictionary_empty_iterator_hasnext,
-    dictionary_empty_iterator_next
-};
+static const struct dictionary_iterator_vtbl no_element_iterator = {dictionary_empty_iterator_hasnext, dictionary_empty_iterator_next};
 
-void
-dictionary_empty_iterator_init(dictionary_iterator *iter)
-{
-    iter->vtbl = &no_element_iterator;
-}
+void                                         dictionary_empty_iterator_init(dictionary_iterator_t *iter) { iter->vtbl = &no_element_iterator; }
 
 /** @} */

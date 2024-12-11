@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to manipulate a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <dnscore/dnsname.h>
 
 #include "dnsdb/dictionary.h"
 
-#if ZDB_HAS_NSEC3_SUPPORT
+#if HAS_NSEC3_SUPPORT
 #include "dnsdb/nsec3_types.h"
 #include "dnsdb/nsec3_item.h"
 #endif
@@ -54,48 +53,46 @@
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_process.h"
 
-static ya_result
-zdb_zone_process_label_children(zdb_zone_process_label_callback_parms *parms)
+static ya_result zdb_zone_process_label_children(zdb_zone_process_label_callback_parms *parms)
 {
-    ya_result return_code = SUCCESS;
-    
-    dictionary_iterator iter;
+    ya_result             return_code = SUCCESS;
+
+    dictionary_iterator_t iter;
     dictionary_iterator_init(&parms->rr_label->sub, &iter);
     while(dictionary_iterator_hasnext(&iter))
     {
-        zdb_rr_label** sub_labelp = (zdb_rr_label**)dictionary_iterator_next(&iter);
+        zdb_rr_label_t **sub_labelp = (zdb_rr_label_t **)dictionary_iterator_next(&iter);
 
         dnsname_stack_push_label(&parms->fqdn_stack, &(*sub_labelp)->name[0]);
-        
+
         parms->rr_label = *sub_labelp;
-        
+
         return_code = parms->cb(parms);
-            
+
         if((FAIL(return_code) || return_code == ZDB_ZONE_PROCESS_STOP))
         {
             break;
         }
 
         return_code = zdb_zone_process_label_children(parms);
-        
+
         if((FAIL(return_code) || return_code == ZDB_ZONE_PROCESS_STOP))
         {
             break;
         }
-        
+
         dnsname_stack_pop_label(&parms->fqdn_stack);
     }
-    
+
     return return_code;
 }
 
-ya_result
-zdb_zone_process_all_labels_from_zone(zdb_zone *zone, zdb_zone_process_label_callback *cb, void *args)
+ya_result zdb_zone_process_all_labels_from_zone(zdb_zone_t *zone, zdb_zone_process_label_callback *cb, void *args)
 {
     yassert(zdb_zone_islocked(zone));
-    
+
     ya_result ret;
-    
+
     if(zone != NULL)
     {
         if(zone->apex != NULL)
@@ -126,7 +123,7 @@ zdb_zone_process_all_labels_from_zone(zdb_zone *zone, zdb_zone_process_label_cal
     {
         ret = UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
-    
+
     return ret;
 }
 

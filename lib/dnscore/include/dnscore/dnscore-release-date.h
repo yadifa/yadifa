@@ -1,2 +1,0 @@
-#pragma
-#define YADIFA_DNSCORE_RELEASE_DATE "2024-07-19"

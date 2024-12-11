@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup format C-string formatting
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup format C-string formatting
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -49,9 +47,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "dnscore/timeformat.h"
-#include "dnscore/ctrl-rfc.h"
+#include "dnscore/ctrl_rfc.h"
 #include "dnscore/hash.h"
 #include "dnscore/mutex.h"
 
@@ -69,7 +68,7 @@
 #endif
 #include <dlfcn.h>
 #undef HAS_DLADDR_SUPPORT
-#define HAS_DLADDR_SUPPORT 0    // keep it disabled for the rest of the binary
+#define HAS_DLADDR_SUPPORT 0 // keep it disabled for the rest of the binary
 #endif
 #endif
 
@@ -94,23 +93,24 @@
 #include "dnscore/base16.h"
 #include "dnscore/base32hex.h"
 #include "dnscore/sys_error.h"
+#include "dnscore/dnscore_extension.h"
 
-#define FMTHDESC_TAG 0x4353454448544d46
+#define FMTHDESC_TAG               0x4353454448544d46
 
-#define SENTINEL '%'
-#define NULL_STRING_SUBSTITUTE "(NULL)"
-#define NULL_STRING_SUBSTITUTE_LEN (sizeof(NULL_STRING_SUBSTITUTE)-1)
+#define SENTINEL                   '%'
+#define NULL_STRING_SUBSTITUTE     "(NULL)"
+#define NULL_STRING_SUBSTITUTE_LEN (sizeof(NULL_STRING_SUBSTITUTE) - 1)
 
-#define CHR0 '\0'
+#define CHR0                       '\0'
 
-static const u8* STREOL = (const u8*)"\n";
-//static const u8* STRCHR0 = (const u8*)"\0";
-static const u8* STRMINUS = (const u8*)"-";
-static const u8* STRESCAPE = (const u8*)"\\";
-static const u8* STRQUOTE = (const u8*)"\"";
-static const uint8_t STRSPACE[] = {' '};
-static const u8 STRSEPARATOR[] = {' ', '|', ' '};
-static const uint8_t QUOTE_SPACE_QUOTE[3] = {'"', ' ', '"'};
+static const uint8_t *STREOL = (const uint8_t *)"\n";
+// static const uint8_t* STRCHR0 = (const uint8_t*)"\0";
+static const uint8_t *STRMINUS = (const uint8_t *)"-";
+static const uint8_t *STRESCAPE = (const uint8_t *)"\\";
+static const uint8_t *STRQUOTE = (const uint8_t *)"\"";
+static const uint8_t  STRSPACE[] = {' '};
+static const uint8_t  STRSEPARATOR[] = {' ', '|', ' '};
+// static const uint8_t QUOTE_SPACE_QUOTE[3] = {'"', ' ', '"'};
 
 #if 0
 static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', ' ', '\t'};
@@ -118,64 +118,59 @@ static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', ' ', '\t'};
 
 #define TXT_ESCAPE_TYPE_NONE 0
 #define TXT_ESCAPE_TYPE_CHAR 1
-#define TXT_ESCAPE_TYPE_OCTL 2 // octal: e.g. \001
+#define TXT_ESCAPE_TYPE_OCTL 2
 
-static const u8 TXT_ESCAPE_TYPE[256] =
-{
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+static const uint8_t TXT_ESCAPE_TYPE[256] = {
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
 
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_CHAR,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x20
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x28
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x30
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x38
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x40
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x48
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x50
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_CHAR,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x58
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x60
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x68
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x70
-    TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE,TXT_ESCAPE_TYPE_NONE, // 0x78
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_CHAR, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x20
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x28
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x30
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x38
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x40
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x48
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x50
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_CHAR, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x58
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x60
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x68
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x70
+    TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, TXT_ESCAPE_TYPE_NONE, // 0x78
 
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
-    TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
+    TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL, TXT_ESCAPE_TYPE_OCTL,
 };
 
 /*
  * Linear access to the format handlers.  Accessed through a dichotomy.
  */
 
-static ptr_vector format_handler_descriptor_table = {NULL, -1, -1};
-static const format_handler_descriptor** format_handler_descriptor_hash_table = NULL;
-static int format_handler_descriptor_hash_table_size = 0;
-static mutex_t debug_osformat_mtx = MUTEX_INITIALIZER;
+static ptr_vector_t                        format_handler_descriptor_table = {{NULL}, -1, -1};
+static const format_handler_descriptor_t **format_handler_descriptor_hash_table = NULL;
+static int                                 format_handler_descriptor_hash_table_size = 0;
+static mutex_t                             debug_osformat_mtx = MUTEX_INITIALIZER;
 
-//static bool g_format_usable = FALSE;
+// static bool g_format_usable = false;
 
-static int
-format_handler_compare(const char* str1, s32 str1_len, const char* str2, s32 str2_len)
+static int format_handler_compare(const char *str1, int32_t str1_len, const char *str2, int32_t str2_len)
 {
 
-    s32 len = MIN(str1_len, str2_len);
+    int32_t len = MIN(str1_len, str2_len);
 
-    int ret = memcmp(str1, str2, len);
+    int     ret = memcmp(str1, str2, len);
 
     if(ret == 0)
     {
@@ -185,33 +180,29 @@ format_handler_compare(const char* str1, s32 str1_len, const char* str2, s32 str
     return ret;
 }
 
-static int
-format_handler_qsort_compare(const void* a_, const void* b_)
+static int format_handler_qsort_compare(const void *a_, const void *b_)
 {
-    format_handler_descriptor* a = (format_handler_descriptor*)a_;
-    format_handler_descriptor* b = (format_handler_descriptor*)b_;
+    format_handler_descriptor_t *a = (format_handler_descriptor_t *)a_;
+    format_handler_descriptor_t *b = (format_handler_descriptor_t *)b_;
 
     return format_handler_compare(a->name, a->name_len, b->name, b->name_len);
 }
 
-static const format_handler_descriptor*
-format_get_format_handler(const char* name, u32 name_len)
+static const format_handler_descriptor_t *format_get_format_handler(const char *name, uint32_t name_len)
 {
-#if 0 /* fix */
-#else
     if(format_handler_descriptor_table.data == NULL)
     {
         return NULL; /* Not initialized */
     }
 
-    format_handler_descriptor* fh = NULL;
+    format_handler_descriptor_t *fh = NULL;
 
-    u32 low = 0;
-    u32 high = format_handler_descriptor_table.offset + 1;
+    uint32_t                     low = 0;
+    uint32_t                     high = format_handler_descriptor_table.offset + 1;
 
     while(high - low > 3)
     {
-        u32 mid = (high + low) / 2;
+        uint32_t mid = (high + low) / 2;
 
         fh = format_handler_descriptor_table.data[mid];
 
@@ -245,7 +236,6 @@ format_get_format_handler(const char* name, u32 name_len)
     }
 
     return NULL;
-#endif
 }
 
 /* Example of custom format handler -> */
@@ -254,28 +244,21 @@ format_get_format_handler(const char* name, u32 name_len)
  * The dummy format handler simply prints the pointer in hexadecimal / lo-case
  */
 
-static void
-dummy_format_handler_method(const void* val, output_stream* stream, s32 padding, char pad_char, bool left_justified, void* reserved_for_method_parameters)
+static void dummy_format_handler_method(const void *val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     (void)reserved_for_method_parameters;
 
-    intptr ival = (intptr)val;
+    intptr_t ival = (intptr_t)val;
     format_hex_u64_lo(ival, stream, padding, pad_char, left_justified);
 }
 
-static format_handler_descriptor dummy_format_handler_descriptor =
-{
-    "Unsupported",
-    11,
-    dummy_format_handler_method
-};
+static format_handler_descriptor_t dummy_format_handler_descriptor = {"Unsupported", 11, dummy_format_handler_method};
 
 /* <- Example of custom format handler */
 
 static void format_grow_hash_table();
 
-void
-format_class_init()
+void        format_class_init()
 {
     if(format_handler_descriptor_table.data != NULL)
     {
@@ -283,91 +266,85 @@ format_class_init()
     }
 
     ptr_vector_init(&format_handler_descriptor_table);
-    
+
     format_grow_hash_table();
 }
 
-void
-format_class_finalize()
+void format_class_finalize()
 {
-    ptr_vector_destroy(&format_handler_descriptor_table);
-    free((void*)format_handler_descriptor_hash_table);
+    ptr_vector_finalise(&format_handler_descriptor_table);
+    free((void *)format_handler_descriptor_hash_table);
     format_handler_descriptor_hash_table = NULL;
 }
 
-bool
-format_available()
-{
-    return format_handler_descriptor_table.data != NULL;
-}
+#if UNUSED
+bool format_available() { return format_handler_descriptor_table.data != NULL; }
+#endif
+
+uint32_t isqrt(uint32_t);
+
+#define FORMAT_GROW_HASH_TABLE_COUNT 19
+static int  format_grow_hash_table_sizes_index = 0;
+static int  format_grow_hash_table_sizes[FORMAT_GROW_HASH_TABLE_COUNT] = {1117, 2237, 4481, 8963, 17929, 35863, 71741, 143483, 286973, 573953, 1147921, 2295859, 4591721, 9183457, 18366923, 36733847, 73467739, 146935499, 293871013};
 
 static void format_grow_hash_table()
 {
     bool retry;
-    
+
     do
     {
-        if(format_handler_descriptor_hash_table != NULL)
+        if(format_grow_hash_table_sizes_index < FORMAT_GROW_HASH_TABLE_COUNT)
         {
-            free((void*)format_handler_descriptor_hash_table);
-
-            int next = (format_handler_descriptor_hash_table_size * 2) | 1;
-
-            for(int i = 3; i < next; i += 2)
-            {
-                if((next % i) == 0)
-                {
-                    next += 2;
-                    i = 1;
-                }
-            }
-
-            format_handler_descriptor_hash_table_size = next;
+            format_handler_descriptor_hash_table_size = format_grow_hash_table_sizes[format_grow_hash_table_sizes_index++]; // prime
         }
         else
         {
-            format_handler_descriptor_hash_table_size = 1117; // prime
+            fprintf(stderr, "can't register these formats with the current implementation");
+            exit(1);
         }
-        
-        retry = FALSE;
 
-        MALLOC_OBJECT_ARRAY_OR_DIE(format_handler_descriptor_hash_table, const format_handler_descriptor*, format_handler_descriptor_hash_table_size, FMTHDESC_TAG);
-        ZEROMEMORY((void*)format_handler_descriptor_hash_table, format_handler_descriptor_hash_table_size * sizeof(format_handler_descriptor*));
-
-        for(int i = 0; i <= ptr_vector_last_index(&format_handler_descriptor_table); ++i)
+        if(format_handler_descriptor_hash_table != NULL)
         {
-            const format_handler_descriptor* fhd = (format_handler_descriptor*)ptr_vector_get(&format_handler_descriptor_table, i);
-            hashcode code = hash_chararray(fhd->name, fhd->name_len);
+            free((void *)format_handler_descriptor_hash_table);
+        }
 
-            int slot = code % format_handler_descriptor_hash_table_size;
+        retry = false;
+
+        MALLOC_OBJECT_ARRAY_OR_DIE(format_handler_descriptor_hash_table, const format_handler_descriptor_t *, format_handler_descriptor_hash_table_size, FMTHDESC_TAG);
+        ZEROMEMORY((void *)format_handler_descriptor_hash_table, format_handler_descriptor_hash_table_size * sizeof(format_handler_descriptor_t *));
+
+        for(int_fast32_t i = 0; i <= ptr_vector_last_index(&format_handler_descriptor_table); ++i)
+        {
+            const format_handler_descriptor_t *fhd = (format_handler_descriptor_t *)ptr_vector_get(&format_handler_descriptor_table, i);
+            hashcode                           code = hash_chararray(fhd->name, fhd->name_len);
+
+            int                                slot = code % format_handler_descriptor_hash_table_size;
 
             if(format_handler_descriptor_hash_table[slot] != NULL)
             {
-                retry = TRUE;
+                retry = true;
                 break;
             }
 
             format_handler_descriptor_hash_table[slot] = fhd; // VS false positive: slot is unsigned and limited by the modulo of the size of the table
         }
-    }
-    while(retry);
+    } while(retry);
 }
 
-ya_result
-format_registerclass(const format_handler_descriptor* fhd)
+ya_result format_registerclass(const format_handler_descriptor_t *fhd)
 {
     if(format_get_format_handler(fhd->name, fhd->name_len) != NULL)
     {
         return FORMAT_ALREADY_REGISTERED; /* Already registered */
     }
 
-    ptr_vector_append(&format_handler_descriptor_table, (format_handler_descriptor*)fhd);
+    ptr_vector_append(&format_handler_descriptor_table, (format_handler_descriptor_t *)fhd);
 
     ptr_vector_qsort(&format_handler_descriptor_table, format_handler_qsort_compare);
-    
+
     hashcode code = hash_chararray(fhd->name, fhd->name_len);
-    int slot = code % format_handler_descriptor_hash_table_size;
-    
+    int      slot = code % format_handler_descriptor_hash_table_size;
+
     if(format_handler_descriptor_hash_table[slot] == NULL)
     {
         format_handler_descriptor_hash_table[slot] = fhd;
@@ -376,50 +353,47 @@ format_registerclass(const format_handler_descriptor* fhd)
     {
         format_grow_hash_table();
     }
-    
+
     return SUCCESS;
 }
 
-/*typedef size_t formatter(char* output, size_t max_chars, bool left-aligned, void* value_to_convert,int arg_count,va_list args);*/
+/*typedef size_t formatter(char* output, size_t max_chars, bool left-aligned, void* value_to_convert,int
+ * arg_count,va_list args);*/
 
-typedef void
-u64_formatter_function(u64, output_stream*, s32, char, bool);
+typedef void      u64_formatter_function(uint64_t, output_stream_t *, int32_t, char, bool);
 
 static const char __HEXA__[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 static const char __hexa__[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
-static void
-do_padding(output_stream* stream, s32 padding, char pad_char)
+static void       do_padding(output_stream_t *stream, int32_t padding, char pad_char)
 {
-    output_stream_write_method* os_write = stream->vtbl->write;
+    output_stream_write_method *os_write = stream->vtbl->write;
 
     while(padding-- > 0)
     {
-        os_write(stream, (u8*) & pad_char, 1);
+        os_write(stream, (uint8_t *)&pad_char, 1);
     }
 }
 
-static void
-format_unsigned(const char* input, size_t size, output_stream* stream, s32 padding, char pad_char, bool left_justified)
+static void format_unsigned(const char *input, size_t size, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
 {
     padding -= size;
 
     if(left_justified)
     {
-        output_stream_write(stream, (const u8*)input, size);
+        output_stream_write(stream, (const uint8_t *)input, size);
         do_padding(stream, padding, pad_char);
     }
     else
     {
         do_padding(stream, padding, pad_char);
-        output_stream_write(stream, (const u8*)input, size);
+        output_stream_write(stream, (const uint8_t *)input, size);
     }
 
     /* Done */
 }
 
-static void
-format_signed(const char* input, size_t size, output_stream* stream, s32 padding, char pad_char, bool left_justified, bool sign)
+static void format_signed(const char *input, size_t size, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, bool sign)
 {
     padding -= size;
 
@@ -430,7 +404,7 @@ format_signed(const char* input, size_t size, output_stream* stream, s32 padding
             output_stream_write(stream, STRMINUS, 1);
         }
 
-        output_stream_write(stream, (const u8*)input, size);
+        output_stream_write(stream, (const uint8_t *)input, size);
         do_padding(stream, padding, pad_char);
     }
     else
@@ -447,103 +421,86 @@ format_signed(const char* input, size_t size, output_stream* stream, s32 padding
             output_stream_write(stream, STRMINUS, 1);
         }
 
-        output_stream_write(stream, (const u8*)input, size);
+        output_stream_write(stream, (const uint8_t *)input, size);
     }
 
     /* Done */
 }
 
-static void
-format_hex_u64_common(const char* hexa_table, u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
+static void format_hex_u64_common(const char *hexa_table, uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
 {
-    char tmp[__SIZEOF_LONG_LONG__ * 2];
-    char* next = &tmp[sizeof(tmp)];
+    char  tmp[__SIZEOF_POINTER__ * 2];
+    char *next = &tmp[sizeof(tmp)];
 
     do
     {
         *--next = hexa_table[val & 0x0f];
         val >>= 4;
-    }
-    while(val != 0);
+    } while(val != 0);
 
     format_unsigned(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified);
 }
 
-void
-format_oct_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
+void format_oct_u64(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
 {
-    char tmp[20];
-    char* next = &tmp[sizeof(tmp)];
+    char  tmp[24];
+    char *next = &tmp[sizeof(tmp)];
 
     do
     {
         *--next = '0' + (val & 7);
         val >>= 3;
-    }
-    while(val != 0);
+    } while(val != 0);
 
     /* next points at the first char of the 10-based representation of the integer */
 
     format_unsigned(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified);
 }
 
-void
-format_dec_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
+void format_dec_u64(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
 {
-    char tmp[20];
-    char* next = &tmp[sizeof(tmp)];
+    char  tmp[20];
+    char *next = &tmp[sizeof(tmp)];
 
     do
     {
         *--next = '0' + (val % 10);
         val /= 10;
-    }
-    while(val != 0);
+    } while(val != 0);
 
     /* next points at the first char of the 10-based representation of the integer */
 
     format_unsigned(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified);
 }
 
-void
-format_dec_s64(s64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
+void format_dec_s64(int64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
 {
-    char tmp[20];
-    char* next = &tmp[sizeof(tmp)];
+    char  tmp[20];
+    char *next = &tmp[sizeof(tmp)];
 
-    bool sign;
+    bool  sign;
 
     if((sign = (val < 0)))
     {
         val = -val;
     }
 
-    u64 uval = (u64)val;
+    uint64_t uval = (uint64_t)val;
 
     do
     {
         *--next = '0' + (uval % 10);
         uval /= 10;
-    }
-    while(uval != 0);
+    } while(uval != 0);
 
     format_signed(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified, sign);
 }
 
-void
-format_hex_u64_lo(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
-{
-    format_hex_u64_common(__hexa__, val, stream, padding, pad_char, left_justified);
-}
+void        format_hex_u64_lo(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified) { format_hex_u64_common(__hexa__, val, stream, padding, pad_char, left_justified); }
 
-void
-format_hex_u64_hi(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
-{
-    format_hex_u64_common(__HEXA__, val, stream, padding, pad_char, left_justified);
-}
+void        format_hex_u64_hi(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified) { format_hex_u64_common(__HEXA__, val, stream, padding, pad_char, left_justified); }
 
-static void
-format_double_make_format(char* p, s32 padding, s32 float_padding, char pad_char, bool left_justified, bool long_double)
+static void format_double_make_format(char *p, int32_t padding, int32_t float_padding, char pad_char, bool left_justified, bool long_double)
 {
     *p++ = '%';
 
@@ -572,30 +529,27 @@ format_double_make_format(char* p, s32 padding, s32 float_padding, char pad_char
     *p++ = CHR0;
 }
 
-static void
-format_longdouble(long double val, output_stream* stream, s32 padding, s32 float_padding, char pad_char, bool left_justified)
+static void format_longdouble(long double val, output_stream_t *stream, int32_t padding, int32_t float_padding, char pad_char, bool left_justified)
 {
     char fmt[32];
     char tmp[64];
 
-    format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, TRUE);
+    format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, true);
     int len = snprintf(tmp, sizeof(tmp), fmt, val);
-    output_stream_write(stream, (const u8*)tmp, len);
+    output_stream_write(stream, (const uint8_t *)tmp, len);
 }
 
-static void
-format_double(double val, output_stream* stream, s32 padding, s32 float_padding, char pad_char, bool left_justified)
+static void format_double(double val, output_stream_t *stream, int32_t padding, int32_t float_padding, char pad_char, bool left_justified)
 {
     char fmt[32];
     char tmp[64];
 
-    format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, FALSE);
+    format_double_make_format(fmt, padding, float_padding, pad_char, left_justified, false);
     int len = snprintf(tmp, sizeof(tmp), fmt, val);
-    output_stream_write(stream, (const u8*)tmp, len);
+    output_stream_write(stream, (const uint8_t *)tmp, len);
 }
 
-void
-format_asciiz(const char* val, output_stream* stream, s32 padding, char pad_char, bool left_justified)
+void format_asciiz(const char *val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
 {
     if(val == NULL)
     {
@@ -608,34 +562,32 @@ format_asciiz(const char* val, output_stream* stream, s32 padding, char pad_char
 
     if(left_justified)
     {
-        output_stream_write(stream, (const u8*)val, val_len);
+        output_stream_write(stream, (const uint8_t *)val, val_len);
         do_padding(stream, padding, pad_char);
     }
     else
     {
         do_padding(stream, padding, pad_char);
-        output_stream_write(stream, (const u8*)val, val_len);
+        output_stream_write(stream, (const uint8_t *)val, val_len);
     }
 }
 
-ya_result
-vosformat(output_stream* os_, const char* fmt, va_list args)
+ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
 {
-    counter_output_stream_data cosd;
-    output_stream os;
+    counter_output_stream_context_t cosd;
+    output_stream_t                 os;
+    counter_output_stream_init(&os, os_, &cosd);
 
-    counter_output_stream_init(os_, &os, &cosd);
+    const char *next = fmt;
 
-    const char* next = fmt;
+    int32_t     padding = -1;
+    int32_t     float_padding = -1;
+    uint8_t     type_size = sizeof(int);
+    uint8_t     size_modifier_count = 0;
+    char        pad_char = ' ';
+    bool        left_justified = true;
 
-    s32 padding = -1;
-    s32 float_padding = -1;
-    u8 type_size = sizeof(int);
-    u8 size_modifier_count = 0;
-    char pad_char = ' ';
-    bool left_justified = TRUE;
-
-    char c;
+    char        c;
 
     for(;;)
     {
@@ -646,7 +598,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             /* copy the rest, return */
             size_t size = next - fmt;
 
-            output_stream_write(&os, (const u8*)fmt, size);
+            output_stream_write(&os, (const uint8_t *)fmt, size);
 
             ya_result ret;
 
@@ -660,7 +612,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             }
 
             /**
-             *	NOTE: counter_output_stream has changed a bit since its first version.
+             *	NOTE: counter_output_stream_t has changed a bit since its first version.
              *
              *
              *	      It does not closes the fitlered stream on "close"
@@ -684,7 +636,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
             size_t size = next - fmt;
 
-            output_stream_write(&os, (const u8*)fmt, size);
+            output_stream_write(&os, (const uint8_t *)fmt, size);
 
             next++;
 
@@ -711,7 +663,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 padding = 0;
                 type_size = sizeof(int);
                 pad_char = ' ';
-                left_justified = TRUE;
+                left_justified = true;
 
                 continue;
             }
@@ -720,7 +672,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
             if(c == '-')
             {
-                left_justified = FALSE;
+                left_justified = false;
                 c = *next++;
             }
 
@@ -730,7 +682,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             {
                 pad_char = c;
 
-                left_justified = FALSE;
+                left_justified = false;
 
                 c = *next++;
             }
@@ -739,17 +691,16 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
             if(isdigit(c))
             {
-                char padding_string[10];
+                char  padding_string[10];
 
-                char* p = padding_string;
-                int n = 9;
+                char *p = padding_string;
+                int   n = 9;
 
                 do
                 {
                     *p++ = c;
                     c = *next++;
-                }
-                while(isdigit(c) && (n > 0));
+                } while(isdigit(c) && (n > 0));
 
                 *p = CHR0;
 
@@ -758,17 +709,16 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
             if(c == '.')
             {
-                char padding_string[10];
+                char  padding_string[10];
 
-                char* p = padding_string;
-                int n = 9;
+                char *p = padding_string;
+                int   n = 9;
                 c = *next++;
                 do
                 {
                     *p++ = c;
                     c = *next++;
-                }
-                while(isdigit(c) && (n > 0));
+                } while(isdigit(c) && (n > 0));
 
                 *p = CHR0;
 
@@ -781,27 +731,27 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             {
                 c = *next++;
 
-                type_size = sizeof(u16);
+                type_size = sizeof(uint16_t);
 
                 if(c == 'h')
                 {
                     c = *next++;
 
-                    type_size = sizeof(u8);
+                    type_size = sizeof(uint8_t);
                 }
             }
             else if(c == 'l')
             {
                 c = *next++;
 
-                type_size = sizeof(u32);
+                type_size = sizeof(uint32_t);
                 size_modifier_count = 1;
 
                 if(c == 'l')
                 {
                     c = *next++;
 
-                    type_size = sizeof(u64);
+                    type_size = sizeof(uint64_t);
                     size_modifier_count = 2;
                 }
             }
@@ -818,24 +768,24 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             {
                 case 'i':
                 {
-                    s64 val;
+                    int64_t val;
 
                     switch(type_size)
                     {
-                        case sizeof(s8):
+                        case sizeof(int8_t):
                         {
                             /*
-                             * warning: ‘u8’ is promoted to ‘int’ when passed through ‘...’
-                             *	    (so you should pass ‘int’ not ‘u8’ to ‘va_arg’)
+                             * warning: ‘uint8_t’ is promoted to ‘int’ when passed through ‘...’
+                             *	    (so you should pass ‘int’ not ‘uint8_t’ to ‘va_arg’)
                              *	    if this code is reached, the program will abort
                              *
                              * => int
                              */
-                            val = (s8)va_arg(args, int);
+                            val = (int8_t)va_arg(args, int);
                             break;
                         }
 
-                        case sizeof(s16):
+                        case sizeof(int16_t):
                         {
                             /*
                              * warning: ‘u16’ is promoted to ‘int’ when passed through ‘...’
@@ -845,19 +795,19 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                              * => int
                              */
 
-                            val = (s16)va_arg(args, int);
+                            val = (int16_t)va_arg(args, int);
                             break;
                         }
 
-                        case sizeof(s32):
+                        case sizeof(int32_t):
                         {
-                            val = (s32)va_arg(args, s32);
+                            val = (int32_t)va_arg(args, int32_t);
                             break;
                         }
 
-                        case sizeof(s64):
+                        case sizeof(int64_t):
                         {
-                            val = va_arg(args, s64);
+                            val = va_arg(args, int64_t);
                             break;
                         }
                         default:
@@ -884,7 +834,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                     ya_result val = va_arg(args, ya_result);
 
                     error_writetext(&os, val);
-                    
+
                     break;
                 }
 
@@ -894,9 +844,9 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 case 'd':
                 case 'o':
                 {
-                    u64_formatter_function* formatter;
+                    u64_formatter_function *formatter;
 
-                    u64 val;
+                    uint64_t                val;
 
                     if(c == 'u' || c == 'd')
                     {
@@ -918,11 +868,11 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                     switch(type_size)
                     {
 
-                        case sizeof(u8):
+                        case sizeof(uint8_t):
                         {
                             /*
-                             * warning: ‘u8’ is promoted to ‘int’ when passed through ‘...’
-                             *	    (so you should pass ‘int’ not ‘u8’ to ‘va_arg’)
+                             * warning: ‘uint8_t’ is promoted to ‘int’ when passed through ‘...’
+                             *	    (so you should pass ‘int’ not ‘uint8_t’ to ‘va_arg’)
                              *	    if this code is reached, the program will abort
                              *
                              * => int
@@ -931,7 +881,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             break;
                         }
 
-                        case sizeof(u16):
+                        case sizeof(uint16_t):
                         {
                             /*
                              * warning: ‘u16’ is promoted to ‘int’ when passed through ‘...’
@@ -945,13 +895,13 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             break;
                         }
 
-                        case sizeof(u32):
+                        case sizeof(uint32_t):
                         {
-                            val = va_arg(args, u32);
+                            val = va_arg(args, uint32_t);
                             break;
                         }
 
-                        case sizeof(u64):
+                        case sizeof(uint64_t):
                         {
                             val = va_arg(args, u64);
                             break;
@@ -976,14 +926,14 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 case 'P':
                 {
 
-                    intptr val = va_arg(args, intptr);
+                    intptr_t val = va_arg(args, intptr_t);
 
 #if HAS_DLADDR_SUPPORT
                     Dl_info info;
 
                     if(val != 0)
                     {
-                        if(dladdr((void*)val, &info) != 0)
+                        if(dladdr((void *)val, &info) != 0)
                         {
                             if(info.dli_sname != NULL)
                             {
@@ -993,21 +943,21 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             else if(info.dli_fname != NULL)
                             {
                                 format_asciiz(info.dli_fname, &os, padding, pad_char, left_justified);
-                                val -= (intptr)info.dli_fbase;
-                                output_stream_write_u8(&os, (u8)':');
+                                val -= (intptr_t)info.dli_fbase;
+                                output_stream_write_u8(&os, (uint8_t)':');
                             }
                         }
                     }
 #endif
-                    
-                    format_hex_u64_hi(val, &os, __SIZEOF_POINTER__ * 2, '0', FALSE);
+
+                    format_hex_u64_hi(val, &os, __SIZEOF_POINTER__ * 2, '0', false);
                     break;
                 }
                 case 'p':
                 {
-                    intptr val = va_arg(args, intptr);
+                    intptr_t val = va_arg(args, intptr_t);
 
-                    format_hex_u64_hi(val, &os, __SIZEOF_POINTER__ * 2, '0', FALSE);
+                    format_hex_u64_hi(val, &os, __SIZEOF_POINTER__ * 2, '0', false);
                     break;
                 }
                 case 'f':
@@ -1029,9 +979,9 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                 }
                 case 's':
                 {
-                    const char* val;
+                    const char *val;
 
-                    val = va_arg(args, const char*);
+                    val = va_arg(args, const char *);
 
                     format_asciiz(val, &os, padding, pad_char, left_justified);
 
@@ -1060,7 +1010,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
 
                 case '{':
                 {
-                    const char* type_name = next;
+                    const char *type_name = next;
                     do
                     {
                         c = *next++;
@@ -1074,16 +1024,15 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             fflush(stderr);
                             abort();
                         }
-                    }
-                    while(c != '}');
+                    } while(c != '}');
 
                     /* type_name -> next contains the type name and arguments
                      * arguments can be integers
                      */
 
-                    size_t type_name_len = next - 1 - type_name;
+                    size_t                             type_name_len = next - 1 - type_name;
 
-                    const format_handler_descriptor* desc = format_get_format_handler(type_name, type_name_len);
+                    const format_handler_descriptor_t *desc = format_get_format_handler(type_name, type_name_len);
 
                     if(desc == NULL)
                     {
@@ -1092,57 +1041,57 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                         desc = &dummy_format_handler_descriptor;
                     }
 
-                    void* ptr = va_arg(args, void*);
+                    void *ptr = va_arg(args, void *);
                     desc->format_handler(ptr, &os, padding, pad_char, left_justified, NULL);
 
                     break;
                 }
-                
+
                 case 'w':
                 {
-                    void* ptr = va_arg(args, void*);
-                    format_writer *fw = (format_writer*)ptr;
+                    void            *ptr = va_arg(args, void *);
+                    format_writer_t *fw = (format_writer_t *)ptr;
                     fw->callback(fw->value, &os, padding, pad_char, left_justified, NULL);
                     break;
                 }
-                
+
                 case 't':
                 {
                     int val = (int)va_arg(args, int);
                     do_padding(&os, val, '\t');
                     break;
                 }
-                
+
                 case 'S':
                 {
                     int val = (int)va_arg(args, int);
                     do_padding(&os, val, ' ');
                     break;
                 }
-                
+
                 case 'T':
                 {
                     switch(size_modifier_count)
                     {
                         case 0:
                         {
-                            s64 val = (s64)va_arg(args, u32);
-                            localepoch_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            int64_t val = (int64_t)va_arg(args, uint32_t);
+                            localepoch_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
                             break;
                         }
 
                         case 1:
                         {
-                            s64 val = (s64)va_arg(args, s64);
-                            localdatetime_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            int64_t val = (int64_t)va_arg(args, int64_t);
+                            localdatetime_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
                             break;
                         }
 
                         case 2:
                         {
 
-                            s64 val = (s64)va_arg(args, s64);
-                            localdatetimeus_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            int64_t val = (int64_t)va_arg(args, int64_t);
+                            localdatetimeus_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
                             break;
                         }
                         default:
@@ -1150,33 +1099,33 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             abort();
                         }
                     }
-                    
+
                     break;
                 }
-                
+
                 case 'U':
                 {
                     switch(size_modifier_count)
                     {
                         case 0:
                         {
-                            s64 val = (s64)va_arg(args, u32);
-                            epoch_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            int64_t val = (int64_t)va_arg(args, uint32_t);
+                            epoch_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
                             break;
                         }
 
                         case 1:
                         {
-                            s64 val = (s64)va_arg(args, s64);
-                            datetime_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            int64_t val = (int64_t)va_arg(args, int64_t);
+                            datetime_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
                             break;
                         }
 
                         case 2:
                         {
 
-                            s64 val = (s64)va_arg(args, s64);
-                            datetimeus_format_handler_method((void*)(intptr)val, &os, 0, 0, FALSE, NULL);
+                            int64_t val = (int64_t)va_arg(args, int64_t);
+                            datetimeus_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
                             break;
                         }
                         default:
@@ -1184,7 +1133,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
                             abort();
                         }
                     }
-                    
+
                     break;
                 }
             }
@@ -1195,7 +1144,7 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
             float_padding = -1;
             type_size = sizeof(int);
             pad_char = ' ';
-            left_justified = TRUE;
+            left_justified = true;
 
             continue;
         }
@@ -1206,25 +1155,146 @@ vosformat(output_stream* os_, const char* fmt, va_list args)
     }
 }
 
-ya_result
-osprint(output_stream* stream, const char* text)
+ya_result osprint(output_stream_t *stream, const char *text) { return output_stream_write(stream, (const uint8_t *)text, strlen(text)); }
+
+/**
+ * Prints a text, wrapped.
+ *
+ * @param stream the stream to print to
+ * @param text the text to print
+ * @param column_current the current column in the console
+ * @param column_count the number of columns in the screen (0: attempt to detect using IOCTLs)
+ * @param column_wrap when wrapping, the column to wrap to
+ */
+
+ya_result osprint_wrapped(output_stream_t *stream, const char *text, int column_current, int column_count, int column_wrap)
 {
-    return output_stream_write(stream, (const u8*)text, strlen(text));
+    const char *next_word = text;
+    bool        just_wrapped = true;
+    for(;;)
+    {
+        int word_size;
+        switch(*next_word)
+        {
+            case ' ':
+            {
+                word_size = 1;
+                if(column_current + word_size >= column_count)
+                {
+                    if(!just_wrapped)
+                    {
+                        just_wrapped = true;
+                        output_stream_write_u8(stream, '\n');
+                        for(int_fast32_t i = 0; i < column_wrap; ++i)
+                        {
+                            output_stream_write_u8(stream, ' ');
+                        }
+                        column_current = column_wrap;
+                    }
+                }
+                else
+                {
+                    output_stream_write_u8(stream, ' ');
+                    column_current += word_size;
+                }
+                ++next_word;
+                continue;
+            }
+            case '\t':
+            {
+                word_size = 8 - (column_current & 7);
+                if(column_current + word_size >= column_count)
+                {
+                    if(!just_wrapped)
+                    {
+                        just_wrapped = true;
+                        output_stream_write_u8(stream, '\n');
+                        for(int_fast32_t i = 0; i < column_wrap; ++i)
+                        {
+                            output_stream_write_u8(stream, ' ');
+                        }
+                        column_current = column_wrap;
+                    }
+                }
+                else
+                {
+                    for(int_fast32_t i = 0; i < word_size; ++i)
+                    {
+                        output_stream_write_u8(stream, ' ');
+                    }
+                    column_current += word_size;
+                }
+                ++next_word;
+                continue;
+            }
+            case '\r':
+            {
+                ++next_word;
+                continue;
+            }
+            case '\n':
+            {
+                if(!just_wrapped)
+                {
+                    just_wrapped = true;
+                    output_stream_write_u8(stream, '\n');
+                    for(int_fast32_t i = 0; i < column_wrap; ++i)
+                    {
+                        output_stream_write_u8(stream, ' ');
+                    }
+                    column_current = column_wrap;
+                }
+                ++next_word;
+                continue;
+            }
+            case '\0':
+            {
+                return SUCCESS;
+            }
+            default:
+            {
+                word_size = 1;
+                while(next_word[word_size] > ' ')
+                {
+                    ++word_size;
+                }
+                if(column_current + word_size >= column_count)
+                {
+                    if(!just_wrapped)
+                    {
+                        // just_wrapped = true;
+                        output_stream_write_u8(stream, '\n');
+                        for(int_fast32_t i = 0; i < column_wrap; ++i)
+                        {
+                            output_stream_write_u8(stream, ' ');
+                        }
+                        column_current = column_wrap;
+                    }
+                }
+
+                output_stream_write(stream, next_word, word_size);
+                next_word += word_size;
+                column_current += word_size;
+                just_wrapped = false;
+                continue;
+            }
+        } // switch
+    } // for
+
+    return output_stream_write(stream, (const uint8_t *)text, strlen(text));
 }
 
-ya_result
-osprintln(output_stream* stream, const char* text)
+ya_result osprintln(output_stream_t *stream, const char *text)
 {
     ya_result n = strlen(text);
-    
-    output_stream_write(stream, (const u8*)text, n);
+
+    output_stream_write(stream, (const uint8_t *)text, n);
     output_stream_write(stream, STREOL, 1);
-    
+
     return n + 1;
 }
 
-ya_result
-osformat(output_stream* stream, const char* fmt, ...)
+ya_result osformat(output_stream_t *stream, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -1233,8 +1303,7 @@ osformat(output_stream* stream, const char* fmt, ...)
     return err;
 }
 
-ya_result
-osformatln(output_stream* stream, const char* fmt, ...)
+ya_result osformatln(output_stream_t *stream, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -1256,16 +1325,15 @@ osformatln(output_stream* stream, const char* fmt, ...)
     return err1;
 }
 
-ya_result
-debug_osformatln(output_stream* stream, const char* fmt, ...)
+ya_result debug_osformatln(output_stream_t *stream, const char *fmt, ...)
 {
-    s64 now = timeus();
+    int64_t now = timeus();
     mutex_lock(&debug_osformat_mtx);
-    localdatetimeus_format_handler_method((void*)(intptr)now, stream, 0, 0, FALSE, NULL);
+    localdatetimeus_format_handler_method((void *)(intptr_t)now, stream, 0, 0, false, NULL);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
-    format_dec_u64(getpid(), stream, 0, 0, FALSE);
+    format_dec_u64(getpid(), stream, 0, 0, false);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
-    format_hex_u64_lo((u64)(intptr)pthread_self(), stream, 0, 0, FALSE);
+    format_hex_u64_lo((uint64_t)(intptr_t)pthread_self(), stream, 0, 0, false);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
     va_list args;
     va_start(args, fmt);
@@ -1276,42 +1344,35 @@ debug_osformatln(output_stream* stream, const char* fmt, ...)
     return err1;
 }
 
-ya_result
-debug_println(const char* text)
+ya_result debug_println(const char *text)
 {
-    s64 now = timeus();
+    int64_t now = timeus();
     mutex_lock(&debug_osformat_mtx);
-    localdatetimeus_format_handler_method((void*)(intptr)now, termout, 0, 0, FALSE, NULL);
+    localdatetimeus_format_handler_method((void *)(intptr_t)now, termout, 0, 0, false, NULL);
     output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
-    format_dec_u64(getpid(), termout, 0, 0, FALSE);
+    format_dec_u64(getpid(), termout, 0, 0, false);
     output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
-    format_hex_u64_lo((u64)(intptr)pthread_self(), termout, 0, 0, FALSE);
+    format_hex_u64_lo((uint64_t)(intptr_t)pthread_self(), termout, 0, 0, false);
     output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
     ya_result n = strlen(text);
-    output_stream_write(termout, (const u8*)text, n);
+    output_stream_write(termout, (const uint8_t *)text, n);
     output_stream_write(termout, STREOL, 1);
     mutex_unlock(&debug_osformat_mtx);
     return n + 1;
 }
 
-ya_result
-print(const char* text)
-{
-    return output_stream_write(termout, (const u8*)text, strlen(text));
-}
+ya_result print(const char *text) { return output_stream_write(termout, (const uint8_t *)text, strlen(text)); }
 
-ya_result
-println(const char* text)
+ya_result println(const char *text)
 {
     ya_result n = strlen(text);
-    output_stream_write(termout, (const u8*)text, n);
+    output_stream_write(termout, (const uint8_t *)text, n);
     output_stream_write(termout, STREOL, 1);
-    
+
     return n + 1;
 }
 
-int
-format(const char* fmt, ...)
+int format(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -1320,8 +1381,7 @@ format(const char* fmt, ...)
     return err;
 }
 
-ya_result
-formatln(const char* fmt, ...)
+ya_result formatln(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -1343,18 +1403,17 @@ formatln(const char* fmt, ...)
     return err1;
 }
 
-int
-vsnformat(char* out, size_t out_size, const char* fmt, va_list args)
+int vsnformat(char *out, size_t out_size, const char *fmt, va_list args)
 {
     if(out_size == 0)
     {
         return 0;
     }
 
-    output_stream baos;
+    output_stream_t                 baos;
     bytearray_output_stream_context baos_context;
 
-    bytearray_output_stream_init_ex_static(&baos, (u8*)out, out_size - 1, 0, &baos_context);
+    bytearray_output_stream_init_ex_static(&baos, (uint8_t *)out, out_size - 1, 0, &baos_context);
 
     int ret = vosformat(&baos, fmt, args);
 
@@ -1374,18 +1433,17 @@ vsnformat(char* out, size_t out_size, const char* fmt, va_list args)
 
 /**
  * This formatter will return an allocated (malloc) string as a result of the format
- * 
+ *
  * @param outp
  * @param out_size
  * @param fmt
  * @param args
- * @return 
+ * @return
  */
 
-int
-vasnformat(char** outp, size_t out_size, const char* fmt, va_list args)
+int vasnformat(char **outp, size_t out_size, const char *fmt, va_list args)
 {
-    output_stream baos;
+    output_stream_t                 baos;
     bytearray_output_stream_context baos_context;
 
     bytearray_output_stream_init_ex_static(&baos, NULL, out_size, 0, &baos_context);
@@ -1395,7 +1453,7 @@ vasnformat(char** outp, size_t out_size, const char* fmt, va_list args)
     if(ISOK(ret) && ((out_size == 0) || (ret < (int)out_size)))
     {
         output_stream_write_u8(&baos, 0);
-        *outp =(char*)bytearray_output_stream_dup(&baos);
+        *outp = (char *)bytearray_output_stream_dup(&baos);
     }
     else
     {
@@ -1409,18 +1467,17 @@ vasnformat(char** outp, size_t out_size, const char* fmt, va_list args)
 
 /**
  * This formatter will return an allocated (malloc) string as a result of the format
- * 
+ *
  * @param outp
  * @param out_size
  * @param fmt
  * @param ...
- * @return 
+ * @return
  */
 
-int
-asnformat(char** outp, size_t out_size, const char* fmt, ...)
+int asnformat(char **outp, size_t out_size, const char *fmt, ...)
 {
-    int ret;
+    int     ret;
     va_list args;
     va_start(args, fmt);
     ret = vasnformat(outp, out_size, fmt, args);
@@ -1429,21 +1486,19 @@ asnformat(char** outp, size_t out_size, const char* fmt, ...)
     return ret;
 }
 
-
 /**
  * This formatter will return an allocated (malloc) string as a result of the format
- * 
+ *
  * @param outp
 
  * @param fmt
  * @param ...
- * @return 
+ * @return
  */
 
-int
-asformat(char** outp, const char* fmt, ...)
+int asformat(char **outp, const char *fmt, ...)
 {
-    int ret;
+    int     ret;
     va_list args;
     va_start(args, fmt);
     ret = vasnformat(outp, 0, fmt, args);
@@ -1452,10 +1507,9 @@ asformat(char** outp, const char* fmt, ...)
     return ret;
 }
 
-int
-snformat(char* out, size_t out_size, const char* fmt, ...)
+int snformat(char *out, size_t out_size, const char *fmt, ...)
 {
-    int ret;
+    int     ret;
     va_list args;
     va_start(args, fmt);
     ret = vsnformat(out, out_size, fmt, args);
@@ -1464,58 +1518,55 @@ snformat(char* out, size_t out_size, const char* fmt, ...)
     return ret;
 }
 
-int
-osprint_base64(output_stream* os, const u8* rdata_pointer, u32 rdata_size)
+int osprint_base64(output_stream_t *os, const uint8_t *rdata_pointer, uint32_t rdata_size)
 {
-    char buffer[65];
-    int total = 0;
-    u32 n;
+    char     buffer[65];
+    int      total = 0;
+    uint32_t n;
 
     while(rdata_size > 48)
     {
         n = base64_encode(rdata_pointer, 48, buffer);
         buffer[n++] = ' ';
-        output_stream_write(os, (u8*)buffer, n);
+        output_stream_write(os, (uint8_t *)buffer, n);
         total += n;
         rdata_pointer += 48;
         rdata_size -= 48;
     }
 
     n = base64_encode(rdata_pointer, rdata_size, buffer);
-    output_stream_write(os, (u8*)buffer, n);
+    output_stream_write(os, (uint8_t *)buffer, n);
 
     total += n;
 
     return total;
 }
 
-int
-osprint_base16(output_stream* os, const u8* rdata_pointer, u32 rdata_size)
+int osprint_base16(output_stream_t *os, const uint8_t *rdata_pointer, uint32_t rdata_size)
 {
-    char buffer[65];
-    int total = 0;
-    u32 n;
+    char     buffer[65];
+    int      total = 0;
+    uint32_t n;
 
     while(rdata_size > 32)
     {
         n = base16_encode(rdata_pointer, 32, buffer);
         buffer[n++] = ' ';
-        output_stream_write(os, (u8*)buffer, n);
+        output_stream_write(os, (uint8_t *)buffer, n);
         total += n;
         rdata_pointer += 32;
         rdata_size -= 32;
     }
 
     n = base16_encode(rdata_pointer, rdata_size, buffer);
-    output_stream_write(os, (u8*)buffer, n);
+    output_stream_write(os, (uint8_t *)buffer, n);
 
     total += n;
 
     return total;
 }
 
-int
-fformat(FILE* out, const char* fmt, ...)
+int fformat(FILE *out, const char *fmt, ...)
 {
     char tmp[4096];
 
@@ -1523,7 +1574,7 @@ fformat(FILE* out, const char* fmt, ...)
     memset(tmp, '!', sizeof(tmp));
 #endif
 
-    int ret;
+    int     ret;
     va_list args;
     va_start(args, fmt);
     ret = vsnformat(tmp, sizeof(tmp), fmt, args);
@@ -1536,41 +1587,27 @@ fformat(FILE* out, const char* fmt, ...)
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
-void
-osprint_u32(output_stream* os, u32 value)
-{
-    format_dec_u64(value, os, 9, ' ', FALSE);
-}
+void osprint_u32(output_stream_t *os, uint32_t value) { format_dec_u64(value, os, 9, ' ', false); }
 
-void
-osprint_u16(output_stream* os, u16 value)
-{
-    format_dec_u64(value, os, 5, ' ', FALSE);
-}
+void osprint_u16(output_stream_t *os, uint16_t value) { format_dec_u64(value, os, 5, ' ', false); }
 
-void
-osprint_u32_hex(output_stream* os, u32 value)
-{
-    format_hex_u64_common(__hexa__, value, os, 8, '0', FALSE);
-}
+void osprint_u32_hex(output_stream_t *os, uint32_t value) { format_hex_u64_common(__hexa__, value, os, 8, '0', false); }
 
-void
-print_char(char value)
+void print_char(char value)
 {
     char tmp[1];
     tmp[0] = value;
-    output_stream_write(&__termout__, (u8*)tmp, 1);
+    output_stream_write(&__termout__, (uint8_t *)tmp, 1);
 }
 
-void
-osprint_char(output_stream* os, char value)
+void osprint_char(output_stream_t *os, char value)
 {
     char tmp[1];
     tmp[0] = value;
-    output_stream_write(os, (u8*)tmp, 1);
+    output_stream_write(os, (uint8_t *)tmp, 1);
 }
 
-void osprint_char_times(output_stream *os, char value, int times)
+void osprint_char_times(output_stream_t *os, char value, int times)
 {
     char tmp[32];
 
@@ -1587,8 +1624,7 @@ void osprint_char_times(output_stream *os, char value, int times)
         {
             output_stream_write(os, tmp, 32);
             times -= 32;
-        }
-        while(times >= 32);
+        } while(times >= 32);
 
         output_stream_write(os, tmp, times);
     }
@@ -1599,17 +1635,15 @@ void osprint_char_times(output_stream *os, char value, int times)
     }
 }
 
-
-ya_result
-osprint_type_bitmap(output_stream* os, const u8* rdata_pointer, u16 rdata_size)
+ya_result osprint_type_bitmap(output_stream_t *os, const uint8_t *rdata_pointer, uint16_t rdata_size)
 {
     /*
      * WindowIndex + WindowSize + bits => a minimum of 3 bytes
      */
     while(rdata_size >= 3)
     {
-        u16 type_hi = *rdata_pointer++;
-        u8 count = *rdata_pointer++;
+        uint16_t type_hi = *rdata_pointer++;
+        uint8_t  count = *rdata_pointer++;
 
         rdata_size -= 2;
 
@@ -1622,12 +1656,12 @@ osprint_type_bitmap(output_stream* os, const u8* rdata_pointer, u16 rdata_size)
 
         /*type_hi <<= 8;*/
 
-        u16 type_lo = 0;
+        uint16_t type_lo = 0;
 
         while(count-- > 0)
         {
-            u8 bitmap = *rdata_pointer++;
-            u32 b;
+            uint8_t  bitmap = *rdata_pointer++;
+            uint32_t b;
 
             for(b = 8; b > 0; b--)
             {
@@ -1635,14 +1669,14 @@ osprint_type_bitmap(output_stream* os, const u8* rdata_pointer, u16 rdata_size)
                 {
                     /* Enabled */
 
-                    u16 type = type_hi + type_lo;
+                    uint16_t type = type_hi + type_lo;
 
                     osformat(os, " %{dnstype}", &type);
                 }
 
                 bitmap <<= 1;
 
-                type_lo+=0x100;
+                type_lo += 0x100;
             }
         }
     }
@@ -1650,40 +1684,42 @@ osprint_type_bitmap(output_stream* os, const u8* rdata_pointer, u16 rdata_size)
     return SUCCESS;
 }
 
-static const u32 loc_pow10[10] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
-static const char loc_ns[2] = {'N','S'};
-static const char loc_ew[2] = {'E','W'};
+static const uint32_t loc_pow10[10] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+static const char     loc_ns[2] = {'N', 'S'};
+static const char     loc_ew[2] = {'E', 'W'};
 
-static bool loc_float(u8 v, u32* out_value)
+static bool           loc_float(uint8_t v, uint32_t *out_value)
 {
-    u32 m = v >> 4;
-    u32 e = v & 0x0f;
-    
+    uint32_t m = v >> 4;
+    uint32_t e = v & 0x0f;
+    // m in [0;9] e in [0;9]
+    // if m == 0 then e != 0
     if(!((m > 9) || (e > 9) || ((m == 0) && (e != 0))))
     {
         *out_value = m * loc_pow10[e];
-        return TRUE;
+        return true;
     }
     else
     {
-        return FALSE;
+        return false;
     }
 }
 
-struct loc_coordinate
+struct loc_coordinate_s
 {
-    int secfrac;
-    int sec;
-    int min;
-    int deg;
-    int cardinal_index; // N S // E W
+    int32_t secfrac;
+    int32_t sec;
+    int32_t min;
+    int32_t deg;
+    int32_t cardinal_index; // N S // E W
 };
 
-static void
-loc_coordinate_init(struct loc_coordinate* c, s32 val)
+static void loc_coordinate_init(struct loc_coordinate_s *c, int32_t val)
 {
-    val -= (s32)0x80000000LU;
-    
+    uint32_t uval = (uint32_t)val; // this avoid the need of -fwrapv
+    uval -= INT32_MIN;             //
+    val = (int32_t)uval;           //
+
     if(val < 0)
     {
         val = -val;
@@ -1693,7 +1729,7 @@ loc_coordinate_init(struct loc_coordinate* c, s32 val)
     {
         c->cardinal_index = 0;
     }
-    
+
     c->secfrac = val % 1000;
     val /= 1000;
     c->sec = val % 60;
@@ -1712,13 +1748,13 @@ loc_coordinate_init(struct loc_coordinate* c, s32 val)
  * @return an error code
  */
 
-ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text_len)
+ya_result osprint_quoted_text_escaped(output_stream_t *os, const uint8_t *text, int text_len)
 {
     output_stream_write(os, STRQUOTE, 1);
 
     for(int i = 0; i < text_len; ++i)
     {
-        u8 escape_type = TXT_ESCAPE_TYPE[text[i]];
+        uint8_t escape_type = TXT_ESCAPE_TYPE[text[i]];
 
         switch(escape_type)
         {
@@ -1735,7 +1771,7 @@ ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text
             }
             case TXT_ESCAPE_TYPE_OCTL:
             {
-                u8 decimal[4];
+                uint8_t decimal[4];
                 decimal[0] = '\\';
                 decimal[1] = ((text[i] / 100) % 10) + '0';
                 decimal[2] = ((text[i] / 10) % 10) + '0';
@@ -1757,15 +1793,13 @@ ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text
  * @param type the record type
  * @param rdata_pointer a pointer to the rdata
  * @param rdata_size the size of the rdata
- *
- * returns an error code.
+ * @return an error code
  */
 
-ya_result
-osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)
+ya_result osprint_rdata(output_stream_t *os, uint16_t type, const uint8_t *rdata_pointer, uint16_t rdata_size)
 {
     char tmp[16];
-    
+
     switch(type)
     {
         case TYPE_A:
@@ -1780,7 +1814,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
         case TYPE_AAAA:
         {
-            u16* rdata_u16 = (u16*)rdata_pointer;
+            uint16_t *rdata_u16 = (uint16_t *)rdata_pointer;
             if(rdata_size == 16)
             {
                 char ip6txt[INET6_ADDRSTRLEN];
@@ -1800,8 +1834,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
             rdata_pointer += 2;
             rdata_size -= 2;
-            FALLTHROUGH // fall through
-        case TYPE_NS:
+        FALLTHROUGH // fall through
+            case TYPE_NS:
         case TYPE_CNAME:
         case TYPE_DNAME:
         case TYPE_PTR:
@@ -1844,17 +1878,17 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
         }
         FALLTHROUGH // fall through
-        case TYPE_TALINK:
+            case TYPE_TALINK:
         {
             if(rdata_size >= 2)
             {
-                u32 len = output_stream_write_dnsname_text(os, rdata_pointer);
+                uint32_t len = output_stream_write_dnsname_text(os, rdata_pointer);
                 rdata_size -= len;
 
                 if(rdata_size > 0)
                 {
                     rdata_pointer += len;
-
+                    output_stream_write(os, STRSPACE, 1);
                     len = output_stream_write_dnsname_text(os, rdata_pointer);
                     rdata_size -= len;
 
@@ -1876,33 +1910,33 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
                 rdata_pointer += 4;
                 rdata_size -= 4;
-                
+
                 ya_result len = protocol_id_to_name(rdata_pointer[0], tmp + 1, sizeof(tmp) - 1);
-                
+
                 if(len < 0)
                 {
                     return len;
                 }
-                
+
                 tmp[0] = ' ';
                 output_stream_write(os, tmp, len + 1);
 
                 rdata_pointer++;
                 rdata_size--;
 
-                for(int index = 0; index < rdata_size; ++index)
+                for(int_fast32_t index = 0; index < rdata_size; ++index)
                 {
-                    u8 m;
+                    uint8_t m;
                     if((m = rdata_pointer[index]) != 0)
                     {
-                        for(int i = 7; i >= 0; --i)
+                        for(int_fast32_t i = 7; i >= 0; --i)
                         {
                             if((m & (1 << i)) != 0)
                             {
-                                u16 port = (u16) ((index << 3) + 7 - i);
-                                
+                                uint16_t port = (uint16_t)((index << 3) + 7 - i);
+
                                 len = server_port_to_name(port, tmp + 1, sizeof(tmp) - 1);
-                                
+
                                 if(len < 0)
                                 {
                                     return len;
@@ -1913,7 +1947,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                         }
                     }
                 }
-                
+
                 return SUCCESS;
             }
             return INCORRECT_RDATA;
@@ -1921,39 +1955,41 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
         case TYPE_GPOS:
         {
-            const u8 *limit = &rdata_pointer[rdata_size];
-            
-            for(int i = 0; i < 3; ++i)
+            const uint8_t *limit = &rdata_pointer[rdata_size];
+            int            sep_len = 0;
+            for(int_fast32_t i = 0; i < 3; ++i)
             {
-                u8 len = *rdata_pointer++;
-                
+                uint8_t len = *rdata_pointer++;
+
                 if(len == 0)
                 {
                     return INCORRECT_RDATA;
                 }
-                
-                if(&rdata_pointer[len] >= limit)
+
+                if(&rdata_pointer[len] > limit)
                 {
                     return INCORRECT_RDATA;
                 }
-                
-                output_stream_write_u8(os, (u8)'"');
+
+                output_stream_write(os, STRSPACE, sep_len);
                 output_stream_write(os, rdata_pointer, len);
-                output_stream_write_u8(os, (u8)'"');
-                
-                rdata_pointer += len;                
+                rdata_pointer += len;
+                sep_len = 1;
             }
-            
+
             return SUCCESS;
         }
 
         case TYPE_LOC:
         {
             /*
+             * RDATA_SIZE: must be 16
+             *
              * VERSION:  This must be zero.
              * Implementations are required to check this field and make
              * no assumptions about the format of unrecognized versions.
              */
+
             if(rdata_size != 16 || rdata_pointer[0] != 0)
             {
                 return INCORRECT_RDATA;
@@ -1965,9 +2001,11 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
              * This allows sizes from 0e0 (<1cm) to 9e9 (90,000km) to be expressed.
              * Four-bit values greater than 9 are undefined, as are values with a base of zero and a non-zero exponent
              */
-            
-            u32 size, horizp, vertp;
-            
+
+            uint32_t size;
+            uint32_t horizp;
+            uint32_t vertp;
+
             if(!loc_float(rdata_pointer[1], &size) || !loc_float(rdata_pointer[2], &horizp) || !loc_float(rdata_pointer[3], &vertp))
             {
                 return INCORRECT_RDATA;
@@ -1976,54 +2014,61 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             /*
              * LATITUDE
              */
-            struct loc_coordinate loc_latitude;            
+            struct loc_coordinate_s loc_latitude;
             loc_coordinate_init(&loc_latitude, ntohl(GET_U32_AT(rdata_pointer[4])));
-            
+
             /*
              * LONGITUDE
              */
 
-            struct loc_coordinate loc_longitude;            
+            struct loc_coordinate_s loc_longitude;
             loc_coordinate_init(&loc_longitude, ntohl(GET_U32_AT(rdata_pointer[8])));
-            
+
             /*
              * ALTITUDE
              */
-            
-            const u32 wgs84_reference = 10000000; // cm
-            
-            u32 altitude = ntohl(GET_U32_AT(rdata_pointer[12]));
-            int altfrac;
-            if(altitude < wgs84_reference)
+
+            const int32_t wgs84_reference = 10000000; // cm
+
+            int32_t       altitude = ntohl(GET_U32_AT(rdata_pointer[12]));
+            int32_t       altfrac;
+            // int32_t altsign;
+
+            if(altitude >= wgs84_reference)
+            {
+                altitude -= wgs84_reference;
+                altfrac = altitude % 100;
+                altitude /= 100;
+                // altsign = 1;
+            }
+            else
             {
                 altitude = wgs84_reference - altitude;
                 altfrac = altitude % 100;
                 altitude /= -100;
+                // altsign = -1;
             }
-            else
-            {
-                altitude = altitude - wgs84_reference;
-                altfrac = altitude % 100;
-                altitude /= 100;
-            }
-                        
-            osformat(os, "%u %u %u.%03u %c %u %u %u.%03u %c %d.%02um %dm %dm %dm",
-                     loc_latitude.deg,                  // degrees latitude [0 .. 90]
-                     loc_latitude.min,                  // minutes latitude [0 .. 59]
-                     loc_latitude.sec,                  // seconds latitude [0 .. 59]
-                     loc_latitude.secfrac,              // fractions of seconds of latitude]
-                     loc_ns[loc_latitude.cardinal_index],// ['N' / 'S']
-                    
-                     loc_longitude.deg,                  // degrees longitude [0 .. 90]
-                     loc_longitude.min,                  // minutes longitude [0 .. 59]
-                     loc_longitude.sec,                  // seconds longitude [0 .. 59]
-                     loc_longitude.secfrac,              // fractions of seconds of longitude]
-                     loc_ew[loc_longitude.cardinal_index],// ['E' / 'W']
-                    
-                     altitude,                    // altitude in meters [-100000.00 .. 42849672.95]
+
+            osformat(os,
+                     "%u %02u %02u.%03u %c %u %02u %02u.%03u %c %d.%02um %dm %dm %dm",
+                     loc_latitude.deg,                    // degrees latitude [0 .. 90]
+                     loc_latitude.min,                    // minutes latitude [0 .. 59]
+                     loc_latitude.sec,                    // seconds latitude [0 .. 59]
+                     loc_latitude.secfrac,                // fractions of seconds of latitude]
+                     loc_ns[loc_latitude.cardinal_index], // ['N' / 'S']
+
+                     loc_longitude.deg,                    // degrees longitude [0 .. 90]
+                     loc_longitude.min,                    // minutes longitude [0 .. 59]
+                     loc_longitude.sec,                    // seconds longitude [0 .. 59]
+                     loc_longitude.secfrac,                // fractions of seconds of longitude]
+                     loc_ew[loc_longitude.cardinal_index], // ['E' / 'W']
+
+                     altitude, // altitude in meters [-100000.00 .. 42849672.95]
                      altfrac,
-                    
-                     size, horizp, vertp);
+
+                     size,
+                     horizp,
+                     vertp);
 
             return SUCCESS;
         }
@@ -2031,10 +2076,10 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             if(rdata_size >= 6)
             {
-                format_dec_u64(ntohl(GET_U32_AT(rdata_pointer[0])), os, 0, 0, FALSE);
+                format_dec_u64(ntohl(GET_U32_AT(rdata_pointer[0])), os, 0, 0, false);
                 output_stream_write_u8(os, ' ');
-                format_dec_u64(ntohl(GET_U16_AT(rdata_pointer[4])), os, 0, 0, FALSE);
-                output_stream_write_u8(os, ' ');
+                format_dec_u64(ntohs(GET_U16_AT(rdata_pointer[4])), os, 0, 0, false);
+                // output_stream_write_u8(os, ' '); // osprint_type_bitmap starts with a space
                 rdata_pointer += 6;
                 rdata_size -= 6;
 
@@ -2064,7 +2109,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
              *
              */
 
-            u32 len;
+            uint32_t len;
             len = *rdata_pointer;
             --rdata_size;
             if(len > rdata_size)
@@ -2084,23 +2129,23 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             ++rdata_pointer;
             osprint_quoted_text_escaped(os, rdata_pointer, len);
-            rdata_size -= len;
-            rdata_pointer += len;
+            // rdata_size -= len;
+            // rdata_pointer += len;
 
             return SUCCESS;
         }
 
         case TYPE_SOA:
         {
-            static u8 dot = (u8)'.';
-            static u8 space = (u8)' ';
-            static u8 escape = (u8)'\\';
+            static uint8_t dot = (uint8_t)'.';
+            static uint8_t space = (uint8_t)' ';
+            static uint8_t escape = (uint8_t)'\\';
 
             output_stream_write_dnsname_text(os, rdata_pointer);
 
             output_stream_write(os, &space, 1);
 
-            u32 len = dnsname_len(rdata_pointer);
+            uint32_t len = dnsname_len(rdata_pointer);
 
             rdata_size -= len;
 
@@ -2108,8 +2153,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             {
                 rdata_pointer += len;
 
-                const u8 *label = rdata_pointer;
-                u8 label_len = *label;
+                const uint8_t *label = rdata_pointer;
+                uint8_t        label_len = *label;
 
                 if(label_len > 0)
                 {
@@ -2125,14 +2170,12 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                             }
 
                             output_stream_write(os, label++, 1);
-                        }
-                        while(--label_len > 0);
+                        } while(--label_len > 0);
 
                         output_stream_write(os, &dot, 1);
 
                         label_len = *label++;
-                    }
-                    while(label_len > 0);
+                    } while(label_len > 0);
 
                     len = label - rdata_pointer;
                 }
@@ -2149,12 +2192,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 {
                     rdata_pointer += len;
 
-                    osformat(os, " %u %u %u %u %u",
-                             ntohl(GET_U32_AT(rdata_pointer[ 0])),
-                             ntohl(GET_U32_AT(rdata_pointer[ 4])),
-                             ntohl(GET_U32_AT(rdata_pointer[ 8])),
-                             ntohl(GET_U32_AT(rdata_pointer[12])),
-                             ntohl(GET_U32_AT(rdata_pointer[16])));
+                    osformat(os, " %u %u %u %u %u", ntohl(GET_U32_AT(rdata_pointer[0])), ntohl(GET_U32_AT(rdata_pointer[4])), ntohl(GET_U32_AT(rdata_pointer[8])), ntohl(GET_U32_AT(rdata_pointer[12])), ntohl(GET_U32_AT(rdata_pointer[16])));
 
                     return SUCCESS;
                 }
@@ -2167,27 +2205,38 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             struct tm exp;
             struct tm inc;
 
-            time_t t = (time_t)ntohl(GET_U32_AT(rdata_pointer[8]));
+            time_t    t = (time_t)ntohl(GET_U32_AT(rdata_pointer[8]));
             gmtime_r(&t, &exp);
             t = (time_t)ntohl(GET_U32_AT(rdata_pointer[12]));
             gmtime_r(&t, &inc);
 
-            u16 covered_type = (GET_U16_AT(rdata_pointer[0])); /** @note NATIVETYPE */
+            uint16_t covered_type = (GET_U16_AT(rdata_pointer[0])); /** @note NATIVETYPE */
 
-            osformat(os, "%{dnstype} %u %u %u %04u%02u%02u%02u%02u%02u %04u%02u%02u%02u%02u%02u %u ",
+            osformat(os,
+                     "%{dnstype} %u %u %u %04u%02u%02u%02u%02u%02u %04u%02u%02u%02u%02u%02u %u ",
                      &covered_type,
                      U8_AT(rdata_pointer[2]),
                      U8_AT(rdata_pointer[3]),
                      ntohl(GET_U32_AT(rdata_pointer[4])),
-                     exp.tm_year + 1900, exp.tm_mon + 1, exp.tm_mday, exp.tm_hour, exp.tm_min, exp.tm_sec,
-                     inc.tm_year + 1900, inc.tm_mon + 1, inc.tm_mday, inc.tm_hour, inc.tm_min, inc.tm_sec,
+                     exp.tm_year + 1900,
+                     exp.tm_mon + 1,
+                     exp.tm_mday,
+                     exp.tm_hour,
+                     exp.tm_min,
+                     exp.tm_sec,
+                     inc.tm_year + 1900,
+                     inc.tm_mon + 1,
+                     inc.tm_mday,
+                     inc.tm_hour,
+                     inc.tm_min,
+                     inc.tm_sec,
                      ntohs(GET_U16_AT(rdata_pointer[16])));
 
             rdata_pointer += RRSIG_RDATA_HEADER_LEN;
             rdata_size -= RRSIG_RDATA_HEADER_LEN;
 
             output_stream_write_dnsname_text(os, rdata_pointer);
-            u32 len = dnsname_len(rdata_pointer);
+            uint32_t len = dnsname_len(rdata_pointer);
             output_stream_write_u8(os, ' ');
 
             rdata_pointer += len;
@@ -2204,10 +2253,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_KEY:
         case TYPE_CDNSKEY:
         {
-            osformat(os, "%u %u %u ",
-                     ntohs(GET_U16_AT(rdata_pointer[0])),
-                     U8_AT(rdata_pointer[2]),
-                     U8_AT(rdata_pointer[3]));
+            osformat(os, "%u %u %u ", ntohs(GET_U16_AT(rdata_pointer[0])), U8_AT(rdata_pointer[2]), U8_AT(rdata_pointer[3]));
 
             rdata_pointer += 4;
             rdata_size -= 4;
@@ -2220,10 +2266,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_CDS:
         case TYPE_DLV:
         {
-            osformat(os, "%u %u %u ",
-                     ntohs(GET_U16_AT(rdata_pointer[0])),
-                     U8_AT(rdata_pointer[2]),
-                     U8_AT(rdata_pointer[3]));
+            osformat(os, "%u %u %u ", ntohs(GET_U16_AT(rdata_pointer[0])), U8_AT(rdata_pointer[2]), U8_AT(rdata_pointer[3]));
 
             rdata_pointer += 4;
             rdata_size -= 4;
@@ -2238,8 +2281,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_NSEC:
         {
             output_stream_write_dnsname_text(os, rdata_pointer);
-            u32 len = dnsname_len(rdata_pointer);
-            output_stream_write_u8(os, ' ');
+            uint32_t len = dnsname_len(rdata_pointer);
+            // output_stream_write_u8(os, ' '); osprint_type_bitmap starts with a space
 
             rdata_pointer += len;
             rdata_size -= len;
@@ -2256,11 +2299,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_NSEC3:
         case TYPE_NSEC3PARAM:
         {
-            osformat(os, "%hhd %hhd %hd ",
-                     rdata_pointer[0],
-                     (type != TYPE_NSEC3PARAM) ? rdata_pointer[1] : 0,
-                     ntohs(GET_U16_AT(rdata_pointer[2])));
-            u8 len = rdata_pointer[4];
+            osformat(os, "%hhd %hhd %hd ", rdata_pointer[0], (type != TYPE_NSEC3PARAM) ? rdata_pointer[1] : 0, ntohs(GET_U16_AT(rdata_pointer[2])));
+            uint8_t len = rdata_pointer[4];
 
             rdata_pointer += 5;
             rdata_size -= 5;
@@ -2320,13 +2360,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             if(rdata_size == 10)
             {
-                osformat(os, "%hu %04x:%04x:%04x:%04x",
-                         ntohs(GET_U16_AT(rdata_pointer[0])),
-                         ntohs(GET_U16_AT(rdata_pointer[2])),
-                         ntohs(GET_U16_AT(rdata_pointer[4])),
-                         ntohs(GET_U16_AT(rdata_pointer[6])),
-                         ntohs(GET_U16_AT(rdata_pointer[8]))
-                );
+                osformat(
+                    os, "%hu %04x:%04x:%04x:%04x", ntohs(GET_U16_AT(rdata_pointer[0])), ntohs(GET_U16_AT(rdata_pointer[2])), ntohs(GET_U16_AT(rdata_pointer[4])), ntohs(GET_U16_AT(rdata_pointer[6])), ntohs(GET_U16_AT(rdata_pointer[8])));
 
                 return SUCCESS;
             }
@@ -2338,13 +2373,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             if(rdata_size == 6)
             {
-                osformat(os, "%hu %hhu.%hhu.%hhu.%hhu",
-                         ntohs(GET_U16_AT(rdata_pointer[0])),
-                         rdata_pointer[2],
-                         rdata_pointer[3],
-                         rdata_pointer[4],
-                         rdata_pointer[5]
-                );
+                osformat(os, "%hu %hhu.%hhu.%hhu.%hhu", ntohs(GET_U16_AT(rdata_pointer[0])), rdata_pointer[2], rdata_pointer[3], rdata_pointer[4], rdata_pointer[5]);
 
                 return SUCCESS;
             }
@@ -2356,14 +2385,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             if(rdata_size == 6)
             {
-                osformat(os, "%02x-%02x-%02x-%02x-%02x-%02x",
-                         rdata_pointer[0],
-                         rdata_pointer[1],
-                         rdata_pointer[2],
-                         rdata_pointer[3],
-                         rdata_pointer[4],
-                         rdata_pointer[5]
-                );
+                osformat(os, "%02x-%02x-%02x-%02x-%02x-%02x", rdata_pointer[0], rdata_pointer[1], rdata_pointer[2], rdata_pointer[3], rdata_pointer[4], rdata_pointer[5]);
 
                 return SUCCESS;
             }
@@ -2375,57 +2397,49 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             if(rdata_size == 8)
             {
-                osformat(os, "%02x-%02x-%02x-%02x-%02x-%02x-%02x-%02x",
-                         rdata_pointer[0],
-                         rdata_pointer[1],
-                         rdata_pointer[2],
-                         rdata_pointer[3],
-                         rdata_pointer[4],
-                         rdata_pointer[5],
-                         rdata_pointer[6],
-                         rdata_pointer[7]
-                );
+                osformat(os, "%02x-%02x-%02x-%02x-%02x-%02x-%02x-%02x", rdata_pointer[0], rdata_pointer[1], rdata_pointer[2], rdata_pointer[3], rdata_pointer[4], rdata_pointer[5], rdata_pointer[6], rdata_pointer[7]);
 
                 return SUCCESS;
             }
 
             return INCORRECT_RDATA;
         }
+
         case TYPE_SRV:
         {
-            u16 priority = GET_U16_AT(rdata_pointer[0]);
-            u16 weight = GET_U16_AT(rdata_pointer[2]);
-            u16 port = GET_U16_AT(rdata_pointer[4]);
-            const u8 *fqdn = (const u8*)&rdata_pointer[6];
+            uint16_t       priority = GET_U16_AT(rdata_pointer[0]);
+            uint16_t       weight = GET_U16_AT(rdata_pointer[2]);
+            uint16_t       port = GET_U16_AT(rdata_pointer[4]);
+            const uint8_t *fqdn = (const uint8_t *)&rdata_pointer[6];
 
             return osformat(os, "%hd %hd %hd %{dnsname}", priority, weight, port, fqdn);
         }
         case TYPE_ZONE_TYPE:
         {
-            u8 zone_type = rdata_pointer[0];
+            uint8_t zone_type = rdata_pointer[0];
 
-            char *txt;
+            char   *txt;
 
             switch(zone_type)
             {
                 case ZT_HINT:
                 {
-                    txt = "hint";
+                    txt = ZT_HINT_STRING;
                     break;
                 }
-                case ZT_MASTER:
+                case ZT_PRIMARY:
                 {
-                    txt = "master";
+                    txt = ZT_PRIMARY_STRING;
                     break;
                 }
-                case ZT_SLAVE:
+                case ZT_SECONDARY:
                 {
-                    txt = "slave";
+                    txt = ZT_SECONDARY_STRING;
                     break;
                 }
                 case ZT_STUB:
                 {
-                    txt = "stub";
+                    txt = ZT_STUB_STRING;
                     break;
                 }
                 default:
@@ -2437,14 +2451,14 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             return osprint(os, txt);
         }
-        case TYPE_ZONE_MASTER:
-        case TYPE_ZONE_SLAVES:
+        case TYPE_ZONE_PRIMARY:
+        case TYPE_ZONE_SECONDARIES:
         case TYPE_ZONE_NOTIFY:
         {
-            u8 flags = rdata_pointer[0];
-            const u8 *src = &rdata_pointer[1];
+            uint8_t        flags = rdata_pointer[0];
+            const uint8_t *src = &rdata_pointer[1];
 
-            ya_result total = 0;
+            ya_result      total = 0;
 
             switch(flags & 0x0f)
             {
@@ -2464,7 +2478,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
                     char ip6txt[INET6_ADDRSTRLEN];
 
-                    inet_ntop(AF_INET6, &src, ip6txt, sizeof(ip6txt));
+                    inet_ntop(AF_INET6, src, ip6txt, sizeof(ip6txt));
 
                     total += osprint(os, ip6txt);
 
@@ -2476,7 +2490,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
             if((flags & REMOTE_SERVER_FLAGS_PORT_MASK) != 0)
             {
-                u16 port = GET_U16_AT(*src);
+                uint16_t port = ntohs(GET_U16_AT(*src));
 
                 total += osformat(os, " %hd", port);
 
@@ -2495,8 +2509,8 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_TXT:
         case TYPE_SPF:
         {
-            u8 pascal_string_size;
-            int space_len = 0;
+            uint8_t pascal_string_size;
+            int     space_len = 0;
 
             while(rdata_size > 0)
             {
@@ -2504,9 +2518,16 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
 
                 if(pascal_string_size > 0)
                 {
-                    output_stream_write(os, STRSPACE, space_len); // 0 at first, then 1
-                    pascal_string_size = MIN(pascal_string_size, rdata_size);
-                    osprint_quoted_text_escaped(os, rdata_pointer, pascal_string_size);
+                    if(pascal_string_size < rdata_size)
+                    {
+                        output_stream_write(os, STRSPACE, space_len); // 0 at first, then 1
+                        pascal_string_size = MIN(pascal_string_size, rdata_size);
+                        osprint_quoted_text_escaped(os, rdata_pointer, pascal_string_size);
+                    }
+                    else
+                    {
+                        return INCORRECT_RDATA;
+                    }
                 }
                 else
                 {
@@ -2528,7 +2549,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             {
                 uint8_t flags = *rdata_pointer++;
                 --rdata_size;
-                format_dec_u64(flags, os, 0, 0, FALSE);
+                format_dec_u64(flags, os, 0, 0, false);
                 output_stream_write_u8(os, ' ');
 
                 uint8_t tag_size = *rdata_pointer++;
@@ -2563,15 +2584,15 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             else
             {
-                format_dec_u64(type_id, os, 0, ' ', FALSE);
+                format_dec_u64(type_id, os, 0, ' ', false);
             }
 
             output_stream_write_u8(os, ' ');
             uint16_t tag = ntohs(GET_U16_AT_P(rdata_pointer));
             rdata_pointer += 2;
-            format_dec_u64(tag, os, 0, 0, FALSE);
+            format_dec_u64(tag, os, 0, 0, false);
             output_stream_write_u8(os, ' ');
-            uint8_t algorithm = *rdata_pointer++;
+            uint8_t     algorithm = *rdata_pointer++;
             const char *algorithm_name = dns_encryption_algorithm_get_name(algorithm);
             if(algorithm_name != NULL)
             {
@@ -2579,7 +2600,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             }
             else
             {
-                format_dec_u64(algorithm, os, 0, 0, FALSE);
+                format_dec_u64(algorithm, os, 0, 0, false);
             }
             output_stream_write_u8(os, ' ');
             rdata_size -= 5;
@@ -2610,7 +2631,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         {
             if(rdata_size == 1)
             {
-                format_hex_u64_lo(rdata_pointer[0], os, 2, '0', FALSE);
+                format_hex_u64_lo(rdata_pointer[0], os, 2, '0', false);
                 return SUCCESS;
             }
             return INCORRECT_RDATA;
@@ -2620,11 +2641,11 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
             /* ONE NAME record */
             if(rdata_size > 0)
             {
-                format_hex_u64_lo(rdata_pointer[0], os, 2, '0', FALSE);
+                format_hex_u64_lo(rdata_pointer[0], os, 2, '0', false);
 
                 if(rdata_size > 1)
                 {
-                    output_stream_write_u8(os, (u8)' ');
+                    output_stream_write_u8(os, (uint8_t)' ');
                     ya_result ret = output_stream_write_dnsname_text(os, rdata_pointer + 1);
 
                     if(ISOK(ret))
@@ -2641,38 +2662,38 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         }
         case TYPE_TSIG:
         {
-            const u8 *limit = &rdata_pointer[rdata_size];
-            
-            ya_result ret = output_stream_write_dnsname_text(os, rdata_pointer);
-            
+            const uint8_t *limit = &rdata_pointer[rdata_size];
+
+            ya_result      ret = output_stream_write_dnsname_text(os, rdata_pointer);
+
             if(FAIL(ret))
             {
                 return ret;
             }
-            
+
             rdata_pointer += ret;
-            
+
             if(limit - rdata_pointer < 16)
             {
-                return ERROR;
+                return INCORRECT_RDATA;
             }
-            
-            u16 time_hi = ntohs(GET_U16_AT(rdata_pointer[0]));
-            u32 time_lo = ntohl(GET_U32_AT(rdata_pointer[2]));
-            u16 fudge = ntohs(GET_U16_AT(rdata_pointer[6]));
-            u16 mac_size = ntohs(GET_U16_AT(rdata_pointer[8]));
-            
+
+            uint16_t time_hi = ntohs(GET_U16_AT(rdata_pointer[0]));
+            uint32_t time_lo = ntohl(GET_U32_AT(rdata_pointer[2]));
+            uint16_t fudge = ntohs(GET_U16_AT(rdata_pointer[6]));
+            uint16_t mac_size = ntohs(GET_U16_AT(rdata_pointer[8]));
+
             rdata_pointer += 10;
-            
+
             if(limit - rdata_pointer < mac_size + 6)
             {
-                return ERROR;
+                return INCORRECT_RDATA;
             }
-            
-            u64 epoch = time_hi;
+
+            uint64_t epoch = time_hi;
             epoch <<= 32;
             epoch |= time_lo;
-            
+
             osformat(os, " %u %hu %hu", epoch, fudge, mac_size);
 
             if(mac_size > 0)
@@ -2681,26 +2702,29 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
                 osprint_base64(os, rdata_pointer, mac_size);
                 rdata_pointer += mac_size;
             }
-            
-            u16 oid = ntohs(GET_U16_AT(rdata_pointer[0]));
-            u16 error = ntohs(GET_U16_AT(rdata_pointer[2]));
-            u16 olen = ntohs(GET_U16_AT(rdata_pointer[4]));
-            
+
+            uint16_t oid = ntohs(GET_U16_AT(rdata_pointer[0]));
+            uint16_t error = ntohs(GET_U16_AT(rdata_pointer[2]));
+            uint16_t olen = ntohs(GET_U16_AT(rdata_pointer[4]));
+
             rdata_pointer += 6;
-            
+
             if(limit - rdata_pointer != olen)
             {
-                return ERROR;
-            }            
-            
-            osformat(os, " %i %s %i ", ntohs(oid), dns_message_rcode_get_name(error), olen);
-            
-            for(; rdata_pointer < limit; ++rdata_pointer)
-            {
-                osformat(os, "%02x", rdata_pointer[0]);
+                return INCORRECT_RDATA;
             }
-            
-            break;
+
+            osformat(os, " %i %s %i", ntohs(oid), dns_message_rcode_get_name(error), olen);
+
+            if(rdata_pointer < limit)
+            {
+                do
+                {
+                    osformat(os, " %02x", rdata_pointer[0]);
+                } while(++rdata_pointer < limit);
+            }
+
+            return SUCCESS;
         }
 
         case TYPE_A6:
@@ -2709,13 +2733,17 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
         case TYPE_SIG:
         case TYPE_ANY:
         default:
-
-            osformat(os, "\\# %u ", rdata_size); /* rfc 3597 */
-            osprint_base16(os, rdata_pointer, rdata_size);
+        {
+            if(!dnscore_dns_extension_osprint_data(os, type, rdata_pointer, rdata_size))
+            {
+                osformat(os, "\\# %u ", rdata_size); /* rfc 3597 */
+                osprint_base16(os, rdata_pointer, rdata_size);
+            }
 
             return SUCCESS;
+        }
     }
-    
+
     return INCORRECT_RDATA;
 }
 
@@ -2733,10 +2761,9 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
  * returns an error code.
  */
 
-ya_result
-osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_size)
+ya_result osprint_rdata_escaped(output_stream_t *os, uint16_t type, const uint8_t *rdata_pointer, uint16_t rdata_size)
 {
-   switch(type)
+    switch(type)
     {
         case TYPE_MX:
         case TYPE_KX:
@@ -2745,8 +2772,8 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
             osformat(os, "%hd ", ntohs(GET_U16_AT(*rdata_pointer)));
             rdata_pointer += 2;
             rdata_size -= 2;
-            FALLTHROUGH // fall through
-        case TYPE_NS:
+        FALLTHROUGH // fall through
+            case TYPE_NS:
         case TYPE_CNAME:
         case TYPE_DNAME:
         case TYPE_PTR:
@@ -2769,13 +2796,13 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
         {
             if(rdata_size >= 2)
             {
-                u32 len = output_stream_write_dnsname_text_escaped(os, rdata_pointer);
+                uint32_t len = output_stream_write_dnsname_text_escaped(os, rdata_pointer);
                 rdata_size -= len;
 
                 if(rdata_size > 0)
                 {
                     rdata_pointer += len;
-
+                    output_stream_write(os, STRSPACE, 1);
                     len = output_stream_write_dnsname_text_escaped(os, rdata_pointer);
                     rdata_size -= len;
 
@@ -2793,7 +2820,7 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
             output_stream_write_dnsname_text_escaped(os, rdata_pointer);
             output_stream_write_u8(os, ' ');
 
-            u32 len = dnsname_len(rdata_pointer);
+            uint32_t len = dnsname_len(rdata_pointer);
             rdata_size -= len;
 
             if(rdata_size > 0)
@@ -2810,12 +2837,7 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
                 {
                     rdata_pointer += len;
 
-                    osformat(os, " %u %u %u %u %u",
-                             ntohl(GET_U32_AT(rdata_pointer[ 0])),
-                             ntohl(GET_U32_AT(rdata_pointer[ 4])),
-                             ntohl(GET_U32_AT(rdata_pointer[ 8])),
-                             ntohl(GET_U32_AT(rdata_pointer[12])),
-                             ntohl(GET_U32_AT(rdata_pointer[16])));
+                    osformat(os, "%u %u %u %u %u", ntohl(GET_U32_AT(rdata_pointer[0])), ntohl(GET_U32_AT(rdata_pointer[4])), ntohl(GET_U32_AT(rdata_pointer[8])), ntohl(GET_U32_AT(rdata_pointer[12])), ntohl(GET_U32_AT(rdata_pointer[16])));
 
                     return SUCCESS;
                 }
@@ -2828,27 +2850,38 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
             struct tm exp;
             struct tm inc;
 
-            time_t t = (time_t)ntohl(GET_U32_AT(rdata_pointer[8]));
+            time_t    t = (time_t)ntohl(GET_U32_AT(rdata_pointer[8]));
             gmtime_r(&t, &exp);
             t = (time_t)ntohl(GET_U32_AT(rdata_pointer[12]));
             gmtime_r(&t, &inc);
 
-            u16 covered_type = (GET_U16_AT(rdata_pointer[0])); /** @note NATIVETYPE */
+            uint16_t covered_type = (GET_U16_AT(rdata_pointer[0])); /** @note NATIVETYPE */
 
-            osformat(os, "%{dnstype} %u %u %u %04u%02u%02u%02u%02u%02u %04u%02u%02u%02u%02u%02u %u ",
+            osformat(os,
+                     "%{dnstype} %u %u %u %04u%02u%02u%02u%02u%02u %04u%02u%02u%02u%02u%02u %u ",
                      &covered_type,
                      U8_AT(rdata_pointer[2]),
                      U8_AT(rdata_pointer[3]),
                      ntohl(GET_U32_AT(rdata_pointer[4])),
-                     exp.tm_year + 1900, exp.tm_mon + 1, exp.tm_mday, exp.tm_hour, exp.tm_min, exp.tm_sec,
-                     inc.tm_year + 1900, inc.tm_mon + 1, inc.tm_mday, inc.tm_hour, inc.tm_min, inc.tm_sec,
+                     exp.tm_year + 1900,
+                     exp.tm_mon + 1,
+                     exp.tm_mday,
+                     exp.tm_hour,
+                     exp.tm_min,
+                     exp.tm_sec,
+                     inc.tm_year + 1900,
+                     inc.tm_mon + 1,
+                     inc.tm_mday,
+                     inc.tm_hour,
+                     inc.tm_min,
+                     inc.tm_sec,
                      ntohs(GET_U16_AT(rdata_pointer[16])));
 
             rdata_pointer += RRSIG_RDATA_HEADER_LEN;
             rdata_size -= RRSIG_RDATA_HEADER_LEN;
 
             output_stream_write_dnsname_text_escaped(os, rdata_pointer);
-            u32 len = dnsname_len(rdata_pointer);
+            uint32_t len = dnsname_len(rdata_pointer);
             output_stream_write_u8(os, ' ');
 
             rdata_pointer += len;
@@ -2865,8 +2898,8 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
         case TYPE_NSEC:
         {
             output_stream_write_dnsname_text_escaped(os, rdata_pointer);
-            u32 len = dnsname_len(rdata_pointer);
-            output_stream_write_u8(os, ' ');
+            uint32_t len = dnsname_len(rdata_pointer);
+            // output_stream_write_u8(os, ' '); // osprint_type_bitmap starts with a ' '
 
             rdata_pointer += len;
             rdata_size -= len;
@@ -2883,10 +2916,10 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
 
         case TYPE_SRV:
         {
-            u16 priority = GET_U16_AT(rdata_pointer[0]);
-            u16 weight = GET_U16_AT(rdata_pointer[2]);
-            u16 port = GET_U16_AT(rdata_pointer[4]);
-            const u8 *fqdn = (const u8*)&rdata_pointer[6];
+            uint16_t       priority = GET_U16_AT(rdata_pointer[0]);
+            uint16_t       weight = GET_U16_AT(rdata_pointer[2]);
+            uint16_t       port = GET_U16_AT(rdata_pointer[4]);
+            const uint8_t *fqdn = (const uint8_t *)&rdata_pointer[6];
 
             osformat(os, "%hd %hd %hd ", priority, weight, port);
 
@@ -2906,37 +2939,31 @@ osprint_rdata_escaped(output_stream* os, u16 type, const u8* rdata_pointer, u16 
     return INCORRECT_RDATA;
 }
 
+ya_result print_rdata(uint16_t type, const uint8_t *rdata_pointer, uint16_t rdata_size) { return osprint_rdata(termout, type, rdata_pointer, rdata_size); }
 
-ya_result
-print_rdata(u16 type, u8* rdata_pointer, u16 rdata_size)
+void      osprint_dump_with_base(output_stream_t *os, const void *data_pointer_, size_t size_, size_t line_size, uint32_t flags, const void *base_pointer_)
 {
-    return osprint_rdata(termout, type, rdata_pointer, rdata_size);
-}
+    const uint8_t *data_pointer = (const uint8_t *)data_pointer_;
+    size_t         size = size_;
 
-void
-osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags, const void* base_pointer_)
-{
-    const u8* data_pointer = (const u8*)data_pointer_;
-    size_t size = size_;
+    bool           offset = (flags & OSPRINT_DUMP_OFFSET) != 0;
+    bool           address = (flags & OSPRINT_DUMP_ADDRESS) != 0;
+    bool           hex = (flags & OSPRINT_DUMP_HEX) != 0;
+    bool           text = (flags & OSPRINT_DUMP_TEXT) != 0;
+    bool           squeeze_zeroes = (flags & OSPRINT_DUMP_SQUEEZE_ZEROES) != 0;
 
-    bool offset = (flags & OSPRINT_DUMP_OFFSET) != 0;
-    bool address = (flags & OSPRINT_DUMP_ADDRESS) != 0;
-    bool hex = (flags & OSPRINT_DUMP_HEX) != 0;
-    bool text = (flags & OSPRINT_DUMP_TEXT) != 0;
-    bool squeeze_zeroes = (flags & OSPRINT_DUMP_SQUEEZE_ZEROES) != 0;
-    
-    size_t group = flags & OSPRINT_DUMP_LAYOUT_GROUP_MASK;
+    size_t         group = flags & OSPRINT_DUMP_LAYOUT_GROUP_MASK;
     group >>= OSPRINT_DUMP_LAYOUT_GROUP_SHIFT;
     size_t separator = flags & OSPRINT_DUMP_LAYOUT_SEPARATOR_MASK;
     separator >>= OSPRINT_DUMP_LAYOUT_SEPARATOR_SHIFT;
 
-    s32 offset_width = 2 * 2;
+    int32_t offset_width = 2 * 2;
 
     if(offset)
     {
-        if(size_ > MAX_U16)
+        if(size_ > U16_MAX)
         {
-            if(size_ <= MAX_U32)
+            if(size_ <= U32_MAX)
             {
                 offset_width = 4 * 2;
             }
@@ -2947,11 +2974,11 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
         }
     }
 
-    size_t dump_size;
-    size_t i;
-    s64 zeroes_count = 0;
-    
-    char hexbyte[2];
+    size_t  dump_size;
+    size_t  i;
+    int64_t zeroes_count = 0;
+
+    char    hexbyte[2];
 
     do
     {
@@ -2964,18 +2991,18 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
             dump_size = size;
         }
 
-        const u8* data;
+        const uint8_t *data;
 
         if(squeeze_zeroes && (dump_size == line_size))
         {
-            if(base_pointer_ < (const void*)data_pointer)
+            if(base_pointer_ < (const void *)data_pointer)
             {
-                bool zeroes = TRUE;
-                for(int i = 0; i < (int)line_size; ++i)
+                bool zeroes = true;
+                for(int_fast32_t i = 0; i < (int)line_size; ++i)
                 {
                     if(data_pointer[i] != 0)
                     {
-                        zeroes = FALSE;
+                        zeroes = false;
                         break;
                     }
                 }
@@ -2989,7 +3016,7 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
                 }
                 else if(zeroes_count > 0)
                 {
-                    osformatln(os,"\t\t... %lli zeroes ...", zeroes_count);
+                    osformatln(os, "\t\t... %lli zeroes ...", zeroes_count);
                     zeroes_count = 0;
                 }
             }
@@ -2997,49 +3024,49 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
 
         if(address)
         {
-            format_hex_u64_hi((intptr)data_pointer, os, __SIZEOF_POINTER__ * 2, '0', FALSE);
-            output_stream_write(os, (const u8*)" | ", 3);
+            format_hex_u64_hi((intptr_t)data_pointer, os, __SIZEOF_POINTER__ * 2, '0', false);
+            output_stream_write(os, (const uint8_t *)" | ", 3);
         }
 
         if(offset)
         {
-            format_hex_u64_hi((intptr)data_pointer - (intptr)base_pointer_, os, offset_width, '0', FALSE);
-            output_stream_write(os, (const u8*)" | ", 3);
+            format_hex_u64_hi((intptr_t)data_pointer - (intptr_t)base_pointer_, os, offset_width, '0', false);
+            output_stream_write(os, (const uint8_t *)" | ", 3);
         }
 
         if(hex)
         {
             data = data_pointer;
-            
+
             for(i = 0; i < dump_size; i++)
             {
-                u8 val = *data++;
-                
+                uint8_t val = *data++;
+
                 hexbyte[0] = __hexa__[val >> 4];
                 hexbyte[1] = __hexa__[val & 0x0f];
-                
-                output_stream_write(os, (u8*)hexbyte, 2);
-                
+
+                output_stream_write(os, (uint8_t *)hexbyte, 2);
+
                 if((i & group) == group)
                 {
-                    output_stream_write_u8(os, (u8)' ');
+                    output_stream_write_u8(os, (uint8_t)' ');
                 }
                 if((i & separator) == separator)
                 {
-                    output_stream_write_u8(os, (u8)' ');
+                    output_stream_write_u8(os, (uint8_t)' ');
                 }
             }
 
             for(; i < line_size; i++)
             {
-                output_stream_write(os, (const u8*)"  ", 2);                             // these are two spaces
+                output_stream_write(os, (const uint8_t *)"  ", 2); // these are two spaces
                 if((i & group) == group)
                 {
-                    output_stream_write_u8(os, (u8)' ');
+                    output_stream_write_u8(os, (uint8_t)' ');
                 }
                 if((i & separator) == separator)
                 {
-                    output_stream_write_u8(os, (u8)' ');
+                    output_stream_write_u8(os, (uint8_t)' ');
                 }
             }
         }
@@ -3048,21 +3075,22 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
         {
             if(hex)
             {
-                output_stream_write(os, (const u8*)" |  ", 4);
+                output_stream_write(os, (const uint8_t *)" |  ", 4);
             }
-            
+
             data = data_pointer;
-            
+
             for(i = 0; i < dump_size; i++)
             {
                 char c = *data++;
-                
-                if(c < ' ')
+
+                // c < ' ' && c > 126 => c + 1 < ' ' + 1
+                if((char)(c + 1) < (char)(' ' + 1))
                 {
                     c = '.';
                 }
 
-                output_stream_write_u8(os, (u8)c);
+                output_stream_write_u8(os, (uint8_t)c);
             }
         }
 
@@ -3071,28 +3099,15 @@ osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size
 
         if(size != 0)
         {
-            output_stream_write_u8(os, (u8)'\n');
+            output_stream_write_u8(os, (uint8_t)'\n');
         }
-    }
-    while(size > 0);
+    } while(size > 0);
 }
 
-void
-osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags)
-{
-    osprint_dump_with_base(os, data_pointer_, size_, line_size, flags, data_pointer_);
-}
+void osprint_dump(output_stream_t *os, const void *data_pointer_, size_t size_, size_t line_size, uint32_t flags) { osprint_dump_with_base(os, data_pointer_, size_, line_size, flags, data_pointer_); }
 
-void
-osprint_question(output_stream* os, u8* qname, u16 qclass, u16 qtype)
-{
-    osformat(os, ";; QUESTION SECTION:\n%{dnsname} %{dnsclass} %{dnstype}\n\n", qname, &qclass, &qtype);
-}
+void osprint_question(output_stream_t *os, const uint8_t *qname, uint16_t qclass, uint16_t qtype) { osformat(os, ";; QUESTION SECTION:\n%{dnsname} %{dnsclass} %{dnstype}\n\n", qname, &qclass, &qtype); }
 
-void
-print_question(u8* qname, u16 qclass, u16 qtype)
-{
-    osprint_question(termout, qname, qclass, qtype);
-}
+void print_question(const uint8_t *qname, uint16_t qclass, uint16_t qtype) { osprint_question(termout, qname, qclass, qtype); }
 
 /** @} */

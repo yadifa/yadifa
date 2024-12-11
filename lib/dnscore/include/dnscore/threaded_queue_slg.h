@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,31 +28,30 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
  *  This version of the ring buffer uses the condition-wait mechanism instead of the 3-mutex one.
  *  I'll have to bench both versions but the main incentive is to get rid of complains from helgrind
- * 
- * @{
  *
+ * @{
  *----------------------------------------------------------------------------*/
 #pragma once
 
 #include <dnscore/thread.h>
 
 #include <dnscore/mutex.h>
-#include <dnscore/list-sl.h>
+#include <dnscore/list_sl.h>
 
 #define L1_DATA_LINE_SIZE 0x40
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 #define THREADED_QUEUE_PAGE_SIZE 4096
@@ -60,8 +59,8 @@ extern "C" {
 
 struct threaded_queue_slg_page_s
 {
-    intptr size;
-    void *data[THREADED_QUEUE_SQL_SLOTS];
+    intptr_t                          size;
+    void                             *data[THREADED_QUEUE_SQL_SLOTS];
     struct threaded_queue_slg_page_s *next;
 };
 
@@ -69,16 +68,16 @@ typedef struct threaded_queue_slg_page_s threaded_queue_slg_page_t;
 
 struct threaded_queue_slg_s
 {
-    mutex_t mtx;
-    cond_t read_cond;
-    intptr read_index;
+    mutex_t                    mtx;
+    cond_t                     read_cond;
+    intptr_t                   read_index;
     threaded_queue_slg_page_t *page_pool;
 #if __unix__
-    threaded_queue_slg_page_t *read_page __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
-    threaded_queue_slg_page_t *write_page __attribute__ ((aligned (L1_DATA_LINE_SIZE)));
+    threaded_queue_slg_page_t *read_page __attribute__((aligned(L1_DATA_LINE_SIZE)));
+    threaded_queue_slg_page_t *write_page __attribute__((aligned(L1_DATA_LINE_SIZE)));
 #else
-    threaded_queue_slg_page_t* read_page;
-    threaded_queue_slg_page_t* write_page;
+    threaded_queue_slg_page_t *read_page;
+    threaded_queue_slg_page_t *write_page;
 #endif
 };
 
@@ -86,29 +85,26 @@ typedef struct threaded_queue_slg_s threaded_queue_slg_t;
 
 #define THREADED_QUEUE_SLG_EMPTY {MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, NULL, NULL, NULL}
 
-void threaded_queue_slg_init(threaded_queue_slg_t *q, int ignored_size);
+void               threaded_queue_slg_init(threaded_queue_slg_t *q, int ignored_size);
 
-void threaded_queue_slg_finalize(threaded_queue_slg_t *q);
+void               threaded_queue_slg_finalize(threaded_queue_slg_t *q);
 
-void threaded_queue_slg_enqueue(threaded_queue_slg_t *q, void *data);
+void               threaded_queue_slg_enqueue(threaded_queue_slg_t *q, void *data);
+
+void              *threaded_queue_slg_dequeue(threaded_queue_slg_t *q);
 
 static inline bool threaded_queue_slg_try_enqueue(threaded_queue_slg_t *q, void *data)
 {
     threaded_queue_slg_enqueue(q, data);
-    return TRUE;
+    return true;
 }
 
-void* threaded_queue_slg_dequeue(threaded_queue_slg_t *q);
+static inline void *threaded_queue_slg_try_dequeue(threaded_queue_slg_t *q) { return threaded_queue_slg_dequeue(q); }
 
-void threaded_queue_slg_wait_empty(threaded_queue_slg_t *q);
+void                threaded_queue_slg_wait_empty(threaded_queue_slg_t *q);
 
-bool  threaded_queue_slg_try_enqueue(threaded_queue_slg_t *queue,void* constant_pointer);
-
-void* threaded_queue_slg_try_dequeue(threaded_queue_slg_t *queue);
-void* threaded_queue_slg_dequeue_with_timeout(threaded_queue_slg_t *queue, s64 timeout_us);
-
-int threaded_queue_slg_size(threaded_queue_slg_t *q);
-int threaded_queue_slg_room(threaded_queue_slg_t *q);
+int                 threaded_queue_slg_size(threaded_queue_slg_t *q);
+int                 threaded_queue_slg_room(threaded_queue_slg_t *q);
 
 /*
  * The queue will block (write) if bigger than this.
@@ -118,7 +114,7 @@ int threaded_queue_slg_room(threaded_queue_slg_t *q);
 
 ya_result threaded_queue_slg_set_maxsize(threaded_queue_slg_t *q, int max_size);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

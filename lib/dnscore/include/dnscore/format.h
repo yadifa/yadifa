@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup format C-string formatting
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup format C-string formatting
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #pragma once
@@ -58,21 +56,21 @@
 #define OSPRINT_DUMP_HEX                    0x20000000U
 #define OSPRINT_DUMP_TEXT                   0x10000000U
 #define OSPRINT_DUMP_SQUEEZE_ZEROES         0x08000000U
-    
+
 // predefined layouts
 #define OSPRINT_DUMP_LAYOUT_DENSE           0x0000ffffU
 #define OSPRINT_DUMP_LAYOUT_ERIC            0x000003ffU
 #define OSPRINT_DUMP_LAYOUT_GERY            0x00000003U
-    
-#define OSPRINT_DUMP_ALL                    (OSPRINT_DUMP_ADDRESS|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
-#define OSPRINT_DUMP_BUFFER                 (OSPRINT_DUMP_OFFSET|OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
-#define OSPRINT_DUMP_HEXTEXT                (OSPRINT_DUMP_HEX|OSPRINT_DUMP_TEXT)
-#define OSPRINT_DUMP_BASE16                 (OSPRINT_DUMP_LAYOUT_DENSE|OSPRINT_DUMP_HEX)
+
+#define OSPRINT_DUMP_ALL                    (OSPRINT_DUMP_ADDRESS | OSPRINT_DUMP_HEX | OSPRINT_DUMP_TEXT)
+#define OSPRINT_DUMP_BUFFER                 (OSPRINT_DUMP_OFFSET | OSPRINT_DUMP_HEX | OSPRINT_DUMP_TEXT)
+#define OSPRINT_DUMP_HEXTEXT                (OSPRINT_DUMP_HEX | OSPRINT_DUMP_TEXT)
+#define OSPRINT_DUMP_BASE16                 (OSPRINT_DUMP_LAYOUT_DENSE | OSPRINT_DUMP_HEX)
 
 /**
  *
  * Formats:
- * 
+ *
  *   modifier   : restrict :
  *              :    to    :
  * -            :          : change justification
@@ -84,15 +82,19 @@
  * l            : iudXxo   : long : 32 bits
  * ll           : iudXxo   : long long : 64 bits
  * L            : f        : long double
- * 
+ *
  *    formats   :
  *              :
  * %t           : integer, prints the number of tabs on the output
  * %S           : integer, prints the number of spaces on the output
- * %T           : integer, prints the 32/64 bits UTC time on the output
+ * %T           : integer, prints the 32/64 bits local time on the output
  *                %T   : 32 bits = YYYY-MM-DD HH:mm:SS
  *                %lT  : 64 bits = YYYY-MM-DD HH:mm:SS
  *                %llT : 64 bits = YYYY-MM-DD HH:mm:SS.NNNNNN
+ * %U           : integer, prints the 32/64 bits UTC time on the output
+ *                %T   : 32 bits = YYYY-MM-DD HH:mm:SSZ
+ *                %lT  : 64 bits = YYYY-MM-DD HH:mm:SSZ
+ *                %llT : 64 bits = YYYY-MM-DD HH:mm:SS.NNNNNNZ
  * %i           : integer, prints the signed 8/16/32/64 bits integer in base 10 on the output
  * %r           : integer, prints the ya_result registered message on the output or the hexadecimal code
  * %u           : integer, prints the unsigned 8/16/32/64 bits integer in base 10 on the output
@@ -105,61 +107,61 @@
  * %f           : double , prints the long double/double/float on the output
  * %s           : char*  , prints the ASCIIZ string on the output
  * %c           : char   , prints the 8-bits char on the output
- * %w           : format_writer, calls the format_writer callback to print on the output
- * 
+ * %w           : format_writer, calls the format_writer_t callback to print on the output
+ *
  * Format extension mechanism:
- * 
+ *
  * "%{registeredformatname}" : void*, prints the pointed value on the output
  *                           : use ya_result format_registerclass(format_handler_descriptor* fhd) for registration
  */
 
-/* void* value, output_stream*, s32 padding, char pad_char, bool left_justified, void* reserved */
-    
-typedef void format_handler_method(const void*, output_stream*, s32, char, bool, void* reserved_for_method_parameters);
+/* void* value, output_stream_t*, int32_t padding, char pad_char, bool left_justified, void* reserved */
 
-typedef struct format_handler_descriptor format_handler_descriptor;
+typedef void                               format_handler_method(const void *, output_stream_t *, int32_t, char, bool, void *reserved_for_method_parameters);
+
+typedef struct format_handler_descriptor_s format_handler_descriptor_t;
 
 // About the %w format:
-// 
+//
 // a pointer to this can be given as a 'w' parameter ie: "%w"
 // the writer callback get's called with
 // void* value as first parameter, what to print
-// output_stream *os as second parameter, where to write the chars to
-// s32 padding the number of chars it's supposed to take on the output (minimum)
+// output_stream_t *os as second parameter, where to write the chars to
+// int32_t padding the number of chars it's supposed to take on the output (minimum)
 // char padchar the character to use for padding
 // bool left_justified where to justify the text
 // void* don't use that one
 //
 // ex:
 //
-// format_writer temp_fw_0 = {my_complex_or_rare_type_printer_callback, &my_complex_or_rare_type};
+// format_writer_t temp_fw_0 = {my_complex_or_rare_type_printer_callback, &my_complex_or_rare_type};
 //
 // format("So the value is : '%w'\n", &temp_fw_0);
 //
 
-struct format_writer
+struct format_writer_s
 {
     format_handler_method *callback;
-    const void * value;
+    const void            *value;
 };
 
-typedef struct format_writer format_writer;
+typedef struct format_writer_s format_writer_t;
 
-struct format_handler_descriptor
+struct format_handler_descriptor_s
 {
-    const char* name;
-    int name_len;	    /* Needed in order to quicken the matching */
-    format_handler_method* format_handler;
+    const char            *name;
+    int                    name_len; /* Needed in order to quicken the matching */
+    format_handler_method *format_handler;
 };
 
-void format_class_init();
+void      format_class_init();
 
-ya_result format_registerclass(const format_handler_descriptor* fhd);
+ya_result format_registerclass(const format_handler_descriptor_t *fhd);
 
 /**
  * %% -> %
- * %-09lli right-justified 0-padded "long long integer" (s64)
- * %-9llu right-justified "long long unsigned integer" (u64)
+ * %-09lli right-justified 0-padded "long long integer" (int64_t)
+ * %-9llu right-justified "long long unsigned integer" (uint64_t)
  * %-20{class} right-justified "class" (class has to be registered)
  * %-20{class(a,b,c,d)} right-justified "class" called with 4 arguments (class has to be registered)
  *
@@ -199,84 +201,96 @@ ya_result format_registerclass(const format_handler_descriptor* fhd);
  *
  */
 
-ya_result vosformat(output_stream* os_, const char* fmt, va_list args);
-ya_result osprint(output_stream* stream,const char* text);
-ya_result osprintln(output_stream* stream,const char* text);
-ya_result osformat(output_stream* stream,const char* fmt,...);
-ya_result osformatln(output_stream* stream,const char* fmt,...);
-ya_result print(const char* text);
-ya_result println(const char* text);
-ya_result format(const char* fmt,...);
-ya_result formatln(const char* fmt,...);
+ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args);
+ya_result osprint(output_stream_t *stream, const char *text);
+
+/**
+ * Prints a text, wrapped.
+ *
+ * @param stream the stream to print to
+ * @param text the text to print
+ * @param column_current the current column in the console
+ * @param column_count the number of columns in the screen (0: attempt to detect using IOCTLs)
+ * @param column_wrap when wrapping, the column to wrap to
+ */
+
+ya_result osprint_wrapped(output_stream_t *stream, const char *text, int column_current, int column_count, int column_wrap);
+ya_result osprintln(output_stream_t *stream, const char *text);
+ya_result osformat(output_stream_t *stream, const char *fmt, ...);
+ya_result osformatln(output_stream_t *stream, const char *fmt, ...);
+ya_result print(const char *text);
+ya_result println(const char *text);
+ya_result format(const char *fmt, ...);
+ya_result formatln(const char *fmt, ...);
 
 // prefixes time | pid | pthread_self
-ya_result debug_osformatln(output_stream* stream, const char* fmt, ...);
-ya_result debug_println(const char* text);
+ya_result debug_osformatln(output_stream_t *stream, const char *fmt, ...);
+ya_result debug_println(const char *text);
 
-int vsnformat(char* out_, size_t out_size, const char* fmt, va_list args);
-int snformat(char* out, size_t out_size, const char* fmt, ...);
+int       vsnformat(char *out_, size_t out_size, const char *fmt, va_list args);
+int       snformat(char *out, size_t out_size, const char *fmt, ...);
 
 /**
  * This formatter will return an allocated (malloc) string as a result of the format
- * 
+ *
  * @param outp
  * @param out_size
  * @param fmt
  * @param args
- * @return 
+ * @return
  */
 
-int vasnformat(char** outp, size_t out_size, const char* fmt, va_list args);
+int vasnformat(char **outp, size_t out_size, const char *fmt, va_list args);
 
 /**
  * This formatter will return an allocated (malloc) string as a result of the format
- * 
+ *
  * @param outp
  * @param out_size
  * @param fmt
  * @param ...
- * @return 
+ * @return
  */
 
-int asnformat(char** outp, size_t out_size, const char* fmt, ...);
+int asnformat(char **outp, size_t out_size, const char *fmt, ...);
 
 /**
  * This formatter will return an allocated (malloc) string as a result of the format
- * 
+ *
  * @param outp
  * @param fmt
  * @param ...
- * @return 
+ * @return
  */
 
-int asformat(char** outp, const char* fmt, ...);
+int asformat(char **outp, const char *fmt, ...);
 
 /* Used by extensions */
 
-void format_dec_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified);
-void format_dec_s64(s64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified);
-void format_hex_u64_lo(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified);
-void format_hex_u64_hi(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified);
-void format_oct_u64(u64 val, output_stream* stream, s32 padding, char pad_char, bool left_justified);
-void format_asciiz(const char* val, output_stream* stream, s32 padding, char pad_char, bool left_justified);
+void format_dec_u64(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
+void format_dec_s64(int64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
+void format_hex_u64_lo(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
+void format_hex_u64_hi(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
+void format_oct_u64(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
+void format_asciiz(const char *val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
 
 /**/
 
-int osprint_base16(output_stream* os, const u8* rdata, u32 rdata_size);
-int osprint_base64(output_stream* os, const u8* rdata, u32 rdata_size);
+int       osprint_base16(output_stream_t *os, const uint8_t *rdata, uint32_t rdata_size);
+int       osprint_base64(output_stream_t *os, const uint8_t *rdata, uint32_t rdata_size);
 
-void osprint_u32(output_stream* os, u32 value);
-void osprint_u16(output_stream* os, u16 value);
-void osprint_u32_hex(output_stream* os, u32 value);
+void      osprint_u32(output_stream_t *os, uint32_t value);
+void      osprint_u16(output_stream_t *os, uint16_t value);
+void      osprint_u32_hex(output_stream_t *os, uint32_t value);
 
-void print_char(char value);
+void      print_char(char value);
 
-void osprint_char(output_stream *os, char value);
-void osprint_char_times(output_stream *os, char value, int times);
-void osprint_dump_with_base(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags, const void* base_pointer_);
-void osprint_dump(output_stream *os, const void* data_pointer_, size_t size_, size_t line_size, u32 flags);
+void      osprint_char(output_stream_t *os, char value);
+void      osprint_char_times(output_stream_t *os, char value, int times);
+void      osprint_dump_with_base(output_stream_t *os, const void *data_pointer_, size_t size_, size_t line_size, uint32_t flags, const void *base_pointer_);
+void      osprint_dump(output_stream_t *os, const void *data_pointer_, size_t size_, size_t line_size, uint32_t flags);
 
-ya_result osprint_type_bitmap(output_stream *os, const u8 *rdata_pointer, u16 rdata_size);
+ya_result osprint_type_bitmap(output_stream_t *os, const uint8_t *rdata_pointer, uint16_t rdata_size);
 
 /**
  * Print a text (char*, len) between quotes, escaping when required.
@@ -287,7 +301,7 @@ ya_result osprint_type_bitmap(output_stream *os, const u8 *rdata_pointer, u16 rd
  * @return an error code
  */
 
-ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text_len);
+ya_result osprint_quoted_text_escaped(output_stream_t *os, const uint8_t *text, int text_len);
 
 /**
  * Prints the TEXT representation of the rdata of a record of a given type.
@@ -300,7 +314,7 @@ ya_result osprint_quoted_text_escaped(output_stream *os, uint8_t *text, int text
  * returns an error code.
  */
 
-ya_result osprint_rdata(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
+ya_result osprint_rdata(output_stream_t *os, uint16_t type, const uint8_t *rdata_pointer, uint16_t rdata_size);
 
 /**
  * Prints the TEXT representation of the rdata of a record of a given type.
@@ -312,20 +326,16 @@ ya_result osprint_rdata(output_stream *os, u16 type, const u8 *rdata_pointer, u1
  * @param type the record type
  * @param rdata_pointer a pointer to the rdata
  * @param rdata_size the size of the rdata
- *
- * returns an error code.
+ * @return an error code
  */
 
-ya_result osprint_rdata_escaped(output_stream *os, u16 type, const u8 *rdata_pointer, u16 rdata_size);
-ya_result print_rdata(u16 type, u8 *rdata, u16 rdata_size);
+ya_result osprint_rdata_escaped(output_stream_t *os, uint16_t type, const uint8_t *rdata_pointer, uint16_t rdata_size);
+ya_result print_rdata(uint16_t type, const uint8_t *rdata, uint16_t rdata_size);
 
-void osprint_question(output_stream *os, u8 *qname, u16 qclass, u16 qtype);
-void print_question(u8 *qname, u16 qclass, u16 qtype);
+void      osprint_question(output_stream_t *os, const uint8_t *qname, uint16_t qclass, uint16_t qtype);
+void      print_question(const uint8_t *qname, uint16_t qclass, uint16_t qtype);
 
-#if 0 /* fix */
-#else
 #define FORMAT_BREAK_ON_INVALID(address__, len__)
-#endif
 
 /*
  * This is just a tool function used to test vsnformat.
@@ -342,7 +352,7 @@ int fformat(FILE *out, const char *fmt, ...);
  *
  * we would have:
  *
- * rdata_desc myrdata={TYPE_SOA, rdata_len, rdata};
+ * rdata_desc_t myrdata={TYPE_SOA, rdata_len, rdata};
  * format("bla bla bla %{rdatadesc}", &myrdata);
  *
  *
@@ -350,10 +360,9 @@ int fformat(FILE *out, const char *fmt, ...);
 
 struct rdata_desc_s
 {
-    u16         type;
-    u16         len;
-    const u8 *  rdata;
+    uint16_t       type;
+    uint16_t       len;
+    const uint8_t *rdata;
 };
 
-typedef struct rdata_desc_s rdata_desc;
-
+typedef struct rdata_desc_s rdata_desc_t;

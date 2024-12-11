@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
+
+#define __THREAD_C__ 1
 
 #if HAS_PTHREAD_SETNAME_NP
 #define _GNU_SOURCE 1
@@ -50,17 +50,21 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdatomic.h>
+
+atomic_int g_thread_starting = 0;
+atomic_int g_thread_running = 0; // for this to be accurate, thread functions need to return
 
 #include <dnscore/thread.h>
 
 #include "dnscore/logger.h"
 
 #define MODULE_MSG_HANDLE g_system_logger
-#define PTHCWRAP_TAG 0x5041525743485450
+#define PTHCWRAP_TAG      0x5041525743485450
 
 #if HAS_PTHREAD_SETNAME_NP
 
-static int thread_count_get_nibbles(u32 count)
+static int thread_count_get_nibbles(uint32_t count)
 {
     int ret = 0;
 
@@ -68,8 +72,7 @@ static int thread_count_get_nibbles(u32 count)
     {
         ++ret;
         count >>= 4;
-    }
-    while(count > 0);
+    } while(count > 0);
 
     return ret;
 }
@@ -78,7 +81,7 @@ void thread_set_name(const char *name, int index, int count)
 {
     // 16 is the size limit for this, cfr man page
     char tmp[16 + 1];
-    char fmt[11]; // :%010x/%010x
+    char fmt[32]; // :%010x/%010x
 
     if(--count <= 0)
     {
@@ -86,7 +89,7 @@ void thread_set_name(const char *name, int index, int count)
     }
     else
     {
-        int count_digits = thread_count_get_nibbles((u32) count);
+        int count_digits = thread_count_get_nibbles((uint32_t)count);
         if(count_digits < 5)
         {
             // name:xx/xx
@@ -94,12 +97,13 @@ void thread_set_name(const char *name, int index, int count)
             int avail = sizeof(tmp) - 1 - suffix_len;
             strcpy_ex(tmp, name, avail);
             int size = strlen(tmp);
-            snformat(fmt, sizeof(fmt), ":%%0%ix/%%0%ix", count_digits, count_digits); // 11 bytes long as count_digits is at most 4 so 1 byte long
+            snformat(fmt, sizeof(fmt), ":%%0%ix/%%0%ix", count_digits,
+                     count_digits); // 11 bytes long as count_digits is at most 4 so 1 byte long
             snprintf(&tmp[size], sizeof(tmp) - size, fmt, index, count);
         }
         else
         {
-            //name:xx
+            // name:xx
 
             assert(count_digits <= 8);
 
@@ -107,7 +111,7 @@ void thread_set_name(const char *name, int index, int count)
             int avail = sizeof(tmp) - 1 - suffix_len;
             strcpy_ex(tmp, name, avail);
             int size = strlen(tmp);
-            snformat(fmt, sizeof(fmt), ":%%0%ix", count_digits);  // 6 bytes as count_digits is at most 8 so 1 byte long
+            snformat(fmt, sizeof(fmt), ":%%0%ix", count_digits); // 6 bytes as count_digits is at most 8 so 1 byte long
             snprintf(&tmp[size], sizeof(tmp) - size, fmt, index, count);
         }
     }
@@ -129,16 +133,16 @@ void thread_set_name(const char *name, int index, int count)
 }
 #endif
 
-#if DEBUG
-
 struct pthead_create_wrapper_s
 {
-    void *(*function_thread)(void*);
+    void *(*function_thread)(void *);
     void *function_args;
 };
 
-static void* pthead_create_wrapper(void* args_)
+static void *pthead_create_wrapper(void *args_)
 {
+    ++g_thread_running;
+    --g_thread_starting;
     char name_buffer[32];
     strcpy(name_buffer, "unnamed");
 
@@ -146,30 +150,31 @@ static void* pthead_create_wrapper(void* args_)
     pthread_getname_np(thread_self(), name_buffer, sizeof(name_buffer));
 #endif
 
-    struct pthead_create_wrapper_s *args = (struct pthead_create_wrapper_s*)args_;
-    log_debug1("thread: %p (%i) started (%s)", (void*)pthread_self(), gettid(), name_buffer);
+    struct pthead_create_wrapper_s *args = (struct pthead_create_wrapper_s *)args_;
+    log_debug1("thread: %p (%i) started (%s)", (void *)pthread_self(), gettid(), name_buffer);
     struct pthead_create_wrapper_s targs = *args;
     free(args);
     void *thread_ret = targs.function_thread(targs.function_args);
-    log_debug1("thread: %p (%i) stopped (%s) with %p", (void*)pthread_self(), gettid(), name_buffer, thread_ret);
+    log_debug1("thread: %p (%i) stopped (%s) with %p", (void *)pthread_self(), gettid(), name_buffer, thread_ret);
+    --g_thread_running;
     return thread_ret;
 }
 
-#endif
-
-ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *function_args)
+ya_result thread_create(thread_t *t, void *(*function_thread)(void *), void *function_args)
 {
-    int ret;
-#if !DEBUG
-    ret = pthread_create(t, NULL, function_thread, function_args);
-#else // DEBUG
+    int                             ret;
+
     struct pthead_create_wrapper_s *pthead_create_wrapper_args;
+    // MUST be malloc
     MALLOC_OBJECT_OR_DIE(pthead_create_wrapper_args, struct pthead_create_wrapper_s, PTHCWRAP_TAG);
     pthead_create_wrapper_args->function_thread = function_thread;
     pthead_create_wrapper_args->function_args = function_args;
     ret = pthread_create(t, NULL, pthead_create_wrapper, pthead_create_wrapper_args);
-#endif
-    if(ret != 0)
+    if(ret == 0)
+    {
+        ++g_thread_starting;
+    }
+    else
     {
         ret = MAKE_ERRNO_ERROR(ret);
     }

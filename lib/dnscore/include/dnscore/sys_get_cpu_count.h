@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,34 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup cpu CPU
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup cpu CPU
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _SYS_GET_CPU_COUNT_H
-#define	_SYS_GET_CPU_COUNT_H
+#define _SYS_GET_CPU_COUNT_H
 
 #include <dnscore/sys_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-u32 sys_get_cpu_count();
-void sys_set_cpu_count(int count);
-bool sys_has_hyperthreading();
+uint32_t sys_get_cpu_count();
+void     sys_set_cpu_count(int count);
+bool     sys_has_hyperthreading();
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _SYS_GET_CPU_COUNT_H */
+#endif /* _SYS_GET_CPU_COUNT_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

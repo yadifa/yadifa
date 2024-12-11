@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,15 +28,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #define COMMON_C 1
 
 #include "common.h"
-
-
 
 /**
  *  @fn const char * file_name_from_path ()
@@ -46,34 +42,31 @@
  *
  *  @return char *
  */
-const char *
-filename_from_path(const char *s)       // base_of_path sounds like beginning of path, or maybe the directory (base) of the file.  This returns the filename_from_path ...
-{                                       // it's a nice tool to have, it should be moved into the core (maybe in fdtools, or parsing/parser)
+const char *filename_from_path(const char *s) // base_of_path sounds like beginning of path, or maybe the directory
+                                              // (base) of the file.  This returns the filename_from_path ...
+{                                             // it's a nice tool to have, it should be moved into the core (maybe in fdtools, or parsing/parser)
     const char *ptr;
 
-    if(s[0] == '/' && s[1] == 0)        // if the string is "/", return it
+    if(s[0] == '/' && s[1] == 0) // if the string is "/", return it
     {
         return (s);
     }
 
-    ptr = strrchr (s, '/');             // get the last '/'
+    ptr = strrchr(s, '/'); // get the last '/'
 
-    return (ptr ? ++ptr : s);           // if a '/' was found, return the word starting after, else return the original word
+    return (ptr ? ++ptr : s); // if a '/' was found, return the word starting after, else return the original word
 }
 
-static  char **module_argv = NULL;
-static int module_argc = 0;
+static char **module_argv = NULL;
+static int    module_argc = 0;
 
-void module_arg_set(char **argv, int argc)
+void          module_arg_set(char **argv, int argc)
 {
     module_argv = argv;
     module_argc = argc;
 }
 
-int module_arg_count()
-{
-    return module_argc;
-}
+int         module_arg_count() { return module_argc; }
 
 const char *module_arg_get(int index)
 {

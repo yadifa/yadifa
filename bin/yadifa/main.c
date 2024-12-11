@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
+ *----------------------------------------------------------------------------*/
+
+/**-----------------------------------------------------------------------------
+ * @defgroup yadifa
+ * @ingroup ###
+ * @brief
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
  *
- */
-
-/** @defgroup yadifa
- *  @ingroup ###
- *  @brief
- */
-
 //#include <sys/resource.h>
+ *
+ *----------------------------------------------------------------------------*/
 
-#include "client-config.h"
+#include "client_config.h"
 
 #include <dnscore/dnscore.h>
 #include <dnscore/config_settings.h>
@@ -48,18 +51,18 @@
 #include <dnscore/format.h>
 #include <dnscore/logger.h>
 #include <dnscore/signals.h>
-#include <dnslg/config-load.h>
+#include <dnslg/config_load.h>
 
 #include "main.h"
 #include "module.h"
 #include "buildinfo.h"
 
-//#define DEBUG_FAKE_PROGRAM_NAME "./ykeygen"
+// #define DEBUG_FAKE_PROGRAM_NAME "./ykeygen"
 
 /*----------------------------------------------------------------------------*/
 #pragma mark GLOBAL VARIABLES
 
-logger_handle *g_client_logger = LOGGER_HANDLE_SINK;
+logger_handle_t *g_client_logger = LOGGER_HANDLE_SINK;
 #define MODULE_MSG_HANDLE g_client_logger
 
 /*----------------------------------------------------------------------------*/
@@ -74,12 +77,12 @@ void config_logger_cleardefault();
 typedef struct my_additional_stuff_s my_additional_stuff_s;
 struct my_additional_stuff_s
 {
-    struct config_main                                            *next;
+    struct config_main *next;
 
-    u16                                                           qtype;
-    u16                                                          qclass;
+    uint16_t            qtype;
+    uint16_t            qclass;
 
-    u8                                                        fqdn[256];
+    uint8_t             fqdn[256];
 };
 
 /*    ------------------------------------------------------------    */
@@ -93,8 +96,7 @@ struct my_additional_stuff_s
  *  @return EXIT_FAILURE
  *  @return exit codes
  */
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 #if defined(DEBUG_FAKE_PROGRAM_NAME)
     argv[0] = DEBUG_FAKE_PROGRAM_NAME;
@@ -107,26 +109,25 @@ main(int argc, char **argv)
 
     signal_handler_init();
 
-    ya_result                                                           ret;
+    ya_result ret;
     ret = module_run_from_args(&argc, argv);
 
     signal_handler_finalize();
 
-    return ISOK(ret)?EXIT_SUCCESS:EXIT_FAILURE;
+    return ISOK(ret) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-void
-yadifa_print_authors()
+void yadifa_print_authors()
 {
-    print("\n"
-          "\t\tYADIFAD authors:\n"
-          "\t\t---------------\n"
-          "\t\t\n"
-          "\t\tGery Van Emelen\n"
-          "\t\tEric Diaz Fernandez\n"
-          "\n"
-          "\t\tContact: " PACKAGE_BUGREPORT "\n"
-         );
+    print(
+        "\n"
+        "\t\tYADIFAD authors:\n"
+        "\t\t---------------\n"
+        "\t\t\n"
+        "\t\tGery Van Emelen\n"
+        "\t\tEric Diaz Fernandez\n"
+        "\n"
+        "\t\tContact: " PACKAGE_BUGREPORT "\n");
     flushout();
 }
 
@@ -137,8 +138,7 @@ yadifa_print_authors()
  *  @param level int
  *  @return -- nothing --
  */
-void
-yadifa_show_version(u8 level)
+void yadifa_show_version(uint8_t level)
 {
     switch(level)
     {

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,31 +28,30 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
 #include <dnscore/sys_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
-        
-struct file_t_;
-    
-typedef struct file_t_* file_t;
-    
+
+struct file_s;
+
+typedef struct file_s *file_t;
+
 struct file_vtbl
 {
     ssize_t (*read)(file_t f, void *buffer, ssize_t size);
@@ -68,21 +67,21 @@ struct file_vtbl
     // add flags, starting with "is slow" meaning it would benefit from caching
 };
 
-struct file_t_
+struct file_s
 {
     const struct file_vtbl *vtbl;
 };
 
 static inline ssize_t file_read(file_t f, void *buffer, ssize_t size) { return f->vtbl->read(f, buffer, size); }
-static inline ssize_t file_write(file_t f, const void *buffer, ssize_t size) { return f->vtbl->write( f, buffer, size); }
+static inline ssize_t file_write(file_t f, const void *buffer, ssize_t size) { return f->vtbl->write(f, buffer, size); }
 static inline ssize_t file_seek(file_t f, ssize_t position, int from) { return f->vtbl->seek(f, position, from); }
 static inline ssize_t file_tell(file_t f) { return f->vtbl->tell(f); }
-static inline int file_flush(file_t f) { return f->vtbl->flush(f); }
-static inline int file_close(file_t f) { return f->vtbl->close(f); }
+static inline int     file_flush(file_t f) { return f->vtbl->flush(f); }
+static inline int     file_close(file_t f) { return f->vtbl->close(f); }
 static inline ssize_t file_size(file_t f) { return f->vtbl->size(f); }
-static inline int file_resize(file_t f, ssize_t size) { return f->vtbl->resize(f, size); }
+static inline int     file_resize(file_t f, ssize_t size) { return f->vtbl->resize(f, size); }
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

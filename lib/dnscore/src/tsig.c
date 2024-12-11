@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,39 +28,47 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/zalloc.h"
-#include "dnscore/message.h" // DO NOT REMOVE ME
+#include "dnscore/dns_message.h" // DO NOT REMOVE ME
 #include "dnscore/tsig.h"
-#include "dnscore/packet_reader.h"
+#include <dnscore/dns_packet_reader.h>
 #include "dnscore/logger.h"
 
 #if DNSCORE_HAS_TSIG_SUPPORT
 
-#define TSIGNODE_TAG 0x45444f4e47495354
-#define TSIGPAYL_TAG 0x4c59415047495354
-#define TSIGMAC_TAG 0x43414d47495354
+#define TSIGNODE_TAG      0x45444f4e47495354
+#define TSIGPAYL_TAG      0x4c59415047495354
+#define TSIGMAC_TAG       0x43414d47495354
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-#define LOG_DIGEST_INPUT 2 // set up to 2 for debugging
+#define LOG_DIGEST_INPUT  0 // 2 // set up to 2 for debugging
+#if !DEBUG
+#if LOG_DIGEST_INPUT > 0
+#pragma message("******************************************************")
+#pragma message("*                                                    *")
+#pragma message("*              LOG_DIGEST_INPUT IS NOT 0             *")
+#pragma message("*                                                    *")
+#pragma message("******************************************************")
+#endif
+#endif
 
-#define TSIG_TCP_PERIOD 99
+#define TSIG_TCP_PERIOD          99
 
 /*
  * AVL definition part begins here
@@ -75,40 +83,40 @@
  * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH 40 // no need for more
+#define AVL_DEPTH_MAX            40 // no need for more
 
 /*
  * The previx that will be put in front of each function name
  */
-#define AVL_PREFIX	    tsig_
+#define AVL_PREFIX               tsig_
 
 /*
  * The type that hold the node
  */
-#define AVL_NODE_TYPE   tsig_node
+#define AVL_NODE_TYPE            tsig_key_node_t
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_TREE_TYPE   AVL_NODE_TYPE*
+#define AVL_TREE_TYPE            AVL_NODE_TYPE *
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_CONST_TREE_TYPE AVL_NODE_TYPE * const
+#define AVL_CONST_TREE_TYPE      AVL_NODE_TYPE *const
 
 /*
  * The way to get the root from the tree
  */
-#define AVL_TREE_ROOT(__tree__) (*(__tree__))
+#define AVL_TREE_ROOT(__tree__)  (*(__tree__))
 
 /*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE const u8*
+#define AVL_REFERENCE_TYPE       const uint8_t *
 
-#define AVL_REFERENCE_IS_CONST TRUE
-#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_IS_CONST   true
+#define AVL_REFERENCE_IS_POINTER true
 
 /*
  * The node has got a pointer to its parent
@@ -116,7 +124,7 @@
  * 0   : disable
  * !=0 : enable
  */
-#define AVL_HAS_PARENT_POINTER 0
+#define AVL_HAS_PARENT_POINTER   0
 
 #include "dnscore/avl.h.inc"
 
@@ -129,86 +137,92 @@
 /*
  * Access to the field that points to the left child
  */
-#define AVL_LEFT_CHILD(node) ((node)->children.lr.left)
+#define AVL_LEFT_CHILD(node)            ((node)->children.lr.left)
 /*
  * Access to the field that points to the right child
  */
-#define AVL_RIGHT_CHILD(node) ((node)->children.lr.right)
+#define AVL_RIGHT_CHILD(node)           ((node)->children.lr.right)
 /*
  * Access to the field that points to one of the children (0: left, 1: right)
  */
-#define AVL_CHILD(node,id) ((node)->children.child[(id)])
+#define AVL_CHILD(node, id)             ((node)->children.child[(id)])
 /*
  * Access to the field that keeps the balance (a signed byte)
  */
-#define AVL_BALANCE(node) ((node)->balance)
+#define AVL_BALANCE(node)               ((node)->balance)
 /*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE const u8*
+#define AVL_REFERENCE_TYPE              const uint8_t *
 
-#define AVL_REFERENCE_IS_CONST TRUE
+#define AVL_REFERENCE_IS_CONST          true
 
 /*
  *
  */
 
-#define AVL_REFERENCE_FORMAT_STRING "%{dnsname}"
+#define AVL_REFERENCE_FORMAT_STRING     "%{dnsname}"
 #define AVL_REFERENCE_FORMAT(reference) reference
 
 /*
  * A macro to initialize a node and setting the reference
  */
 
-#define AVL_INIT_NODE(node,reference) ZEROMEMORY((node),sizeof(tsig_node));(node)->item.name = dnsname_dup(reference)
+#define AVL_INIT_NODE(node, reference)                                                                                                                                                                                                         \
+    ZEROMEMORY((node), sizeof(tsig_key_node_t));                                                                                                                                                                                               \
+    (node)->item.name = dnsname_dup(reference)
 
 /*
  * A macro to allocate a new node
  */
 
-#define AVL_ALLOC_NODE(node,reference) MALLOC_OR_DIE(AVL_NODE_TYPE*,node,sizeof(AVL_NODE_TYPE), TSIGNODE_TAG)
+#define AVL_ALLOC_NODE(node, reference) MALLOC_OR_DIE(AVL_NODE_TYPE *, node, sizeof(AVL_NODE_TYPE), TSIGNODE_TAG)
 
 /*
  * A macro to free a node allocated by ALLOC_NODE
  */
 
-#define AVL_FREE_NODE(node) free((u8*)(node)->item.name);free((u8*)(node)->item.mac);free(node)
+#define AVL_FREE_NODE(node)                                                                                                                                                                                                                    \
+    free((uint8_t *)(node)->item.name);                                                                                                                                                                                                        \
+    free((uint8_t *)(node)->item.mac);                                                                                                                                                                                                         \
+    free(node)
 /*
  * A macro to print the node
  */
-#define AVL_DUMP_NODE(node) format("node@%p",(node));
+#define AVL_DUMP_NODE(node) format("node@%p", (node));
 /*
  * A macro that returns the reference field of the node.
  * It must be of type REFERENCE_TYPE
  */
 #define AVL_REFERENCE(node) (node)->item.name
 
-#define AVL_TERNARYCMP 1
+#define AVL_TERNARYCMP      1
 
 #if !AVL_TERNARYCMP
 /*
  * A macro to compare two references
- * Returns TRUE if and only if the references are equal.
+ * Returns true if and only if the references are equal.
  */
-#define AVL_ISEQUAL(reference_a,reference_b) dnsname_equals(reference_a,reference_b)
+#define AVL_ISEQUAL(reference_a, reference_b)  dnsname_equals(reference_a, reference_b)
 /*
  * A macro to compare two references
- * Returns TRUE if and only if the first one is bigger than the second one.
+ * Returns true if and only if the first one is bigger than the second one.
  */
-#define AVL_ISBIGGER(reference_a,reference_b) (dnsname_compare(reference_a,reference_b) > 0)
+#define AVL_ISBIGGER(reference_a, reference_b) (dnsname_compare(reference_a, reference_b) > 0)
 #else
-#define AVL_COMPARE(reference_a,reference_b) (dnsname_compare(reference_a,reference_b))
+#define AVL_COMPARE(reference_a, reference_b) (dnsname_compare(reference_a, reference_b))
 #endif
 
 /*
  * Copies the payload of a node
  * It MUST NOT copy the "proprietary" node fields : children, parent, balance
  */
-#define AVL_COPY_PAYLOAD(node_trg,node_src) (node_trg)->item.name = dnsname_dup((node_src)->item.name);		  \
-					    MALLOC_OR_DIE(const u8*,(node_trg)->item.mac,(node_src)->item.mac_size, TSIGPAYL_TAG); \
-					    MEMCOPY((u8*)(node_trg)->item.mac, (node_src)->item.mac, (node_src)->item.mac_size);  \
-					    (node_trg)->item.mac_size = (node_src)->item.mac_size; \
-					    (node_trg)->item.mac_algorithm = (node_src)->item.mac_algorithm;
+#define AVL_COPY_PAYLOAD(node_trg, node_src)                                                                                                                                                                                                   \
+    (node_trg)->item.name = dnsname_dup((node_src)->item.name);                                                                                                                                                                                \
+    MALLOC_OR_DIE(const uint8_t *, (node_trg)->item.mac, (node_src)->item.mac_size, TSIGPAYL_TAG);                                                                                                                                             \
+    MEMCOPY((uint8_t *)(node_trg)->item.mac, (node_src)->item.mac, (node_src)->item.mac_size);                                                                                                                                                 \
+    (node_trg)->item.mac_size = (node_src)->item.mac_size;                                                                                                                                                                                     \
+    (node_trg)->item.mac_algorithm = (node_src)->item.mac_algorithm;
 /*
  * A macro to preprocess a node before it is preprocessed for a delete (detach)
  * If there was anything to do BEFORE deleting a node, we would do it here
@@ -220,9 +234,9 @@
 #define AVL_NODE_DELETE_CALLBACK(node)
 
 #include "dnscore/avl.c.inc"
-#include "dnscore/message.h" // DO NOT REMOVE ME
+#include "dnscore/dns_message.h" // DO NOT REMOVE ME
 
-#undef AVL_MAX_DEPTH
+#undef AVL_DEPTH_MAX
 #undef AVL_PREFIX
 #undef AVL_NODE_TYPE
 #undef AVL_TREE_TYPE
@@ -235,29 +249,19 @@
  *
  */
 
-static tsig_node *tsig_tree = NULL;
-static u32 tsig_tree_count = 0;
-static u8 tsig_serial = 0; /// @note load serial
+static tsig_key_node_t         *tsig_tree = NULL;
+static uint32_t                 tsig_tree_count = 0;
+static uint8_t                  tsig_serial = 0; /// @note load serial
 
-static const value_name_table hmac_digest_enum[]=
-{
-    {HMAC_MD5   , "hmac-md5"    },
-    {HMAC_SHA1  , "hmac-sha1"   },
-    {HMAC_SHA224, "hmac-sha224" },
-    {HMAC_SHA256, "hmac-sha256" },
-    {HMAC_SHA384, "hmac-sha384" },
-    {HMAC_SHA512, "hmac-sha512" },
-    {0, NULL}
-};
+static const value_name_table_t hmac_digest_enum[] = {{HMAC_MD5, "hmac-md5"}, {HMAC_SHA1, "hmac-sha1"}, {HMAC_SHA224, "hmac-sha224"}, {HMAC_SHA256, "hmac-sha256"}, {HMAC_SHA384, "hmac-sha384"}, {HMAC_SHA512, "hmac-sha512"}, {0, NULL}};
 
-static ya_result tsig_digest_answer(message_data *mesg);
-static ya_result tsig_add_tsig(message_data *mesg);
+static ya_result                tsig_digest_answer(dns_message_t *mesg);
+static ya_result                tsig_add_tsig(dns_message_t *mesg);
 
-ya_result
-tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname)
+ya_result                       tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname)
 {
     ya_result ret;
-    u32 integer_value;
+    uint32_t  integer_value;
     if(ISOK(ret = value_name_table_get_value_from_casename(hmac_digest_enum, hmacname, &integer_value)))
     {
         return (ya_result)integer_value;
@@ -268,8 +272,7 @@ tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname)
     }
 }
 
-const char *
-tsig_get_friendly_name_from_hmac_algorithm(u32 algorithm)
+const char *tsig_get_friendly_name_from_hmac_algorithm(uint32_t algorithm)
 {
     const char *name = "?";
     value_name_table_get_name_from_value(hmac_digest_enum, algorithm, &name);
@@ -280,54 +283,65 @@ tsig_get_friendly_name_from_hmac_algorithm(u32 algorithm)
  * Call this before a config reload
  */
 
-void
-tsig_serial_next()
-{
-    tsig_serial++;
-}
+void tsig_serial_next() { tsig_serial++; }
 
-ya_result
-tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm)
-{
-    ya_result return_code = SUCCESS;
+/**
+ * Registers a TSIG key.
+ *
+ * @param name the name of the key
+ * @param mac the mac of the key
+ * @param mac_size the size of the mac
+ * @param mac_algorithm the algorithm
+ *
+ * @return an error code
+ *
+ */
 
-    tsig_node *node = tsig_insert(&tsig_tree, name);
+ya_result tsig_register(const uint8_t *name, const uint8_t *mac, uint16_t mac_size, uint8_t mac_algorithm)
+{
+    ya_result        return_code = SUCCESS;
+
+    tsig_key_node_t *node = tsig_insert(&tsig_tree, name);
 
     if(node != NULL)
     {
         if(node->item.mac != NULL)
         {
-            bool same = (node->item.mac_size == mac_size)                 &&
-                        (node->item.mac_algorithm == mac_algorithm)       &&
-                        (memcmp((u8*)node->item.mac, mac, mac_size) == 0);
+            bool same = (node->item.mac_size == mac_size) && (node->item.mac_algorithm == mac_algorithm) && (memcmp((uint8_t *)node->item.mac, mac, mac_size) == 0);
 
             if(same)
             {
                 // don't complain if they are an exact match
                 return SUCCESS;
             }
-            
+
             if(node->item.load_serial != tsig_serial)
             {
                 node->item.load_serial = tsig_serial; // else every 256 updates will see a duplicate
 
                 // this is an old version of the key
 
-                free((void*)node->item.mac);
+                free((void *)node->item.mac);
                 node->item.mac = NULL;
             }
             else
             {
                 // it's a dup in the config file
-                
+
                 return TSIG_DUPLICATE_REGISTRATION; /* dup */
             }
         }
-        
+
+        if(node->item.name == NULL)
+        {
+            // dnsname_dup has failed
+            return INVALID_STATE_ERROR;
+        }
+
         yassert(node->item.mac == NULL);
-        
-        MALLOC_OR_DIE(u8*, node->item.mac, mac_size, TSIGMAC_TAG);
-        MEMCOPY((u8*)node->item.mac, mac, mac_size);
+
+        MALLOC_OR_DIE(uint8_t *, node->item.mac, mac_size, TSIGMAC_TAG);
+        MEMCOPY((uint8_t *)node->item.mac, mac, mac_size);
 
         node->item.mac_algorithm_name = tsig_get_algorithm_name(mac_algorithm);
         node->item.name_len = dnsname_len(name);
@@ -346,112 +360,141 @@ tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm)
     return return_code;
 }
 
-tsig_item*
-tsig_get(const u8 *name)
+ya_result tsig_unregister(const uint8_t *name)
 {
-    tsig_node *node = tsig_find(&tsig_tree, name);
-
+    tsig_key_node_t *node = tsig_find(&tsig_tree, name);
     if(node != NULL)
     {
-        return &node->item;
+        free((void *)node->item.mac);
+        node->item.mac = NULL;
+        tsig_delete(&tsig_tree, name);
+        return SUCCESS;
+    }
+    else
+    {
+        return ERROR;
+    }
+}
+
+tsig_key_t *tsig_get(const uint8_t *name)
+{
+    if(name != NULL)
+    {
+        tsig_key_node_t *node = tsig_find(&tsig_tree, name);
+
+        if(node != NULL)
+        {
+            return &node->item;
+        }
     }
 
     return NULL;
 }
 
-u32
-tsig_get_count()
+tsig_key_t *tsig_get_with_ascii_name(const char *ascii_name)
 {
-    return tsig_tree_count;
+    if(ascii_name != NULL)
+    {
+        uint8_t name[256];
+        if(ISOK(dnsname_init_with_cstr(name, ascii_name)))
+        {
+            tsig_key_node_t *node = tsig_find(&tsig_tree, name);
+
+            if(node != NULL)
+            {
+                return &node->item;
+            }
+        }
+    }
+
+    return NULL;
 }
 
-tsig_item*
-tsig_get_at_index(s32 index)
+uint32_t    tsig_get_count() { return tsig_tree_count; }
+
+tsig_key_t *tsig_get_at_index(int32_t index)
 {
-    if(index < 0 || (u32)index >= tsig_tree_count)
+    if(index < 0 || (uint32_t)index >= tsig_tree_count)
     {
         return NULL;
     }
-    
-    tsig_iterator iter;
+
+    tsig_iterator_t iter;
     tsig_iterator_init(&tsig_tree, &iter);
-    
+
     while(tsig_iterator_hasnext(&iter))
     {
-        tsig_node *node = tsig_iterator_next_node(&iter);
-        
+        tsig_key_node_t *node = tsig_iterator_next_node(&iter);
+
         if(index == 0)
         {
             return &node->item;
         }
-        
+
         index--;
     }
-    
+
     // should never be reached
-    
+
     return NULL;
 }
 
 void tsig_finalize_algorithms();
 
-void
-tsig_finalize()
+void tsig_finalize()
 {
     tsig_destroy(&tsig_tree);
     tsig_finalize_algorithms();
 }
 
-static u8 tsig_typeclassttl[8] = {0x00, 0xfa, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00};
-static u8 tsig_classttl[6] = {0x00, 0xff, 0x00, 0x00, 0x00, 0x00};
-static u8 tsig_noerror_noother[4] = {0x00, 0x00, 0x00, 0x00};
+static uint8_t tsig_typeclassttl[8] = {0x00, 0xfa, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00};
+static uint8_t tsig_classttl[6] = {0x00, 0xff, 0x00, 0x00, 0x00, 0x00};
+static uint8_t tsig_noerror_noother[4] = {0x00, 0x00, 0x00, 0x00};
 
-static void
-tsig_update_time(message_data *mesg)
+static void    tsig_update_time(dns_message_t *mesg)
 {
-    u64 now = time(NULL);
-    mesg->_tsig.timehi = htons((u16)(now >> 32));
-    mesg->_tsig.timelo = htonl((u32)now);
+    uint64_t now = time(NULL);
+    mesg->_tsig.timehi = htons((uint16_t)(now >> 32));
+    mesg->_tsig.timelo = htonl((uint32_t)now);
 }
 
-static ya_result
-tsig_process_append_unsigned(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset)
+static ya_result tsig_process_append_unsigned(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t tsig_offset)
 {
-    u16* tsig_rdata_size_position_p;
-    u16 tsig_rdata_size;
-    message_set_status(mesg, FP_RCODE_NOTAUTH); // no fingerprint here, it's RFC
-    message_update_answer_status(mesg);
-    message_set_rcode(mesg, RCODE_NOTAUTH);
-    packet_reader_set_position(purd, tsig_offset);
+    uint16_t *tsig_rdata_size_position_p;
+    uint16_t  tsig_rdata_size;
+    dns_message_set_status(mesg, FP_RCODE_NOTAUTH); // no fingerprint here, it's RFC
+    dns_message_update_answer_status(mesg);
+    dns_message_set_rcode(mesg, RCODE_NOTAUTH);
+    dns_packet_reader_set_position(purd, tsig_offset);
 
-    if(FAIL(packet_reader_skip_zone_record(purd)))
+    if(FAIL(dns_packet_reader_skip_zone_record(purd)))
     {
-        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+        return MAKE_RCODE_ERROR(RCODE_FORMERR);
     }
 
-    if(packet_reader_available(purd) <= 6)
+    if(dns_packet_reader_available(purd) <= 6)
     {
-        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+        return MAKE_RCODE_ERROR(RCODE_FORMERR);
     }
 
-    packet_reader_skip_bytes(purd, 4); // return value guaranteed : checked above
-    tsig_rdata_size_position_p = (u16*)packet_reader_get_current_ptr_const(purd, 2);
-    packet_reader_read_u16_unchecked(purd, &tsig_rdata_size); // checked above
+    dns_packet_reader_skip_bytes(purd, 4); // return value guaranteed : checked above
+    tsig_rdata_size_position_p = (uint16_t *)dns_packet_reader_get_current_ptr_const(purd, 2);
+    dns_packet_reader_read_u16_unchecked(purd, &tsig_rdata_size); // checked above
 
-    if(FAIL(packet_reader_skip_fqdn(purd))) // algorithm
+    if(FAIL(dns_packet_reader_skip_fqdn(purd))) // algorithm
     {
-        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+        return MAKE_RCODE_ERROR(RCODE_FORMERR);
     }
 
-    u8 *p = (u8*)packet_reader_get_current_ptr_const(purd, 16); // ensures there is enough room
+    uint8_t *p = (uint8_t *)dns_packet_reader_get_current_ptr_const(purd, 16); // ensures there is enough room
     if(p != NULL)
     {
-        message_set_answer(mesg); // Make the message an answer
+        dns_message_set_answer(mesg); // Make the message an answer
 
         // overwrite the TSIG without the MAC and with a BADKEY error code
         // keep the name and the algorithm
 
-        u32 now = timeus() / ONE_SECOND_US;
+        uint32_t now = timeus() / ONE_SECOND_US;
         SET_U16_AT_P(p, 0);
         p += 2;
         SET_U32_AT_P(p, htonl(now));
@@ -460,7 +503,7 @@ tsig_process_append_unsigned(message_data *mesg, packet_unpack_reader_data *purd
         p += 2;
         SET_U16_AT_P(p, 0);
         p += 2;
-        SET_U16_AT_P(p, message_get_id(mesg));
+        SET_U16_AT_P(p, dns_message_get_id(mesg));
         p += 2;
         SET_U16_AT_P(p, mesg->_tsig.error); // the error code is stored in network order
         p += 2;
@@ -469,47 +512,46 @@ tsig_process_append_unsigned(message_data *mesg, packet_unpack_reader_data *purd
 
         // adjust the TSIG rdata size
 
-        SET_U16_AT_P(tsig_rdata_size_position_p, htons((p - (u8*)tsig_rdata_size_position_p) - 2));
+        SET_U16_AT_P(tsig_rdata_size_position_p, htons((p - (uint8_t *)tsig_rdata_size_position_p) - 2));
 
         // adjust the message size
 
-        packet_reader_skip_unchecked(purd, 16); // we know it's available
-        message_set_size(mesg, packet_reader_position(purd));
+        dns_packet_reader_skip_unchecked(purd, 16); // we know it's available
+        dns_message_set_size(mesg, dns_packet_reader_position(purd));
 
-        return MAKE_DNSMSG_ERROR(ntohs(mesg->_tsig.error));
+        return MAKE_RCODE_ERROR(ntohs(mesg->_tsig.error));
     }
     else
     {
-        return MAKE_DNSMSG_ERROR(RCODE_FORMERR);
+        return MAKE_RCODE_ERROR(RCODE_FORMERR);
     }
 }
 
-static ya_result
-tsig_verify_query(message_data *mesg)
+static ya_result tsig_verify_query(dns_message_t *mesg)
 {
-    u32 md_len = 0;
-    u8 md[EVP_MAX_MD_SIZE];
+    uint32_t md_len = EVP_MAX_MD_SIZE;
+    uint8_t  md[EVP_MAX_MD_SIZE];
 
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_verify_query(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
+    log_debug("tsig_verify_query(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
 
-    u64 then = (u64)ntohs(mesg->_tsig.timehi);
+    uint64_t then = (uint64_t)ntohs(mesg->_tsig.timehi);
     then <<= 32;
-    then |= (u64)ntohl(mesg->_tsig.timelo);
-    u64 now = time(NULL);
-    s64 fudge = ntohs(mesg->_tsig.fudge);
+    then |= (uint64_t)ntohl(mesg->_tsig.timelo);
+    uint64_t now = time(NULL);
+    int64_t  fudge = ntohs(mesg->_tsig.fudge);
 
-    if(llabs((s64)((s64)then - now)) > fudge) // cast to signed in case now > then
+    if(llabs((int64_t)((int64_t)then - now)) > fudge) // cast to signed in case now > then
     {
-        message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
+        dns_message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
 
-        message_update_answer_status(mesg);
-        message_set_rcode(mesg, RCODE_NOTAUTH);
+        dns_message_update_answer_status(mesg);
+        dns_message_set_rcode(mesg, RCODE_NOTAUTH);
 
         free(mesg->_tsig.other);
         mesg->_tsig.other_len = NU16(6);
-        MALLOC_OR_DIE(u8*, mesg->_tsig.other, 6, TSIGOTHR_TAG);
+        MALLOC_OR_DIE(uint8_t *, mesg->_tsig.other, 6, TSIGOTHR_TAG);
         SET_U16_AT_P(mesg->_tsig.other, 0);
         SET_U32_AT_P(mesg->_tsig.other + 2, htonl(time(NULL)));
 
@@ -527,27 +569,26 @@ tsig_verify_query(message_data *mesg)
         return INVALID_STATE_ERROR;
     }
 
-    if(FAIL(hmac_init(hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+    if(FAIL(hmac_init(hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
     {
         hmac_free(hmac);
         return INVALID_STATE_ERROR;
-    
     }
 
     /* DNS message */
 
-    hmac_update(hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+    hmac_update(hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
     /* TSIG Variables */
 
     hmac_update(hmac, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
     hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
     hmac_update(hmac, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-    hmac_update(hmac, (u8*) & mesg->_tsig.timehi, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.timelo, 4);
-    hmac_update(hmac, (u8*) & mesg->_tsig.fudge, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.error, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.other_len, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.error, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.other_len, 2);
 
     if((mesg->_tsig.other != NULL) && (mesg->_tsig.other_len > 0))
     {
@@ -555,23 +596,23 @@ tsig_verify_query(message_data *mesg)
     }
 
     hmac_final(hmac, md, &md_len);
-    
+
 #if LOG_DIGEST_INPUT
     log_debug("tsig_verify_query: computed:");
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, md, md_len, 32);
     log_debug("tsig_verify_query: expected:", mesg);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) mesg->_tsig.mac, md_len, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)mesg->_tsig.mac, md_len, 32);
 #endif
-    
+
     hmac_free(hmac);
 
     if((md_len != mesg->_tsig.mac_size) || (memcmp(mesg->_tsig.mac, md, md_len) != 0))
     {
-        packet_unpack_reader_data purd;
-        purd.packet = message_get_buffer(mesg);
-        purd.packet_size = message_get_buffer_size(mesg);
-        u16 additionals = 1; // message_is_edns0(mesg)?2:1;
-        message_set_additional_count(mesg, message_get_additional_count(mesg) + additionals);
+        dns_packet_reader_t purd;
+        purd.packet = dns_message_get_buffer(mesg);
+        purd.packet_size = dns_message_get_buffer_size(mesg);
+        uint16_t additionals = 1; // message_is_edns0(mesg)?2:1;
+        dns_message_set_additional_count(mesg, dns_message_get_additional_count(mesg) + additionals);
         mesg->_tsig.error = NU16(RCODE_BADSIG);
         tsig_process_append_unsigned(mesg, &purd, mesg->_tsig.tsig_offset);
         return TSIG_BADSIG;
@@ -582,31 +623,27 @@ tsig_verify_query(message_data *mesg)
     return SUCCESS;
 }
 
-ya_result
-tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
+ya_result tsig_verify_answer(dns_message_t *mesg, const uint8_t *mac, uint16_t mac_size)
 {
-    u32 md_len = 0;
-    u8 md[EVP_MAX_MD_SIZE];
+    uint32_t md_len = EVP_MAX_MD_SIZE;
+    uint8_t  md[EVP_MAX_MD_SIZE];
 
-    u16 mac_size_network = htons(mac_size);
+    uint16_t mac_size_network = htons(mac_size);
 
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_verify_answer(%p = %{dnsname} %{dnstype} %{dnsclass}, %p, %i)",
-            mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
-            mac, mac_size
-            );
+    log_debug("tsig_verify_answer(%p = %{dnsname} %{dnstype} %{dnsclass}, %p, %i)", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg), mac, mac_size);
 #endif
 
-    u64 then = (u64)ntohs(mesg->_tsig.timehi);
+    uint64_t then = (uint64_t)ntohs(mesg->_tsig.timehi);
     then <<= 32;
-    then |= (u64)ntohl(mesg->_tsig.timelo);
-    u64 now = time(NULL);
-    s64 fudge = ntohs(mesg->_tsig.fudge);
+    then |= (uint64_t)ntohl(mesg->_tsig.timelo);
+    uint64_t now = time(NULL);
+    int64_t  fudge = ntohs(mesg->_tsig.fudge);
 
-    if(llabs((s64)((s64)then - now)) > fudge) // cast to signed in case now > then
+    if(llabs((int64_t)((int64_t)then - now)) > fudge) // cast to signed in case now > then
     {
         mesg->_tsig.error = NU16(RCODE_BADTIME);
-        message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
+        dns_message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
         return TSIG_BADTIME;
     }
 
@@ -617,29 +654,29 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
         return INVALID_STATE_ERROR;
     }
 
-    if(FAIL(hmac_init(hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+    if(FAIL(hmac_init(hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
     {
         hmac_free(hmac);
         return INVALID_STATE_ERROR;
     }
-    
-    hmac_update(hmac, (u8*) &mac_size_network, 2);
+
+    hmac_update(hmac, (uint8_t *)&mac_size_network, 2);
     hmac_update(hmac, mac, mac_size);
 
     /* DNS message */
 
-    hmac_update(hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+    hmac_update(hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
     /* TSIG Variables */
 
     hmac_update(hmac, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
     hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
     hmac_update(hmac, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-    hmac_update(hmac, (u8*) &mesg->_tsig.timehi, 2);
-    hmac_update(hmac, (u8*) &mesg->_tsig.timelo, 4);
-    hmac_update(hmac, (u8*) &mesg->_tsig.fudge, 2);
-    hmac_update(hmac, (u8*) &mesg->_tsig.error, 2);
-    hmac_update(hmac, (u8*) &mesg->_tsig.other_len, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.error, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.other_len, 2);
 
     if((mesg->_tsig.other != NULL) && (mesg->_tsig.other_len > 0))
     {
@@ -647,7 +684,7 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
     }
 
     hmac_final(hmac, md, &md_len);
-    
+
 #if LOG_DIGEST_INPUT
     log_debug("tsig_verify_answer: computed");
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, md, md_len, 32);
@@ -659,22 +696,19 @@ tsig_verify_answer(message_data *mesg, const u8 *mac, u16 mac_size)
 
     if((md_len != mac_size) || (memcmp(mesg->_tsig.mac, md, md_len) != 0))
     {
-        message_set_status(mesg, FP_TSIG_ERROR);
+        dns_message_set_status(mesg, FP_TSIG_ERROR);
         return TSIG_BADSIG;
     }
 
     return SUCCESS;
 }
 
-
-static ya_result
-tsig_digest_query(message_data *mesg)
+static ya_result tsig_digest_query(dns_message_t *mesg)
 {
-/* Request MAC */
-    
+    /* Request MAC */
+
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_digest_query(%p = %{dnsname} %{dnstype} %{dnsclass})",
-            mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
+    log_debug("tsig_digest_query(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
 
     tsig_hmac_t hmac = tsig_hmac_allocate();
@@ -684,33 +718,33 @@ tsig_digest_query(message_data *mesg)
         return INVALID_STATE_ERROR;
     }
 
-    if(FAIL(hmac_init(hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+    if(FAIL(hmac_init(hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
     {
         hmac_free(hmac);
         return ERROR;
     }
-    
+
     /* DNS message */
 
-    hmac_update(hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+    hmac_update(hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
     /* TSIG Variables */
 
     hmac_update(hmac, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
     hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
     hmac_update(hmac, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-    hmac_update(hmac, (u8*) & mesg->_tsig.timehi, 2);
-    hmac_update(hmac, (u8*) & mesg->_tsig.timelo, 4);
-    hmac_update(hmac, (u8*) & mesg->_tsig.fudge, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+    hmac_update(hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
     // error is 0
     // other len is 0
     // no need to work on other data either (since other len is 0)
     hmac_update(hmac, tsig_noerror_noother, 4); // four zeros
 
-    u32 tmp_mac_size;
+    uint32_t tmp_mac_size = sizeof(mesg->_tsig.mac);
     hmac_final(hmac, mesg->_tsig.mac, &tmp_mac_size);
     mesg->_tsig.mac_size = tmp_mac_size;
-    
+
 #if LOG_DIGEST_INPUT
     log_debug("tsig_digest_query: computed");
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, tmp_mac_size, 32);
@@ -721,10 +755,9 @@ tsig_digest_query(message_data *mesg)
     return SUCCESS;
 }
 
-static ya_result
-tsig_digest_answer(message_data *mesg)
+static ya_result tsig_digest_answer(dns_message_t *mesg)
 {
-    yassert(message_has_tsig(mesg));
+    yassert(dns_message_has_tsig(mesg));
 
     tsig_hmac_t hmac = tsig_hmac_allocate();
 
@@ -736,43 +769,42 @@ tsig_digest_answer(message_data *mesg)
     /* Request MAC */
 
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_digest_answer(%p = %{dnsname} %{dnstype} %{dnsclass})",
-            mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
+    log_debug("tsig_digest_answer(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
 
-    if(mesg->_tsig.tsig != NULL && message_tsig_get_key_size(mesg) > 0)
+    if(mesg->_tsig.tsig != NULL && dns_message_tsig_get_key_size(mesg) > 0)
     {
-        if(FAIL(hmac_init(hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+        if(FAIL(hmac_init(hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
         {
             hmac_free(hmac);
             return ERROR;
         }
 
-        u16 mac_size_network = htons(mesg->_tsig.mac_size);
-        hmac_update(hmac, (u8*) & mac_size_network, 2);
+        uint16_t mac_size_network = htons(mesg->_tsig.mac_size);
+        hmac_update(hmac, (uint8_t *)&mac_size_network, 2);
         hmac_update(hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
 
         /* DNS message */
 
-        hmac_update(hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+        hmac_update(hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
         /* TSIG Variables */
 
         hmac_update(hmac, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
         hmac_update(hmac, tsig_classttl, sizeof(tsig_classttl));
         hmac_update(hmac, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-        hmac_update(hmac, (u8*) & mesg->_tsig.timehi, 2);
-        hmac_update(hmac, (u8*) & mesg->_tsig.timelo, 4);
-        hmac_update(hmac, (u8*) & mesg->_tsig.fudge, 2);
-        hmac_update(hmac, (u8*) & mesg->_tsig.error, 2);
-        hmac_update(hmac, (u8*) & mesg->_tsig.other_len, 2);
+        hmac_update(hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+        hmac_update(hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+        hmac_update(hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
+        hmac_update(hmac, (uint8_t *)&mesg->_tsig.error, 2);
+        hmac_update(hmac, (uint8_t *)&mesg->_tsig.other_len, 2);
 
         if((mesg->_tsig.other != NULL) && (mesg->_tsig.other_len > 0))
         {
             hmac_update(hmac, mesg->_tsig.other, ntohs(mesg->_tsig.other_len));
         }
 
-        u32 tmp_mac_size;
+        uint32_t tmp_mac_size = sizeof(mesg->_tsig.mac);
         hmac_final(hmac, mesg->_tsig.mac, &tmp_mac_size);
         mesg->_tsig.mac_size = tmp_mac_size;
 
@@ -780,7 +812,7 @@ tsig_digest_answer(message_data *mesg)
         log_debug("tsig_digest_answer: computed");
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, tmp_mac_size, 32);
 #endif
-    
+
         hmac_free(hmac);
     }
     else
@@ -792,32 +824,31 @@ tsig_digest_answer(message_data *mesg)
 
 /**
  * Extracts the TSIG from a message
- * 
+ *
  * _ checks if the CLASS & TTL are right
  * _ checks if the TSIG name is known
  * _ loads the TSIG into the TSIG structure into the message
- * 
+ *
  * Works fine for questions but for answer it needs to match a previous setup.
- * 
+ *
  * @param mesg          the message
  * @param purd          a packet reader at the position of the TSIG record
  * @param tsig_offset
  * @param tsigname
  * @param tctr
- * @return 
+ * @return
  */
 
-ya_result
-tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr)
+ya_result tsig_process(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t tsig_offset, const tsig_key_t *tsig, struct type_class_ttl_rdlen_s *tctr)
 {
-    u16 ar_count = message_get_additional_count(mesg);
-    u8 algorithm[256];
+    uint16_t ar_count = dns_message_get_additional_count(mesg);
+    uint8_t  algorithm[256];
 
-    mesg->_tsig.tsig_offset = (u16)tsig_offset;
+    mesg->_tsig.tsig_offset = (uint16_t)tsig_offset;
 
-    if((tctr->qclass == CLASS_ANY) && (tctr->ttl == 0))
+    if((tctr->rclass == CLASS_ANY) && (tctr->ttl == 0))
     {
-        u32 tsig_rdata_len = ntohs(tctr->rdlen);
+        uint32_t  tsig_rdata_len = ntohs(tctr->rdlen);
 
         ya_result return_code;
 
@@ -825,18 +856,18 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
          * Read the algorithm name and see if it matches our TSIG key
          */
 
-        if(FAIL(return_code = packet_reader_read_fqdn(purd, algorithm, sizeof(algorithm))))
+        if(FAIL(return_code = dns_packet_reader_read_fqdn(purd, algorithm, sizeof(algorithm))))
         {
             /* oops */
 
             mesg->_tsig.error = NU16(RCODE_BADKEY);
-            message_set_status(mesg, FP_TSIG_BROKEN);
-            return MAKE_DNSMSG_ERROR(FP_TSIG_BROKEN); // format error reading the algorithm name
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
+            return MAKE_RCODE_ERROR(FP_TSIG_BROKEN); // format error reading the algorithm name
         }
 
         tsig_rdata_len -= return_code;
 
-        u8 alg = tsig_get_algorithm(algorithm);
+        uint8_t alg = tsig_get_algorithm(algorithm);
 
         if((tsig == NULL) || (alg == HMAC_UNKNOWN) || ((tsig != NULL) && (tsig->mac_algorithm != alg)))
         {
@@ -858,22 +889,22 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
 
         tsig_rdata_len -= 10 + 6;
 
-        message_set_size(mesg, tsig_offset);
-        message_set_additional_count(mesg, ar_count - 1);
+        dns_message_set_size(mesg, tsig_offset);
+        dns_message_set_additional_count(mesg, ar_count - 1);
 
         /*
          * Save the TSIG.
          */
-        
+
         mesg->_tsig.other = NULL;
         mesg->_tsig.other_len = 0;
         mesg->_tsig.tsig = tsig;
         mesg->_tsig.mac_algorithm = alg;
 
-        if(FAIL(return_code = packet_reader_read(purd, &mesg->_tsig.timehi, 10)))
+        if(FAIL(return_code = dns_packet_reader_read(purd, &mesg->_tsig.timehi, 10)))
         {
             /* oops */
-            message_set_status(mesg, FP_TSIG_BROKEN);
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return TSIG_FORMERR;
         }
 
@@ -889,63 +920,63 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
          * The next best thing is u64
          */
 
-        u16 mac_size = ntohs(mesg->_tsig.mac_size);  /* NETWORK => NATIVE */
+        uint16_t mac_size = ntohs(mesg->_tsig.mac_size); /* NETWORK => NATIVE */
 
         if(mac_size > sizeof(mesg->_tsig.mac))
         {
             /* oops */
-            message_set_status(mesg, FP_TSIG_BROKEN);
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return TSIG_FORMERR;
         }
 
         mesg->_tsig.mac_size = mac_size;
 
-        if(FAIL(return_code = packet_reader_read(purd, mesg->_tsig.mac, mac_size)))
+        if(FAIL(return_code = dns_packet_reader_read(purd, mesg->_tsig.mac, mac_size)))
         {
             /* oops */
-            message_set_status(mesg, FP_TSIG_BROKEN);
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return TSIG_FORMERR;
         }
 
         tsig_rdata_len -= mac_size;
 
-        if(FAIL(return_code = packet_reader_read(purd, &mesg->_tsig.original_id, 6))) // and error, and other len
+        if(FAIL(return_code = dns_packet_reader_read(purd, &mesg->_tsig.original_id, 6))) // and error, and other len
         {
             /* oops */
-            message_set_status(mesg, FP_TSIG_BROKEN);
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return TSIG_FORMERR;
         }
 
         if(tsig_rdata_len != mesg->_tsig.other_len)
         {
-            message_set_status(mesg, FP_TSIG_BROKEN);
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return TSIG_FORMERR;
         }
 
         if(mesg->_tsig.other_len != 0)
         {
-            u16 other_len = ntohs(mesg->_tsig.other_len);
+            uint16_t other_len = ntohs(mesg->_tsig.other_len);
 
-            MALLOC_OR_DIE(u8*, mesg->_tsig.other, other_len, TSIGOTHR_TAG);
+            MALLOC_OR_DIE(uint8_t *, mesg->_tsig.other, other_len, TSIGOTHR_TAG);
 
-            if(FAIL(return_code = packet_reader_read(purd, mesg->_tsig.other, other_len)))
+            if(FAIL(return_code = dns_packet_reader_read(purd, mesg->_tsig.other, other_len)))
             {
                 /* oops */
 
                 free(mesg->_tsig.other);
                 mesg->_tsig.other = NULL;
                 mesg->_tsig.other_len = 0;
-                message_set_status(mesg, FP_TSIG_BROKEN);
+                dns_message_set_status(mesg, FP_TSIG_BROKEN);
                 return TSIG_FORMERR;
             }
         }
 
-        if(!packet_reader_eof(purd))
+        if(!dns_packet_reader_eof(purd))
         {
             free(mesg->_tsig.other);
             mesg->_tsig.other = NULL;
             mesg->_tsig.other_len = 0;
-            message_set_status(mesg, FP_TSIG_BROKEN);
+            dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return TSIG_FORMERR;
         }
 
@@ -953,26 +984,25 @@ tsig_process(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offse
     }
 
     /* error : tsig but wrong tsig setup */
-    message_set_status(mesg, FP_TSIG_BROKEN);
+    dns_message_set_status(mesg, FP_TSIG_BROKEN);
     return TSIG_FORMERR;
 }
 
-ya_result
-tsig_process_query(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, u8 tsigname[MAX_DOMAIN_LENGTH], struct type_class_ttl_rdlen *tctr)
+ya_result tsig_process_query(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t tsig_offset, uint8_t tsigname[DOMAIN_LENGTH_MAX], struct type_class_ttl_rdlen_s *tctr)
 {
-    ya_result return_value;
-    
-    tsig_item *tsig = tsig_get(tsigname);
-    
+    ya_result   return_value;
+
+    tsig_key_t *tsig = tsig_get(tsigname);
+
     if(ISOK(return_value = tsig_process(mesg, purd, tsig_offset, tsig, tctr)))
     {
         if(ISOK(return_value = tsig_verify_query(mesg)))
         {
             return return_value;
         }
-        
+
         // tsig process may have allocated tsig other
-        
+
         free(mesg->_tsig.other);
         mesg->_tsig.other = NULL;
         mesg->_tsig.other_len = 0;
@@ -983,30 +1013,29 @@ tsig_process_query(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig
 
 /**
  * Extracts and verifies the TSIG in an (answer) message.
- * 
+ *
  * @param mesg the message
  * @param purd a packet reader set for the message
  * @param tsig_offset the position of the tsig
- * @param tsig 
+ * @param tsig
  * @param tctr
- * @return 
+ * @return
  */
 
-ya_result
-tsig_process_answer(message_data *mesg, packet_unpack_reader_data *purd, u32 tsig_offset, struct type_class_ttl_rdlen *tctr)
+ya_result tsig_process_answer(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t tsig_offset, struct type_class_ttl_rdlen_s *tctr)
 {
     ya_result return_value;
-    
-    int mac_size = message_tsig_mac_get_size(mesg);
-    u8 mac[64];
+
+    int       mac_size = dns_message_tsig_mac_get_size(mesg);
+    uint8_t   mac[HMAC_BUFFER_SIZE];
 
     assert(mac_size <= (int)sizeof(mac));
-    
-    message_tsig_mac_copy(mesg, mac);
-    
+
+    dns_message_tsig_mac_copy(mesg, mac);
+
     // extract the tsig
-    
-    if(ISOK(return_value = tsig_process(mesg, purd, tsig_offset, message_tsig_get_key(mesg), tctr)))
+
+    if(ISOK(return_value = tsig_process(mesg, purd, tsig_offset, dns_message_tsig_get_key(mesg), tctr)))
     {
         // verify the tsig in the answer
 
@@ -1025,20 +1054,18 @@ tsig_process_answer(message_data *mesg, packet_unpack_reader_data *purd, u32 tsi
             }
         }
     }
-    
+
     return return_value;
 }
 
-
-
+#if UNUSED
 /**
  * Extracts the TSIG from the message
  *
  * Reads all the records but the last AR one
  */
 
-ya_result
-tsig_extract_and_process(message_data *mesg)
+ya_result tsig_extract_and_process(dns_message_t *mesg)
 {
     /*yassert(message_is_additional_section_ptr_set(mesg));*/
 
@@ -1065,19 +1092,17 @@ tsig_extract_and_process(message_data *mesg)
      *
      */
 
-    packet_unpack_reader_data purd;
-    
-    purd.packet = message_get_buffer_const(mesg);
-    purd.packet_size = message_get_size(mesg);
+    dns_packet_reader_t purd;
 
-    if(!message_is_additional_section_ptr_set(mesg))
+    purd.packet = dns_message_get_buffer_const(mesg);
+    purd.packet_size = dns_message_get_size(mesg);
+
+    if(!dns_message_is_additional_section_ptr_set(mesg))
     {
-        u32 tsig_index = message_get_answer_count(mesg) +
-                message_get_authority_count(mesg) +
-                message_get_additional_count(mesg) - 1;
-        purd.offset = DNS_HEADER_LENGTH; /* Header */
-        packet_reader_skip_fqdn(&purd);               // checked below
-        if(FAIL(packet_reader_skip(&purd, 4)))  // type class
+        uint32_t tsig_index = dns_message_get_answer_count(mesg) + dns_message_get_authority_count(mesg) + dns_message_get_additional_count(mesg) - 1;
+        purd.offset = DNS_HEADER_LENGTH;           /* Header */
+        dns_packet_reader_skip_fqdn(&purd);        // checked below
+        if(FAIL(dns_packet_reader_skip(&purd, 4))) // type class
         {
             return UNPROCESSABLE_MESSAGE;
         }
@@ -1088,81 +1113,87 @@ tsig_extract_and_process(message_data *mesg)
              * It should be in this kind of processing that we read the EDNS0 flag
              */
 
-            if(FAIL(packet_reader_skip_record(&purd)))
+            if(FAIL(dns_packet_reader_skip_record(&purd)))
             {
                 return UNPROCESSABLE_MESSAGE;
             }
         }
 
-        message_set_additional_section_ptr(mesg, (void*)packet_reader_get_next_u8_ptr_const(&purd));
+        dns_message_set_additional_section_ptr(mesg, (void *)dns_packet_reader_get_next_u8_ptr_const(&purd));
     }
     else
     {
-        packet_reader_set_position(&purd, message_get_additional_section_ptr(mesg) - message_get_buffer(mesg));
+        dns_packet_reader_set_position(&purd, dns_message_get_additional_section_ptr(mesg) - dns_message_get_buffer(mesg));
     }
 
     struct type_class_ttl_rdlen tctr;
 
-    u32 record_offset = purd.offset;
+    uint32_t                    record_offset = purd.offset;
 
-    u8 tsigname[MAX_DOMAIN_LENGTH];
+    uint8_t                     tsigname[DOMAIN_LENGTH_MAX];
 
-    if(FAIL(packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
+    if(FAIL(dns_packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
     {
         /* oops */
 
         return TSIG_FORMERR;
     }
 
-    /*yassert(((u8*)&tctr.rdlen) - ((u8*)&tctr.qtype) == 8);*/
+    /*yassert(((uint8_t*)&tctr.rdlen) - ((uint8_t*)&tctr.qtype) == 8);*/
 
-    if(ISOK(packet_reader_read(&purd, &tctr, 10))) // exact
+    if(ISOK(dns_packet_reader_read(&purd, &tctr, 10))) // exact
     {
         if(tctr.qtype == TYPE_TSIG) /* && (tctr.qclass == TYPE_ANY) && (tctr.ttl == 0 )*/
         {
             /* It must be the last AR record, class = ANY and TTL = 0 */
 
-            return tsig_process_query(mesg, &purd, record_offset, tsigname, &tctr);
-
+            if(dns_message_is_query(mesg))
+            {
+                return tsig_process_query(mesg, &purd, record_offset, tsigname, &tctr);
+            }
+            else
+            {
+                return tsig_process_answer(mesg, &purd, record_offset, tsigname, &tctr);
+            }
         } /* if type is TSIG */
 
         /* AR but not a TSIG  : there is just no TSIG in this packet */
 
-        message_tsig_clear_key(mesg);
+        dns_message_tsig_clear_key(mesg);
     }
 
     return TSIG_FORMERR;
 }
+#endif
 
 /**
  * Adds the TSIG to the message
  *
  */
 
-static ya_result
-tsig_add_tsig(message_data *mesg)
+static ya_result tsig_add_tsig(dns_message_t *mesg)
 {
-    u16 ar_count = message_get_additional_count(mesg);
+    uint16_t ar_count = dns_message_get_additional_count(mesg);
 
     /* Converted after network read ... so why do I do this ? */
-    u16 mac_size = mesg->_tsig.mac_size;
-    u16 other_len = ntohs(mesg->_tsig.other_len);
+    uint16_t mac_size = mesg->_tsig.mac_size;
+    uint16_t other_len = ntohs(mesg->_tsig.other_len);
 
     // if((mesg->_tsig.tsig != NULL) && (mac_size > 0))
 
-    if(message_get_buffer_size(mesg) < message_get_size(mesg) +         // valid use of message_get_buffer_size()
-                                       message_tsig_get_key(mesg)->name_len + /* DNS NAME of the TSIG (name of the key) */
-                                       mac_size + /* MAC */
-                                       other_len + /* OTHER DATA */
-                                       12) /* time + fudge + mac size + original id + error + other len = 12 bytes */
+    if(dns_message_get_buffer_size(mesg) < dns_message_get_size(mesg) +                   // valid use of message_get_buffer_size()
+                                               dns_message_tsig_get_key(mesg)->name_len + /* DNS NAME of the TSIG (name of the key) */
+                                               mac_size +                                 /* MAC */
+                                               other_len +                                /* OTHER DATA */
+                                               12)                                        /* time + fudge + mac size + original id + error + other len = 12 bytes */
     {
         /* Cannot sign because of truncation */
-        message_set_truncated_answer(mesg);
+        dns_message_set_truncated_answer(mesg);
 
         return TSIG_SIZE_LIMIT_ERROR;
     }
 
-    u8 *tsig_ptr = message_get_buffer_limit(mesg);
+    uint8_t *tsig_ptr = dns_message_get_buffer_limit(mesg);
 
     /* record */
 
@@ -1171,7 +1202,7 @@ tsig_add_tsig(message_data *mesg)
 
     memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
     tsig_ptr += sizeof(tsig_typeclassttl);
-    u16 *rdata_size_ptr = (u16*)tsig_ptr;
+    uint16_t *rdata_size_ptr = (uint16_t *)tsig_ptr;
     tsig_ptr += 2;
 
     /* rdata */
@@ -1200,14 +1231,14 @@ tsig_add_tsig(message_data *mesg)
         tsig_ptr += other_len;
     }
 
-    u16 rdata_size = (tsig_ptr - (u8*)rdata_size_ptr) - 2;
+    uint16_t rdata_size = (tsig_ptr - (uint8_t *)rdata_size_ptr) - 2;
 
     SET_U16_AT(*rdata_size_ptr, htons(rdata_size));
 
-    message_set_size(mesg, tsig_ptr - message_get_buffer(mesg));
+    dns_message_set_size(mesg, tsig_ptr - dns_message_get_buffer(mesg));
 
-    message_set_additional_count(mesg, ar_count + 1);
-    
+    dns_message_set_additional_count(mesg, ar_count + 1);
+
     return SUCCESS;
 }
 
@@ -1215,12 +1246,11 @@ tsig_add_tsig(message_data *mesg)
  * Signs the message answer with its TSIG
  */
 
-ya_result
-tsig_sign_answer(message_data *mesg)
+ya_result tsig_sign_answer(dns_message_t *mesg)
 {
-    yassert(message_is_additional_section_ptr_set(mesg));
+    yassert(dns_message_is_additional_section_ptr_set(mesg));
 
-    if(message_has_tsig(mesg))
+    if(dns_message_has_tsig(mesg))
     {
         ya_result ret;
 
@@ -1244,11 +1274,13 @@ tsig_sign_answer(message_data *mesg)
  * Signs the message query with its TSIG
  */
 
-ya_result
-tsig_sign_query(message_data *mesg)
+ya_result tsig_sign_query(dns_message_t *mesg)
 {
-    yassert(message_is_additional_section_ptr_set(mesg));
-    
+    if(dns_message_tsig_get_key(mesg) == NULL)
+    {
+        return INVALID_STATE_ERROR;
+    }
+
     ya_result ret;
 
     // tsig_update_time(mesg);
@@ -1257,7 +1289,7 @@ tsig_sign_query(message_data *mesg)
     {
         ret = tsig_add_tsig(mesg);
     }
-    
+
     return ret;
 }
 
@@ -1267,37 +1299,37 @@ tsig_sign_query(message_data *mesg)
  *  Adds a TSIG error to the message
  *
  */
-
-#if 0
-ya_result
-tsig_append_unsigned_error(message_data *mesg)
+#if UNUSED
+ya_result tsig_append_unsigned_error(dns_message_t *mesg)
 {
-    yassert(message_is_additional_section_ptr_set(mesg));
+    yassert(dns_message_is_additional_section_ptr_set(mesg));
 
-    u16 ar_count = message_get_additional_count(mesg);
+    uint16_t            ar_count = dns_message_get_additional_count(mesg);
 
-    packet_unpack_reader_data purd;
-    packet_reader_init_from_message(&purd, mesg);
-    
-    packet_reader_skip_fqdn(&purd);
-    purd.offset += 4;
-    message_set_size(mesg, purd.offset);
-    
-    message_set_query_answer_authority_additional_counts_ne(mesg, NU16(1), 0, 0, 0);
+    dns_packet_reader_t purd;
+    dns_packet_reader_init_from_message(&purd, mesg);
+    dns_packet_reader_skip_fqdn(&purd);        // checked below
+    if(FAIL(dns_packet_reader_skip(&purd, 4))) // type class
+    {
+        return TSIG_UNABLE_TO_SIGN;
+    }
 
-    if(!message_has_tsig(mesg) ||
-            message_get_buffer_size(mesg) < message_get_size(mesg) + // valid use of message_get_buffer_size()
-            mesg->_tsig.tsig->name_len + /* DNS NAME of the TSIG (name of the key) */
-            0 + /* MAC */
-            0 + /* OTHER DATA */
-            12 /*DO NOT REPLACE*/) /* = time + fudge + mac size + original id + error + other len */
+    dns_message_set_size(mesg, purd.offset);
+
+    dns_message_set_query_answer_authority_additional_counts_ne(mesg, NU16(1), 0, 0, 0);
+
+    if(!dns_message_has_tsig(mesg) || dns_message_get_buffer_size(mesg) < dns_message_get_size(mesg) +            // valid use of message_get_buffer_size()
+                                                                              mesg->_tsig.tsig->name_len +        /* DNS NAME of the TSIG (name of the key) */
+                                                                              0 +                                 /* MAC */
+                                                                              0 +                                 /* OTHER DATA */
+                                                                              12 /* DO NOT REPLACE THIS VALUE */) /* = time + fudge + mac size + original id + error + other len */
     {
         /* Cannot sign */
 
         return TSIG_UNABLE_TO_SIGN;
     }
 
-    u8 *tsig_ptr = message_get_buffer_limit(mesg);
+    uint8_t *tsig_ptr = dns_message_get_buffer_limit(mesg);
 
     /* record */
 
@@ -1306,7 +1338,7 @@ tsig_append_unsigned_error(message_data *mesg)
 
     memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
     tsig_ptr += sizeof(tsig_typeclassttl);
-    u16 *rdata_size_ptr = (u16*)tsig_ptr;
+    uint16_t *rdata_size_ptr = (uint16_t *)tsig_ptr;
     tsig_ptr += 2;
 
     /* rdata */
@@ -1314,110 +1346,39 @@ tsig_append_unsigned_error(message_data *mesg)
     memcpy(tsig_ptr, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
     tsig_ptr += mesg->_tsig.tsig->mac_algorithm_name_len;
 
-    SET_U16_AT(tsig_ptr[ 0], mesg->_tsig.timehi);
-    SET_U32_AT(tsig_ptr[ 2], mesg->_tsig.timelo);
-    SET_U16_AT(tsig_ptr[ 6], mesg->_tsig.fudge);
-    SET_U16_AT(tsig_ptr[ 8], 0); /* MAC len */
+    SET_U16_AT(tsig_ptr[0], mesg->_tsig.timehi);
+    SET_U32_AT(tsig_ptr[2], mesg->_tsig.timelo);
+    SET_U16_AT(tsig_ptr[6], mesg->_tsig.fudge);
+    SET_U16_AT(tsig_ptr[8], 0); /* MAC len */
     SET_U16_AT(tsig_ptr[10], mesg->_tsig.original_id);
     SET_U16_AT(tsig_ptr[12], mesg->_tsig.error);
     SET_U16_AT(tsig_ptr[14], 0); /* Error len */
 
     tsig_ptr += 16;
 
-    u16 rdata_size = (tsig_ptr - (u8*)rdata_size_ptr) - 2;
+    uint16_t rdata_size = (tsig_ptr - (uint8_t *)rdata_size_ptr) - 2;
 
     SET_U16_AT(*rdata_size_ptr, htons(rdata_size));
 
-    message_set_size(mesg, tsig_ptr - message_get_buffer(mesg));
+    dns_message_set_size(mesg, tsig_ptr - dns_message_get_buffer(mesg));
 
-    message_set_additional_count(mesg, ar_count + 1);
+    dns_message_set_additional_count(mesg, ar_count + 1);
 
     return SUCCESS;
 }
 #endif
 
-ya_result
-tsig_append_unsigned_error(message_data *mesg)
+ya_result tsig_append_error(dns_message_t *mesg)
 {
-    yassert(message_is_additional_section_ptr_set(mesg));
+    yassert(dns_message_is_additional_section_ptr_set(mesg));
 
-    u16 ar_count = message_get_additional_count(mesg);
-
-    packet_unpack_reader_data purd;
-    packet_reader_init_from_message(&purd, mesg);
-    packet_reader_skip_fqdn(&purd);               // checked below
-    if(FAIL(packet_reader_skip(&purd, 4)))  // type class
-    {
-        return TSIG_UNABLE_TO_SIGN;
-    }
-
-    message_set_size(mesg, purd.offset);
-
-    message_set_query_answer_authority_additional_counts_ne(mesg, NU16(1), 0, 0, 0);
-
-    if(!message_has_tsig(mesg) ||
-            message_get_buffer_size(mesg) < message_get_size(mesg) + // valid use of message_get_buffer_size()
-            mesg->_tsig.tsig->name_len + /* DNS NAME of the TSIG (name of the key) */
-            0 + /* MAC */
-            0 + /* OTHER DATA */
-            12  /* DO NOT REPLACE THIS VALUE */) /* = time + fudge + mac size + original id + error + other len */
-    {
-    /* Cannot sign */
-
-        return TSIG_UNABLE_TO_SIGN;
-    }
-
-    u8 *tsig_ptr = message_get_buffer_limit(mesg);
-
-    /* record */
-
-    memcpy(tsig_ptr, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
-    tsig_ptr += mesg->_tsig.tsig->name_len;
-
-    memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
-    tsig_ptr += sizeof(tsig_typeclassttl);
-    u16 *rdata_size_ptr = (u16*)tsig_ptr;
-    tsig_ptr += 2;
-
-    /* rdata */
-
-    memcpy(tsig_ptr, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-    tsig_ptr += mesg->_tsig.tsig->mac_algorithm_name_len;
-
-    SET_U16_AT(tsig_ptr[ 0], mesg->_tsig.timehi);
-    SET_U32_AT(tsig_ptr[ 2], mesg->_tsig.timelo);
-    SET_U16_AT(tsig_ptr[ 6], mesg->_tsig.fudge);
-    SET_U16_AT(tsig_ptr[ 8], 0); /* MAC len */
-    SET_U16_AT(tsig_ptr[10], mesg->_tsig.original_id);
-    SET_U16_AT(tsig_ptr[12], mesg->_tsig.error);
-    SET_U16_AT(tsig_ptr[14], 0); /* Error len */
-
-    tsig_ptr += 16;
-
-    u16 rdata_size = (tsig_ptr - (u8*)rdata_size_ptr) - 2;
-
-    SET_U16_AT(*rdata_size_ptr, htons(rdata_size));
-
-    message_set_size(mesg, tsig_ptr - message_get_buffer(mesg));
-
-    message_set_additional_count(mesg, ar_count + 1);
-
-    return SUCCESS;
-}
-
-ya_result
-tsig_append_error(message_data *mesg)
-{
-    yassert(message_is_additional_section_ptr_set(mesg));
-    
-    message_update_answer_status(mesg);
+    dns_message_update_answer_status(mesg);
     tsig_sign_answer(mesg);
 
     return SUCCESS;
 }
 
-ya_result
-tsig_sign_tcp_first_message(struct message_data *mesg)
+ya_result tsig_sign_tcp_first_message(struct dns_message_s *mesg)
 {
     ya_result ret = tsig_sign_answer(mesg);
 
@@ -1443,27 +1404,25 @@ tsig_sign_tcp_first_message(struct message_data *mesg)
         return INVALID_STATE_ERROR;
     }
 
-    if(FAIL(hmac_init(mesg->_tsig.hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+    if(FAIL(hmac_init(mesg->_tsig.hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
     {
-        hmac_free(mesg->_tsig.hmac);
-        mesg->_tsig.hmac = NULL;
+        dns_message_free_allocated_hmac(mesg);
         return ERROR;
     }
 
-    u16 mac_size_ne = htons(mesg->_tsig.mac_size);
-    
+    uint16_t mac_size_ne = htons(mesg->_tsig.mac_size);
+
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_sign_tcp_first_message(%p = %{dnsname} %{dnstype} %{dnsclass})",
-            mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
+    log_debug("tsig_sign_tcp_first_message(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
-    
+
 #if LOG_DIGEST_INPUT
     log_debug("tsig_sign_tcp_first_message: previous digest: (%p)", mesg);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mac_size_ne, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mac_size_ne, 2, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, mesg->_tsig.mac_size, 32);
 #endif
 
-    hmac_update(mesg->_tsig.hmac, (u8*) &mac_size_ne, 2);
+    hmac_update(mesg->_tsig.hmac, (uint8_t *)&mac_size_ne, 2);
     hmac_update(mesg->_tsig.hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
 
     mesg->_tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD;
@@ -1471,19 +1430,22 @@ tsig_sign_tcp_first_message(struct message_data *mesg)
     return SUCCESS;
 }
 
-ya_result
-tsig_sign_tcp_next_message(struct message_data *mesg)
+ya_result tsig_sign_tcp_next_message(struct dns_message_s *mesg)
 {
     /*
      * Digest the message
      */
 
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_sign_tcp_next_message(%p = %{dnsname} %{dnstype} %{dnsclass})",
-            mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
+    log_debug("tsig_sign_tcp_next_message(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
 
-    hmac_update(mesg->_tsig.hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+    if(mesg->_tsig.hmac == NULL)
+    {
+        return INVALID_STATE_ERROR;
+    }
+
+    hmac_update(mesg->_tsig.hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
     /*
      * If it's the 100th since the last TSIG, then ...
@@ -1496,14 +1458,14 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
         /*
          * Digest the time
          */
-        
+
         tsig_update_time(mesg);
 
-        hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.timehi, 2);
-        hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.timelo, 4);
-        hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.fudge, 2);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
 
-        u32 tmp_mac_size;
+        uint32_t tmp_mac_size = sizeof(mesg->_tsig.mac);
         hmac_final(mesg->_tsig.hmac, mesg->_tsig.mac, &tmp_mac_size);
 
         /*
@@ -1519,40 +1481,43 @@ tsig_sign_tcp_next_message(struct message_data *mesg)
          */
 
         hmac_reset(mesg->_tsig.hmac);
-        
-        if(FAIL(hmac_init(mesg->_tsig.hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+
+        if(FAIL(hmac_init(mesg->_tsig.hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
         {
             return ERROR;
         }
 
-        u16 mac_size_ne = htons(mesg->_tsig.mac_size);
+        uint16_t mac_size_ne = htons(mesg->_tsig.mac_size);
 
 #if LOG_DIGEST_INPUT
         log_debug("tsig_sign_tcp_first_message: previous digest: (%p)", mesg);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) &mac_size_ne, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mac_size_ne, 2, 32);
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, mesg->_tsig.mac_size, 32);
 #endif
 
-        hmac_update(mesg->_tsig.hmac, (u8*) &mac_size_ne, 2);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mac_size_ne, 2);
         hmac_update(mesg->_tsig.hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
     }
 
     return SUCCESS;
 }
 
-ya_result
-tsig_sign_tcp_last_message(struct message_data *mesg)
+ya_result tsig_sign_tcp_last_message(struct dns_message_s *mesg)
 {
     /*
      * Digest the message
      */
 
 #if LOG_DIGEST_INPUT
-    log_debug("tsig_sign_tcp_last_message(%p = %{dnsname} %{dnstype} %{dnsclass})",
-            mesg, message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg));
+    log_debug("tsig_sign_tcp_last_message(%p = %{dnsname} %{dnstype} %{dnsclass})", mesg, dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
 
-    hmac_update(mesg->_tsig.hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+    if(mesg->_tsig.hmac == NULL)
+    {
+        return INVALID_STATE_ERROR;
+    }
+
+    hmac_update(mesg->_tsig.hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
     /*
      * If it's the 100th since the last TSIG, then ...
@@ -1563,14 +1528,14 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
     /*
      * Digest the time
      */
-    
+
     tsig_update_time(mesg);
 
-    hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.timehi, 2);
-    hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.timelo, 4);
-    hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.fudge, 2);
+    hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+    hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+    hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
 
-    u32 tmp_mac_size;
+    uint32_t tmp_mac_size = sizeof(mesg->_tsig.mac);
     hmac_final(mesg->_tsig.hmac, mesg->_tsig.mac, &tmp_mac_size);
 
     /*
@@ -1579,8 +1544,7 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
 
     tsig_add_tsig(mesg);
 
-    hmac_free(mesg->_tsig.hmac);
-    mesg->_tsig.hmac = NULL;
+    dns_message_free_allocated_hmac(mesg);
 
     return SUCCESS;
 }
@@ -1589,12 +1553,11 @@ tsig_sign_tcp_last_message(struct message_data *mesg)
  * If the message has no TSIG to do, it is considered to be successful.
  */
 
-ya_result
-tsig_sign_tcp_message(struct message_data *mesg, tsig_tcp_message_position pos)
+ya_result tsig_sign_tcp_message(struct dns_message_s *mesg, tsig_tcp_message_position pos)
 {
     ya_result return_code = SUCCESS;
 
-    if(message_has_tsig(mesg))
+    if(dns_message_has_tsig(mesg))
     {
         switch(pos)
         {
@@ -1613,7 +1576,7 @@ tsig_sign_tcp_message(struct message_data *mesg, tsig_tcp_message_position pos)
                 return_code = tsig_sign_tcp_last_message(mesg);
                 break;
             }
-            case TSIG_WHOLE:    /* one packet message */
+            case TSIG_WHOLE: /* one packet message */
             {
                 return_code = tsig_sign_answer(mesg);
                 break;
@@ -1628,13 +1591,12 @@ tsig_sign_tcp_message(struct message_data *mesg, tsig_tcp_message_position pos)
     return return_code;
 }
 
-ya_result
-tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_size)
+ya_result tsig_verify_tcp_first_message(struct dns_message_s *mesg, const uint8_t *mac, uint16_t mac_size)
 {
 #if LOG_DIGEST_INPUT
     log_debug("tsig_verify_tcp_first_message: first verify: (%p)", mesg);
 #endif
-    
+
     ya_result ret = tsig_verify_answer(mesg, mac, mac_size);
 
     /* I must NOT clear the digest memory : it has already been done at the end of tsig_sign */
@@ -1659,41 +1621,39 @@ tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_
         return INVALID_STATE_ERROR;
     }
 
-    if(FAIL(hmac_init(mesg->_tsig.hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+    if(FAIL(hmac_init(mesg->_tsig.hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
     {
-        hmac_free(mesg->_tsig.hmac);
-        mesg->_tsig.hmac = NULL;
+        dns_message_free_allocated_hmac(mesg);
         return ERROR;
     }
 
-    u16 mac_size_network = htons(mesg->_tsig.mac_size);
+    uint16_t mac_size_network = htons(mesg->_tsig.mac_size);
 
 #if LOG_DIGEST_INPUT
     log_debug("tsig_verify_tcp_first_message: previous MAC: (%p)", mesg);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mac_size_network, 2, 32);
     log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, mesg->_tsig.mac_size, 32);
 #endif
 
-    hmac_update(mesg->_tsig.hmac, (u8*) & mac_size_network, 2);
+    hmac_update(mesg->_tsig.hmac, (uint8_t *)&mac_size_network, 2);
     hmac_update(mesg->_tsig.hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
 
-    mesg->_tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD + 2;    /* be a bit lenient */
+    mesg->_tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD + 2; /* be a bit lenient */
 
     return SUCCESS;
 }
 
-ya_result
-tsig_verify_tcp_next_message(struct message_data *mesg)
+ya_result tsig_verify_tcp_next_message(struct dns_message_s *mesg)
 {
     /*
      * Digest the message
      */
 
-    u8 mac[64];
+    uint8_t mac[HMAC_BUFFER_SIZE];
 
 #if LOG_DIGEST_INPUT
     log_debug("tsig_verify_tcp_next_message: message: (%p)", mesg);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, message_get_buffer_const(mesg), message_get_size(mesg), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 32);
 #endif
 
     if(mesg->_tsig.tcp_tsig_countdown-- < 0)
@@ -1701,7 +1661,7 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
         return TSIG_BADSIG;
     }
 
-    hmac_update(mesg->_tsig.hmac, message_get_buffer_const(mesg), message_get_size(mesg));
+    hmac_update(mesg->_tsig.hmac, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
 
     /*
      * If it has been signed ...
@@ -1709,7 +1669,7 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
 
     if(mesg->_tsig.tsig != NULL)
     {
-        mesg->_tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD + 2;    /* be a bit lenient */
+        mesg->_tsig.tcp_tsig_countdown = TSIG_TCP_PERIOD + 2; /* be a bit lenient */
 
         /*
          * Digest the time
@@ -1717,30 +1677,29 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
 
 #if LOG_DIGEST_INPUT
         log_debug("tsig_verify_tcp_next_message: timers: (%p)", mesg);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->_tsig.timehi, 2, 32);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->_tsig.timelo, 4, 32);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mesg->_tsig.fudge, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mesg->_tsig.timehi, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mesg->_tsig.timelo, 4, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mesg->_tsig.fudge, 2, 32);
 #endif
 
-        hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.timehi, 2);
-        hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.timelo, 4);
-        hmac_update(mesg->_tsig.hmac, (u8*) & mesg->_tsig.fudge, 2);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.timehi, 2);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.timelo, 4);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mesg->_tsig.fudge, 2);
 
-        u32 tmp_mac_size;
+        uint32_t tmp_mac_size = sizeof(mac);
         hmac_final(mesg->_tsig.hmac, mac, &tmp_mac_size);
-        
+
 #if LOG_DIGEST_INPUT
         log_debug("tsig_verify_tcp_next_message: value:", mesg);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) mac, tmp_mac_size, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)mac, tmp_mac_size, 32);
         log_debug("tsig_verify_tcp_next_message: expected:", mesg);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) mesg->_tsig.mac, tmp_mac_size, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)mesg->_tsig.mac, tmp_mac_size, 32);
 #endif
 
         if(memcmp(mesg->_tsig.mac, mac, tmp_mac_size) != 0)
         {
             log_debug("tsig_verify_tcp_next_message: BADSIG");
-            hmac_free(mesg->_tsig.hmac);
-            mesg->_tsig.hmac = NULL;
+            dns_message_free_allocated_hmac(mesg);
             return TSIG_BADSIG;
         }
 
@@ -1751,47 +1710,45 @@ tsig_verify_tcp_next_message(struct message_data *mesg)
          */
 
         hmac_reset(mesg->_tsig.hmac);
-        
-        if(FAIL(hmac_init(mesg->_tsig.hmac, message_tsig_get_key_bytes(mesg), message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
+
+        if(FAIL(hmac_init(mesg->_tsig.hmac, dns_message_tsig_get_key_bytes(mesg), dns_message_tsig_get_key_size(mesg), mesg->_tsig.tsig->mac_algorithm)))
         {
             return ERROR;
         }
 
-        u16 mac_size_network = htons(mesg->_tsig.mac_size);
+        uint16_t mac_size_network = htons(mesg->_tsig.mac_size);
 
 #if LOG_DIGEST_INPUT
         log_debug("tsig_verify_tcp_next_message: previous MAC: (%p)", mesg);
-        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (u8*) & mac_size_network, 2, 32);
+        log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, (uint8_t *)&mac_size_network, 2, 32);
         log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, mesg->_tsig.mac, mesg->_tsig.mac_size, 32);
 #endif
 
-        hmac_update(mesg->_tsig.hmac, (u8*) & mac_size_network, 2);
+        hmac_update(mesg->_tsig.hmac, (uint8_t *)&mac_size_network, 2);
         hmac_update(mesg->_tsig.hmac, mesg->_tsig.mac, mesg->_tsig.mac_size);
     }
-    
+
     return SUCCESS;
 }
 
 /**
  * This only cleans-up after the verify
- * 
+ *
  * @param mesg
  */
 
-void 
-tsig_verify_tcp_last_message(struct message_data *mesg)
+void tsig_verify_tcp_last_message(struct dns_message_s *mesg)
 {
     /*
      * Clear the digest
      */
-    
+
 #if LOG_DIGEST_INPUT
     log_debug("tsig_verify_tcp_last_message: message: (%p)", mesg);
-    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, message_get_buffer_const(mesg), message_get_size(mesg), 32);
+    log_memdump(MODULE_MSG_HANDLE, MSG_DEBUG, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 32);
 #endif
-    message_clear_hmac(mesg);
+    dns_message_clear_hmac(mesg);
 }
-
 
 /**
  * Skips the header and all the records but the last AR.
@@ -1801,52 +1758,51 @@ tsig_verify_tcp_last_message(struct message_data *mesg)
  * Extract the TSIG
  * Decreases AR
  * Decreases the size of the message.
- * 
+ *
  * Whole-message processing should avoid this as it does the job twice ...
  */
 
-ya_result
-tsig_message_extract(struct message_data *mesg)
+ya_result tsig_message_extract(struct dns_message_s *mesg)
 {
-    packet_unpack_reader_data reader;
-    ya_result return_value;
-    
-    u16 ar_count = message_get_additional_count_ne(mesg); // will change endian after this
+    dns_packet_reader_t reader;
+    ya_result           return_value;
 
-    if( ar_count == 0)
+    uint16_t            ar_count = dns_message_get_additional_count_ne(mesg); // will change endian after this
+
+    if(ar_count == 0)
     {
-        return 0;   /* no TSIG */
+        return 0; /* no TSIG */
     }
-    
+
     ar_count = ntohs(ar_count);
 
-    u16 qd = message_get_query_count(mesg);
-    u16 an = message_get_answer_count(mesg);
-    u16 ns = message_get_authority_count(mesg);
+    uint16_t qd = dns_message_get_query_count(mesg);
+    uint16_t an = dns_message_get_answer_count(mesg);
+    uint16_t ns = dns_message_get_authority_count(mesg);
 
-    packet_reader_init(&reader, message_get_buffer_const(mesg), message_get_size(mesg));
-    reader.offset = DNS_HEADER_LENGTH;
-    
+    dns_packet_reader_init(&reader, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg));
+    reader.packet_offset = DNS_HEADER_LENGTH;
+
     while(qd > 0)
     {
-        if(FAIL(return_value = packet_reader_skip_fqdn(&reader)))
+        if(FAIL(return_value = dns_packet_reader_skip_fqdn(&reader)))
         {
             return return_value;
         }
-        
-        if(FAIL(return_value = packet_reader_skip(&reader, 4)))
+
+        if(FAIL(return_value = dns_packet_reader_skip(&reader, 4)))
         {
             return return_value;
         }
 
         qd--;
     }
-    
-    u16 n = an + ns + ar_count - 1;
+
+    uint16_t n = an + ns + ar_count - 1;
 
     while(n > 0)
     {
-        if(FAIL(return_value = packet_reader_skip_record(&reader)))
+        if(FAIL(return_value = dns_packet_reader_skip_record(&reader)))
         {
             return return_value;
         }
@@ -1856,28 +1812,28 @@ tsig_message_extract(struct message_data *mesg)
 
     /* The following record is supposed to be a TSIG */
 
-    u32 tsig_offset = reader.offset;
+    uint32_t tsig_offset = reader.packet_offset;
 
-    u8 fqdn[MAX_DOMAIN_LENGTH];
+    uint8_t  fqdn[DOMAIN_LENGTH_MAX];
 
-    if(FAIL(return_value = packet_reader_read_fqdn(&reader, fqdn, sizeof(fqdn))))
+    if(FAIL(return_value = dns_packet_reader_read_fqdn(&reader, fqdn, sizeof(fqdn))))
     {
         return return_value;
     }
 
-    struct type_class_ttl_rdlen tctr;
-    
-    if(FAIL(return_value = packet_reader_read(&reader, &tctr, 10)))
+    struct type_class_ttl_rdlen_s tctr;
+
+    if(FAIL(return_value = dns_packet_reader_read(&reader, &tctr, 10)))
     {
         return return_value;
     }
 
-    if(tctr.qtype != TYPE_TSIG)
+    if(tctr.rtype != TYPE_TSIG)
     {
         return 0;
     }
-    
-    if(tctr.qclass != CLASS_ANY)
+
+    if(tctr.rclass != CLASS_ANY)
     {
         return TSIG_FORMERR;
     }
@@ -1887,38 +1843,38 @@ tsig_message_extract(struct message_data *mesg)
         return TSIG_FORMERR;
     }
 
-    tsig_item *tsig = tsig_get(fqdn);
+    tsig_key_t *tsig = tsig_get(fqdn);
 
     if(tsig == NULL)
     {
         return TSIG_BADKEY;
     }
 
-    s32 len = ntohs(tctr.rdlen) - 16;
+    int32_t len = ntohs(tctr.rdlen) - 16;
 
     if(len < 3 + 3) /* minimum for the fixed bytes + two relevant fqdn */
     {
         return TSIG_FORMERR;
     }
 
-    if(FAIL(return_value = packet_reader_read_fqdn(&reader, fqdn, sizeof(fqdn))))
+    if(FAIL(return_value = dns_packet_reader_read_fqdn(&reader, fqdn, sizeof(fqdn))))
     {
         return return_value;
     }
 
     len -= return_value;
 
-    if(packet_reader_available(&reader) < 2 + 4 + 2 + 2)
+    if(dns_packet_reader_available(&reader) < 2 + 4 + 2 + 2)
     {
         return TSIG_FORMERR;
     }
 
-    packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.timehi);     // checked
-    packet_reader_read_u32_unchecked(&reader, &mesg->_tsig.timelo);     // checked
-    packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.fudge);      // checked
-    packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.mac_size);   // checked
+    dns_packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.timehi);   // checked
+    dns_packet_reader_read_u32_unchecked(&reader, &mesg->_tsig.timelo);   // checked
+    dns_packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.fudge);    // checked
+    dns_packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.mac_size); // checked
 
-    u16 mac_size = ntohs(mesg->_tsig.mac_size);
+    uint16_t mac_size = ntohs(mesg->_tsig.mac_size);
 
     mesg->_tsig.mac_size = mac_size;
 
@@ -1927,23 +1883,23 @@ tsig_message_extract(struct message_data *mesg)
         return TSIG_BADKEY; /* The key is bigger than anything supported */
     }
 
-    if(FAIL(return_value = packet_reader_read(&reader, mesg->_tsig.mac, mac_size)))
+    if(FAIL(return_value = dns_packet_reader_read(&reader, mesg->_tsig.mac, mac_size)))
     {
         return return_value;
     }
 
     len -= return_value;
 
-    if(packet_reader_available(&reader) < 2 + 2 + 2)
+    if(dns_packet_reader_available(&reader) < 2 + 2 + 2)
     {
         return TSIG_FORMERR;
     }
 
-    packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.original_id);    // checked above
-    packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.error);          // checked above
-    packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.other_len);      // checked above
+    dns_packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.original_id); // checked above
+    dns_packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.error);       // checked above
+    dns_packet_reader_read_u16_unchecked(&reader, &mesg->_tsig.other_len);   // checked above
 
-    u16 other_len = ntohs(mesg->_tsig.other_len);
+    uint16_t other_len = ntohs(mesg->_tsig.other_len);
 
     len -= other_len;
 
@@ -1956,13 +1912,12 @@ tsig_message_extract(struct message_data *mesg)
     mesg->_tsig.other_len = 0;
     mesg->_tsig.tsig = tsig;
     mesg->_tsig.mac_algorithm = tsig->mac_algorithm;
-    message_set_size(mesg, tsig_offset);
-    message_set_additional_count(mesg, ar_count - 1);
+    dns_message_set_size(mesg, tsig_offset);
+    dns_message_set_additional_count(mesg, ar_count - 1);
 
-    return 1;   /* got 1 signature */
+    return 1; /* got 1 signature */
 }
 
 #endif
 
 /** @} */
-

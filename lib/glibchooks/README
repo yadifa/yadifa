@@ -1,0 +1,169 @@
+glibchooks is a library used by the automated tests
+===================================================
+
+The glibc hooks is currently only working for glibc.
+
+How to use it?
+
+Either with LD_PRELOAD:
+
+% LD_PRELOAD=./libglibchook.so ./myprogram
+
+In that case only the memory usage hook will be active.
+
+Or by linking to glibchooksctrl to try to bind to the hooks and hook away.
+
+My favorite use is by directly linking both libraries.
+
+e.g.
+
+link_libraries(dnscore glibchooksload glibchooksctrl glibchooks)
+
+---
+
+In the program, you can hook the lib using something like:
+
+static void hooks_init()
+{
+    ssize_t ret = glibchooks_controller_init();
+    if(ret < 0)
+    {
+        yatest_log("Unable to setup glibc hook: skipped");
+        exit(0);
+    }
+}
+
+Then hook what you need using glibchooks_set_or_die
+
+e.g.
+
+glibchooks_set_or_die("setsockopt", setsockopt_error_test_hook);
+
+---
+
+How a hook works
+================
+
+A hook is a function of the form:
+
+void hookfunctionname(specific_hooked_function_args_t *args)
+{
+...
+}
+
+Where specific_hooked_function_args_t is a typedef of a struct always of the form:
+
+struct args
+{
+    uint64_t mask
+    ...
+    int ret;
+    int errno_value;
+};
+
+mask is a bitmask telling what values in the struct are set.
+"..." is all the parameters of the functions.
+ret and errno_value are there for the return value and the errno value of the call.
+
+e.g.
+
+struct socket_function_args_s
+{
+    uint64_t mask;
+    int domain;
+    int type;
+    int protocol;
+    int ret;
+    int errno_value;
+};
+
+A hook will be called up to twice.
+
+Once before the call to the glibc function.  In that case the mask will only cover the parameters without ret & errno_value.
+The hook function can change any field of the structure.  If it changes the mask to include ret and/or errno_value,
+the glibc function is not called and the values of the fields are returned to the caller.
+If the mask is left unchanged, the glibc function is called and the hook is called again this time with ret & errno_value set.
+This time again it can change the values of the fields any way it wants.  The mask will be ignored as it's considered "full".
+
+---
+
+How to add a hook
+=================
+
+In a .c file, have a table have an INTERNAL function_hooks_t table[] that can be registered.
+It contains the name of the hook and a pointer to the hook function, defined above it.
+You also need to define a pointer to the glibc function.
+
+An static void init() function, part of the registration, does the hooking.
+
+A static void print() function is used to print something at the end of the program.
+It's used by the memory hook to print statistics.
+
+Finally, define the INTERNAL hook_module_t module.
+
+e.g.
+
+static void function_hook_dummy(void *args)
+{
+    (void)args;
+}
+
+static open_function_hook_t open_function_hook = (void*)function_hook_dummy;
+
+INTERNAL function_hooks_t function_hooks[] =
+{
+   {"open", (void**)&open_function_hook},
+   ...
+};
+
+static int (*glibc_open)(const char *filename, int oflag, ...);
+
+static void hooks_init()
+{
+    glibc_open = function_hook("open");
+    ...
+}
+
+static void hooks_print()
+{
+// nothing to do
+}
+
+INTERNAL hook_module_t module =
+{
+    "myhooks",      // a name without much meaning
+    function_hooks, // can be NULL if hooked functions aren't meant to be modified by the program
+    hooks_init,
+    hooks_print
+};
+
+In an associated header file, define the args and associated hook function pointer.
+
+e.g.
+
+// open
+
+struct open_function_args_s
+{
+    uint64_t mask;
+    const char *filename;
+    int flags;
+    int mode;
+    int fd;
+    int errno_value;
+};
+
+typedef struct open_function_args_s open_function_args_t;
+
+typedef void (*open_function_hook_t)(open_function_args_t *args);
+
+Finally, add your module in glibchooks_main.c:
+
+extern INTERNAL hook_module_t module;
+
+static hook_module_t *modules[] =
+{
+    &module,
+    ...
+    NULL
+};

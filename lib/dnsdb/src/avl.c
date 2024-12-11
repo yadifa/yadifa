@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,27 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief AVL structure and functions
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief AVL structure and functions
  *
  *  AVL structure and functions
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
 
 #define DEBUG_LEVEL 0
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -57,10 +59,7 @@
 
 #include <dnscore/format.h>
 
-#if 0 /* fix */
-#else
 #define DUMP_NODE(...)
-#endif
 
 #include "dnsdb/avl.h"
 
@@ -71,68 +70,73 @@
 
 /* This should be closer to 40 */
 
-#define MAX_DEPTH   40 /* 64 */
+#define DEPTH_MAX         40 /* 64 */
 
 /*
  * The following macros are defining relevant fields in the node
  */
 
-#define LEFT_CHILD(node) ((node)->children.lr.left)
+#define LEFT_CHILD(node)  ((node)->children.lr.left)
 #define RIGHT_CHILD(node) ((node)->children.lr.right)
-#define CHILD(node,id) ((node)->children.child[(id)])
+#define CHILD(node, id)   ((node)->children.child[(id)])
 
-#define BALANCE(node) ((node)->balance)
+#define BALANCE(node)     ((node)->balance)
 
 /*
  * The following macros are defining relevant operations in the node
  */
 
 /* What is used to compare the nodes */
-#define REFERENCE_TYPE hashcode
-#define INIT_NODE(node,reference) (node)->hash=(reference);(node)->data=NULL
-#define REFERENCE(node) (node)->hash
+#define REFERENCE_TYPE    hashcode
+#define INIT_NODE(node, reference)                                                                                                                                                                                                             \
+    (node)->hash = (reference);                                                                                                                                                                                                                \
+    (node)->data = NULL
+#define REFERENCE(node)                  (node)->hash
 /* Compare two references */
-#define BIGGER(reference_a,reference_b) (reference_a)>(reference_b)
+#define BIGGER(reference_a, reference_b) (reference_a) > (reference_b)
 
 /* What is returned when a node is created/found */
-#define DATA(node) (node)->data
-#define DATAPTR(node) &(node)->data
+#define DATA(node)                       (node)->data
+#define DATAPTR(node)                    &(node)->data
 
 /* Copies the payload of a node (not the balance + pointers) */
-#define COPY_PAYLOAD(node_trg,node_src) (node_trg)->data = (node_src)->data; (node_trg)->hash = (node_src)->hash
+#define COPY_PAYLOAD(node_trg, node_src)                                                                                                                                                                                                       \
+    (node_trg)->data = (node_src)->data;                                                                                                                                                                                                       \
+    (node_trg)->hash = (node_src)->hash
 
 /*
  *
  */
 
-#define TOOLEFT    (-2)
-#define LEFT       (-1)
-#define MIDDLE      0
-#define RIGHT       1
-#define TOORIGHT    2
+#define TOOLEFT   (-2)
+#define LEFT      (-1)
+#define MIDDLE    0
+#define RIGHT     1
+#define TOORIGHT  2
 
-#define DIR_LEFT    0
-#define DIR_RIGHT   1
-#define DIR_CRASH   127
+#define DIR_LEFT  0
+#define DIR_RIGHT 1
+#define DIR_CRASH 127
 
-#define avl_destroy_node(node) LDEBUG(9, "avl_destroy_node(%p)\n",node);ZFREE_OBJECT(node);
+#define avl_destroy_node(node)                                                                                                                                                                                                                 \
+    LDEBUG(9, "avl_destroy_node(%p)\n", node);                                                                                                                                                                                                 \
+    ZFREE_OBJECT(node);
 
 /* #define DIR_TO_BALANCE(dir) (((dir)==0)?LEFT:RIGHT) */
-static s8 DIR_TO_BALANCE_[2] = {LEFT, RIGHT};
+static int8_t DIR_TO_BALANCE_[2] = {LEFT, RIGHT};
 #define DIR_TO_BALANCE(dir) DIR_TO_BALANCE_[(dir)]
 
 /* #define BALANCE_TO_DIR(bal) (((bal)<MIDDLE)?DIR_LEFT:DIR_RIGHT) */
-static s8 BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DIR_RIGHT};
-#define BALANCE_TO_DIR(bal) BALANCE_TO_DIR_[(bal)-TOOLEFT]
+static int8_t BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DIR_RIGHT};
+#define BALANCE_TO_DIR(bal)  BALANCE_TO_DIR_[(bal) - TOOLEFT]
 
-#define NODE_BALANCED(node) (BALANCE(node)==MIDDLE)
+#define NODE_BALANCED(node)  (BALANCE(node) == MIDDLE)
 
-#define MUST_REBALANCE(node) ((BALANCE(node)<LEFT)||(BALANCE(node)>RIGHT))
+#define MUST_REBALANCE(node) ((BALANCE(node) < LEFT) || (BALANCE(node) > RIGHT))
 
-static inline avl_node*
-avl_node_single_rotation2(avl_node* node)
+static inline avl_node *avl_node_single_rotation2(avl_node *node)
 {
-    avl_node* save;
+    avl_node *save;
 
     if(BALANCE(node) < 0) /* balance = LEFT -> dir = RIGHT other = LEFT */
     {
@@ -153,10 +157,9 @@ avl_node_single_rotation2(avl_node* node)
     return save;
 }
 
-static inline avl_node*
-avl_node_double_rotation2(avl_node* node)
+static inline avl_node *avl_node_double_rotation2(avl_node *node)
 {
-    avl_node* save;
+    avl_node *save;
 
     if(BALANCE(node) < 0) /* balance = LEFT -> dir = RIGHT other = LEFT */
     {
@@ -216,12 +219,11 @@ avl_node_double_rotation2(avl_node* node)
     return save;
 }
 
-static avl_node*
-avl_create_node(hashcode hash)
+static avl_node *avl_create_node(hashcode hash)
 {
-    avl_node* node;
+    avl_node *node;
 
-    ZALLOC_OBJECT_OR_DIE( node, avl_node, DATABASE_AVL_NODE_TAG);
+    ZALLOC_OBJECT_OR_DIE(node, avl_node, DATABASE_AVL_NODE_TAG);
 
     LEFT_CHILD(node) = NULL;
     RIGHT_CHILD(node) = NULL;
@@ -232,13 +234,6 @@ avl_create_node(hashcode hash)
     return node;
 }
 
-/*
-   static void avl_destroy_node(avl_node* node)
-   {
-   avl_destroy_node(node);
-   }
- */
-
 /** @brief Initializes the tree
  *
  *  Initializes the tree.
@@ -248,11 +243,7 @@ avl_create_node(hashcode hash)
  *
  */
 
-void
-avl_init(avl_tree* tree)
-{
-    *tree = NULL;
-}
+void avl_init(avl_tree *tree) { *tree = NULL; }
 
 /** @brief Find a node in the tree
  *
@@ -266,15 +257,14 @@ avl_init(avl_tree* tree)
 
 #if !ZDB_INLINES_AVL_FIND
 
-void*
-avl_find(avl_tree* root, hashcode obj_hash)
+void *avl_find(avl_tree *root, hashcode obj_hash)
 {
-#if 1 /* NOTE: If I do this in assembly code.  I could probably win a few cycles
-       *       This is by far the most common call of the DB
-       * NOTE: The compiler's job is very good.
+#if 1 /* NOTE: If I do this in assembly code.  I could probably win a few cycles                                                                                                                                                               \
+       *       This is by far the most common call of the DB                                                                                                                                                                                   \
+       * NOTE: The compiler's job is very good.                                                                                                                                                                                                \
        */
-    avl_node* node = *root;
-    hashcode h;
+    avl_node *node = *root;
+    hashcode  h;
 
     /* This is one of the parts I could try to optimize
      * I've checked the assembly, and it sucks ...
@@ -291,7 +281,7 @@ avl_find(avl_tree* root, hashcode obj_hash)
             return node->data;
         }
 
-        node = CHILD(node, (obj_hash > h)&1);
+        node = CHILD(node, (obj_hash > h) & 1);
     }
 
     /*return (node!=NULL)?node->data:NULL;*/
@@ -321,31 +311,29 @@ avl_find(avl_tree* root, hashcode obj_hash)
      */
     /* NOT DONE YET !!! */
     /* x86_64 :  RDI = root, ESI = obj_hash */
-    __asm__
-            (
-             "movq (%rdi),%rax\n\t"
-             "testq %rax,%rax\n\t"
-             "jz avl_find_return_null\n\t"
-             "\navl_find_loop:\n\t"
-             "cmpl 16(%rax),%esi\n\t"
-             "jz avl_find_return_data\n\t"
-             "sbbq %rcx,%rcx\n\t"
-             "andq 8,%rcx\n\t"
-             "movq (%rcx,%rax),%rax\n\t"
-             "testq %rax,%rax\n\t"
-             "jnz avl_find_loop\n\t"
-             "\navl_find_return_null:\n\t"
+    __asm__(
+        "movq (%rdi),%rax\n\t"
+        "testq %rax,%rax\n\t"
+        "jz avl_find_return_null\n\t"
+        "\navl_find_loop:\n\t"
+        "cmpl 16(%rax),%esi\n\t"
+        "jz avl_find_return_data\n\t"
+        "sbbq %rcx,%rcx\n\t"
+        "andq 8,%rcx\n\t"
+        "movq (%rcx,%rax),%rax\n\t"
+        "testq %rax,%rax\n\t"
+        "jnz avl_find_loop\n\t"
+        "\navl_find_return_null:\n\t"
 #if DEBUG
-            "leave\n\t"
+        "leave\n\t"
 #endif
-            "ret\n\t"
-             "\navl_find_return_data:\n\t"
-             "mov 16(%rax),%rax\n\t"
+        "ret\n\t"
+        "\navl_find_return_data:\n\t"
+        "mov 16(%rax),%rax\n\t"
 #if DEBUG
-            "leave\n\t"
+        "leave\n\t"
 #endif
-            "ret\n\t"
-             );
+        "ret\n\t");
 #endif
 }
 
@@ -364,11 +352,10 @@ avl_find(avl_tree* root, hashcode obj_hash)
 
 #if !ZDB_INLINES_AVL_FIND
 
-void**
-avl_findp(avl_tree* root, hashcode obj_hash)
+void **avl_findp(avl_tree *root, hashcode obj_hash)
 {
-    avl_node* node = *root;
-    hashcode h;
+    avl_node *node = *root;
+    hashcode  h;
 
     while(node != NULL /* &&((h=node->hash)!=obj_hash) */)
     {
@@ -377,7 +364,7 @@ avl_findp(avl_tree* root, hashcode obj_hash)
             return &node->data;
         }
 
-        node = CHILD(node, (obj_hash > h)&1);
+        node = CHILD(node, (obj_hash > h) & 1);
     }
 
     /* return (node!=NULL)?&node->data:NULL; */
@@ -405,8 +392,7 @@ avl_findp(avl_tree* root, hashcode obj_hash)
  *  @return The node associated to the hash
  */
 
-void**
-avl_insert(avl_tree* root, hashcode obj_hash)
+void **avl_insert(avl_tree *root, hashcode obj_hash)
 {
     LDEBUG(9, "avl_insert(%p,%08x) ------------------------------\n", root, obj_hash);
 
@@ -419,14 +405,14 @@ avl_insert(avl_tree* root, hashcode obj_hash)
         return &(*root)->data;
     }
 
-    avl_node * nodes[MAX_DEPTH];
-    s8 balances[MAX_DEPTH];
-    s8 dirs[MAX_DEPTH];
+    avl_node *nodes[DEPTH_MAX];
+    int8_t    balances[DEPTH_MAX];
+    int8_t    dirs[DEPTH_MAX];
 
-    avl_node* node = *root;
-    hashcode node_hash;
-    int level = 0;
-    s8 dir = MIDDLE;
+    avl_node *node = *root;
+    hashcode  node_hash;
+    int       level = 0;
+    int8_t    dir = MIDDLE;
 
     while((node != NULL) && (obj_hash != (node_hash = node->hash)))
     {
@@ -434,7 +420,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
         balances[level] = BALANCE(node);
 
         /* DIR_LEFT = 0, DIR_RIGHT = 1 */
-        dir = (obj_hash > node_hash)&1;
+        dir = (obj_hash > node_hash) & 1;
         node = CHILD(node, dir);
 
         dirs[level++] = dir;
@@ -457,7 +443,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
 
     /* the parent is node */
 
-    avl_node* ret = avl_create_node(obj_hash);
+    avl_node *ret = avl_create_node(obj_hash);
     CHILD(node, dir) = ret;
 
     LDEBUG(9, "Created a new node from %08x, going %i (%p)\n", node->hash, dir, ret);
@@ -479,7 +465,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
         LDEBUG(9, "parent was not balanced, now it is\n");
     }
 
-    avl_node* parent;
+    avl_node *parent;
 
     /* Now I have to update the balance up to the root (if needed ...)
      * node is m_nodes[level]
@@ -492,7 +478,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
         LDEBUG(9, "\tUpdating balance at %i\n", level);
 
         if(BALANCE(node) == balances[level]) /* balance of the node */
-        { /* this branch will exit */
+        {                                    /* this branch will exit */
             /* The node's balance has not been changed */
 
             return &ret->data;
@@ -602,8 +588,7 @@ avl_insert(avl_tree* root, hashcode obj_hash)
  *  @return The node associated to the hash, NULL if it did not exist.
  */
 
-void*
-avl_delete(avl_tree* root, hashcode obj_hash)
+void *avl_delete(avl_tree *root, hashcode obj_hash)
 {
     LDEBUG(9, "avl_delete(%p,%08x) ------------------------------\n", root, obj_hash);
 
@@ -614,20 +599,20 @@ avl_delete(avl_tree* root, hashcode obj_hash)
         return NULL;
     }
 
-    avl_node * nodes[MAX_DEPTH];
-    s8 balances[MAX_DEPTH];
-    s8 dirs[MAX_DEPTH];
+    avl_node *nodes[DEPTH_MAX];
+    int8_t    balances[DEPTH_MAX];
+    int8_t    dirs[DEPTH_MAX];
 
 #if DEBUG
-    memset(&nodes, 0xff, sizeof(avl_node*) * MAX_DEPTH);
-    memset(&balances, 0xff, MAX_DEPTH);
-    memset(&dirs, 0xff, MAX_DEPTH);
+    memset(&nodes, 0xff, sizeof(avl_node *) * DEPTH_MAX);
+    memset(&balances, 0xff, DEPTH_MAX);
+    memset(&dirs, 0xff, DEPTH_MAX);
 #endif
 
-    avl_node* node = *root;
-    hashcode node_hash;
-    int level = 0;
-    s8 dir = MIDDLE;
+    avl_node *node = *root;
+    hashcode  node_hash;
+    int       level = 0;
+    int8_t    dir = MIDDLE;
 
     while((node != NULL) && (obj_hash != (node_hash = node->hash)))
     {
@@ -635,7 +620,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
         balances[level] = BALANCE(node);
 
         /* DIR_LEFT = 0, DIR_RIGHT = 1 */
-        dir = (obj_hash > node_hash)&1;
+        dir = (obj_hash > node_hash) & 1;
         node = CHILD(node, dir);
 
         dirs[level++] = dir;
@@ -643,7 +628,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
     LDEBUG(9, "Level = %i\n", level);
 
-    yassert(level < MAX_DEPTH);
+    yassert(level < DEPTH_MAX);
 
     if(node == NULL)
     {
@@ -665,11 +650,11 @@ avl_delete(avl_tree* root, hashcode obj_hash)
     /* Remove "node" from the parent */
     /* Keep the pointer for the find & destroy operation */
 
-    void* data = node->data;
+    void     *data = node->data;
 
-    avl_node* victim = node;
-    avl_node* victim_left = LEFT_CHILD(node);
-    avl_node* victim_right = RIGHT_CHILD(node);
+    avl_node *victim = node;
+    avl_node *victim_left = LEFT_CHILD(node);
+    avl_node *victim_right = RIGHT_CHILD(node);
 
     /** We have found the victim node.  From here 3 cases can be found
      *
@@ -719,9 +704,9 @@ avl_delete(avl_tree* root, hashcode obj_hash)
         DUMP_NODE(victim);
         LDEBUG(9, ", GOING LEFT (VICTIM)\n");
 
-        avl_node* beforesuccessor = victim; /* actually it's "victim" here */
-        avl_node* successor = victim_left;
-        avl_node* tmp_node;
+        avl_node *beforesuccessor = victim; /* actually it's "victim" here */
+        avl_node *successor = victim_left;
+        avl_node *tmp_node;
 
         LDEBUG(9, "[%i] From ", level);
         DUMP_NODE(successor);
@@ -746,8 +731,8 @@ avl_delete(avl_tree* root, hashcode obj_hash)
             dirs[level++] = DIR_RIGHT;
         }
 
-        yassert(level < MAX_DEPTH);
-        
+        yassert(level < DEPTH_MAX);
+
         /* successor has at most one left child */
 
         LDEBUG(9, "[%i] Replacement is ", level);
@@ -769,7 +754,6 @@ avl_delete(avl_tree* root, hashcode obj_hash)
             BALANCE(beforesuccessor)++;
         }
 
-
         DUMP_NODE(successor);
         LDEBUG(9, " : avl_destroy_node(%p)\n", successor);
         avl_destroy_node(successor); /* avl_destroy_node(successor); */
@@ -788,11 +772,11 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
         if(level > 1)
         {
-            avl_node* victim_parent = nodes[level - 2];
+            avl_node *victim_parent = nodes[level - 2];
 
             /* ONE or BOTH are NULL, this is the best alternative to the if/elseif/else above */
 
-            CHILD(victim_parent, dir) = (avl_node*)((intptr)victim_left | (intptr)victim_right);
+            CHILD(victim_parent, dir) = (avl_node *)((intptr_t)victim_left | (intptr_t)victim_right);
 
             BALANCE(victim_parent) -= DIR_TO_BALANCE(dir); /* The balance has changed */
 
@@ -804,7 +788,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
         else /* Else we have no parent, so we change the root */
         {
             /* ONE or BOTH are NULL, this is the best alternative to the if/elseif/else above */
-            *root = (avl_node*)((intptr)victim_left | (intptr)victim_right);
+            *root = (avl_node *)((intptr_t)victim_left | (intptr_t)victim_right);
             return data;
         }
     }
@@ -827,7 +811,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
         LDEBUG(9, "\n");
 
         if(BALANCE(node) == balances[level]) /* balance of the node */
-        { /* this branch will exit */
+        {                                    /* this branch will exit */
             /* The node's balance has not been changed */
 
             LDEBUG(9, "Balance is the same\n");
@@ -856,8 +840,7 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
             if(level >= 0)
             {
-                LDEBUG(9, "\tBalance [%i] changed for MIDDLE (%i) Fixing [%i] parent balance of %i (%i)\n",
-                       level + 1, balances[level + 1], level, DIR_TO_BALANCE(dirs[level]), dirs[level]);
+                LDEBUG(9, "\tBalance [%i] changed for MIDDLE (%i) Fixing [%i] parent balance of %i (%i)\n", level + 1, balances[level + 1], level, DIR_TO_BALANCE(dirs[level]), dirs[level]);
 
                 node = nodes[level];
                 BALANCE(node) -= DIR_TO_BALANCE(dirs[level]);
@@ -890,15 +873,15 @@ avl_delete(avl_tree* root, hashcode obj_hash)
 
         BALANCE(node) >>= 1;
 
-        avl_node* child = CHILD(node, BALANCE_TO_DIR(BALANCE(node)));
-        s8 parent_balance = BALANCE(node);
-        s8 child_balance = BALANCE(child);
+        avl_node *child = CHILD(node, BALANCE_TO_DIR(BALANCE(node)));
+        int8_t    parent_balance = BALANCE(node);
+        int8_t    child_balance = BALANCE(child);
 
         if(child_balance == MIDDLE) /* patched single rotation */
         {
             LDEBUG(9, "Single Rotation (delete)\n");
 
-            avl_node* root;
+            avl_node *root;
 
             root = avl_node_single_rotation2(node);
 
@@ -957,18 +940,17 @@ avl_delete(avl_tree* root, hashcode obj_hash)
     return data;
 }
 
-static void
-avl_destroy_(avl_node* node)
+static void avl_finalise_(avl_node *node)
 {
-    avl_node* child = LEFT_CHILD(node);
+    avl_node *child = LEFT_CHILD(node);
     if(child != NULL)
     {
-        avl_destroy_(child);
+        avl_finalise_(child);
     }
     child = RIGHT_CHILD(node);
     if(child != NULL)
     {
-        avl_destroy_(child);
+        avl_finalise_(child);
     }
 
     avl_destroy_node(node); /* avl_destroy_node(node); */
@@ -981,20 +963,18 @@ avl_destroy_(avl_node* node)
  *  @param[in] tree the tree to empty
  */
 
-void
-avl_destroy(avl_tree* tree)
+void avl_finalise(avl_tree *tree)
 {
     if(*tree != NULL)
     {
-        avl_destroy_(*tree);
+        avl_finalise_(*tree);
         *tree = NULL;
     }
 }
 
 /* Iterators -> */
 
-void
-avl_iterator_init(avl_tree tree, avl_iterator* iter)
+void avl_iterator_init(avl_tree tree, avl_iterator *iter)
 {
     /* Do we have a tree to iterate ? */
 
@@ -1004,7 +984,7 @@ avl_iterator_init(avl_tree tree, avl_iterator* iter)
     {
         /* Let's stack the whole left path */
 
-        register avl_node* node = tree;
+        register avl_node *node = tree;
 
         while(node != NULL)
         {
@@ -1014,8 +994,7 @@ avl_iterator_init(avl_tree tree, avl_iterator* iter)
     }
 }
 
-avl_node*
-avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_hash)
+avl_node *avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_hash)
 {
     /* Do we have a tree to iterate ? */
 
@@ -1025,14 +1004,14 @@ avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_has
     {
         /* Let's stack the path left path */
 
-        register avl_node* node = tree;
+        register avl_node *node = tree;
 
         while(node != NULL)
         {
             register hashcode h = node->hash;
-            
+
             if(obj_hash < h)
-            {                
+            {
                 iter->stack[++iter->stack_pointer] = node;
                 node = LEFT_CHILD(node);
             }
@@ -1045,45 +1024,39 @@ avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_has
                 if(RIGHT_CHILD(node) != NULL)
                 {
                     // one right, full left
-                    register avl_node* next_node = RIGHT_CHILD(node);
-                    
+                    register avl_node *next_node = RIGHT_CHILD(node);
+
                     do
                     {
                         iter->stack[++iter->stack_pointer] = next_node;
                         next_node = LEFT_CHILD(next_node);
-                    }
-                    while(next_node != NULL);
-                    
+                    } while(next_node != NULL);
+
                     return node;
                 }
-                
+
                 return node;
             }
         }
     }
-    
+
     return NULL;
 }
 
 #if !ZDB_INLINES_AVL_FIND
-bool
-avl_iterator_hasnext(avl_iterator* iter)
-{
-    return iter->stack_pointer >= 0;
-}
+bool avl_iterator_hasnext(avl_iterator *iter) { return iter->stack_pointer >= 0; }
 #endif
 
-void**
-avl_iterator_next(avl_iterator* iter)
+void **avl_iterator_next(avl_iterator *iter)
 {
     yassert(iter->stack_pointer >= 0);
-    
-    register avl_node* node = iter->stack[iter->stack_pointer];
-    void** datapp = &node->data;
+
+    register avl_node *node = iter->stack[iter->stack_pointer];
+    void             **datapp = &node->data;
 
     /* we got the data, now let's ready the next node */
 
-    register avl_node* tmp;
+    register avl_node *tmp;
 
     /* let's branch right if possible */
 
@@ -1091,18 +1064,19 @@ avl_iterator_next(avl_iterator* iter)
     {
         iter->stack[iter->stack_pointer] = tmp; /* replace TOP */
         node = tmp;
-        
+
         while((tmp = LEFT_CHILD(node)) != NULL)
         {
-            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on collections of tens of billions of items*/
+            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on
+                                                         collections of tens of billions of items*/
             node = tmp;
         }
 
         return datapp;
     }
-    
+
 #if DEBUG
-    iter->stack[iter->stack_pointer] = (avl_node*)(intptr)0xfefefefefefefefeLL;
+    iter->stack[iter->stack_pointer] = (avl_node *)(intptr_t)0xfefefefefefefefeLL;
 #endif
 
     iter->stack_pointer--;
@@ -1110,17 +1084,16 @@ avl_iterator_next(avl_iterator* iter)
     return datapp;
 }
 
-avl_node*
-avl_iterator_next_node(avl_iterator* iter)
+avl_node *avl_iterator_next_node(avl_iterator *iter)
 {
     yassert(iter->stack_pointer >= 0);
-    
-    avl_node* node = iter->stack[iter->stack_pointer];
-    avl_node* current = node;
+
+    avl_node *node = iter->stack[iter->stack_pointer];
+    avl_node *current = node;
 
     /* we got the data, now let's ready the next node */
 
-    register avl_node* tmp;
+    register avl_node *tmp;
 
     /* let's branch right if possible */
 
@@ -1131,15 +1104,16 @@ avl_iterator_next_node(avl_iterator* iter)
         node = tmp;
         while((tmp = LEFT_CHILD(node)) != NULL)
         {
-            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on collections of tens of billions of items */
+            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on
+                                                         collections of tens of billions of items */
             node = tmp;
         }
 
         return current;
     }
-    
+
 #if DEBUG
-    iter->stack[iter->stack_pointer] = (avl_node*)(intptr)0xfefefefefefefefeLL;
+    iter->stack[iter->stack_pointer] = (avl_node *)(intptr_t)0xfefefefefefefefeLL;
 #endif
 
     iter->stack_pointer--;
@@ -1149,18 +1123,17 @@ avl_iterator_next_node(avl_iterator* iter)
 
 /* <- Iterators */
 
-static void
-avl_callback_and_destroy_(avl_node* node, void (*callback)(void*))
+static void avl_callback_and_finalise_(avl_node *node, void (*callback)(void *))
 {
-    avl_node* child = LEFT_CHILD(node);
+    avl_node *child = LEFT_CHILD(node);
     if(child != NULL)
     {
-        avl_callback_and_destroy_(child, callback);
+        avl_callback_and_finalise_(child, callback);
     }
     child = RIGHT_CHILD(node);
     if(child != NULL)
     {
-        avl_callback_and_destroy_(child, callback);
+        avl_callback_and_finalise_(child, callback);
     }
 
     callback(node->data);
@@ -1178,12 +1151,11 @@ avl_callback_and_destroy_(avl_node* node, void (*callback)(void*))
  *  @param[in] tree the tree to empty
  */
 
-void
-avl_callback_and_destroy(avl_tree tree, void (*callback)(void*))
+void avl_callback_and_finalise(avl_tree tree, void (*callback)(void *))
 {
     if(tree != NULL)
     {
-        avl_callback_and_destroy_(tree, callback);
+        avl_callback_and_finalise_(tree, callback);
     }
 }
 
@@ -1200,8 +1172,7 @@ avl_callback_and_destroy(avl_tree tree, void (*callback)(void*))
  *
  */
 
-ya_result
-avl_check(avl_tree tree)
+ya_result avl_check(avl_tree tree)
 {
     int err = avl_checkdepth(tree);
     if(err < 0)
@@ -1222,8 +1193,7 @@ avl_check(avl_tree tree)
  *
  */
 
-s32
-avl_checkdepth(avl_node* node)
+int32_t avl_checkdepth(avl_node *node)
 {
     if(node == NULL)
     {
@@ -1299,8 +1269,7 @@ avl_checkdepth(avl_node* node)
     return max + 1;
 }
 
-static void
-avl_print_(avl_node* node)
+static void avl_print_(avl_node *node)
 {
     if(LEFT_CHILD(node) != NULL)
     {
@@ -1323,8 +1292,7 @@ avl_print_(avl_node* node)
  *
  */
 
-void
-avl_print(avl_tree tree)
+void avl_print(avl_tree tree)
 {
     if(tree != NULL)
     {
@@ -1344,12 +1312,11 @@ avl_print(avl_tree tree)
  *
  */
 
-#define HASH(x) (((x)!=NULL)?(x)->hash:0)
+#define HASH(x) (((x) != NULL) ? (x)->hash : 0)
 
 /*#define MAX(x,y) (((x)>(y))?(x):(y))*/
 
-int
-avl_getnodedepth(avl_node* node)
+int avl_getnodedepth(avl_node *node)
 {
     if(node == NULL)
     {
@@ -1358,8 +1325,7 @@ avl_getnodedepth(avl_node* node)
     return MAX(avl_getnodedepth(LEFT_CHILD(node)), avl_getnodedepth(RIGHT_CHILD(node))) + 1;
 }
 
-void
-avl_printnode(avl_node* node)
+void avl_printnode(avl_node *node)
 {
     if(node != NULL)
     {
@@ -1374,5 +1340,3 @@ avl_printnode(avl_node* node)
 #endif
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

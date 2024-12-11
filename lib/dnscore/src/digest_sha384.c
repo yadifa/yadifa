@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,69 +28,52 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/digest.h"
 
 #ifndef OPENSSL_NO_SHA512
 
-static s32
-digest_sha384_update(digest_s* ctx, const void* buffer, u32 size)
-{
-    return SHA384_Update(&ctx->ctx.sha384, buffer, size) - 1;
-}
+static int32_t digest_sha384_update(digest_t *ctx, const void *buffer, uint32_t size) { return SHA384_Update(&ctx->ctx.sha384, buffer, size) - 1; }
 
-static s32
-digest_sha384_final(digest_s* ctx)
-{
-    return SHA384_Final(ctx->digest, &ctx->ctx.sha384) - 1;
-}
+static int32_t digest_sha384_final(digest_t *ctx) { return SHA384_Final(ctx->digest, &ctx->ctx.sha384) - 1; }
 
-static s32 digest_sha384_final_copy_bytes(digest_s* ctx, void* buffer, u32 size)
+static int32_t digest_sha384_final_copy_bytes(digest_t *ctx, void *buffer, uint32_t size)
 {
     if(size >= SHA384_DIGEST_LENGTH)
     {
-        return SHA384_Final(buffer, &ctx->ctx.sha384) - 1;
+        if(SHA384_Final(buffer, &ctx->ctx.sha384) != 0)
+        {
+            return SHA384_DIGEST_LENGTH;
+        }
+        else
+        {
+            return ERROR;
+        }
     }
 
     return BUFFER_WOULD_OVERFLOW;
 }
 
-static s32
-digest_sha384_get_size(digest_s* ctx)
+static int32_t digest_sha384_get_size(digest_t *ctx)
 {
     (void)ctx;
     return SHA384_DIGEST_LENGTH;
 }
 
-static s32 digest_sha384_get_digest(digest_s* ctx, void **ptr)
+static int32_t digest_sha384_get_digest(digest_t *ctx, void **ptr)
 {
     *ptr = &ctx->digest[0];
 
     return SHA384_DIGEST_LENGTH;
 }
 
-static void digest_sha384_finalise(struct digest_s* ctx)
-{
-    (void)ctx;
-}
+static void                     digest_sha384_finalise(struct digest_s *ctx) { (void)ctx; }
 
-static const struct digest_vtbl sha384_vtbl =
-{
-    digest_sha384_update,
-    digest_sha384_final,
-    digest_sha384_final_copy_bytes,
-    digest_sha384_get_size,
-    digest_sha384_get_digest,
-    digest_sha384_finalise,
-    "SHA384"
-};
+static const struct digest_vtbl sha384_vtbl = {digest_sha384_update, digest_sha384_final, digest_sha384_final_copy_bytes, digest_sha384_get_size, digest_sha384_get_digest, digest_sha384_finalise, "SHA384"};
 
-void
-digest_sha384_init(digest_s *ctx)
+void                            digest_sha384_init(digest_t *ctx)
 {
     ctx->vtbl = &sha384_vtbl;
     SHA384_Init(&ctx->ctx.sha384);

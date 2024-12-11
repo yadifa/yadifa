@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,46 +28,44 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _LOGGER_CHANNEL_FILE_H
-#define	_LOGGER_CHANNEL_FILE_H
+#define _LOGGER_CHANNEL_FILE_H
 
 #include <dnscore/logger.h>
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-ya_result logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, bool forceflush, logger_channel *chan);
+ya_result logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, uint16_t mode, bool forceflush, logger_channel_t *chan);
 
 /**
- * 
+ *
  * changes the name after a reopen, does not rename the file itself
- * 
+ *
  * @param chan
  * @param newpath
- * @return 
+ * @return
  */
 
-ya_result logger_channel_file_rename(logger_channel *chan, const char *newpath);
+ya_result logger_channel_file_rename(logger_channel_t *chan, const char *newpath);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _LOGGER_CHANNEL_STREAM_H */
+#endif /* _LOGGER_CHANNEL_STREAM_H */
 /** @} */

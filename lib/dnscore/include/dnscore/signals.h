@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,17 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 /*------------------------------------------------------------------------------
@@ -46,22 +44,23 @@
  * USE INCLUDES */
 
 #include <signal.h>
-#ifdef WIN32
+#if __windows__
 #include <sigset.h>
+typedef int siginfo_t;
 #endif
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <dnscore/sys_types.h>
 
-typedef void (*signal_handler_cb)(u8 signum);
+typedef void (*signal_handler_function_t)(uint8_t signum);
 
 // initalises and starts the handler
 
-ya_result signal_handler_init();
+ya_result                 signal_handler_init();
 
-signal_handler_cb signal_handler_get(u8 signum);
+signal_handler_function_t signal_handler_get(uint8_t signum);
 
-void signal_handler_set(u8 signum, signal_handler_cb handler);
+void                      signal_handler_set(uint8_t signum, signal_handler_function_t handler);
 
 // stop the handler
 

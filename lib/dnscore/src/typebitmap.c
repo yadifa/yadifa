@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 
 #include <arpa/inet.h>
 
@@ -53,19 +51,18 @@
  * Call this with the context->type_bitmap_field set
  */
 
-void
-type_bit_maps_write(const type_bit_maps_context *context, u8 *output)
+void type_bit_maps_write(const type_bit_maps_context_t *context, uint8_t *output)
 {
     /* No types at all ? Should NOT have been called */
 
-    //yassert(context->type_bit_maps_size > 2);
+    // yassert(context->type_bit_maps_size > 2);
 
-    const u8* type_bitmap_field = context->type_bitmap_field;
-    const u8* window_size = context->window_size;
+    const uint8_t *type_bitmap_field = context->type_bitmap_field;
+    const uint8_t *window_size = context->window_size;
 
-    for(s32 i = 0; i <= context->last_type_window; i++)
+    for(int_fast32_t i = 0; i <= context->last_type_window; i++)
     {
-        u8 bytes = window_size[i];
+        uint8_t bytes = window_size[i];
 
         if(bytes == 0)
         {
@@ -75,8 +72,8 @@ type_bit_maps_write(const type_bit_maps_context *context, u8 *output)
         *output++ = i;
         *output++ = bytes;
 
-        u32 wo = i << 5;    /* 256 bits = 32 bytes = 2^5 */
-        u32 wo_limit = wo + bytes;
+        uint32_t wo = i << 5; /* 256 bits = 32 bytes = 2^5 */
+        uint32_t wo_limit = wo + bytes;
 
         for(; wo < wo_limit; wo++)
         {
@@ -85,74 +82,58 @@ type_bit_maps_write(const type_bit_maps_context *context, u8 *output)
     }
 }
 
-s32
-type_bit_maps_expand(type_bit_maps_context* context, u8* type_bitmap, u32 size)
+int32_t type_bit_maps_expand(type_bit_maps_context_t *context, uint8_t *type_bitmap, uint32_t size)
 {
-    const u8 * const limit = type_bitmap + size;
-    s32 last_type = -1;
-    while(type_bitmap < limit)
+    if(size > 0)
     {
-        u8 wn = *type_bitmap++;
-        last_type = wn;
-        u8 ws = *type_bitmap++;
-
-        if(ws == 0)         /* Blocks with no types present MUST NOT be included */
+        const uint8_t *const limit = type_bitmap + size;
+        int32_t              last_type_window = -1;
+        while(type_bitmap < limit)
         {
-            continue;
+            // read the window index & size
+            uint8_t window_index = *type_bitmap++; // window index
+            uint8_t window_size = *type_bitmap++;  // window size
+
+            if(window_size == 0) // Blocks with no types present MUST NOT be included
+            {
+                context->window_size[window_index] = 0;
+                continue;
+            }
+
+            // update the last_type_window
+
+            last_type_window = window_index;
+
+            if(window_index > context->last_type_window) // seems pointless
+            {
+                context->last_type_window = window_index;
+            }
+            // destination into the 8K bitmap
+            uint8_t *wp = &context->type_bitmap_field[window_index << 8];
+            // update the window size
+            context->window_size[window_index] = MAX(context->window_size[window_index], window_size);
+
+            while(window_size-- > 0)
+            {
+                uint8_t types = *type_bitmap;
+                *wp++ = types;
+                type_bitmap++;
+            }
+
+            context->window_size[window_index] = wp - context->type_bitmap_field;
         }
 
-        u8* wp = &context->type_bitmap_field[wn << 8];
-        context->window_size[wn] = MAX(context->window_size[wn], ws);
+        context->last_type_window = MAX(last_type_window >> 8, context->last_type_window);
 
-        while(ws-- > 0)
-        {
-            *wp++ = *type_bitmap++;
-        }
+        return last_type_window;
     }
-
-    context->last_type_window = MAX(last_type >> 8, context->last_type_window);
-
-    return last_type;
+    else
+    {
+        return -1;
+    }
 }
 
-bool
-type_bit_maps_merge(type_bit_maps_context* context, u8* type_bitmap_a, u32 a_size, u8* type_bitmap_b, u32 b_size)
-{
-    if(a_size == b_size)
-    {
-        if(memcmp(type_bitmap_a, type_bitmap_b, a_size) == 0)
-        {
-            return FALSE; /* Nothing to do.  Both bitmaps are equals */
-        }
-    }
-
-    u8* type_bitmap_field = context->type_bitmap_field;
-    u8* window_size = context->window_size;
-
-    ZEROMEMORY(window_size, sizeof(context->window_size));
-    ZEROMEMORY(type_bitmap_field, sizeof(context->type_bitmap_field));
-
-    s32 last_type_a = type_bit_maps_expand(context, type_bitmap_a, a_size);
-    s32 last_type_b = type_bit_maps_expand(context, type_bitmap_b, b_size);
-
-    u32 type_bit_maps_size = 0;
-    s32 last_type_window = MAX(last_type_a, last_type_b);
-
-    for(s32 i = 0; i <= last_type_window; i++)
-    {
-        u8 ws = window_size[i];
-
-        if(ws > 0)
-        {
-            type_bit_maps_size += 1 + 1 + ws;
-        }
-    }
-
-    return TRUE;
-}
-
-void
-type_bit_maps_output_stream_write(const type_bit_maps_context* context, output_stream* os)
+void type_bit_maps_output_stream_write(const type_bit_maps_context_t *context, output_stream_t *os)
 {
     /* No types at all */
 
@@ -161,12 +142,12 @@ type_bit_maps_output_stream_write(const type_bit_maps_context* context, output_s
         return;
     }
 
-    const u8* type_bitmap_field = context->type_bitmap_field;
-    const u8* window_size = context->window_size;
+    const uint8_t *type_bitmap_field = context->type_bitmap_field;
+    const uint8_t *window_size = context->window_size;
 
-    for(s32 i = 0; i <= context->last_type_window; i++)
+    for(int_fast32_t i = 0; i <= context->last_type_window; i++)
     {
-        u8 bytes = window_size[i];
+        uint8_t bytes = window_size[i];
 
         if(bytes > 0)
         {
@@ -177,23 +158,23 @@ type_bit_maps_output_stream_write(const type_bit_maps_context* context, output_s
     }
 }
 
-bool
-type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type)
+bool type_bit_maps_gettypestatus(uint8_t *packed_type_bitmap, uint32_t size, uint16_t type)
 {
-    u8 window_index = (type >> 8);
+    type = ntohs(type);
+    uint8_t window_index = (type >> 8);
 
     /* Skip to the right window */
 
     while(size > 2)
     {
-        u8 current_index = *packed_type_bitmap++;
-        u8 current_size = *packed_type_bitmap++;
+        uint8_t current_index = *packed_type_bitmap++;
+        uint8_t current_size = *packed_type_bitmap++;
 
         if(current_index >= window_index)
         {
             if(current_index == window_index)
             {
-                u32 byte_offset = (type >> 3);
+                uint32_t byte_offset = (type >> 3);
 
                 if(byte_offset < current_size)
                 {
@@ -205,13 +186,11 @@ type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type)
         }
 
         size -= 2;
-
         size -= current_size;
         packed_type_bitmap += current_size;
     }
 
-    return FALSE;
-
+    return false;
 }
 
 /*
@@ -220,97 +199,93 @@ type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type)
  *
  */
 
-void
-type_bit_maps_init(type_bit_maps_context *context)
+void type_bit_maps_init(type_bit_maps_context_t *context)
 {
-    //context->last_type_window = 0;
+    // context->last_type_window = 0;
     context->type_bit_maps_size = 0;
-    //ZEROMEMORY(context, sizeof(type_bit_maps_context));
+    // ZEROMEMORY(context, sizeof(type_bit_maps_context));
     context->last_type_window = -1;
 }
 
-void type_bit_maps_set_type(type_bit_maps_context *context, u16 rtype)
+void type_bit_maps_set_type(type_bit_maps_context_t *context, uint16_t rtype)
 {
-    u8 *type_bitmap_field = context->type_bitmap_field;
-    u8 *window_size = context->window_size;
-    s32 last_type_window = context->last_type_window;
+    uint8_t *type_bitmap_field = context->type_bitmap_field;
+    uint8_t *window_size = context->window_size;
+    int32_t  last_type_window = context->last_type_window;
 
     // Network bit order
-    rtype = (u16)ntohs(rtype);
+    rtype = (uint16_t)ntohs(rtype);
 
-    const s32 type_window = rtype >> 8;
+    const int32_t type_window = rtype >> 8;
 
     // clear additional bytes if needed
 
     if(type_window > last_type_window)
     {
-        s32 length = type_window - last_type_window;
+        int32_t length = type_window - last_type_window;
         ZEROMEMORY(&window_size[last_type_window + 1], length);
         ZEROMEMORY(&type_bitmap_field[(last_type_window + 1) << 5], length << 5);
         last_type_window = type_window;
         context->last_type_window = last_type_window;
     }
-    
-    const u8 mask = 1 << (7 - (rtype & 7));
+
+    const uint8_t mask = 1 << (7 - (rtype & 7));
     type_bitmap_field[rtype >> 3] |= mask;
-    u8 new_window_size = ((rtype & 0xf8) >> 3) + 1;
+    uint8_t new_window_size = ((rtype & 0xf8) >> 3) + 1;
     if(new_window_size > window_size[type_window])
     {
         window_size[type_window] = new_window_size;
     }
-
-    // if the bit is cleared, increase the window size
 }
 
-void type_bit_maps_clear_type(type_bit_maps_context *context, u16 rtype)
+void type_bit_maps_clear_type(type_bit_maps_context_t *context, uint16_t rtype)
 {
-    u8 *type_bitmap_field = context->type_bitmap_field;
-    u8 *window_size = context->window_size;
+    uint8_t *type_bitmap_field = context->type_bitmap_field;
+    uint8_t *window_size = context->window_size;
 
     /* Network bit order */
-    rtype = (u16)ntohs(rtype);
+    rtype = (uint16_t)ntohs(rtype);
 
-    const u8 mask = 1 << (7 - (rtype & 7));
+    const uint8_t mask = 1 << (7 - (rtype & 7));
 
-    int rtype_byte_offset = rtype >> 3;
-    int rtype_window_offset = rtype >> 8;
+    int           rtype_byte_offset = rtype >> 3;
+    int           rtype_window_offset = rtype >> 8;
 
-    if((type_bitmap_field[rtype_byte_offset] & mask) == 0)
+    // offset              size = offset - 1
+    if(rtype_byte_offset >= window_size[rtype_window_offset]) // bit not set
+    {
+        return;
+    }
+
+    if((type_bitmap_field[rtype_byte_offset] & mask) != 0)
     {
         type_bitmap_field[rtype_byte_offset] &= ~mask;
-        s8 ws = window_size[rtype_window_offset];
-        u8 *window_base = &type_bitmap_field[rtype_byte_offset & 0xf8];
 
-        while((ws > 0) && (window_base[ws] == 0))
+        if((rtype_byte_offset == window_size[rtype_window_offset] - 1) && (type_bitmap_field[rtype_byte_offset] == 0))
         {
-            --ws;
-        }
-
-        window_size[rtype_window_offset] = ws;
-
-        if(ws == 0)
-        {
-            while(rtype_window_offset >= 0)
+            while(rtype_byte_offset >= 0)
             {
-                if(window_size[rtype_window_offset] > 0)
+                if(type_bitmap_field[--rtype_byte_offset] != 0)
                 {
                     break;
                 }
             }
-        }
 
-        context->last_type_window = MAX(rtype_window_offset, context->last_type_window);
+            window_size[rtype_window_offset] = rtype_byte_offset + 1;
+
+            context->last_type_window = MAX(rtype_window_offset, context->last_type_window);
+        }
     }
 }
 
-u16 type_bit_maps_update_size(type_bit_maps_context *context)
+uint16_t type_bit_maps_update_size(type_bit_maps_context_t *context)
 {
-    const u8 *window_size = context->window_size;
-    u32 type_bit_maps_size = 0;
+    const uint8_t *window_size = context->window_size;
+    uint32_t       type_bit_maps_size = 0;
 
-    for(s32 i = 0; i <= context->last_type_window; i++)
+    for(int_fast32_t i = 0; i <= context->last_type_window; i++)
     {
-        u8 ws = window_size[i];
+        uint8_t ws = window_size[i];
 
         if(ws > 0)
         {
@@ -325,16 +300,16 @@ u16 type_bit_maps_update_size(type_bit_maps_context *context)
 
 /**
  * Compares two types bit maps.
- * 
+ *
  * type_bit_maps_update_size(a) must have been called before.
  * type_bit_maps_update_size(b) must have been called before.
- * 
+ *
  * @param a
  * @param b
- * @return 
+ * @return
  */
 
-int type_bit_maps_compare(const type_bit_maps_context *a, const type_bit_maps_context *b)
+int type_bit_maps_compare(const type_bit_maps_context_t *a, const type_bit_maps_context_t *b)
 {
     int d = a->last_type_window;
     d -= b->last_type_window;
@@ -344,13 +319,26 @@ int type_bit_maps_compare(const type_bit_maps_context *a, const type_bit_maps_co
         d -= b->type_bit_maps_size;
         if(d == 0)
         {
-            if(a->last_type_window > 0)
+            for(int_fast32_t i = 0; i <= a->last_type_window; ++i)
             {
-                d = memcmp(a->type_bitmap_field, b->type_bitmap_field, a->last_type_window << 5); // VS complains: 32 bits is more than enough
+                d = a->window_size[i] - b->window_size[i];
+                if(d == 0)
+                {
+                    d = memcmp(a->type_bitmap_field, b->type_bitmap_field,
+                               a->window_size[i]); // VS complains: 32 bits is more than enough
+                    if(d != 0)
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    break;
+                }
             }
         }
     }
-    
+
     return d;
 }
 

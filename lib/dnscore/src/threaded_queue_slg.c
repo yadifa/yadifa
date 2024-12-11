@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{ *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -48,9 +47,9 @@
 
 #include "dnscore/threaded_queue_slg.h"
 
-#define MODULE_MSG_HANDLE		g_system_logger
+#define MODULE_MSG_HANDLE g_system_logger
 
-#define THRDQSPG_TAG 0x4750535144524854
+#define THRDQSPG_TAG      0x4750535144524854
 
 void threaded_queue_slg_init(threaded_queue_slg_t *q, int ignored_size)
 {
@@ -72,9 +71,9 @@ void threaded_queue_slg_finalize(threaded_queue_slg_t *q)
 {
     mutex_lock(&q->mtx);
 
-    int pool_released_count = 0;
-    int read_released_count = 0;
-    bool write_auto_cleared = (q->write_page == NULL);
+    int                        pool_released_count = 0;
+    int                        read_released_count = 0;
+    bool                       write_auto_cleared = (q->write_page == NULL);
 
     threaded_queue_slg_page_t *page = q->page_pool;
 
@@ -103,7 +102,7 @@ void threaded_queue_slg_finalize(threaded_queue_slg_t *q)
         {
             q->write_page = NULL;
 
-            write_auto_cleared = TRUE;
+            write_auto_cleared = true;
         }
     }
 
@@ -112,29 +111,26 @@ void threaded_queue_slg_finalize(threaded_queue_slg_t *q)
 
     mutex_unlock(&q->mtx);
 
-    log_debug("threaded_queue_slg_finalize: %i pooled, %i released, write %s", pool_released_count, read_released_count, ((write_auto_cleared)?"auto-cleared":"not cleared"));
+    log_debug("threaded_queue_slg_finalize: %i pooled, %i released, write %s", pool_released_count, read_released_count, ((write_auto_cleared) ? "auto-cleared" : "not cleared"));
 
     cond_finalize(&q->read_cond);
     mutex_destroy(&q->mtx);
 }
 
-int
-threaded_queue_slg_room(threaded_queue_slg_t *q)
+int threaded_queue_slg_room(threaded_queue_slg_t *q)
 {
     (void)q;
-    return MAX_S32;
+    return INT32_MAX;
 }
 
-ya_result
-threaded_queue_slg_set_maxsize(threaded_queue_slg_t *q, int max_size)
+ya_result threaded_queue_slg_set_maxsize(threaded_queue_slg_t *q, int max_size)
 {
     (void)q;
     (void)max_size;
     return SUCCESS;
 }
 
-void
-threaded_queue_slg_enqueue(threaded_queue_slg_t *q, void *data)
+void threaded_queue_slg_enqueue(threaded_queue_slg_t *q, void *data)
 {
     mutex_lock(&q->mtx);
     threaded_queue_slg_page_t *page = q->write_page;
@@ -147,39 +143,37 @@ threaded_queue_slg_enqueue(threaded_queue_slg_t *q, void *data)
     {
         threaded_queue_slg_page_t *next_page;
 
+        if(q->page_pool != NULL)
+        {
+            next_page = q->page_pool;
+            q->page_pool = next_page->next;
+        }
+        else
+        {
+            ZALLOC_OBJECT_OR_DIE(next_page, threaded_queue_slg_page_t, THRDQSPG_TAG);
+        }
 
-            if(q->page_pool != NULL)
-            {
-                next_page = q->page_pool;
-                q->page_pool = next_page->next;
-            }
-            else
-            {
-                ZALLOC_OBJECT_OR_DIE(next_page, threaded_queue_slg_page_t, THRDQSPG_TAG);
-            }
-
-            next_page->data[0] = data;
-            next_page->size = 1;
-            next_page->next = NULL;
-            page->next = next_page;
-            q->write_page = next_page;
-
+        next_page->data[0] = data;
+        next_page->size = 1;
+        next_page->next = NULL;
+        page->next = next_page;
+        q->write_page = next_page;
     }
 
     cond_notify(&q->read_cond);
     mutex_unlock(&q->mtx);
 }
 
-void* threaded_queue_slg_dequeue(threaded_queue_slg_t *q)
+void *threaded_queue_slg_dequeue(threaded_queue_slg_t *q)
 {
     void *data;
 
     mutex_lock(&q->mtx);
     for(;;)
     {
-        volatile threaded_queue_slg_page_t *page = (volatile threaded_queue_slg_page_t*)q->read_page;
+        volatile threaded_queue_slg_page_t *page = (volatile threaded_queue_slg_page_t *)q->read_page;
 
-        intptr d = (intptr)page->size - (intptr)q->read_index;
+        intptr_t                            d = (intptr_t)page->size - (intptr_t)q->read_index;
 
         if(d > 0)
         {
@@ -210,11 +204,11 @@ void* threaded_queue_slg_dequeue(threaded_queue_slg_t *q)
                 }
                 else
                 {
-                    threaded_queue_slg_page_t *tmp = (threaded_queue_slg_page_t*)page;
+                    threaded_queue_slg_page_t *tmp = (threaded_queue_slg_page_t *)page;
                     page = page->next;
                     tmp->next = q->page_pool;
                     q->page_pool = tmp;
-                    q->read_page = (threaded_queue_slg_page_t*)page;
+                    q->read_page = (threaded_queue_slg_page_t *)page;
                     q->read_index = 0;
                 }
             }
@@ -224,7 +218,7 @@ void* threaded_queue_slg_dequeue(threaded_queue_slg_t *q)
 
                 page->size = 0;
                 q->read_index = 0;
-                
+
                 cond_wait(&q->read_cond, &q->mtx);
             }
 #else
@@ -247,10 +241,9 @@ void threaded_queue_slg_wait_empty(threaded_queue_slg_t *q)
     mutex_unlock(&q->mtx);
 }
 
-int
-threaded_queue_slg_size(threaded_queue_slg_t *q)
+int threaded_queue_slg_size(threaded_queue_slg_t *q)
 {
-    intptr ret = q->read_page->size;
+    intptr_t ret = q->read_page->size;
 
     mutex_lock(&q->mtx);
     threaded_queue_slg_page_t *page = q->read_page->next;
@@ -267,4 +260,3 @@ threaded_queue_slg_size(threaded_queue_slg_t *q)
 }
 
 /** @} */
-

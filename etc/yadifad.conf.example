@@ -31,7 +31,7 @@
         serverid                     "yadifad-01"
 
         # The version returned by a query to version.yadifa. CH TXT
-        version                      "2.6.7"
+        version                      "3.0.0"
 
         # Set the maximum UDP packet size.  Cannot be less than 512.  Cannot be more than 65535.  Typical choice is 4096.
         edns0-max-size              4096
@@ -227,7 +227,7 @@ include "keys.conf"
 <zone>
         type                    primary
         domain                  localhost
-        file                    masters/localhost.zone
+        file                    primaries/localhost.zone
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -236,7 +236,7 @@ include "keys.conf"
 <zone>
         type                    primary
         domain                  localhost6
-        file                    masters/localhost6.zone
+        file                    primaries/localhost6.zone
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -245,7 +245,7 @@ include "keys.conf"
 <zone>
         type                    primary
         domain                  0.0.127.in-addr.arpa
-        file                    masters/0.0.127.in-addr.arpa.zone
+        file                    primaries/0.0.127.in-addr.arpa.zone
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -254,7 +254,7 @@ include "keys.conf"
 <zone>
         type                    primary
         domain                  0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa
-        file                    masters/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.zone
+        file                    primaries/0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.zone
         allow-transfer          none
         allow-update            none
         allow-update-forwarding none
@@ -268,7 +268,7 @@ include "keys.conf"
         domain                  somedomain.eu.
 
         # The zone file, relative to 'datapath'.  (mandatory for a primary)
-        file                    masters/somedomain.eu.zone
+        file                    primaries/somedomain.eu.zone
 
         # Specifies what address to bind to to do transfer requests for this zone
         # transfer-source       192.0.2.53
@@ -284,7 +284,7 @@ include "keys.conf"
         domain                  somedomain.eu.
 
         # The zone file, relative to 'datapath'.  (mandatory for a primary)
-        file                    masters/somedomain.eu.zone
+        file                    primaries/somedomain.eu.zone
 
         # The DNSSEC policy to apply for automatic key management by YADIFA
         dnssec-policy           "typical-policy"
@@ -298,7 +298,7 @@ include "keys.conf"
         domain                  someotherdomain.eu.
 
         # The zone file, relative to 'datapath'.  (mandatory for a primary)
-        file                    slaves/someotherdomain.eu.zone
+        file                    secondaries/someotherdomain.eu.zone
 
         primary                 192.0.2.54
         

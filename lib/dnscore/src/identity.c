@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
-
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
- *
- * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
+ *
+ *
+ *
+ * @{
+ *----------------------------------------------------------------------------*/
+
+#include "dnscore/dnscore_config.h"
 #include "dnscore/sys_types.h"
 #include "dnscore/logger.h"
 #include "dnscore/file_output_stream.h"
@@ -53,7 +51,6 @@
 #if HAVE_GRP_H
 #include <grp.h>
 #endif
-
 
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */
@@ -72,22 +69,21 @@
  *
  *  @return an error code
  */
-ya_result
-identity_change(uid_t new_uid, gid_t new_gid)
+ya_result identity_change(uid_t new_uid, gid_t new_gid)
 {
 #if __unix__
     ya_result return_code;
 
-    uid_t uid = getuid();
-    uid_t euid = getuid();
-    gid_t gid = getgid();
-    gid_t egid = getegid();
-    
-    bool is_admin = (uid==0)||(euid==0)||(gid==0)||(egid==0);
-    
+    uid_t     uid = getuid();
+    uid_t     euid = getuid();
+    gid_t     gid = getgid();
+    gid_t     egid = getegid();
+
+    bool      is_admin = (uid == 0) || (euid == 0) || (gid == 0) || (egid == 0);
+
     /*    ------------------------------------------------------------    */
 
-    if( is_admin && ((uid != new_uid) || (gid != new_gid) || (euid != new_uid) || (egid != new_gid)))
+    if(is_admin && ((uid != new_uid) || (gid != new_gid) || (euid != new_uid) || (egid != new_gid)))
     {
         log_info("changing identity to %d:%d (current: %d:%d)", new_uid, new_gid, uid, gid);
     }
@@ -105,15 +101,17 @@ identity_change(uid_t new_uid, gid_t new_gid)
             return_code = ERRNO_ERROR;
             log_err("error switching to gid %i: %r", new_gid, return_code);
 
-            return return_code;;
+            return return_code;
+            ;
         }
-        
+
         if(setegid(new_gid) < 0)
         {
             return_code = ERRNO_ERROR;
             log_err("error switching to egid %i: %r", new_gid, return_code);
 
-            return return_code;;
+            return return_code;
+            ;
         }
     }
 
@@ -130,19 +128,21 @@ identity_change(uid_t new_uid, gid_t new_gid)
             return_code = ERRNO_ERROR;
             log_err("could not change uid to %i: %r", new_uid, return_code);
 
-            return return_code;;
+            return return_code;
+            ;
         }
-        
+
         if(seteuid(new_uid) < 0)
         {
             return_code = ERRNO_ERROR;
             log_err("could not change euid to %i: %r", new_uid, return_code);
 
-            return return_code;;
+            return return_code;
+            ;
         }
     }
 #if DEBUG
-    output_stream os;
+    output_stream_t os;
     if(ISOK(file_output_stream_create(&os, "/tmp/test-uid-gid", 0644)))
     {
         osformatln(&os, "uid=%u gid=%u euid=%u egid=%u\n", uid, gid, euid, egid);

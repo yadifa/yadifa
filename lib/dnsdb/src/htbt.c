@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Hash-Table of Balanced trees structure and functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Hash-Table of Balanced trees structure and functions.
  *
  *  Implementation of the Hash-Table of Balanced trees structure and functions.
  *  An hashtable holding htbt collections.
@@ -50,11 +49,14 @@
  *  _ reduce the number of potential collisions in said trees.
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
-#include "dnsdb/dnsdb-config.h"
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <stdlib.h>
 
 #include "dnsdb/htbt.h"
@@ -69,8 +71,7 @@
  *
  */
 
-htbt
-htbt_create()
+htbt htbt_create()
 {
     htbt ret = htable_alloc();
 
@@ -85,22 +86,18 @@ htbt_create()
 
     if(ret != NULL)
     {
-        u32 i;
+        uint32_t i;
 
         for(i = 0; i < DEFAULT_HTABLE_SIZE; i++)
         {
-            btree_init((btree*) & ret[i].data);
+            btree_init((btree *)&ret[i].data);
         }
     }
 
     return ret;
 }
 
-void
-htbt_init(htbt* collection)
-{
-    *collection = htbt_create();
-}
+void htbt_init(htbt *collection) { *collection = htbt_create(); }
 
 #if !ZDB_INLINES_HTBT_FIND
 
@@ -116,18 +113,17 @@ htbt_init(htbt* collection)
  *  @return A pointer to the node or NULL if there is no such node.
  */
 
-void*
-htbt_find(htbt collection, hashcode obj_hash)
+void *htbt_find(htbt collection, hashcode obj_hash)
 {
     /* compute the table hash from the object hash */
     hashcode table_hash = HTBT_HASH_TRANSFORM(obj_hash);
 
     /* grab the entry for the given hash */
-    htable_entry* entry = &htable_get(collection, table_hash);
+    htable_entry *entry = &htable_get(collection, table_hash);
 
     /* search the tree of the entry */
 
-    return btree_find((btree*) & entry->data, obj_hash);
+    return btree_find((btree *)&entry->data, obj_hash);
 }
 
 /** @brief Finds a node in the collection.
@@ -142,18 +138,17 @@ htbt_find(htbt collection, hashcode obj_hash)
  *  @return A pointer to a pointer to the node or NULL if there is no such node.
  */
 
-void**
-htbt_findp(htbt collection, hashcode obj_hash)
+void **htbt_findp(htbt collection, hashcode obj_hash)
 {
     /* compute the table hash from the object hash */
     hashcode table_hash = HTBT_HASH_TRANSFORM(obj_hash);
 
     /* grab the entry for the given hash */
-    htable_entry* entry = &htable_get(collection, table_hash);
+    htable_entry *entry = &htable_get(collection, table_hash);
 
     /* search the tree of the entry */
 
-    return btree_findp((btree*) & entry->data, obj_hash);
+    return btree_findp((btree *)&entry->data, obj_hash);
 }
 
 /** @brief Inserts data into the collection.
@@ -169,18 +164,17 @@ htbt_findp(htbt collection, hashcode obj_hash)
  *  @return A pointer to the data field associated to the hash, or NULL (out of memory)
  */
 
-void**
-htbt_insert(htbt collection, hashcode obj_hash)
+void **htbt_insert(htbt collection, hashcode obj_hash)
 {
     /* compute the table hash from the object hash */
     hashcode table_hash = HTBT_HASH_TRANSFORM(obj_hash);
 
     /* grab the entry for the given hash */
-    htable_entry* entry = &htable_get(collection, table_hash);
+    htable_entry *entry = &htable_get(collection, table_hash);
 
     /* search the tree of the entry */
 
-    void** pdata = btree_insert((btree*) & entry->data, obj_hash);
+    void **pdata = btree_insert((btree *)&entry->data, obj_hash);
 
     return pdata;
 }
@@ -197,18 +191,17 @@ htbt_insert(htbt collection, hashcode obj_hash)
  *  @return The node associated to the hash
  */
 
-void*
-htbt_delete(htbt collection, hashcode obj_hash)
+void *htbt_delete(htbt collection, hashcode obj_hash)
 {
     /* compute the table hash from the object hash */
     hashcode table_hash = HTBT_HASH_TRANSFORM(obj_hash);
 
     /* grab the entry for the given hash */
-    htable_entry* entry = &htable_get(collection, table_hash);
+    htable_entry *entry = &htable_get(collection, table_hash);
 
     /* search the tree of the entry */
 
-    void** pdata = btree_delete((btree*) & entry->data, obj_hash);
+    void **pdata = btree_delete((btree *)&entry->data, obj_hash);
 
     return pdata;
 }
@@ -223,19 +216,18 @@ htbt_delete(htbt collection, hashcode obj_hash)
  *  @param[in] collection the collection to destroy
  */
 
-void
-htbt_destroy(htbt* collectionp)
+void htbt_destroy(htbt *collectionp)
 {
     yassert(collectionp != NULL);
     htbt collection = *collectionp;
 
     if(collection != NULL)
     {
-        u32 i;
+        uint32_t i;
 
         for(i = 0; i < DEFAULT_HTABLE_SIZE; i++)
         {
-            btree_destroy((btree*) & collection[i].data);
+            btree_finalise((btree *)&collection[i].data);
             collection[i].data = NULL;
         }
 
@@ -245,8 +237,7 @@ htbt_destroy(htbt* collectionp)
     }
 }
 
-void
-htbt_iterator_init(htbt collection, htbt_iterator* iter)
+void htbt_iterator_init(htbt collection, htbt_iterator *iter)
 {
     if(collection != NULL)
     {
@@ -257,9 +248,9 @@ htbt_iterator_init(htbt collection, htbt_iterator* iter)
                 /* We got one */
                 btree_iterator_init((btree)collection->data, &iter->iter);
                 /* The next one, if any, can be found from the next hash-table slot*/
-                
+
                 iter->table = collection + 1;
-                iter->count = collection_limit - collection - 1; // the size of the remaining array (starts close to the size of the htbt hash)
+                iter->count = (int32_t)(collection_limit - collection - 1); // the size of the remaining array (starts close to the size of the htbt hash)
 
                 return;
             }
@@ -272,34 +263,33 @@ htbt_iterator_init(htbt collection, htbt_iterator* iter)
     btree_iterator_init(NULL, &iter->iter);
 }
 
-avl_node *
-htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
+avl_node *htbt_iterator_init_from(htbt collection, htbt_iterator *iter, hashcode obj_hash)
 {
     if(collection != NULL)
     {
-        hashcode table_hash = HTBT_HASH_TRANSFORM(obj_hash);
-        
+        hashcode   table_hash = HTBT_HASH_TRANSFORM(obj_hash);
+
         htbt const collection_limit = &collection[DEFAULT_HTABLE_SIZE];
-                
+
         collection = &htable_get(collection, table_hash);
-        
+
         // if the tree exists
-        
+
         if(collection->data != NULL)
         {
             /* We got one */
 
-            btree_node *node = btree_iterator_init_from((btree) collection->data, &iter->iter, obj_hash);
+            btree_node *node = btree_iterator_init_from((btree)collection->data, &iter->iter, obj_hash);
             /* The next one, if any, can be found from the next hash-table slot*/
 
             iter->table = collection + 1;
-            iter->count = collection_limit - collection - 1;
+            iter->count = (int32_t)(collection_limit - collection - 1);
 
             return node;
         }
-        
+
         // else find the first tree that exists
-        
+
         for(collection++; collection < collection_limit; collection++)
         {
             if(collection->data != NULL)
@@ -310,37 +300,32 @@ htbt_iterator_init_from(htbt collection, htbt_iterator* iter, hashcode obj_hash)
                 /* The next one, if any, can be found from the next hash-table slot*/
 
                 iter->table = collection + 1;
-                iter->count = collection_limit - collection - 1;
-                
+                iter->count = (int32_t)(collection_limit - collection - 1);
+
                 return NULL;
             }
         }
     }
-    
+
     // else there is nothing to see here
 
     iter->count = -1;
     iter->table = NULL;
 
     btree_iterator_init(NULL, &iter->iter);
-    
+
     return NULL;
 }
 
 #if !ZDB_INLINES_HTBT_FIND
 
-bool
-htbt_iterator_hasnext(htbt_iterator* iter)
-{
-    return btree_iterator_hasnext(&iter->iter);
-}
+bool htbt_iterator_hasnext(htbt_iterator *iter) { return btree_iterator_hasnext(&iter->iter); }
 
 #endif
 
-void**
-htbt_iterator_next(htbt_iterator* iter)
+void **htbt_iterator_next(htbt_iterator *iter)
 {
-    void* vpp = btree_iterator_next(&iter->iter);
+    void *vpp = btree_iterator_next(&iter->iter);
 
     /* Is there still something to iter in the current tree ? */
     if(!btree_iterator_hasnext(&iter->iter))
@@ -349,7 +334,8 @@ htbt_iterator_next(htbt_iterator* iter)
 
         if(iter->count > 0)
         {
-            for(; (iter->count > 0) && (iter->table->data == NULL); iter->count--, iter->table++);
+            for(; (iter->count > 0) && (iter->table->data == NULL); iter->count--, iter->table++)
+                ;
 
             if(iter->count > 0)
             {
@@ -364,10 +350,9 @@ htbt_iterator_next(htbt_iterator* iter)
     return vpp;
 }
 
-htbt_node*
-htbt_iterator_next_node(htbt_iterator* iter)
+htbt_node *htbt_iterator_next_node(htbt_iterator *iter)
 {
-    btree_node* node = btree_iterator_next_node(&iter->iter);
+    btree_node *node = btree_iterator_next_node(&iter->iter);
 
     /* Is there still something to iter in the current tree ? */
     if(!btree_iterator_hasnext(&iter->iter))
@@ -376,7 +361,8 @@ htbt_iterator_next_node(htbt_iterator* iter)
 
         if(iter->count > 0)
         {
-            for(; (iter->count > 0) && (iter->table->data == NULL); iter->count--, iter->table++);
+            for(; (iter->count > 0) && (iter->table->data == NULL); iter->count--, iter->table++)
+                ;
 
             if(iter->count > 0)
             {

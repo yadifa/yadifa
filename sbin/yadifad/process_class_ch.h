@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 
 void class_ch_set_hostname(const char *name);
 void class_ch_set_version(const char *name);
@@ -54,6 +52,6 @@ void class_ch_set_id_server(const char *name);
  * Answers to a CH query.  Query operation assumed.
  */
 
-void class_ch_process(message_data *mesg);
+void class_ch_process(dns_message_t *mesg);
 
 /** @} */

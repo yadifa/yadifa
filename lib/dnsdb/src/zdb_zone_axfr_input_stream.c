@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,11 +28,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <unistd.h>
 
 #include "dnscore/file_input_stream.h"
@@ -41,13 +39,13 @@
 #include "dnsdb/zdb_types.h"
 #include "dnsdb/zdb_zone_axfr_input_stream.h"
 
-#include "dnsdb/zdb-zone-path-provider.h"
+#include "dnsdb/zdb_zone_path_provider.h"
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/** @defgroup
+ *  @ingroup
+ *  @brief
  *
- *  
+ *
  *
  * @{
  *
@@ -56,10 +54,10 @@
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */
 
-extern logger_handle* g_database_logger;
+extern logger_handle_t *g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-#define AXFRIS_TAG  0x534952465841
+#define AXFRIS_TAG        0x534952465841
 
 /*------------------------------------------------------------------------------
  * STATIC PROTOTYPES */
@@ -81,37 +79,36 @@ typedef struct zdb_zone_axfr_input_stream_data zdb_zone_axfr_input_stream_data;
 
 struct zdb_zone_axfr_input_stream_data
 {
-    input_stream filtered;
-    zdb_zone* zone;
-    u32 serial;
+    input_stream_t filtered;
+    zdb_zone_t    *zone;
+    uint32_t       serial;
 };
 
-static ya_result
-zdb_zone_axfr_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
+static ya_result zdb_zone_axfr_input_stream_read(input_stream_t *stream_, void *buffer_, uint32_t len)
 {
-    zdb_zone_axfr_input_stream_data* stream = (zdb_zone_axfr_input_stream_data*)stream_->data;
-    u8 *buffer = (u8*)buffer_;
-    bool first_chance_eof = FALSE;
-    
+    zdb_zone_axfr_input_stream_data *stream = (zdb_zone_axfr_input_stream_data *)stream_->data;
+    uint8_t                         *buffer = (uint8_t *)buffer_;
+    bool                             first_chance_eof = false;
+
     for(;;)
-    {    
+    {
         ya_result n = input_stream_read(&stream->filtered, buffer, len);
-        
+
         // ERROR or SUCCESS
-        
+
         if(n != 0)
         {
             /* log_debug("zdb_zone_axfr_input_stream_read: got %d", n); */
-            
+
             return n;
         }
-        
+
         // EOF ... or is it ?
 
         if(first_chance_eof)
         {
             // already broken once : EOF
-            
+
             /* log_debug("zdb_zone_axfr_input_stream_read: final EOF"); */
 
             return 0;
@@ -120,15 +117,15 @@ zdb_zone_axfr_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
         if((stream->zone->axfr_timestamp != 0) || (stream->zone->axfr_serial != stream->serial))
         {
             // file written OR file written and a new one starts to be written => done
-            
+
             /* log_debug("zdb_zone_axfr_input_stream_read: first chance EOF"); */
 
-            first_chance_eof = TRUE;
+            first_chance_eof = true;
         }
         else
         {
             // just wait
-            
+
             /* log_debug("zdb_zone_axfr_input_stream_read: wait"); */
         }
 
@@ -136,70 +133,61 @@ zdb_zone_axfr_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
     }
 }
 
-static ya_result
-zdb_zone_axfr_input_stream_skip(input_stream* stream_, u32 len)
+static ya_result zdb_zone_axfr_input_stream_skip(input_stream_t *stream_, uint32_t len)
 {
     // Yes, this is not the usual pattern : skip will simply read from the stream into
     // a buffer so the call is simply forwarded to the reader.
-    //zdb_zone_axfr_input_stream_data* stream = (zdb_zone_axfr_input_stream_data*)stream_;
+    // zdb_zone_axfr_input_stream_data* stream = (zdb_zone_axfr_input_stream_data*)stream_;
     ya_result total = 0;
-        
-    u8 tmp[512];
-    
+
+    uint8_t   tmp[512];
+
     while(len > 0)
     {
         // Yes, I meant to use stream_ and not "stream"
         ya_result n = zdb_zone_axfr_input_stream_read(stream_, tmp, MIN(len, sizeof(tmp)));
-        
+
         if(FAIL(n))
         {
             return n;
         }
-        
+
         if(n == 0)
         {
             break;
         }
-        
+
         total += n;
     }
-    
+
     return total;
 }
 
-static void
-zdb_zone_axfr_input_stream_close(input_stream* is)
+static void zdb_zone_axfr_input_stream_close(input_stream_t *is)
 {
-    zdb_zone_axfr_input_stream_data* data = (zdb_zone_axfr_input_stream_data*)is->data;
-    
+    zdb_zone_axfr_input_stream_data *data = (zdb_zone_axfr_input_stream_data *)is->data;
+
     input_stream_close(&data->filtered);
-    
+
     free(data);
-    
+
     input_stream_set_void(is);
 }
 
-static input_stream_vtbl zdb_zone_axfr_input_stream_vtbl =
-{
-    zdb_zone_axfr_input_stream_read,
-    zdb_zone_axfr_input_stream_skip,
-    zdb_zone_axfr_input_stream_close,
-    "zdb_zone_axfr_input_stream"
-};
+static input_stream_vtbl zdb_zone_axfr_input_stream_vtbl = {zdb_zone_axfr_input_stream_read, zdb_zone_axfr_input_stream_skip, zdb_zone_axfr_input_stream_close, "zdb_zone_axfr_input_stream"};
 
-ya_result
-zdb_zone_axfr_input_stream_open_with_path(input_stream *is, zdb_zone *zone, const char *filepath)
+ya_result                zdb_zone_axfr_input_stream_open_with_path(input_stream_t *is, zdb_zone_t *zone, const char *filepath)
 {
     ya_result ret;
-    u32 serial;
-    //u32 timestamp;
-    
-    serial    = zone->axfr_serial;
-    //timestamp = zone->axfr_timestamp; 
-    
+    uint32_t  serial;
+    // uint32_t timestamp;
+
+    serial = zone->axfr_serial;
+    // timestamp = zone->axfr_timestamp;
+
     if(ISOK(ret = file_input_stream_open(is, filepath)))
     {
-        zdb_zone_axfr_input_stream_data* data;
+        zdb_zone_axfr_input_stream_data *data;
         MALLOC_OBJECT_OR_DIE(data, zdb_zone_axfr_input_stream_data, AXFRIS_TAG);
         data->filtered.data = is->data;
         data->filtered.vtbl = is->vtbl;
@@ -209,39 +197,34 @@ zdb_zone_axfr_input_stream_open_with_path(input_stream *is, zdb_zone *zone, cons
         is->data = data;
         is->vtbl = &zdb_zone_axfr_input_stream_vtbl;
     }
-    
+
     return ret;
 }
 
-ya_result
-zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone)
+ya_result zdb_zone_axfr_input_stream_open(input_stream_t *is, zdb_zone_t *zone)
 {
     ya_result ret;
-    u32 serial;
-    u32 timestamp;
-    char path[PATH_MAX];
+    uint32_t  serial;
+    uint32_t  timestamp;
+    char      path[PATH_MAX];
 
-    serial    = zone->axfr_serial;
-    timestamp = zone->axfr_timestamp;    
-        
-        
+    serial = zone->axfr_serial;
+    timestamp = zone->axfr_timestamp;
+
     while(timestamp == 0)
     {
-       /* 
-        * being written : try to open the axfr.part file
-        * in the event of a success, a stream waiting for the completion of the file will be returned
-        */
+        /*
+         * being written : try to open the axfr.part file
+         * in the event of a success, a stream waiting for the completion of the file will be returned
+         */
 
-        if(ISOK(ret = zdb_zone_path_get_provider()(
-            zone->origin, 
-            path, sizeof(path) - 6,
-            ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
+        if(ISOK(ret = zdb_zone_path_get_provider()(zone->origin, path, sizeof(path) - 6, ZDB_ZONE_PATH_PROVIDER_AXFR_FILE | ZDB_ZONE_PATH_PROVIDER_MKDIR)))
         {
             memcpy(&path[ret], ".part", 6);
 
             if(ISOK(ret = file_input_stream_open(is, path)))
             {
-                zdb_zone_axfr_input_stream_data* data;
+                zdb_zone_axfr_input_stream_data *data;
                 MALLOC_OBJECT_OR_DIE(data, zdb_zone_axfr_input_stream_data, AXFRIS_TAG);
                 data->filtered.data = is->data;
                 data->filtered.vtbl = is->vtbl;
@@ -254,7 +237,7 @@ zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone)
                 return ret;
             }
         }
-        
+
         if(dnscore_shuttingdown())
         {
             return STOPPED_BY_APPLICATION_SHUTDOWN;
@@ -262,7 +245,7 @@ zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone)
 
         usleep(10000);
 
-        serial    = zone->axfr_serial;
+        serial = zone->axfr_serial;
         timestamp = zone->axfr_timestamp;
     }
 
@@ -271,10 +254,7 @@ zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone)
      * in the event of a success, a simple file input stream will be returned
      */
 
-    if(ISOK(ret = zdb_zone_path_get_provider()(
-        zone->origin, 
-        path, sizeof(path) - 6,
-        ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
+    if(ISOK(ret = zdb_zone_path_get_provider()(zone->origin, path, sizeof(path) - 6, ZDB_ZONE_PATH_PROVIDER_AXFR_FILE | ZDB_ZONE_PATH_PROVIDER_MKDIR)))
     {
         ret = file_input_stream_open(is, path);
     }

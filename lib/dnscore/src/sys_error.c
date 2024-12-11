@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,27 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnscoreerror Error
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup dnscoreerror Error
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include <openssl/err.h>
 #include <dnscore/logger_handle.h>
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/sys_types.h"
 #include "dnscore/sys_error.h"
 #include "dnscore/rfc.h"
-#include "dnscore/u32_set.h"
+#include "dnscore/u32_treemap.h"
 #include "dnscore/output_stream.h"
 #include "dnscore/format.h"
 #include "dnscore/dnssec_errors.h"
@@ -57,18 +54,20 @@
 #include "dnscore/cmdline.h"
 #include "dnscore/zone_reader.h"
 #include "dnscore/zone_reader_text.h"
+#include "dnscore/crypto.h"
 
-extern logger_handle *g_system_logger;
+#include <openssl/ssl.h>
+#include <openssl/engine.h>
+#include <openssl/err.h>
+
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
-#define ERRORTBL_TAG 0x4c4254524f525245
+#define ERRORTBL_TAG      0x4c4254524f525245
 
 #define ERROR_TEXT_COPIED 0
 
-/*----------------------------------------------------------------------------*/
-
-void
-dief(ya_result error_code, const char* format, ...)
+void dief(ya_result error_code, const char *format, ...)
 {
     /**
      * @note Cannot use format here.  The output call HAS to be from the standard library/system.
@@ -84,10 +83,9 @@ dief(ya_result error_code, const char* format, ...)
     abort();
 }
 
-static u32_node *error_set = NULL;
+static u32_treemap_node_t *error_set = NULL;
 
-void
-error_register(ya_result code, const char* const text)
+void                       error_register(ya_result code, const char *const text)
 {
     if(text == NULL)
     {
@@ -102,58 +100,53 @@ error_register(ya_result code, const char* const text)
         return;
     }
 
-    u32_node *error_node;
+    u32_treemap_node_t *error_node;
 
-    if((error_node = u32_set_find(&error_set, code)) == NULL)
+    if((error_node = u32_treemap_find(&error_set, code)) == NULL)
     {
-        error_node = u32_set_insert(&error_set, code);
+        error_node = u32_treemap_insert(&error_set, code);
 
         if(error_node->value == 0)
         {
 #if ERROR_TEXT_COPIED
             error_node->value = strdup(text);
 #else
-            error_node->value = (void*)text; /// @note 20210427 edf -- it used to be strdup(text), but the parameter is supposed to be a constant string.
+            error_node->value = (void *)text; /// @note 20210427 edf -- it used to be strdup(text), but the parameter is
+                                              /// supposed to be a constant string.
 #endif
         }
     }
     else
     {
-        fprintf(stderr, "\nerror_register(%08x,%s): duplicate key, previous value = '%s'\n", code, text, (const char*)error_node->value);
+        fprintf(stderr, "\nerror_register(%08x,%s): duplicate key, previous value = '%s'\n", code, text, (const char *)error_node->value);
         fflush(stderr);
     }
 }
 
 #if ERROR_TEXT_COPIED
-static void
-error_unregister_all_cb(u32_node *node)
-{
-    free(node->value);
-}
+static void error_unregister_all_cb(u32_treemap_node_t *node) { free(node->value); }
 #endif
 
-void
-error_unregister_all()
+void error_unregister_all()
 {
 #if ERROR_TEXT_COPIED
-    u32_set_callback_and_destroy(&error_set, error_unregister_all_cb);
+    u32_treemap_callback_and_finalise(&error_set, error_unregister_all_cb);
 #else
-    u32_set_destroy(&error_set);
+    u32_treemap_finalise(&error_set);
 #endif
 }
 
 static char error_gettext_tmp[64];
 
 /**
- * 
- * DEPRECATED
- * 
+ *
+ * DEPRECATED, not thread-safe
+ *
  * @param code
- * @return 
+ * @return
  */
 
-const char*
-error_gettext(ya_result code)
+const char *error_gettext(ya_result code)
 {
     /* errno handling */
 
@@ -169,21 +162,21 @@ error_gettext(ya_result code)
     }
 
     /**/
-    
-    u32_node *error_node;
-    
-    error_node = u32_set_find(&error_set, code);
-    if(error_node != NULL)
-    {
-        return (const char*)error_node->value;
-    }
-    
-    u32 error_base = YA_ERROR_BASE(code);
 
-    error_node = u32_set_find(&error_set, error_base);
+    u32_treemap_node_t *error_node;
+
+    error_node = u32_treemap_find(&error_set, code);
     if(error_node != NULL)
     {
-        return (const char*)error_node->value;
+        return (const char *)error_node->value;
+    }
+
+    uint32_t error_base = YA_ERROR_BASE(code);
+
+    error_node = u32_treemap_find(&error_set, error_base);
+    if(error_node != NULL)
+    {
+        return (const char *)error_node->value;
     }
 
     snprintf(error_gettext_tmp, sizeof(error_gettext_tmp), "undefined error code %08x", code);
@@ -192,15 +185,14 @@ error_gettext(ya_result code)
 }
 
 /**
- * 
+ *
  * Text representation of the error code
- * 
+ *
  * @param os
  * @param code
  */
 
-void
-error_writetext(output_stream *os, ya_result code)
+void error_writetext(output_stream_t *os, ya_result code)
 {
     /* errno handling */
 
@@ -213,15 +205,10 @@ error_writetext(output_stream *os, ya_result code)
     if(YA_ERROR_BASE(code) == ERRNO_ERROR_BASE)
     {
         code &= 0xffff;
-#if DEBUG
-        if(code == EINTR)
-        {
-            osprint(os, "<EINTR> "); // whoopsie
-        }
-#endif
         osprint(os, strerror(code));
         return;
     }
+
     else if(YA_ERROR_BASE(code) == SSL_ERROR_BASE)
     {
         code &= 0xffff;
@@ -232,39 +219,38 @@ error_writetext(output_stream *os, ya_result code)
     }
 
     /**/
-    
-    u32_node *error_node;
-    
-    error_node = u32_set_find(&error_set, code);
+
+    u32_treemap_node_t *error_node;
+
+    error_node = u32_treemap_find(&error_set, code);
     if(error_node != NULL)
     {
-        osprint(os, (const char*)error_node->value);
+        osprint(os, (const char *)error_node->value);
         return;
     }
-    
-    u32 error_base = YA_ERROR_BASE(code);
 
-    error_node = u32_set_find(&error_set, error_base);
+    uint32_t error_base = YA_ERROR_BASE(code);
+
+    error_node = u32_treemap_find(&error_set, error_base);
     if(error_node != NULL)
     {
-        osformatln(os, "%s(%08x)", (const char*)error_node->value, code);
+        osformatln(os, "%s(%08x)", (const char *)error_node->value, code);
         return;
     }
 
     osformat(os, "undefined error code %08x", code);
 }
 
-static bool dnscore_register_errors_done = FALSE;
+static bool dnscore_register_errors_done = false;
 
-void
-dnscore_register_errors()
+void        dnscore_register_errors()
 {
     if(dnscore_register_errors_done)
     {
         return;
     }
 
-    dnscore_register_errors_done = TRUE;
+    dnscore_register_errors_done = true;
 
     error_register(SUCCESS, "SUCCESS");
 
@@ -275,6 +261,7 @@ dnscore_register_errors()
     error_register(PARSEINT_ERROR, "PARSEINT_ERROR");
     error_register(PARSEDATE_ERROR, "PARSEDATE_ERROR");
     error_register(PARSEIP_ERROR, "PARSEIP_ERROR");
+    error_register(PARSE_ERROR, "PARSE_ERROR");
 
     error_register(CIRCULAR_FILE_FULL, "CIRCULAR_FILE_FULL");
     error_register(CIRCULAR_FILE_SHORT, "CIRCULAR_FILE_SHORT");
@@ -284,7 +271,7 @@ dnscore_register_errors()
     error_register(DATA_FORMAT_ERROR, "DATA_FORMAT_ERROR");
 
     error_register(LOCK_FAILED, "LOCK_FAILED");
-    
+
     error_register(TCP_RATE_TOO_SLOW, "TCP_RATE_TOO_SLOW");
 
     error_register(PARSEWORD_NOMATCH_ERROR, "PARSEWORD_NOMATCH_ERROR");
@@ -293,7 +280,7 @@ dnscore_register_errors()
     error_register(PARSE_INVALID_CHARACTER, "PARSE_INVALID_CHARACTER");
     error_register(PARSE_INVALID_ARGUMENT, "PARSE_INVALID_ARGUMENT");
     error_register(PARSE_EMPTY_ARGUMENT, "PARSE_EMPTY_ARGUMENT");
-    
+
     error_register(CONFIG_SECTION_CALLBACK_ALREADY_SET, "CONFIG_SECTION_CALLBACK_ALREADY_SET");
     error_register(CONFIG_SECTION_CALLBACK_NOT_SET, "CONFIG_SECTION_CALLBACK_NOT_SET");
     error_register(CONFIG_SECTION_CALLBACK_NOT_FOUND, "CONFIG_SECTION_CALLBACK_NOT_FOUND");
@@ -331,6 +318,8 @@ dnscore_register_errors()
     error_register(UNSUPPORTED_CLASS, "UNSUPPORTED_CLASS");
 
     error_register(CANNOT_OPEN_FILE, "CANNOT_OPEN_FILE");
+
+    error_register(CONNECTION_QUOTA_EXCEEDED, "CONNECTION_QUOTA_EXCEEDED");
 
     error_register(UNKNOWN_NAME, "UNKNOWN_NAME");
     error_register(BIGGER_THAN_PATH_MAX, "BIGGER_THAN_PATH_MAX");
@@ -371,7 +360,7 @@ dnscore_register_errors()
     error_register(LOGGER_CHANNEL_ALREADY_REGISTERED, "LOGGER_CHANNEL_ALREADY_REGISTERED");
     error_register(LOGGER_CHANNEL_NOT_REGISTERED, "LOGGER_CHANNEL_NOT_REGISTERED");
     error_register(LOGGER_CHANNEL_HAS_LINKS, "LOGGER_CHANNEL_HAS_LINKS");
-    
+
     error_register(ALARM_REARM, "ALARM_REARM");
 
     error_register(DNS_ERROR_BASE, "DNS_ERROR_BASE");
@@ -395,16 +384,15 @@ dnscore_register_errors()
     error_register(MESSAGE_IS_NOT_AN_ANSWER, "MESSAGE_IS_NOT_AN_ANSWER");
     error_register(MESSAGE_UNEXPECTED_ANSWER_DOMAIN, "MESSAGE_UNEXPECTED_ANSWER_DOMAIN");
     error_register(MESSAGE_UNEXPECTED_ANSWER_TYPE_CLASS, "MESSAGE_UNEXPECTED_ANSWER_TYPE_CLASS");
-    error_register(MESSAGE_CONTENT_OVERFLOW, "MESSAGE_CONTENT_OVERFLOW");
     error_register(MESSAGE_TRUNCATED, "MESSAGE_TRUNCATED");
-    
+
     error_register(RRSIG_COVERED_TYPE_DIFFERS, "RRSIG_COVERED_TYPE_DIFFERS");
     error_register(RRSIG_OUTPUT_DIGEST_SIZE_TOO_BIG, "RRSIG_OUTPUT_DIGEST_SIZE_TOO_BIG");
     error_register(RRSIG_UNSUPPORTED_COVERED_TYPE, "RRSIG_UNSUPPORTED_COVERED_TYPE");
     error_register(RRSIG_VERIFICATION_FAILED, "RRSIG_VERIFICATION_FAILED");
 
     error_register(DNSSEC_ALGORITHM_UNKOWN, "DNSSEC_ALGORITHM_UNKOWN");
-    
+
     /* DNS */
 
     error_register(RCODE_ERROR_CODE(RCODE_NOERROR), "NOERROR");
@@ -451,7 +439,7 @@ dnscore_register_errors()
     error_register(DNSSEC_ERROR_KEYISTOOBIG, "DNSSEC_ERROR_KEYISTOOBIG");
     error_register(DNSSEC_ERROR_KEYRING_ALGOTAG_COLLISION, "DNSSEC_ERROR_KEYRING_ALGOTAG_COLLISION");
 
-    error_register(DNSSEC_ERROR_KEYRING_KEY_IS_NOT_PRIVATE,"DNSSEC_ERROR_KEYRING_KEY_IS_NOT_PRIVATE");
+    error_register(DNSSEC_ERROR_KEYRING_KEY_IS_NOT_PRIVATE, "DNSSEC_ERROR_KEYRING_KEY_IS_NOT_PRIVATE");
 
     error_register(DNSSEC_ERROR_KEY_GENERATION_FAILED, "DNSSEC_ERROR_KEY_GENERATION_FAILED");
     error_register(DNSSEC_ERROR_NO_KEY_FOR_DOMAIN, "DNSSEC_ERROR_NO_KEY_FOR_DOMAIN");
@@ -467,7 +455,7 @@ dnscore_register_errors()
     error_register(DNSSEC_ERROR_NSEC3_LABELTODIGESTFAILED, "DNSSEC_ERROR_NSEC3_LABELTODIGESTFAILED");
     error_register(DNSSEC_ERROR_NSEC3_DIGESTORIGINOVERFLOW, "DNSSEC_ERROR_NSEC3_DIGESTORIGINOVERFLOW");
     error_register(DNSSEC_ERROR_NSEC3_LABELNOTFOUND, "DNSSEC_ERROR_NSEC3_LABELNOTFOUND");
-    
+
     error_register(DNSSEC_ERROR_NSEC_INVALIDZONESTATE, "DNSSEC_ERROR_NSEC_INVALIDZONESTATE");
 
     error_register(DNSSEC_ERROR_RRSIG_NOENGINE, "DNSSEC_ERROR_RRSIG_NOENGINE");
@@ -481,36 +469,10 @@ dnscore_register_errors()
     error_register(ZALLOC_ERROR_OUTOFMEMORY, "ZALLOC_ERROR_OUTOFMEMORY");
 
     zone_reader_text_init_error_codes();
-    
+
     parser_init_error_codes();
     config_init_error_codes();
     cmdline_init_error_codes();
-}
-
-ya_result ya_ssl_error()
-{
-    unsigned long ssl_err = ERR_get_error();
-
-    if(ssl_err != 0)
-    {
-        LOGGER_EARLY_CULL_PREFIX(MSG_ERR)
-        {
-            char buffer[256];
-            ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-            log_err("ssl: %i, %s", ssl_err, buffer);
-
-            unsigned long next_ssl_err;
-            while((next_ssl_err = ERR_get_error()) != 0)
-            {
-                ERR_error_string_n(next_ssl_err, buffer, sizeof(buffer));
-                log_err("ssl: %i, %s", next_ssl_err, buffer);
-            }
-
-            ERR_clear_error();
-        }
-    }
-
-    return SSL_ERROR_CODE(ssl_err);
 }
 
 /** @} */

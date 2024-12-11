@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,68 +28,60 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
  *  This version of the ring buffer uses the condition-wait mechanism instead of the 3-mutex one.
  *  I'll have to bench both versions but the main incentive is to get rid of complains from helgrind
- * 
- * @{
  *
+ * @{
  *----------------------------------------------------------------------------*/
 #ifndef _THREADED_RINGBUFFER_CW_H
-#define	_THREADED_RINGBUFFER_CW_H
+#define _THREADED_RINGBUFFER_CW_H
 
 #include <dnscore/sys_types.h>
 #include <dnscore/mutex.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-typedef struct threaded_ringbuffer_cw threaded_ringbuffer_cw;
-
-
-struct threaded_ringbuffer_cw_node;
-
-/* NOTE: The algorithm does not need these to be volatile */
-
-struct threaded_ringbuffer_cw
+struct threaded_ringbuffer_cw_s
 {
-    void** buffer;
-    void** buffer_limit;
-    void** write_slot;
-    void** read_slot;
+    void   **buffer;
+    void   **buffer_limit;
+    void   **write_slot;
+    void   **read_slot;
 
-    mutex_t mutex;
-    cond_t cond_read;
-    cond_t cond_write;
+    mutex_t  mutex;
+    cond_t   cond_read;
+    cond_t   cond_write;
 
-    u32 max_size;
-    u32 size;
+    uint32_t max_size;
+    uint32_t size;
 };
 
-#define THREADED_RINGBUFFER_CW_EMPTY {0,0,0,0,MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,0,0}
+typedef struct threaded_ringbuffer_cw_s threaded_ringbuffer_cw_t;
 
-void  threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size);
-void  threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw *queue);
-void  threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue,void* constant_pointer);
-void  threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constant_pointer_array, u32 count);
-bool  threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw *queue,void* constant_pointer);
-void* threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue);
-void* threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue);
-void* threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue);
-void* threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 timeout_us);
-void* threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue);
-u32   threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void** array, u32 array_size);
-void  threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue);
-u32   threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue);
-int   threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue);
+#define THREADED_RINGBUFFER_CW_EMPTY {0, 0, 0, 0, MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, 0}
+
+void     threaded_ringbuffer_cw_init(threaded_ringbuffer_cw_t *queue, int max_size);
+void     threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw_t *queue);
+void     threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw_t *queue, void *constant_pointer);
+void     threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw_t *queue, void **constant_pointer_array, uint32_t count);
+bool     threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw_t *queue, void *constant_pointer);
+void    *threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw_t *queue);
+void    *threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw_t *queue, int64_t timeout_us);
+void    *threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw_t *queue);
+uint32_t threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw_t *queue, void **array, uint32_t array_size);
+void     threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw_t *queue);
+uint32_t threaded_ringbuffer_cw_size(threaded_ringbuffer_cw_t *queue);
+int      threaded_ringbuffer_cw_room(threaded_ringbuffer_cw_t *queue);
 
 /*
  * The queue will block (write) if bigger than this.
@@ -97,11 +89,11 @@ int   threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue);
  * the content is emptied by the readers.
  */
 
-ya_result threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size);
+ya_result threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw_t *queue, int max_size);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _THREADED_QUEUE_H */
+#endif /* _THREADED_QUEUE_H */
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to iterate through the labels of a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to iterate through the labels of a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -46,7 +45,7 @@
 #include <dnsdb/nsec3_types.h>
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -60,23 +59,24 @@ enum zdb_zone_label_iterator_ex_mode
 
 struct zdb_zone_label_iterator_ex
 {
-    s32 mode;
-    s32 min_ttl;
-    const zdb_zone *zone;
-    struct nsec3_zone *n3;
-    u8 *pool;
-    u8 *nsec3_owner;
-    //zdb_packed_ttlrdata *nsec3_record;
-    //zdb_packed_ttlrdata *nsec3_rrsig;
-    zdb_rr_label nsec3_label;
-    avl_node nsec3_label_nsec3;
-    avl_node nsec3_label_rrsig;
+    int32_t           mode;
+    int32_t           min_ttl;
+    const zdb_zone_t *zone;
+    nsec3_zone_t     *n3;
+    uint8_t          *pool;
+    uint8_t          *nsec3_owner;
+    // zdb_resource_record_data_t *nsec3_record;
+    // zdb_resource_record_data_t *nsec3_rrsig;
+    zdb_rr_label_t                  nsec3_label;
+
+    zdb_resource_record_sets_node_t nsec3_label_nsec3;
+    zdb_resource_record_sets_node_t nsec3_label_rrsig;
     union
     {
-        struct zdb_zone_label_iterator label_iter;
-        struct nsec3_iterator nsec3_iter;
+        zdb_zone_label_iterator_t label_iter;
+        nsec3_iterator_t          nsec3_iter;
     } iter;
-    u8 pool_buffer[TMP_NSEC3_TTLRDATA_SIZE];
+    uint8_t pool_buffer[TMP_NSEC3_TTLRDATA_SIZE];
 };
 
 typedef struct zdb_zone_label_iterator_ex zdb_zone_label_iterator_ex;
@@ -91,7 +91,7 @@ typedef struct zdb_zone_label_iterator_ex zdb_zone_label_iterator_ex;
  *
  */
 
-void zdb_zone_label_iterator_ex_init(zdb_zone_label_iterator_ex* iter, const zdb_zone* zone);
+void zdb_zone_label_iterator_ex_init(zdb_zone_label_iterator_ex *iter, const zdb_zone_t *zone);
 
 /**
  * @brief Checks if there is still data available from an iterator
@@ -100,11 +100,11 @@ void zdb_zone_label_iterator_ex_init(zdb_zone_label_iterator_ex* iter, const zdb
  *
  * @param[in] iter a pointer to the iterator
  *
- * @return TRUE if data is available, FALSE otherwise.
+ * @return true if data is available, false otherwise.
  *
  */
 
-bool zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter);
+bool zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex *iter);
 
 /**
  * @brief Copies the full name of the next label returned by the "next" call.
@@ -120,8 +120,8 @@ bool zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter);
  *
  */
 
-u32 zdb_zone_label_iterator_ex_nextname_to_cstr(zdb_zone_label_iterator_ex* iter, char* buffer256);
-u32 zdb_zone_label_iterator_ex_nextname(zdb_zone_label_iterator_ex* iter, u8* buffer256);
+uint32_t zdb_zone_label_iterator_ex_nextname_to_cstr(zdb_zone_label_iterator_ex *iter, char *buffer256);
+uint32_t zdb_zone_label_iterator_ex_nextname(zdb_zone_label_iterator_ex *iter, uint8_t *buffer256);
 
 /**
  * @brief Returns the next data available from an iterator
@@ -134,9 +134,9 @@ u32 zdb_zone_label_iterator_ex_nextname(zdb_zone_label_iterator_ex* iter, u8* bu
  *
  */
 
-zdb_rr_label* zdb_zone_label_iterator_ex_next(zdb_zone_label_iterator_ex* iter);
+zdb_rr_label_t *zdb_zone_label_iterator_ex_next(zdb_zone_label_iterator_ex *iter);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

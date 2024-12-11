@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,48 +28,67 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _COUNTER_OUTPUT_STREAM_H
-#define	_COUNTER_OUTPUT_STREAM_H
+#define _COUNTER_OUTPUT_STREAM_H
 
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-    typedef struct counter_output_stream_data counter_output_stream_data;
-    
+struct counter_output_stream_context_s
+{
+    output_stream_t *filtered;
+    uint64_t         write_count;
+    uint64_t         written_count;
+    ya_result        result;
+    uint8_t          flags;
+};
 
-    struct counter_output_stream_data
-    {
-        output_stream* filtered;
-        u64 write_count;
-        u64 written_count;
-        ya_result result;
-        u8 flags;
-    };
+typedef struct counter_output_stream_context_s counter_output_stream_context_t;
 
-    void counter_output_stream_init(output_stream* filtered, output_stream* stream,counter_output_stream_data* counter_data);
+/**
+ * Initialises a counter output stream.
+ *
+ * @param os the stream
+ * @param filtered the filtered stream
+ * @param counter_data the context with the counter information
+ */
 
-#ifdef	__cplusplus
+void counter_output_stream_init(output_stream_t *os, output_stream_t *filtered, counter_output_stream_context_t *counter_data);
+
+/**
+ * Returns the counter context
+ *
+ * @param os the stream
+ */
+
+counter_output_stream_context_t *counter_output_stream_context_get(output_stream_t *os);
+
+/**
+ * Returns the filtered stream
+ *
+ * @param os the stream
+ */
+
+output_stream_t *counter_output_stream_get_filtered(output_stream_t *os);
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _counter_output_stream_H */
+#endif /* _counter_output_stream_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

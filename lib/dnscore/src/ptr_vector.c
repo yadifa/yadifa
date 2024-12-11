@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,28 +28,27 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup collections Generic collections functions
- *  @ingroup dnscore
- *  @brief A dynamic-sized array of pointers
+/**-----------------------------------------------------------------------------
+ * @defgroup collections Generic collections functions
+ * @ingroup dnscore
+ * @brief A dynamic-sized array of pointers
  *
  *  A dynamic-sized array of pointers
  *
  *  Used for resource record canonization and such.
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/ptr_vector.h"
 
-#define PTR_QSORT_SMALL 50
-#define PTR_QSORT_PIVOT_CHOSE 1
-#define PTR_QSORT_DERECURSE 1
-#define PTR_QSORT_DERECURSE_DEPTH 64
+#define PTR_QSORT_SMALL                     50
+#define PTR_QSORT_PIVOT_CHOSE               1
+#define PTR_QSORT_DERECURSE                 1
+#define PTR_QSORT_DERECURSE_DEPTH           64
 
 #define PTR_VECTOR_RESTRICTED_SIZE_INCREASE 16
 
@@ -59,32 +58,30 @@
 
 /**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
- * 
- * @param v a pointer to the ptr_vector structure to initialise
+ *
+ * @param v a pointer to the ptr_vector_t structure to initialise
  */
 
-void
-ptr_vector_init(ptr_vector* v)
+void ptr_vector_init(ptr_vector_t *v)
 {
     v->size = PTR_VECTOR_DEFAULT_SIZE;
-    MALLOC_OR_DIE(void**, v->data, v->size * sizeof(void*), PTR_VECTOR_TAG);
+    MALLOC_OR_DIE(void **, v->data, v->size * sizeof(void *), PTRVCTRD_TAG);
     v->offset = -1;
 }
 
 /**
  * Initialises a vector structure with a size of PTR_VECTOR_DEFAULT_SIZE entries
- * 
- * @param v a pointer to the ptr_vector structure to initialise
+ *
+ * @param v a pointer to the ptr_vector_t structure to initialise
  * @param initial_capacity the size to allocate to start with
  */
 
-void
-ptr_vector_init_ex(ptr_vector* v, u32 initial_capacity)
+void ptr_vector_init_ex(ptr_vector_t *v, uint32_t initial_capacity)
 {
     v->size = initial_capacity;
     if(initial_capacity > 0)
     {
-        MALLOC_OR_DIE(void**, v->data, v->size * sizeof(void*), PTR_VECTOR_TAG);
+        MALLOC_OR_DIE(void **, v->data, v->size * sizeof(void *), PTRVCTRD_TAG);
     }
     else
     {
@@ -96,22 +93,21 @@ ptr_vector_init_ex(ptr_vector* v, u32 initial_capacity)
 /**
  * Initialises a vector as a copy as another vector.
  * The reserved size is the size of the original plus the extra size.
- * 
- * @param v a pointer to the ptr_vector structure to initialise
+ *
+ * @param v a pointer to the ptr_vector_t structure to initialise
  * @param original the vector to copy
  * @param extra_size the amount of reserved slots to allocate
  */
 
-void
-ptr_vector_init_copy(ptr_vector* v, const ptr_vector* original, u32 extra_size)
+void ptr_vector_init_copy(ptr_vector_t *v, const ptr_vector_t *original, uint32_t extra_size)
 {
     assert(ptr_vector_size(original) >= 0);
-    
+
     ptr_vector_init_ex(v, ptr_vector_size(original) + extra_size);
     if(ptr_vector_last_index(original) >= 0) // => size > 0 => v->data != NULL
     {
         assert(original->data != NULL && v->data != NULL);
-        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void*)); // scan-build false positive
+        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void *)); // scan-build false positive
     }
     v->offset = original->offset;
 }
@@ -119,22 +115,21 @@ ptr_vector_init_copy(ptr_vector* v, const ptr_vector* original, u32 extra_size)
 /**
  * Initialises a vector as a copy as another vector plus onz item added
  * The reserved size is the size of the original plus one
- * 
- * @param v a pointer to the ptr_vector structure to initialise
+ *
+ * @param v a pointer to the ptr_vector_t structure to initialise
  * @param original the vector to copy
  * @param data an item to add
  */
 
-void
-ptr_vector_init_copy_append(ptr_vector* v, const ptr_vector* original, void *data)
+void ptr_vector_init_copy_append(ptr_vector_t *v, const ptr_vector_t *original, void *data)
 {
     assert(ptr_vector_size(original) >= 0);
-    
+
     ptr_vector_init_ex(v, ptr_vector_size(original) + 1);
     if(ptr_vector_last_index(original) >= 0)
     {
         assert(original->data != NULL && v->data != NULL);
-        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void*));
+        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void *));
     }
     v->offset = original->offset;
     ptr_vector_append(v, data);
@@ -143,22 +138,22 @@ ptr_vector_init_copy_append(ptr_vector* v, const ptr_vector* original, void *dat
 /**
  * Initialises a vector as a copy as another vector plus a few items added
  * The reserved size is the size of the original plus the data size.
- * 
- * @param v a pointer to the ptr_vector structure to initialise
+ *
+ * @param v a pointer to the ptr_vector_t structure to initialise
  * @param original the vector to copy
  * @param data an array of pointers
  * @param data_size the size of the data array
  */
 
-void
-ptr_vector_init_copy_append_array(ptr_vector* v, const ptr_vector* original, void *data, u32 data_size)
+void ptr_vector_init_copy_append_array(ptr_vector_t *v, const ptr_vector_t *original, void *data, uint32_t data_size)
 {
     ptr_vector_init_ex(v, ptr_vector_size(original) + data_size);
 
     if(ptr_vector_last_index(original) >= 0) // A faster way to test if size > 0 => v->data != NULL
     {
         assert(original->data != NULL && v->data != NULL);
-        memcpy(v->data, original->data, ptr_vector_size(original) * sizeof(void*)); // scan-build false positive: v->data is not NULL
+        memcpy(v->data, original->data,
+               ptr_vector_size(original) * sizeof(void *)); // scan-build false positive: v->data is not NULL
     }
     v->offset = original->offset;
     ptr_vector_append_array(v, data, data_size);
@@ -167,12 +162,11 @@ ptr_vector_init_copy_append_array(ptr_vector* v, const ptr_vector* original, voi
 /**
  * Calls the callback on every pointer stored in the vector.
  * Frees the memory used by a vector structure
- * 
- * @param v a pointer to the ptr_vector structure
+ *
+ * @param v a pointer to the ptr_vector_t structure
  */
 
-void
-ptr_vector_callback_and_destroy(ptr_vector *v, callback_function free_memory)
+void ptr_vector_callback_and_finalise(ptr_vector_t *v, callback_function_t free_memory)
 {
     ptr_vector_callback_and_clear(v, free_memory);
     v->size = -1;
@@ -182,12 +176,11 @@ ptr_vector_callback_and_destroy(ptr_vector *v, callback_function free_memory)
 
 /**
  * Frees the memory used by a vector structure (not the vector structure itself)
- * 
- * @param v a pointer to the ptr_vector structure
+ *
+ * @param v a pointer to the ptr_vector_t structure
  */
 
-void
-ptr_vector_destroy(ptr_vector* v)
+void ptr_vector_finalise(ptr_vector_t *v)
 {
     v->size = -1;
     v->offset = -1;
@@ -197,15 +190,11 @@ ptr_vector_destroy(ptr_vector* v)
 
 /**
  * Empties the vector (does not release memory)
- * 
- * @param v a pointer to the ptr_vector structure
+ *
+ * @param v a pointer to the ptr_vector_t structure
  */
 
-void
-ptr_vector_clear(ptr_vector* v)
-{
-    v->offset = -1;
-}
+void ptr_vector_clear(ptr_vector_t *v) { v->offset = -1; }
 
 /**
  * Changes the capacity of a vector to the specified size
@@ -215,31 +204,30 @@ ptr_vector_clear(ptr_vector* v)
  *
  * Note that when shrinking, the capacity is not really changed.
  *
- * 
- * @param v a pointer to the ptr_vector structure
+ *
+ * @param v a pointer to the ptr_vector_t structure
  * @param newsize
  */
 
-void
-ptr_vector_resize(ptr_vector*v, s32 newsize)
+void ptr_vector_resize(ptr_vector_t *v, int32_t newsize)
 {
-    void** data;
+    void **data;
     assert(newsize >= 0);
     assert(v->offset >= -1);
     assert(v->size >= 0);
 
     if(v->offset >= 0)
     {
-        if(newsize  > v->offset + 1)
+        if(newsize > v->offset + 1)
         {
-            MALLOC_OR_DIE(void**, data, newsize * sizeof(void*), PTR_VECTOR_TAG);
+            MALLOC_OR_DIE(void **, data, newsize * sizeof(void *), PTRVCTRD_TAG);
 
             /* Only the data up to v->offset (included) is relevant */
-            MEMCOPY(data, v->data, (v->offset + 1) * sizeof(void*));
+            MEMCOPY(data, v->data, (v->offset + 1) * sizeof(void *));
 #if DEBUG
             if(v->data != NULL)
             {
-                memset(v->data, 0xff, v->size * sizeof(void*));
+                memset(v->data, 0xff, v->size * sizeof(void *));
             }
 #endif
             free(v->data);
@@ -259,13 +247,16 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
 
             if(newsize > 0)
             {
-                MALLOC_OR_DIE(void**, data, newsize * sizeof(void*), PTR_VECTOR_TAG);
+                MALLOC_OR_DIE(void **, data, newsize * sizeof(void *), PTRVCTRD_TAG);
             }
             else
             {
 #if DEBUG
-#pragma message ("Should set data to NULL and keep newsize to 0 but scan-build couldn't handle it. DEBUG builds only.")
-                MALLOC_OR_DIE(void**, data, sizeof(void*), PTR_VECTOR_TAG);
+                MALLOC_OR_DIE(void **,
+                              data,
+                              sizeof(void *),
+                              PTRVCTRD_TAG); /// @note edf -- Should set data to NULL and keep newsize to 0 but
+                                             /// scan-build couldn't handle it. DEBUG builds only.
                 newsize = 1;
 #else
                 data = NULL;
@@ -282,12 +273,11 @@ ptr_vector_resize(ptr_vector*v, s32 newsize)
  * Ensures the vector has enough capacity to accommodate a
  * specified number of items
  *
- * @param v a pointer to the ptr_vector structure
+ * @param v a pointer to the ptr_vector_t structure
  * @param reqsize the minimum size of the vector
  */
 
-void
-ptr_vector_ensures(ptr_vector*v, s32 reqsize)
+void ptr_vector_ensures(ptr_vector_t *v, int32_t reqsize)
 {
     if(v->size >= 0)
     {
@@ -305,15 +295,13 @@ ptr_vector_ensures(ptr_vector*v, s32 reqsize)
     }
 }
 
-void
-ptr_vector_remove_from(ptr_vector *v, s32 first_bad_index)
+void ptr_vector_remove_from(ptr_vector_t *v, int32_t first_bad_index)
 {
     assert((first_bad_index >= 0) && (first_bad_index <= v->offset));
     v->offset = first_bad_index - 1;
 }
 
-void
-ptr_vector_remove_after(ptr_vector *v, s32 last_good_index)
+void ptr_vector_remove_after(ptr_vector_t *v, int32_t last_good_index)
 {
     assert((last_good_index >= -1) && (last_good_index <= v->offset));
     v->offset = last_good_index;
@@ -322,56 +310,66 @@ ptr_vector_remove_after(ptr_vector *v, s32 last_good_index)
 /**
  * Resizes the capacity so it can at most contain its
  * current size.
- * 
- * @param v a pointer to the ptr_vector structure
+ *
+ * @param v a pointer to the ptr_vector_t structure
  */
 
-void
-ptr_vector_shrink(ptr_vector*v)
+void ptr_vector_shrink(ptr_vector_t *v)
 {
     if(v->size != (v->offset + 1))
     {
-        ptr_vector_resize(v, v->offset + 1);
+        void **data;
+        int    newsize = v->offset + 1;
+        MALLOC_OR_DIE(void **, data, newsize * sizeof(void *), PTRVCTRD_TAG);
+        memcpy(data, v->data, newsize * sizeof(void *));
+        free(v->data);
+        v->data = data;
     }
 }
 
 /**
  * Appends the item (pointer) to the vector
- * 
- * @param v     a pointer to the ptr_vector structure
+ *
+ * @param v     a pointer to the ptr_vector_t structure
  * @param data  a pointer to the item
  */
 
-void
-ptr_vector_append(ptr_vector* v, void* data)
+void ptr_vector_append(ptr_vector_t *v, void *data)
 {
-    if(v->offset + 1 >= v->size)
+    if(v->offset + 1 < v->size)
     {
-        if(v->size == 0)
-        {
-            v->size = PTR_VECTOR_DEFAULT_SIZE;
-        }
-        ptr_vector_resize(v, v->size * 2);
+        v->data[++v->offset] = data;
     }
-
-    assert(v->data != NULL);
-    v->data[++v->offset] = data;
+    else
+    {
+        if(v->size > 0)
+        {
+            assert(v->data != NULL);
+            ptr_vector_resize(v, v->size * 2);
+        }
+        else
+        {
+            assert(v->data == NULL);
+            v->size = PTR_VECTOR_DEFAULT_SIZE;
+            MALLOC_OR_DIE(void **, v->data, v->size * sizeof(void *), PTRVCTRD_TAG);
+        }
+        v->data[++v->offset] = data;
+    }
 }
 
 /**
  * Appends the item (pointer) to the vector
- * 
- * @param v     a pointer to the ptr_vector structure
+ *
+ * @param v     a pointer to the ptr_vector_t structure
  * @param datap  a pointer to the items
  * @param data_size the number of items to append
  */
 
-void
-ptr_vector_append_array(ptr_vector* v, void** datap, u32 data_size)
+void ptr_vector_append_array(ptr_vector_t *v, void **datap, uint32_t data_size)
 {
     if(data_size > 0)
     {
-        while((u32)(v->offset + data_size) >= (u32)v->size)
+        while((uint32_t)(v->offset + data_size) >= (uint32_t)v->size)
         {
             if(v->size == 0)
             {
@@ -381,69 +379,73 @@ ptr_vector_append_array(ptr_vector* v, void** datap, u32 data_size)
         }
         assert(v->data != NULL);
         assert(datap != NULL);
-        memcpy(&v->data[++v->offset], datap, data_size * sizeof(void*)); // scan-build false positive: v->data can only be null if data_size is 0, which is not possible
+        memcpy(&v->data[v->offset + 1],
+               datap,
+               data_size * sizeof(void *)); // scan-build false positive: v->data can only be null if data_size is 0,
+                                            // which is not possible
+        v->offset += data_size;
     }
 }
 
-void ptr_vector_append_vector(ptr_vector *v, ptr_vector *toappend)
-{
-    ptr_vector_append_array(v, toappend->data, toappend->offset + 1);
-}
+void ptr_vector_append_vector(ptr_vector_t *v, ptr_vector_t *toappend) { ptr_vector_append_array(v, toappend->data, toappend->offset + 1); }
 
 /**
  * Appends the item (pointer) to the vector and try to keep the buffer size at at most
  * restrictedlimit.
  * The goal is to avoid a growth of *2 that would go far beyond the restrictedlimit.
  * The performance is extremely poor when the number of items in the buffer is restrictedlimit or more.
- * 
- * @param v     a pointer to the ptr_vector structure
+ *
+ * @param v     a pointer to the ptr_vector_t structure
  * @param data  a pointer to the item
  * @param restrictedlimit a guideline limit on the size of the vector
  */
 
-void
-ptr_vector_append_restrict_size(ptr_vector* v, void* data, u32 restrictedlimit)
+void ptr_vector_append_restrict_size(ptr_vector_t *v, void *data, uint32_t restrictedlimit)
 {
     assert((v->size >= 0) && (v->offset < v->size) && (v->offset >= -1));
 
-    u32 next_offset = (u32)(v->offset + 1); // >= 0
-
-    if(next_offset >= (u32)v->size) // size has to be > next_offset
+    if(restrictedlimit > 0)
     {
-        u32 size = (u32)v->size; // unsigned
-        
-        // if the size is not 0 prepare to double it, else set it to a reasonable minimum
-        if(size != 0)       // size > 0
+        uint32_t next_offset = (uint32_t)(v->offset + 1); // >= 0
+
+        if(next_offset >= (uint32_t)v->size) // size has to be > next_offset
         {
-            size <<= 1;
+            uint32_t size = (uint32_t)v->size; // unsigned
 
-            // if the size is bigger than the restriction, set it to the maximum between the restriction and what we actually need
-
-            if(size > restrictedlimit)
+            // if the size is not 0 prepare to double it, else set it to a reasonable minimum
+            if(size != 0) // size > 0
             {
-                size = MAX(MIN(restrictedlimit, PTR_VECTOR_DEFAULT_SIZE), next_offset + PTR_VECTOR_RESTRICTED_SIZE_INCREASE); // worst case size = MAX(>0, 0)
+                size <<= 1;
+
+                // if the size is bigger than the restriction, set it to the maximum between the restriction and what we
+                // actually need
+
+                if(size > restrictedlimit)
+                {
+                    size = MAX(MIN(restrictedlimit, PTR_VECTOR_DEFAULT_SIZE),
+                               next_offset + PTR_VECTOR_RESTRICTED_SIZE_INCREASE); // worst case size = MAX(>0, 0)
+                }
             }
-        }
-        else
-        {
-            size = PTR_VECTOR_DEFAULT_SIZE; // size > 0
+            else
+            {
+                size = MIN(PTR_VECTOR_DEFAULT_SIZE, restrictedlimit); // size > 0
+            }
+
+            ptr_vector_resize(v, size);
         }
 
-        ptr_vector_resize(v, size);
+        v->data[++v->offset] = data; // scan-build false positive, can only happen if resize called with size = 0, which is impossible
     }
-
-    v->data[++v->offset] = data; // scan-build false positive, can only happen if resize called with size = 0, which is impossible
 }
 
 /**
  * Appends the item (pointer) to the vector
- * 
- * @param v     a pointer to the ptr_vector structure
+ *
+ * @param v     a pointer to the ptr_vector_t structure
  * @param data  a pointer to the item
  */
 
-void*
-ptr_vector_pop(ptr_vector* v)
+void *ptr_vector_pop(ptr_vector_t *v)
 {
     if(v->offset >= 0)
     {
@@ -455,21 +457,15 @@ ptr_vector_pop(ptr_vector* v)
     }
 }
 
-static int
-ptr_sort_heap_parent(int index)
+static int ptr_sort_heap_parent(int index)
 {
     assert(index > 0);
     return (index - 1) / 2;
 }
 
-static int
-ptr_sort_heap_leftchild(int index)
-{
-    return (index * 2) + 1;
-}
+static int  ptr_sort_heap_leftchild(int index) { return (index * 2) + 1; }
 
-static void
-ptr_sort_siftdown(void** base, int from, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
+static void ptr_sort_siftdown(void **base, int from, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
 {
     int root = from;
     int child;
@@ -488,20 +484,19 @@ ptr_sort_siftdown(void** base, int from, size_t n, ptr_vector_qsort_r_callback *
         {
             break;
         }
-        
+
         void **tmp = base[swp];
         base[swp] = base[root];
         base[root] = tmp;
-        
+
         root = swp;
     }
 }
 
-static void
-ptr_sort_heapify(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
+static void ptr_sort_heapify(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
 {
     int start = ptr_sort_heap_parent(n - 1);
-    
+
     while(start >= 0)
     {
         ptr_sort_siftdown(base, start, n - 1, cmp, data);
@@ -509,8 +504,7 @@ ptr_sort_heapify(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *
     }
 }
 
-void
-ptr_sort_heapsort(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
+void ptr_sort_heapsort(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
 {
     if(n > 2)
     {
@@ -539,23 +533,21 @@ ptr_sort_heapsort(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void 
     }
 }
 
-void
-ptr_sort_insertion(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
+void ptr_sort_insertion(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
 {
     for(ssize_t i = 1; i < (ssize_t)n; ++i)
     {
-        void **tmp = base[i];
-        ssize_t j = i - 1;
-        for(; (j >= 0) && (cmp(base[j], tmp, data) > 0); --j)
+        void  **tmp = base[i];
+        ssize_t j = i;
+        for(; (j > 0) && (cmp(base[j - 1], tmp, data) > 0); --j)
         {
-            base[j + 1] = base[j];
+            base[j] = base[j - 1];
         }
-        base[j + 1] = tmp;
+        base[j] = tmp;
     }
 }
 
-void
-ptr_sort3_bubble(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
+void ptr_sort3_bubble(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
 {
     for(size_t i = 0; i < n; ++i)
     {
@@ -576,52 +568,51 @@ struct ptr_sort3_quicksort2_stack_cell
     void **base;
     void **limit;
 };
-static void
-ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
+static void ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
 {
-    void **limit = &base[n];
-    ssize_t sp = -1;
-    
+    void                                 **limit = &base[n];
+    ssize_t                                sp = -1;
+
     struct ptr_sort3_quicksort2_stack_cell stack[PTR_QSORT_DERECURSE_DEPTH];
 
-    //ssize_t msp = -1;
-    
+    // ssize_t msp = -1;
+
     for(;;)
     {
         if(limit - base <= PTR_QSORT_SMALL)
         {
-            //ptr_sort_insertion(base, limit - base, cmp);
-            
-            for(void **ip = base + 1; ip < limit; ++ip) //for(ssize_t i = 1; i < (ssize_t)n; ++i)
+            // ptr_sort_insertion(base, limit - base, cmp);
+
+            for(void **ip = base + 1; ip < limit; ++ip) // for(ssize_t i = 1; i < (ssize_t)n; ++i)
             {
-                void *tmp = *ip;
+                void  *tmp = *ip;
                 void **jp = ip - 1;
                 for(; (jp >= base) && (cmp(*jp, tmp) > 0); --jp)
                 {
                     jp[1] = *jp; // base[j + 1] = base[j];
                 }
-                jp[1] = tmp; //base[j + 1] = tmp;
+                jp[1] = tmp; // base[j + 1] = tmp;
             }
-            
+
             if(sp >= 0)
             {
-                //if(sp > msp) msp = sp;
-                
+                // if(sp > msp) msp = sp;
+
                 base = stack[sp].base;
                 limit = stack[sp--].limit;
                 continue;
             }
-            
+
             return;
         }
-        
+
         // choose a good enough pivot
         // doing this, start sorting
 
         void **hip = limit - 1;
         void **lop = base;
-        void *pivot;
-        
+        void  *pivot;
+
         {
             void **middlep = &base[(limit - base) >> 1];
 
@@ -641,27 +632,27 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
                     {
                         // C is the smallest: C B A
 
-                        register void *tmp = *lop;  // t = A
-                        *lop = *hip;             // A = C
-                        *hip = tmp;                 // C = t
+                        register void *tmp = *lop; // t = A
+                        *lop = *hip;               // A = C
+                        *hip = tmp;                // C = t
                     }
                     else
                     {
                         // B is the smallest: B C A
 
-                        register void *tmp = *lop;  // t = A
-                        *lop = *middlep;         // A = B
-                        *middlep = *hip;        // B = C
-                        *hip = tmp;                 // C = t
+                        register void *tmp = *lop; // t = A
+                        *lop = *middlep;           // A = B
+                        *middlep = *hip;           // B = C
+                        *hip = tmp;                // C = t
                     }
                 }
                 else // A <= C
                 {
                     // B A C
 
-                    register void *tmp = *lop;      // t = A
-                    *lop = *middlep;             // A = B
-                    *middlep = tmp;                 // B = t
+                    register void *tmp = *lop; // t = A
+                    *lop = *middlep;           // A = B
+                    *middlep = tmp;            // B = t
                 }
             } // A <= B
             else
@@ -676,18 +667,18 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
                     {
                         // C is the smallest: C A B
 
-                        register void *tmp = *lop;  // t = A
-                        *lop = *hip;             // A = C
-                        *hip = *middlep;        // C = B
-                        *middlep = tmp;             // B = t
+                        register void *tmp = *lop; // t = A
+                        *lop = *hip;               // A = C
+                        *hip = *middlep;           // C = B
+                        *middlep = tmp;            // B = t
                     }
                     else
                     {
                         // A is the smallest: A C B
 
                         register void *tmp = *middlep; // t = B
-                        *middlep = *hip;            // B = C
-                        *hip = tmp;                     // C = t
+                        *middlep = *hip;               // B = C
+                        *hip = tmp;                    // C = t
                     }
                 }
                 else // B <= C
@@ -695,7 +686,7 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
                     // A B C
                 }
             }
-            
+
             pivot = *middlep;
         }
 
@@ -705,7 +696,7 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
 
         ++lop;
         --hip;
-    
+
         for(;;)
         {
             while(cmp(*lop, pivot) < 0) // while smaller than pivot
@@ -717,7 +708,7 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
             {
                 --hip;
             }
-            
+
             ssize_t d = hip - lop;
 
             if(d <= 1)
@@ -734,27 +725,27 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
                 }
                 break;
             }
-            
+
             // exchange two values (<= pivot with >= pivot)
 
             register void *tmp = *lop;
             *lop = *hip;
             *hip = tmp;
-            
+
             ++lop;
             --hip;
         }
- 
+
         size_t first = hip - base;
         size_t second = limit - hip;
-        
+
         assert(sp < PTR_QSORT_DERECURSE_DEPTH);
-        
+
         if(first > second)
         {
             stack[++sp].base = base;
             stack[sp].limit = hip;
-            
+
             base = hip;
         }
         else
@@ -769,13 +760,12 @@ ptr_sort_quicksort(void **base, size_t n, ptr_vector_qsort_callback *cmp)
 
 /**
  * Sort the content of the vector using the compare callback
- * 
- * @param v       a pointer to the ptr_vector structure
+ *
+ * @param v       a pointer to the ptr_vector_t structure
  * @param compare comparison callback
  */
 
-void
-ptr_vector_qsort(ptr_vector* v, ptr_vector_qsort_callback compare)
+void ptr_vector_qsort(ptr_vector_t *v, ptr_vector_qsort_callback compare)
 {
     if(v->offset > 0) /* at least 2 items */
     {
@@ -783,52 +773,51 @@ ptr_vector_qsort(ptr_vector* v, ptr_vector_qsort_callback compare)
     }
 }
 
-static void
-ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
+static void ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, void *data)
 {
-    void **limit = &base[n];
-    ssize_t sp = -1;
-    
+    void                                 **limit = &base[n];
+    ssize_t                                sp = -1;
+
     struct ptr_sort3_quicksort2_stack_cell stack[PTR_QSORT_DERECURSE_DEPTH];
 
-    //ssize_t msp = -1;
-    
+    // ssize_t msp = -1;
+
     for(;;)
     {
         if(limit - base <= PTR_QSORT_SMALL)
         {
-            //ptr_sort_insertion(base, limit - base, cmp, data);
-            
-            for(void **ip = base + 1; ip < limit; ++ip) //for(ssize_t i = 1; i < (ssize_t)n; ++i)
+            // ptr_sort_insertion(base, limit - base, cmp, data);
+
+            for(void **ip = base + 1; ip < limit; ++ip) // for(ssize_t i = 1; i < (ssize_t)n; ++i)
             {
-                void *tmp = *ip;
+                void  *tmp = *ip;
                 void **jp = ip - 1;
                 for(; (jp >= base) && (cmp(*jp, tmp, data) > 0); --jp)
                 {
                     jp[1] = *jp; // base[j + 1] = base[j];
                 }
-                jp[1] = tmp; //base[j + 1] = tmp;
+                jp[1] = tmp; // base[j + 1] = tmp;
             }
-            
+
             if(sp >= 0)
             {
-                //if(sp > msp) msp = sp;
-                
+                // if(sp > msp) msp = sp;
+
                 base = stack[sp].base;
                 limit = stack[sp--].limit;
                 continue;
             }
-            
+
             return;
         }
-        
+
         // choose a good enough pivot
         // doing this, start sorting
 
         void **hip = limit - 1;
         void **lop = base;
-        void *pivot;
-        
+        void  *pivot;
+
         {
             void **middlep = &base[(limit - base) >> 1];
 
@@ -848,27 +837,27 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
                     {
                         // C is the smallest: C B A
 
-                        register void *tmp = *lop;  // t = A
-                        *lop = *hip;             // A = C
-                        *hip = tmp;                 // C = t
+                        register void *tmp = *lop; // t = A
+                        *lop = *hip;               // A = C
+                        *hip = tmp;                // C = t
                     }
                     else
                     {
                         // B is the smallest: B C A
 
-                        register void *tmp = *lop;  // t = A
-                        *lop = *middlep;         // A = B
-                        *middlep = *hip;        // B = C
-                        *hip = tmp;                 // C = t
+                        register void *tmp = *lop; // t = A
+                        *lop = *middlep;           // A = B
+                        *middlep = *hip;           // B = C
+                        *hip = tmp;                // C = t
                     }
                 }
                 else // A <= C
                 {
                     // B A C
 
-                    register void *tmp = *lop;      // t = A
-                    *lop = *middlep;             // A = B
-                    *middlep = tmp;                 // B = t
+                    register void *tmp = *lop; // t = A
+                    *lop = *middlep;           // A = B
+                    *middlep = tmp;            // B = t
                 }
             } // A <= B
             else
@@ -883,18 +872,18 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
                     {
                         // C is the smallest: C A B
 
-                        register void *tmp = *lop;  // t = A
-                        *lop = *hip;             // A = C
-                        *hip = *middlep;        // C = B
-                        *middlep = tmp;             // B = t
+                        register void *tmp = *lop; // t = A
+                        *lop = *hip;               // A = C
+                        *hip = *middlep;           // C = B
+                        *middlep = tmp;            // B = t
                     }
                     else
                     {
                         // A is the smallest: A C B
 
                         register void *tmp = *middlep; // t = B
-                        *middlep = *hip;            // B = C
-                        *hip = tmp;                     // C = t
+                        *middlep = *hip;               // B = C
+                        *hip = tmp;                    // C = t
                     }
                 }
                 else // B <= C
@@ -902,7 +891,7 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
                     // A B C
                 }
             }
-            
+
             pivot = *middlep;
         }
 
@@ -912,7 +901,7 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
 
         ++lop;
         --hip;
-    
+
         for(;;)
         {
             while(cmp(*lop, pivot, data) < 0) // while smaller than pivot
@@ -924,7 +913,7 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
             {
                 --hip;
             }
-            
+
             ssize_t d = hip - lop;
 
             if(d <= 1)
@@ -941,27 +930,27 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
                 }
                 break;
             }
-            
+
             // exchange two values (<= pivot with >= pivot)
 
             register void *tmp = *lop;
             *lop = *hip;
             *hip = tmp;
-            
+
             ++lop;
             --hip;
         }
- 
+
         size_t first = hip - base;
         size_t second = limit - hip;
-        
+
         assert(sp < PTR_QSORT_DERECURSE_DEPTH);
-        
+
         if(first > second)
         {
             stack[++sp].base = base;
             stack[sp].limit = hip;
-            
+
             base = hip;
         }
         else
@@ -974,8 +963,7 @@ ptr_sort_quicksort_r(void **base, size_t n, ptr_vector_qsort_r_callback *cmp, vo
     }
 }
 
-void
-ptr_vector_qsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context)
+void ptr_vector_qsort_r(ptr_vector_t *v, ptr_vector_qsort_r_callback compare, void *compare_context)
 {
     if(v->offset > 0) /* at least 2 items */
     {
@@ -983,8 +971,7 @@ ptr_vector_qsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *com
     }
 }
 
-void
-ptr_vector_insertionsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, void *compare_context)
+void ptr_vector_insertionsort_r(ptr_vector_t *v, ptr_vector_qsort_r_callback compare, void *compare_context)
 {
     if(v->offset > 0) /* at least 2 items */
     {
@@ -994,13 +981,12 @@ ptr_vector_insertionsort_r(ptr_vector *v, ptr_vector_qsort_r_callback compare, v
 
 /**
  * Empties the vector releasing the item memory first
- * 
- * @param v       a pointer to the ptr_vector structure
+ *
+ * @param v       a pointer to the ptr_vector_t structure
  * @param free_memory item free callback
  */
 
-void
-ptr_vector_callback_and_clear(ptr_vector* v, callback_function free_memory)
+void ptr_vector_callback_and_clear(ptr_vector_t *v, callback_function_t free_memory)
 {
     int n = v->offset;
     int i;
@@ -1016,23 +1002,22 @@ ptr_vector_callback_and_clear(ptr_vector* v, callback_function free_memory)
 
 /**
  * Look sequentially in the vector for an item using a key and a comparison function
- * 
- * @param v         a pointer to the ptr_vector structure
+ *
+ * @param v         a pointer to the ptr_vector_t structure
  * @param what      the key
  * @param compare   the comparison function
- * 
+ *
  * @return the first matching item or NULL if none has been found
  */
 
-void*
-ptr_vector_linear_search(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+void *ptr_vector_linear_search(const ptr_vector_t *v, const void *what, ptr_vector_search_callback compare)
 {
     int last = v->offset;
     int i;
 
     for(i = 0; i <= last; i++)
     {
-        void* data = v->data[i];
+        void *data = v->data[i];
 
         if(compare(what, data) == 0)
         {
@@ -1043,15 +1028,14 @@ ptr_vector_linear_search(const ptr_vector* v, const void* what, ptr_vector_searc
     return NULL;
 }
 
-s32
-ptr_vector_search_ptr_index(const ptr_vector* v, const void* what)
+int32_t ptr_vector_search_ptr_index(const ptr_vector_t *v, const void *what)
 {
     int last = v->offset;
     int i;
 
     for(i = 0; i <= last; i++)
     {
-        void* data = v->data[i];
+        void *data = v->data[i];
 
         if(what == data)
         {
@@ -1063,24 +1047,24 @@ ptr_vector_search_ptr_index(const ptr_vector* v, const void* what)
 }
 
 /**
- * Look sequentially in the vector for an item using a key and a comparison function, returns the index of the first matching item
- * 
- * @param v         a pointer to the ptr_vector structure
+ * Look sequentially in the vector for an item using a key and a comparison function, returns the index of the first
+ * matching item
+ *
+ * @param v         a pointer to the ptr_vector_t structure
  * @param what      the key
  * @param compare   the comparison function
- * 
+ *
  * @return the first matching item index or -1 if none has been found
  */
 
-s32
-ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+int32_t ptr_vector_index_of(const ptr_vector_t *v, const void *what, ptr_vector_search_callback compare)
 {
-    s32 last = v->offset;
-    s32 i;
+    int32_t last = v->offset;
+    int32_t i;
 
     for(i = 0; i <= last; i++)
     {
-        void* data = v->data[i];
+        void *data = v->data[i];
 
         if(compare(what, data) == 0)
         {
@@ -1094,16 +1078,15 @@ ptr_vector_index_of(const ptr_vector* v, const void* what, ptr_vector_search_cal
 /**
  * Look in the SORTED vector for an item using a key and a comparison function
  * The callback needs to tell equal (0) smaller (<0) or bigger (>0)
- * 
- * @param v         a pointer to the ptr_vector structure
+ *
+ * @param v         a pointer to the ptr_vector_t structure
  * @param what      the key
  * @param compare   the comparison function
- * 
+ *
  * @return the first matching item or NULL if none has been found
  */
 
-void*
-ptr_vector_search(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+void *ptr_vector_search(const ptr_vector_t *v, const void *what, ptr_vector_search_callback compare)
 {
     int first = 0;
     int last = v->offset;
@@ -1116,11 +1099,11 @@ ptr_vector_search(const ptr_vector* v, const void* what, ptr_vector_search_callb
     while(first < last)
     {
 
-        int pivot = (last + first) >> 1;
+        int   pivot = (last + first) >> 1;
 
         void *item = v->data[pivot];
 
-        int cmp = compare(what, item);
+        int   cmp = compare(what, item);
 
         if(cmp == 0)
         {
@@ -1154,15 +1137,14 @@ ptr_vector_search(const ptr_vector* v, const void* what, ptr_vector_search_callb
  * Look in the SORTED vector for an item using a key and a comparison function
  * The callback needs to tell equal (0) smaller (<0) or bigger (>0)
  *
- * @param v         a pointer to the ptr_vector structure
+ * @param v         a pointer to the ptr_vector_t structure
  * @param what      the key
  * @param compare   the comparison function
  *
  * @return the first matching item or NULL if none has been found
  */
 
-s32
-ptr_vector_search_index(const ptr_vector* v, const void* what, ptr_vector_search_callback compare)
+int32_t ptr_vector_search_index(const ptr_vector_t *v, const void *what, ptr_vector_search_callback compare)
 {
     int first = 0;
     int last = v->offset;
@@ -1175,11 +1157,11 @@ ptr_vector_search_index(const ptr_vector* v, const void* what, ptr_vector_search
     while(first < last)
     {
 
-        int pivot = (last + first) >> 1;
+        int   pivot = (last + first) >> 1;
 
         void *item = v->data[pivot];
 
-        int cmp = compare(what, item);
+        int   cmp = compare(what, item);
 
         if(cmp == 0)
         {
@@ -1212,26 +1194,32 @@ ptr_vector_search_index(const ptr_vector* v, const void* what, ptr_vector_search
 /**
  * Inserts a value at position, pushing items from this position up
  * Potentially very slow.
- * 
+ *
  * @param pv
  * @param idx
  */
 
-void
-ptr_vector_insert_at(ptr_vector *pv, s32 idx, void *val)
+void ptr_vector_insert_at(ptr_vector_t *pv, int32_t idx, void *val)
 {
     assert(idx >= 0);
 
     if(idx <= pv->offset)
     {
-        ptr_vector_ensures(pv, pv->offset + 1);
-        memmove(&pv->data[idx + 1], &pv->data[idx], (pv->offset - idx) * sizeof(void*)); // scan-build false positive as ensures is called with size > 0 and thus data cannot be NULL
+        ptr_vector_ensures(pv, pv->offset + 1); /// @note: could be optimised quite a bit when the buffer is grown
+        memmove(&pv->data[idx + 1],
+                &pv->data[idx],
+                (pv->offset + 1 - idx) * sizeof(void *)); // scan-build false positive as ensures is called with size >
+                                                          // 0 and thus data cannot be NULL
         pv->data[idx] = val;
+        ++pv->offset;
     }
     else
     {
-        ptr_vector_ensures(pv, idx + 1);
-        memset(&pv->data[pv->offset + 1], 0, &pv->data[idx] - &pv->data[pv->offset + 1]); // scan-build false positive as ensures is called with size > 0 and thus data cannot be NULL
+        ptr_vector_ensures(pv, idx + 1); /// @note: could be optimised quite a bit when the buffer is grown
+        memset(&pv->data[pv->offset + 1],
+               0,
+               (&pv->data[idx] - &pv->data[pv->offset + 1]) * sizeof(void *)); // scan-build false positive as ensures is called with size > 0 and thus data cannot
+                                                                               // be NULL
         pv->data[idx] = val;
         pv->offset = idx;
     }
@@ -1240,15 +1228,14 @@ ptr_vector_insert_at(ptr_vector *pv, s32 idx, void *val)
 /**
  * Inserts multiple values at position, pushing items from this position up
  * Potentially very slow.
- * 
+ *
  * @param pv
  * @param idx
  * @param valp  an array of pointers that will be inserted
  * @param n the size of the array of pointers
  */
 
-void
-ptr_vector_insert_array_at(ptr_vector *pv, s32 idx, void **valp, u32 n)
+void ptr_vector_insert_array_at(ptr_vector_t *pv, int32_t idx, void **valp, uint32_t n)
 {
     assert(idx >= 0);
     assert(pv->offset >= -1);
@@ -1257,48 +1244,55 @@ ptr_vector_insert_array_at(ptr_vector *pv, s32 idx, void **valp, u32 n)
         if(idx <= pv->offset)
         {
             ptr_vector_ensures(pv, pv->offset + n);
-            memmove(&pv->data[idx + n], &pv->data[idx], (pv->offset - idx + n) * sizeof(void*)); // scan-build false positive as ensures is called with size > 0 and thus data cannot be NULL
-            memcpy(&pv->data[idx], valp, n);
+            memmove(&pv->data[idx + n],
+                    &pv->data[idx],
+                    (pv->offset + 1 - idx) * sizeof(void *)); // scan-build false positive as ensures is called with
+                                                              // size > 0 and thus data cannot be NULL
+            memcpy(&pv->data[idx], valp, n * sizeof(void *));
+            pv->offset += n;
         }
         else
         {
             ptr_vector_ensures(pv, idx + n);
-            memset(&pv->data[pv->offset + n], 0, &pv->data[idx] - &pv->data[pv->offset + n]); // scan-build false positive as ensures is called with size > 0 and thus data cannot be NULL
-            memcpy(&pv->data[idx], valp, n);
+            memset(&pv->data[pv->offset + 1],
+                   0,
+                   (idx - (pv->offset + 1)) * sizeof(void *)); // scan-build false positive as ensures is called with
+                                                               // size > 0 and thus data cannot be NULL
+            memcpy(&pv->data[idx], valp, n * sizeof(void *));
             pv->offset = idx + n - 1;
         }
     }
 }
 
 /**
- * 
+ *
  * Removes a value at position, pulling items above this position down
  * Potentially very slow
- * 
+ *
  * @param pv
  * @param idx
  * @return the removed value
  */
 
-void*
-ptr_vector_remove_at(ptr_vector *pv, s32 idx)
+void *ptr_vector_remove_at(ptr_vector_t *pv, int32_t idx)
 {
-    void *data = pv->data[idx];
-    
     if(idx <= pv->offset)
     {
-        memmove(&pv->data[idx], &pv->data[idx + 1], (pv->offset - idx) * sizeof(void*));
+        void *data = pv->data[idx];
+        memmove(&pv->data[idx], &pv->data[idx + 1], (pv->offset - idx) * sizeof(void *));
         --pv->offset;
+        return data;
     }
-    
-    return data;
+    else
+    {
+        return NULL;
+    }
 }
 
-int
-ptr_vector_compare_pointers_callback(const void *a, const void *b)
+int ptr_vector_compare_pointers_callback(const void *a, const void *b)
 {
-    intptr va = (intptr)a;
-    intptr vb = (intptr)b;
+    intptr_t va = (intptr_t)a;
+    intptr_t vb = (intptr_t)b;
     return va - vb;
 }
 

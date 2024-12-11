@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbdnssec DNSSEC functions
- *  @ingroup dnsdb
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbdnssec DNSSEC functions
+ * @ingroup dnsdb
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 #pragma once
 /*------------------------------------------------------------------------------
  *
@@ -49,6 +48,9 @@
 #if DNSCORE_HAS_EDDSA_SUPPORT
 #include <dnscore/dnskey_eddsa.h>
 #endif
+#if DNSCORE_HAS_OQS_SUPPORT
+#include <dnscore/dnskey_postquantumsafe.h>
+#endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
 #include <dnscore/dnskey_dummy.h>
 #endif
@@ -57,38 +59,38 @@
 #include <dnsdb/dnssec_config.h>
 #include <dnsdb/rrsig.h>
 
-#include <dnsdb/dnssec-keystore.h>
+#include <dnsdb/dnssec_keystore.h>
 
 #if ZDB_HAS_DNSSEC_SUPPORT
 
 #ifndef _DNSSEC_C
 #include <dnscore/logger.h>
-extern logger_handle *g_dnssec_logger;
+extern logger_handle_t *g_dnssec_logger;
 #endif
 
-
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-#define DEFAULT_ENGINE_NAME             "openssl"
+#define DEFAULT_ENGINE_NAME           "openssl"
 
-#define DNSSEC_DIGEST_TYPE_SHA1         1
-#define DNSSEC_DIGEST_TYPE_SHA256       2
+#define DNSSEC_DIGEST_TYPE_SHA1       1
+#define DNSSEC_DIGEST_TYPE_SHA256     2
 
-#define DNSSEC_MINIMUM_KEY_SIZE_BYTES   ((DNSSEC_MINIMUM_KEY_SIZE+7)/8)
-#define DNSSEC_MAXIMUM_KEY_SIZE_BYTES   ((DNSSEC_MAXIMUM_KEY_SIZE+7)/8)
+#define DNSSEC_MINIMUM_KEY_SIZE_BYTES ((DNSSEC_MINIMUM_KEY_SIZE + 7) / 8)
+#define DNSSEC_MAXIMUM_KEY_SIZE_BYTES ((DNSSEC_MAXIMUM_KEY_SIZE + 7) / 8)
 
-#define ENGINE_PRESET_DELIMITER ","
-#define ENGINE_COMMAND_DELIMITER ":"
+#define ENGINE_PRESET_DELIMITER       ","
+#define ENGINE_COMMAND_DELIMITER      ":"
 
-ENGINE* dnssec_loadengine(const char *engine_name);
-void dnssec_unloadengine(ENGINE *engine);
+ENGINE *dnssec_loadengine(const char *engine_name);
+void    dnssec_unloadengine(ENGINE *engine);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif // ZDB_HAS_DNSSEC_SUPPORT
 
 /** @} */

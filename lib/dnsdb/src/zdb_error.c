@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup error Database error handling
- *  @ingroup dnsdb
- *  @brief Database error handling
+/**-----------------------------------------------------------------------------
+ * @defgroup error Database error handling
+ * @ingroup dnsdb
+ * @brief Database error handling
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -51,17 +50,16 @@
  *
  */
 
-static bool zdb_register_errors_done = FALSE;
+static bool zdb_register_errors_done = false;
 
-void
-zdb_register_errors()
+void        zdb_register_errors()
 {
     if(zdb_register_errors_done)
     {
         return;
     }
 
-    zdb_register_errors_done = TRUE;
+    zdb_register_errors_done = true;
 
     error_register(ZDB_ERROR_BASE, "An error occurred in the database.");
 
@@ -80,8 +78,8 @@ zdb_register_errors()
     error_register(ZDB_ERROR_CORRUPTEDSOA, "ZDB_ERROR_CORRUPTEDSOA");
 
     error_register(ZDB_ERROR_ICMTL_NOTFOUND, "ZDB_ERROR_ICMTL_NOTFOUND");
-    error_register(ZDB_ERROR_ICMTL_STATUS_INVALID,"ZDB_ERROR_ICMTL_STATUS_INVALID");
-    error_register(ZDB_ERROR_ICMTL_FOLDERPATHTOOLONG,"ZDB_ERROR_ICMTL_FOLDERPATHTOOLONG");
+    error_register(ZDB_ERROR_ICMTL_STATUS_INVALID, "ZDB_ERROR_ICMTL_STATUS_INVALID");
+    error_register(ZDB_ERROR_ICMTL_FOLDERPATHTOOLONG, "ZDB_ERROR_ICMTL_FOLDERPATHTOOLONG");
 
     error_register(ZDB_ERROR_ZONE_IS_NOT_SIGNED, "ZDB_ERROR_ZONE_IS_NOT_SIGNED");
     error_register(ZDB_ERROR_ZONE_IS_ALREADY_BEING_SIGNED, "ZDB_ERROR_ZONE_IS_ALREADY_BEING_SIGNED");
@@ -90,7 +88,7 @@ zdb_register_errors()
     error_register(ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE, "ZDB_ERROR_ZONE_NO_ZSK_PRIVATE_KEY_FILE");
     error_register(ZDB_ERROR_ZONE_NO_ACTIVE_DNSKEY_FOUND, "ZDB_ERROR_ZONE_NO_ACTIVE_DNSKEY_FOUND");
     error_register(ZDB_ERROR_ZONE_NOT_IN_DATABASE, "ZDB_ERROR_ZONE_NOT_IN_DATABASE");
-    error_register(ZDB_ERROR_ZONE_NOT_MAINTAINED,"ZDB_ERROR_ZONE_NOT_MAINTAINED");
+    error_register(ZDB_ERROR_ZONE_NOT_MAINTAINED, "ZDB_ERROR_ZONE_NOT_MAINTAINED");
 
     error_register(ZDB_READER_FIRST_RECORD_NOT_SOA, "ZDB_READER_FIRST_RECORD_NOT_SOA");
     error_register(ZDB_READER_ANOTHER_DOMAIN_WAS_EXPECTED, "ZDB_READER_ANOTHER_DOMAIN_WAS_EXPECTED");
@@ -98,7 +96,7 @@ zdb_register_errors()
     error_register(ZDB_READER_MIXED_DNSSEC_VERSIONS, "ZDB_READER_MIXED_DNSSEC_VERSIONS");
     error_register(ZDB_READER_ALREADY_LOADED, "ZDB_READER_ALREADY_LOADED");
     error_register(ZDB_READER_NSEC3PARAMWITHOUTNSEC3, "ZDB_READER_NSEC3PARAMWITHOUTNSEC3");
-    
+
     error_register(ZDB_JOURNAL_WRONG_PARAMETERS, "ZDB_JOURNAL_WRONG_PARAMETERS");
     error_register(ZDB_JOURNAL_READING_DID_NOT_FOUND_SOA, "ZDB_JOURNAL_READING_DID_NOT_FOUND_SOA");
     error_register(ZDB_JOURNAL_SOA_RECORD_EXPECTED, "ZDB_JOURNAL_SOA_RECORD_EXPECTED");
@@ -112,7 +110,5 @@ zdb_register_errors()
     error_register(ZDB_JOURNAL_SHORT_READ, "ZDB_JOURNAL_SHORT_READ");
     error_register(ZDB_JOURNAL_SIZE_LIMIT_TOO_SMALL, "ZDB_JOURNAL_SIZE_LIMIT_TOO_SMALL");
 }
-
-
 
 /** @} */

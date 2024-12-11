@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,9 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -43,35 +41,36 @@
 
 #include <dnscore/host_address.h>
 
-struct tsig_item;
+struct tsig_key_s;
 
-typedef struct yadifa_ctrl_settings_s yadifa_ctrl_settings_s;
 struct yadifa_ctrl_settings_s
 {
-    host_address                                                    *server;
-    u8                                                               *qname;
-    u8                                                       *tsig_key_name;
-//  u8                                                                *file;
-    char                                                       *config_file;
-    struct tsig_item                                          *tsig_key_item; // for the -y option
+    host_address_t *server;
+    uint8_t        *qname;
+    uint8_t        *tsig_key_name;
+    //  uint8_t                                                                *file;
+    char              *config_file;
+    struct tsig_key_s *tsig_key_item; // for the -y option
 
-    u8                                                            log_level;
+    uint8_t            log_level;
 
     /*    ------------------------------------------------------------    */
 
-    u16                                                              qclass;
-    u16                                                               qtype;
-    u16                                                                port;
+    uint16_t rclass;
+    uint16_t rtype;
+    uint16_t port;
 
-    bool                                                              clean;
+    bool     clean;
 
     /** @todo 20150219 gve -- #if HAS_TCL must be set, before release */
-//#if HAS_TCL
-    bool                                                        interactive;
-//#endif // HAS_TCL
-    bool                                                            verbose;
-    bool                                                             enable;
+    // #if HAS_TCL
+    bool interactive;
+    // #endif // HAS_TCL
+    bool verbose;
+    bool enable;
 };
+
+typedef struct yadifa_ctrl_settings_s yadifa_ctrl_settings_t;
 
 #ifndef CTRL_C_
 extern const module_s ctrl_program;

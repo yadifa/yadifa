@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,36 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnskey DNSSEC keys functions
- *  @ingroup dnsdbdnssec
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup dnskey DNSSEC keys functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 #pragma once
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
 
-
 #include <dnscore/sys_types.h>
 #include <dnscore/dnskey.h>
 #include <dnscore/parser.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-ya_result dnskey_rsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key);
+ya_result dnskey_rsa_loadpublic(const uint8_t *rdata, uint16_t rdata_size, const char *origin, dnskey_t **out_key);
 
-ya_result dnskey_rsa_newinstance(u32 size, u8 algorithm,u16 flags,const char* origin, dnssec_key** out_key);
+ya_result dnskey_rsa_newinstance(uint32_t size, uint8_t algorithm, uint16_t flags, const char *origin, dnskey_t **out_key);
 
-void dnskey_rsa_parse_init(dnskey_field_parser *fp);
+void      dnskey_rsa_parse_init(dnskey_field_parser *fp);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

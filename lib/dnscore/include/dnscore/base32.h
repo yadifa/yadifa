@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,58 +28,56 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/**
- *  @defgroup base Base conversion functions
- *  @ingroup dnscore
- *  @brief Base 32 codec
- * 
- * Base 32 codec functions
- * 
- * @{
+/**-----------------------------------------------------------------------------
+ * @defgroup base Base conversion functions
+ * @ingroup dnscore
+ * @brief Base 32 codec
  *
+ * Base 32 codec functions
+ *
+ * @{
  *----------------------------------------------------------------------------*/
 #ifndef _BASE32_H
-#define	_BASE32_H
+#define _BASE32_H
 
 #include <dnscore/sys_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 /**
  * Encodes bytes into base32
  * The output size must be at least size_in * 8/5
- * 
+ *
  * @param buffer_in     bytes to convert
  * @param size_in       number of bytes
  * @param buffer_out    output buffer of a size >= size_in * 8/5
- * 
+ *
  * @return output size
  */
-    
-u32 base32_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
+
+uint32_t base32_encode(const void *buffer_in, uint32_t size_in, char *buffer_out);
 
 /**
  * Decodes base32 into bytes
  * The output size must be at least size_in * 5/8
- * 
+ *
  * @param buffer_in     base32 text
  * @param size_in       number of chars
  * @param buffer_out    output buffer of a size >= size_in * 5/8
- * 
+ *
  * @return output size
  */
 
-ya_result base32_decode(const char* buffer_in,u32 size_in,u8* buffer_out);
+ya_result base32_decode(const char *buffer_in, uint32_t size_in, uint8_t *buffer_out);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _BASE32_H */
+#endif /* _BASE32_H */
 /** @} */

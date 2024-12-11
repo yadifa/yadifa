@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,55 +28,51 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
 #include <dnscore/sys_types.h>
 
-#if 0 /* fix */
-#else
 #define LIMITER_WINDOW_COUNT    1
 #define LIMITER_WINDOW_DURATION 1000000 // 1s
-#endif
 
-typedef u32 limiter_count_t;
+typedef uint32_t limiter_count_t;
 
 struct limiter_t
 {
-    u64 time_base;
-    u64 last_time;
-    u64 wait_time;
-    u32 window_current;
+    uint64_t        time_base;
+    uint64_t        last_time;
+    uint64_t        wait_time;
+    uint32_t        window_current;
     limiter_count_t rate_max;
     limiter_count_t window[LIMITER_WINDOW_COUNT];
 };
 
 typedef struct limiter_t limiter_t;
 
-void limiter_init(limiter_t *r, limiter_count_t amount_max);
+void                     limiter_init(limiter_t *r, limiter_count_t amount_max);
 
-void limiter_set_wait_time(limiter_t *r, u64 time_to_wait_between_two);
+void                     limiter_set_wait_time(limiter_t *r, uint64_t time_to_wait_between_two);
 
-void limiter_finalize(limiter_t *r);
+void                     limiter_finalize(limiter_t *r);
 
 /**
  * Computes the quota for adding a given amount
  * Sends the result back in two variables.
- * 
+ *
  * @param r the limiter
  * @param amount_to_add the amount to add
  * @param quota_available_now a pointer to a variable to hold how much can be added right now (can be NULL)
- * @param time_to_wait_for_more a pointer to a variable to hold how much time (us) needs to be waited before probing again (can be NULL)
- * 
+ * @param time_to_wait_for_more a pointer to a variable to hold how much time (us) needs to be waited before probing
+ * again (can be NULL)
+ *
  * Returns timeus() at the time of the call (not at the return of the call)
  */
-u64 limiter_quota(limiter_t *r, limiter_count_t amount_to_add, limiter_count_t* quota_available_now, u64* time_to_wait_for_more);
+uint64_t limiter_quota(limiter_t *r, limiter_count_t amount_to_add, limiter_count_t *quota_available_now, uint64_t *time_to_wait_for_more);
 
-void limiter_add(limiter_t *r, limiter_count_t amount_to_add, limiter_count_t* amount_added, u64* time_to_wait_for_more);
+void     limiter_add(limiter_t *r, limiter_count_t amount_to_add, limiter_count_t *amount_added, uint64_t *time_to_wait_for_more);
 
-void limiter_add_anyway(limiter_t *r, limiter_count_t amount_to_add, limiter_count_t* amount_added, u64* time_to_wait_for_more);
+void     limiter_add_anyway(limiter_t *r, limiter_count_t amount_to_add, limiter_count_t *amount_added, uint64_t *time_to_wait_for_more);
 
-void limiter_wait(limiter_t *r, limiter_count_t amount_to_add);
+void     limiter_wait(limiter_t *r, limiter_count_t amount_to_add);

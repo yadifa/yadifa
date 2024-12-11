@@ -1,6 +1,6 @@
-dnl ############################################################################
+dnl ----------------------------------------------------------------------------
 dnl
-dnl Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2024, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -10,9 +10,8 @@ dnl
 dnl        * Redistributions of source code must retain the above copyright
 dnl          notice, this list of conditions and the following disclaimer.
 dnl        * Redistributions in binary form must reproduce the above copyright
-dnl          notice, this list of conditions and the following disclaimer in
-dnl          the documentation and/or other materials provided with the
-dnl          distribution.
+dnl          notice, this list of conditions and the following disclaimer in the
+dnl          documentation and/or other materials provided with the distribution.
 dnl        * Neither the name of EURid nor the names of its contributors may be
 dnl          used to endorse or promote products derived from this software
 dnl          without specific prior written permission.
@@ -25,19 +24,19 @@ dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
 dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 dnl SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+dnl CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl
-dnl ############################################################################        
-        
+dnl ----------------------------------------------------------------------------
+
 AC_DEFUN([AC_CHECK_ENABLE_RRL], [
 
 AC_HAS_DISABLE(rrl,RRL_SUPPORT,[DNS Response Rate Limiter])
  
 ])
 
-dnl SSL DNSCORE DNSDB (all defaulted to FALSE)
+dnl SSL DNSCORE DNSDB (all defaulted to false)
 
 requires_tcl=0
 requires_ssl=0
@@ -106,7 +105,6 @@ AC_DEFUN([AC_YADIFA_ADD_SSL], [
 	AC_ARG_WITH(openssl, AS_HELP_STRING([--with-openssl=DIR], [the openssl from directory DIR]),
 		[
 			echo "yes"
-
 			OPENSSL="${withval}"
 			CFLAGS="-I$with_openssl/include $CFLAGS $CFLAGS3264"
 			LDFLAGS="-L$with_openssl/lib $SSLDEPS $LDFLAGS"
@@ -132,9 +130,8 @@ dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
             AC_SEARCH_LIBS([OPENSSL_init_ssl],[ssl],,[exit 1])
             ])
         AC_CHECK_FUNC(EVP_PKEY_new_raw_public_key,
-            [AC_DEFINE_UNQUOTED([HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY],[1],[Has EVP_PKEY_new_raw_public_key])],
-            [AC_DEFINE_UNQUOTED([HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY],[0],[Has EVP_PKEY_new_raw_public_key])],
-            )
+            AC_DEFINE_UNQUOTED(HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY,[1],[Has EVP_PKEY_new_raw_public_key]),
+            AC_DEFINE_UNQUOTED(HAS_EVP_PKEY_NEW_RAW_PUBLIC_KEY,[0],[Doesn't have EVP_PKEY_new_raw_public_key]))
 
         AC_DEFINE_UNQUOTED(HAS_OPENSSL, [1], [linked with an OpenSSL compatible API])
     else
@@ -142,8 +139,51 @@ dnl		AC_CHECK_LIB([ssl], [SSL_library_init],,[exit],[$SSLDEPS])
     fi
 
 	AC_SUBST(OPENSSL)
-])
+    AC_MSG_CHECKING([SSL version])
+    cat > openssl_version_check.c <<_ACEOF
+#include <stdio.h>
+#include <openssl/opensslv.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+unsigned int OPENSSL_version_major(void);
+unsigned int OPENSSL_version_minor(void);
+unsigned int OPENSSL_version_patch(void);
+#else
+static unsigned int OPENSSL_version_major(void) { return (OPENSSL_VERSION_NUMBER>>28)&15;}
+static unsigned int OPENSSL_version_minor(void) { return (OPENSSL_VERSION_NUMBER>>20)&15;}
+static unsigned int OPENSSL_version_patch(void) { return OPENSSL_VERSION_NUMBER&65535;}
+#endif
+int main(int argc, char *argv[[]])
+{
+if(argc == 1) printf("%i.%i.%i\n", OPENSSL_version_major(), OPENSSL_version_minor(), OPENSSL_version_patch());
+else switch(argv[[1]][[0]]) {
+    case '0': printf("%i\n", OPENSSL_version_major());break;
+    case '1': printf("%i\n", OPENSSL_version_minor());break;
+    case '2': printf("%i\n", OPENSSL_version_patch());break;
+    default: puts("?"); break;
+    }
+   return 0;
+}
+_ACEOF
+openssl_version_major=1
+LDFLAGS_RPATH=$(echo $LDFLAGS|sed 's/-L/-Wl,-rpath,/g')
+LDFLAGS="$LDFLAGS $LDFLAGS_RPATH"
+echo ${CC} ${CFLAGS} $LDFLAGS openssl_version_check.c -o openssl_version_check -lssl -lcrypto
+${CC} ${CFLAGS} $LDFLAGS openssl_version_check.c -o openssl_version_check -lssl -lcrypto
+# > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+    openssl_version_major=$(./openssl_version_check 0)
+    openssl_version_minor=$(./openssl_version_check 1)
+    AC_MSG_RESULT([$openssl_version_major $openssl_version_minor])
+else
+    AC_MSG_RESULT([assuming 1])
+fi
+rm -f openssl_version_check.c openssl_version_check
 
+AM_CONDITIONAL([OPENSSL_VERSION_MAJOR_1], [test $openssl_version_major -lt 3 ])
+AM_CONDITIONAL([OPENSSL_VERSION_MAJOR_3], [test $openssl_version_major -ge 3 ])
+AC_DEFINE_UNQUOTED([OPENSSL_VERSION_MAJOR], [$openssl_version_major], [The openssl API version])
+
+])
 
 AC_DEFUN([AC_YADIFA_ADD_LIBS], [
 
@@ -167,9 +207,8 @@ AC_SEARCH_LIBS([gethostbyname],[nsl],,[exit 1])
 AC_SEARCH_LIBS([socket],[socket],,[exit 1])
 AC_SEARCH_LIBS([dlopen],[dl],,[exit 1])
 AC_SEARCH_LIBS([pthread_self],[pthread],,[exit 1])
-AC_SEARCH_LIBS([backtrace],[execinfo],,[exit 1])
-AC_SEARCH_LIBS([backtrace_symbols],[execinfo],,[exit 1])
-dnl AC_GETHOSTBYNAME_CHECK
+AC_SEARCH_LIBS([backtrace],[execinfo],,)
+AC_SEARCH_LIBS([backtrace_symbols],[execinfo],,)
 
 if [[ $requires_tcl -eq 1 ]]
 then
@@ -281,15 +320,13 @@ AC_DEFUN([AC_YADIFA_FEATURES], [
 
 AC_CHECK_ENABLE_RRL
 
-dnl MASTER
+dnl PRIMARY
 dnl ==========================================================================
 
 dnl NOTE: Putting the empty optional text (,,) is mandatory
 
-AC_HAS_DISABLE(master,MASTER_SUPPORT,[DNS master],,
-
-    AC_YADIFA_ENABLE_SSL
-    ,
+AC_HAS_DISABLE(primary,PRIMARY_SUPPORT,[DNS primary],,
+    AC_YADIFA_ENABLE_SSL,
     enable_dynupdate='no'
     enable_rrsig_management='no')
 
@@ -300,8 +337,8 @@ AC_HAS_DISABLE(ctrl,CTRL,[yadifa ctrl remote control tool])
 
 dnl ZONESIGN
 dnl ==========================================================================
-dnl AC_HAS_ENABLE(zonesign,ZONESIGN,[yadifa zonesign tool])
-AM_CONDITIONAL([HAS_ZONESIGN], [xno = xyes])
+
+AC_HAS_ENABLE(zonesign,ZONESIGN,[yadifa zonesign tool])
 
 dnl KEYGEN
 dnl ==========================================================================
@@ -383,8 +420,7 @@ AC_HAS_ENABLE(malloc_debug,MALLOC_DEBUG_SUPPORT,[malloc debug support for yadifa
 dnl LIBC MALLOC DEBUG
 dnl ============
 
-dnl AC_HAS_ENABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT,[libc malloc debug support monitors program-wide allocations (DEPRECATED)])
-AC_FORCE_DISABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT)
+AC_HAS_ENABLE(libc_malloc_debug,LIBC_MALLOC_DEBUG_SUPPORT,[libc malloc debug support monitors program-wide allocations])
 
 dnl BFD STACKTRACE DEBUG
 dnl ====================
@@ -477,13 +513,18 @@ AC_HAS_ENABLE(systemd_resolved_avoidance, SYSTEMD_RESOLVED_AVOIDANCE, [to set do
 dnl NON-AA AXFR (non-AA AXFR as sent by MS DNS)
 dnl ==========================================================================
 
-AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[defaults axfr-strict-authority to no. Lenient acceptance of AXFR answer from master that do not have AA bit by default (Microsoft DNS)])
+AC_HAS_ENABLE(non_aa_axfr_support,NON_AA_AXFR_SUPPORT,[defaults axfr-strict-authority to no. Lenient acceptance of AXFR answer from authoritative servers that do not have AA bit by default (Microsoft DNS)])
+
+dnl QUERY LOG AGGREGATION MODEL
+dnl ===========================
+
+AC_HAS_ENABLE(query_log_aggregation,QUERY_LOG_AGGREGATION,[changes the way query logs from each thread are aggregated])
 
 dnl TCP MANAGER
 dnl ==========================================================================
 
 dnl not for release
-dnl AC_HAS_ENABLE(tcp_manager,TCP_MANAGER,[Enables the TCP manager (experimental)])
+AC_FORCE_ENABLE(tcp_manager,TCP_MANAGER,[Enables the TCP manager (experimental)])
 
 dnl STRDUP
 dnl ==========================================================================
@@ -536,6 +577,7 @@ echo "LOGDIR=$logdir"
 AC_SOCKADDR_SA_LEN_CHECK
 AC_SOCKADDR_IN_SIN_LEN_CHECK
 AC_SOCKADDR_IN6_SIN6_LEN_CHECK
+AC_HAS_GNU_SOURCE_CHECK
 
 ])
 
@@ -574,7 +616,7 @@ echo ZALLOC STATISTICS . : $enable_zalloc_statistics
 echo ZALLOC DEBUG ...... : $enable_zalloc_debug
 echo ACL ............... : $enable_acl
 echo TSIG .............. : $enable_tsig
-echo MASTER ............ : $enable_master
+echo PRIMARY ........... : $enable_primary
 echo DYNUPDATE ......... : $enable_dynupdate
 echo RRSIG MANAGEMENT .. : $enable_rrsig_management
 echo CTRL .............. : $enable_ctrl

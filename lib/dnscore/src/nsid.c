@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,71 +28,89 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdlib.h>
-//#include <arpa/inet.h>
-//#include <ctype.h>
+// #include <arpa/inet.h>
+// #include <ctype.h>
 
-//#include "dnscore/dnscore-config.h"
+// #include "dnscore/dnscore_config.h"
 
 #define DNSCORE_NSID_C
 
 #include "dnscore/nsid.h"
 #include "dnscore/rfc.h"
 
-static u8 edns0_rdatasize_nsid_option_wire_default[2] = {0,0};
+static uint8_t edns0_nsid_option_wire_default[4] = {(uint8_t)OPT_NSID, (uint8_t)(OPT_NSID >> 8), 0, 0};
+static uint8_t edns0_rdatasize_nsid_option_wire_default[2] = {0, 0};         // rdatasize = 0, empty everything else
+static uint8_t edns0_rdatasize_nsid_cookie_option_wire_default[2] = {0, 20}; // rdatasize = 20 (the size of a cookie)
 
-u32 edns0_record_size = EDNS0_RECORD_SIZE;
-u8 *edns0_rdatasize_nsid_option_wire = edns0_rdatasize_nsid_option_wire_default;
-u32 edns0_rdatasize_nsid_option_wire_size = 2;
+uint32_t       edns0_record_size = EDNS0_RECORD_SIZE;
+uint8_t       *edns0_nsid_option_wire = edns0_nsid_option_wire_default;
+uint8_t       *edns0_rdatasize_nsid_option_wire = edns0_rdatasize_nsid_option_wire_default;
+uint8_t       *edns0_rdatasize_nsid_cookie_option_wire = edns0_rdatasize_nsid_cookie_option_wire_default;
+uint32_t       edns0_nsid_option_wire_size = sizeof(edns0_nsid_option_wire_default);
+uint32_t       edns0_rdatasize_nsid_option_wire_size = 2;
 
-void
-edns0_set_nsid(u8 *bytes, u16 size)
+/**
+ * Sets the NSID fields.
+ * If called with NULL, resets the value to default.
+ *
+ * @param bytes the NSID or NULL
+ * @param size the size of the NSID, ignored if bytes is NULL
+ * @return an error code
+ */
+
+ya_result edns0_set_nsid(const uint8_t *bytes, uint16_t size)
 {
     if(bytes != NULL)
     {
         if(size > EDNS0_NSID_SIZE_MAX)
         {
-            return;
+            return BUFFER_WOULD_OVERFLOW;
         }
-        
-        u8 *tmp = malloc(2 + 2 + 2 + size);
+
+        size_t   tmp_size = 2 + 2 + 2 + size;
+        uint8_t *tmp = malloc(tmp_size * 2);
 
         if(tmp == NULL)
         {
-            return;
+            return ERROR;
         }
-        
-        tmp[0] = (size + 4) >> 8; 
-        tmp[1] = (size + 4) & 255; // VS false positive (nonsense) 
-        tmp[2] = 0;
-        tmp[3] = EDNS0_OPT_3;
+
+        tmp[0] = (size + 4) >> 8;          // rdatasize, Big Endian
+        tmp[1] = (size + 4) & 255;         // VS false positive (nonsense)
+        tmp[2] = (uint8_t)OPT_NSID;        // option 0003 (NSID)
+        tmp[3] = (uint8_t)(OPT_NSID >> 8); // size of the NSID
         tmp[4] = size >> 8;
         tmp[5] = size & 255;
-        memcpy(&tmp[6], bytes, size);
-        
+        memcpy(&tmp[6], bytes, size); // bytes of the NSID
+
+        memcpy(&tmp[tmp_size], tmp, tmp_size);
+
         if(edns0_rdatasize_nsid_option_wire != edns0_rdatasize_nsid_option_wire_default)
         {
             free(edns0_rdatasize_nsid_option_wire);
         }
-        
+
         edns0_rdatasize_nsid_option_wire = tmp;
+        edns0_nsid_option_wire = tmp + 2;
+        edns0_nsid_option_wire_size = tmp_size - 2;
+        edns0_rdatasize_nsid_cookie_option_wire = &tmp[tmp_size];
+        SET_U16_AT_P(edns0_rdatasize_nsid_cookie_option_wire, htons(ntohs(GET_U16_AT_P(edns0_rdatasize_nsid_cookie_option_wire)) + 20));
         edns0_rdatasize_nsid_option_wire_size = 6 + size;
-        
+
         edns0_record_size = EDNS0_RECORD_SIZE - 2 + edns0_rdatasize_nsid_option_wire_size;
     }
     else
@@ -101,10 +119,13 @@ edns0_set_nsid(u8 *bytes, u16 size)
         {
             free(edns0_rdatasize_nsid_option_wire);
             edns0_rdatasize_nsid_option_wire = edns0_rdatasize_nsid_option_wire_default;
-            edns0_rdatasize_nsid_option_wire_size = 2;            
+            edns0_rdatasize_nsid_cookie_option_wire = edns0_rdatasize_nsid_cookie_option_wire_default;
+            edns0_rdatasize_nsid_option_wire_size = 2;
             edns0_record_size = EDNS0_RECORD_SIZE;
         }
     }
+
+    return SUCCESS;
 }
 
 /** @} */

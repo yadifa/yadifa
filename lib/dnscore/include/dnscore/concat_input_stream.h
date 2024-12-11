@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,49 +28,45 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _CONCAT_INPUT_STREAM_H
-#define	_CONCAT_INPUT_STREAM_H
+#define _CONCAT_INPUT_STREAM_H
 
 #include <dnscore/input_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 /**
- * 
+ *
  * @param cis
  */
-    
-void concat_input_stream_init(input_stream *cis);
+
+void concat_input_stream_init(input_stream_t *cis);
 
 /**
- * 
+ *
  * @param cis
  * @param added_stream
  */
 
-void concat_input_stream_add(input_stream *cis, input_stream *added_stream);
+void concat_input_stream_add(input_stream_t *cis, input_stream_t *added_stream);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _CONCAT_INPUT_STREAM_H */
+#endif /* _CONCAT_INPUT_STREAM_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

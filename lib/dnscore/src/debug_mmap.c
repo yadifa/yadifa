@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup debug Debug functions
- *  @ingroup dnscore
- *  @brief Debug functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup debug Debug functions
+ * @ingroup dnscore
+ * @brief Debug functions.
  *
  *  Definitions of debug functions/hooks, mainly memory related.
  *
  * @{
- */
-#include "dnscore/dnscore-config.h"
+ *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore_config.h"
 #include "dnscore/debug_config.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -64,20 +63,20 @@
 #undef debug_stat
 #undef debug_mallocated
 
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 struct debug_mmap_s
 {
-    void *addr;
-    size_t len;
-    int prot;
-    int flags;
-    int fildes;
-    off_t off;
-    s64 ts;
+    void      *addr;
+    size_t     len;
+    int        prot;
+    int        flags;
+    int        fildes;
+    off_t      off;
+    int64_t    ts;
     stacktrace trace;
-    void *mapped;
+    void      *mapped;
 };
 
 typedef struct debug_mmap_s debug_mmap_t;
@@ -87,18 +86,17 @@ typedef struct debug_mmap_s debug_mmap_t;
 
 #if DNSCORE_HAS_MMAP_DEBUG_SUPPORT
 
-static ptr_set_debug debug_mmap_set = PTR_SET_DEBUG_EMPTY;
-static pthread_mutex_t debug_mmap_mtx = PTHREAD_MUTEX_INITIALIZER;
+static ptr_treemap_debug_t debug_mmap_set = PTR_TREEMAP_DEBUG_EMPTY;
+static pthread_mutex_t     debug_mmap_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-void*
-debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
+void                      *debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
 {
     // DO NOT: formatln("debug_mmap(%p, %llx, %i, %i, %i, %lli)", addr, len, prot, flags, fildes, off);
 
     void *ret = mmap(addr, len, prot, flags, fildes, off);
     if(ret != MAP_FAILED)
     {
-        debug_mmap_t *debug_mmap = (debug_mmap_t*)debug_malloc_unmonitored(sizeof(debug_mmap_t));
+        debug_mmap_t *debug_mmap = (debug_mmap_t *)debug_malloc_unmonitored(sizeof(debug_mmap_t));
         debug_mmap->addr = addr;
         debug_mmap->len = len;
         debug_mmap->prot = prot;
@@ -109,7 +107,7 @@ debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
         debug_mmap->ts = timeus();
         debug_mmap->mapped = ret;
         pthread_mutex_lock(&debug_mmap_mtx);
-        ptr_node_debug *node = ptr_set_debug_insert(&debug_mmap_set, ret);
+        ptr_treemap_node_debug_t *node = ptr_treemap_debug_insert(&debug_mmap_set, ret);
         node->value = debug_mmap;
         pthread_mutex_unlock(&debug_mmap_mtx);
     }
@@ -119,36 +117,35 @@ debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
 int debug_munmap(void *addr, size_t len)
 {
     pthread_mutex_lock(&debug_mmap_mtx);
-    ptr_node_debug *node = ptr_set_debug_find(&debug_mmap_set, addr);
+    ptr_treemap_node_debug_t *node = ptr_treemap_debug_find(&debug_mmap_set, addr);
     if(node != NULL)
     {
         debug_mmap_t *debug_mmap = (debug_mmap_t *)node->value;
         debug_free_unmonitored(debug_mmap);
-        ptr_set_debug_delete(&debug_mmap_set, addr);
+        ptr_treemap_debug_delete(&debug_mmap_set, addr);
     }
     pthread_mutex_unlock(&debug_mmap_mtx);
     int ret = munmap(addr, len);
     return ret;
 }
 
-void
-debug_mmap_stat()
+void debug_mmap_stat()
 {
-    u32 count = 0;
-    u64 total = 0;
+    uint32_t count = 0;
+    uint64_t total = 0;
 
     formatln("MMAP statistics:");
 
     pthread_mutex_lock(&debug_mmap_mtx);
-    ptr_set_debug_iterator iter;
-    ptr_set_debug_iterator_init(&debug_mmap_set, &iter);
-    while(ptr_set_debug_iterator_hasnext(&iter))
+    ptr_treemap_debug_iterator iter;
+    ptr_treemap_debug_iterator_init(&debug_mmap_set, &iter);
+    while(ptr_treemap_debug_iterator_hasnext(&iter))
     {
-        const ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
-        const debug_mmap_t *debug_mmap = (const debug_mmap_t *)node->value;
+        const ptr_treemap_node_debug_t *node = ptr_treemap_debug_iterator_next_node(&iter);
+        const debug_mmap_t             *debug_mmap = (const debug_mmap_t *)node->value;
         formatln("MMAP %p %016llx %04x %04x %5i %08x (%lli)", debug_mmap->mapped, debug_mmap->len, debug_mmap->prot, debug_mmap->flags, debug_mmap->fildes, debug_mmap->off, debug_mmap->ts);
         debug_stacktrace_print(termout, debug_mmap->trace);
-        output_stream_write_u8(termout, (u8)'\n');
+        output_stream_write_u8(termout, (uint8_t)'\n');
         ++count;
         total += debug_mmap->len;
     }
@@ -159,8 +156,7 @@ debug_mmap_stat()
 
 #else
 
-void*
-debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
+void *debug_mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
 {
     void *ret = mmap(addr, len, prot, flags, fildes, off);
     return ret;
@@ -172,10 +168,7 @@ int debug_munmap(void *addr, size_t len)
     return ret;
 }
 
-void
-debug_mmap_stat()
-{
-}
+void debug_mmap_stat() {}
 
 #endif
 

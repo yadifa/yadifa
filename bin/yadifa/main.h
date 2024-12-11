@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
-#include <dnscore/dnscore-release-date.h>
-#include "client-config.h"
+#include <dnscore/dnscore_release_date.h>
+#include "client_config.h"
 
-#define     PROGRAM_NAME                "yadifa"
-#define     PROGRAM_VERSION             PACKAGE_VERSION
-#define     RELEASE_DATE                YADIFA_DNSCORE_RELEASE_DATE
+#define PROGRAM_NAME    "yadifa"
+#define PROGRAM_VERSION PACKAGE_VERSION
+#define RELEASE_DATE    YADIFA_DNSCORE_RELEASE_DATE
 
-void yadifa_show_version(u8 level);
+void yadifa_show_version(uint8_t level);

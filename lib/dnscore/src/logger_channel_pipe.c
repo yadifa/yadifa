@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -60,37 +58,33 @@
 #include "dnscore/chroot.h"
 #include "dnscore/fdtools.h"
 #include "dnscore/thread_pool.h"
-#include "dnscore/popen-output-stream.h"
+#include "dnscore/popen_output_stream.h"
 #include "dnscore/process.h"
 
 #define PIPE_CHANNEL_BUFFER_SIZE 65536
 
-
-
 struct pipe_data
 {
-    output_stream os;
-    char *command;
-    bool force_flush;
+    output_stream_t os;
+    char           *command;
+    bool            force_flush;
 };
 
 typedef struct pipe_data pipe_data;
 
-static ya_result
-logger_channel_pipe_append(const char *command, pipe_data* sd);
+static ya_result         logger_channel_pipe_append(const char *command, pipe_data *sd);
 
-static ya_result
-logger_channel_pipe_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
+static ya_result         logger_channel_pipe_constmsg(logger_channel_t *chan, int level, char *text, uint32_t text_len, uint32_t date_offset)
 {
     (void)level;
     (void)date_offset;
 
-    pipe_data* sd = (pipe_data*)chan->data;
+    pipe_data *sd = (pipe_data *)chan->data;
 
-    output_stream_write(&sd->os, (const u8*)text, text_len);
+    output_stream_write(&sd->os, (const uint8_t *)text, text_len);
 
-    ya_result ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
-    
+    ya_result ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
+
     if(ret == MAKE_ERRNO_ERROR(EPIPE))
     {
         output_stream_flush(&sd->os);
@@ -99,8 +93,8 @@ logger_channel_pipe_constmsg(logger_channel* chan, int level, char* text, u32 te
 
         if(ISOK(ret = logger_channel_pipe_append(sd->command, sd)))
         {
-            output_stream_write(&sd->os, (const u8*)text, text_len);
-            ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
+            output_stream_write(&sd->os, (const uint8_t *)text, text_len);
+            ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
 
             if(ret == MAKE_ERRNO_ERROR(EPIPE))
             {
@@ -125,17 +119,16 @@ logger_channel_pipe_constmsg(logger_channel* chan, int level, char* text, u32 te
     return ret;
 }
 
-static ya_result
-logger_channel_pipe_vmsg(logger_channel* chan, int level, char* text, va_list args)
+static ya_result logger_channel_pipe_vmsg(logger_channel_t *chan, int level, char *text, va_list args)
 {
     (void)level;
 
-    pipe_data* sd = (pipe_data*)chan->data;
+    pipe_data *sd = (pipe_data *)chan->data;
 
     vosformat(&sd->os, text, args);
 
-    ya_result ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
-    
+    ya_result ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
+
     if(ret == MAKE_ERRNO_ERROR(EPIPE))
     {
         // the child is probably dead as the connection has been closed
@@ -154,7 +147,7 @@ logger_channel_pipe_vmsg(logger_channel* chan, int level, char* text, va_list ar
         if(ISOK(ret = logger_channel_pipe_append(sd->command, sd)))
         {
             vosformat(&sd->os, text, args);
-            ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
+            ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
 
             if(ret == MAKE_ERRNO_ERROR(EPIPE))
             {
@@ -181,8 +174,7 @@ logger_channel_pipe_vmsg(logger_channel* chan, int level, char* text, va_list ar
     return ret;
 }
 
-static ya_result
-logger_channel_pipe_msg(logger_channel* chan, int level, char* text, ...)
+static ya_result logger_channel_pipe_msg(logger_channel_t *chan, int level, char *text, ...)
 {
     va_list args;
     va_start(args, text);
@@ -194,18 +186,16 @@ logger_channel_pipe_msg(logger_channel* chan, int level, char* text, ...)
     return ret;
 }
 
-static void
-logger_channel_pipe_flush(logger_channel* chan)
+static void logger_channel_pipe_flush(logger_channel_t *chan)
 {
-    pipe_data* sd = (pipe_data*)chan->data;
+    pipe_data *sd = (pipe_data *)chan->data;
 
     output_stream_flush(&sd->os);
 }
 
-static void
-logger_channel_pipe_close(logger_channel* chan)
+static void logger_channel_pipe_close(logger_channel_t *chan)
 {
-    pipe_data* sd = (pipe_data*)chan->data;
+    pipe_data *sd = (pipe_data *)chan->data;
 
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
@@ -213,7 +203,7 @@ logger_channel_pipe_close(logger_channel* chan)
     chroot_unmanage_path(&sd->command);
 #endif
     free(sd->command);
-    
+
     chan->vtbl = NULL;
     sd->os.data = NULL;
     sd->os.vtbl = NULL;
@@ -221,11 +211,10 @@ logger_channel_pipe_close(logger_channel* chan)
     free(chan->data);
     chan->data = NULL;
 }
-static ya_result
-logger_channel_pipe_append(const char *command, pipe_data* sd)
+static ya_result logger_channel_pipe_append(const char *command, pipe_data *sd)
 {
     // fork & exec
-    
+
     popen_output_stream_parameters params;
     params.uid = logger_get_uid();
     params.gid = logger_get_gid();
@@ -238,30 +227,30 @@ logger_channel_pipe_append(const char *command, pipe_data* sd)
     return ret;
 }
 
-static ya_result
-logger_channel_pipe_reopen(logger_channel* chan)
-{    
-    ya_result ret;        
-    pipe_data* sd = (pipe_data*)chan->data;
+static ya_result logger_channel_pipe_reopen(logger_channel_t *chan)
+{
+    ya_result      ret;
+    pipe_data     *sd = (pipe_data *)chan->data;
     struct timeval tv;
-    struct tm t;
-    
+    struct tm      t;
+
 #if DNSCORE_HAS_LOG_THREAD_TAG
     char thread_tag_buffer[9];
 #endif
 
     logger_channel_pipe_flush(chan);
-    
+
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
-    
+
 #if DNSCORE_HAS_LOG_THREAD_TAG
     thread_copy_tag_with_pid_and_tid(getpid_ex(), thread_self(), thread_tag_buffer);
 #endif
-    
-    logger_channel_pipe_msg(chan, LOG_NOTICE,
 
-#if (DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
+    logger_channel_pipe_msg(chan,
+                            LOG_NOTICE,
+
+#if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | I | reopening '%s'",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | I | reopening '%s'",
@@ -274,23 +263,28 @@ logger_channel_pipe_reopen(logger_channel* chan)
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopening '%s'",
 #endif
-                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                            t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec, // t is initialized at line 338 (localtime_r)
+                            t.tm_year + 1900,
+                            t.tm_mon + 1,
+                            t.tm_mday,
+                            t.tm_hour,
+                            t.tm_min,
+                            t.tm_sec,
+                            tv.tv_usec, // t is initialized at line 338 (localtime_r)
 #if DEBUG || HAS_LOG_PID
                             getpid(),
 #endif
 #if DNSCORE_HAS_LOG_THREAD_TAG
                             thread_tag_buffer,
 #else
-    #if DEBUG || HAS_LOG_THREAD_ID
+#if DEBUG || HAS_LOG_THREAD_ID
                             thread_self(),
-    #endif
+#endif
 #endif
                             "system",
                             sd->command);
-    
+
     logger_channel_pipe_flush(chan);
-    
+
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
     output_stream_set_sink(&sd->os);
@@ -299,13 +293,14 @@ logger_channel_pipe_reopen(logger_channel* chan)
     {
         output_stream_set_sink(&sd->os);
     }
-    
+
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
 
-    logger_channel_pipe_msg(chan, LOG_NOTICE,
-    
-#if (DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
+    logger_channel_pipe_msg(chan,
+                            LOG_NOTICE,
+
+#if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | I | reopened '%s'",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | I | reopened '%s'",
@@ -318,63 +313,67 @@ logger_channel_pipe_reopen(logger_channel* chan)
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopened '%s'",
 #endif
-                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                            t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                            t.tm_year + 1900,
+                            t.tm_mon + 1,
+                            t.tm_mday,
+                            t.tm_hour,
+                            t.tm_min,
+                            t.tm_sec,
+                            tv.tv_usec,
 #if DEBUG || HAS_LOG_PID
                             getpid(),
 #endif
 #if DNSCORE_HAS_LOG_THREAD_TAG
                             thread_tag_buffer,
 #else
-    #if DEBUG || HAS_LOG_THREAD_ID
+#if DEBUG || HAS_LOG_THREAD_ID
                             thread_self(),
-    #endif
+#endif
 #endif
                             "system",
                             sd->command);
     logger_channel_pipe_flush(chan);
-        
+
     return ret;
 }
 
-static void
-logger_channel_pipe_sink(logger_channel* chan)
+static void logger_channel_pipe_sink(logger_channel_t *chan)
 {
-    pipe_data* sd = (pipe_data*)chan->data;
+    pipe_data *sd = (pipe_data *)chan->data;
     //
     (void)sd;
 }
 
-static const logger_channel_vtbl stream_vtbl =
-{
-    logger_channel_pipe_constmsg,
-    logger_channel_pipe_msg,
-    logger_channel_pipe_vmsg,
-    logger_channel_pipe_flush,
-    logger_channel_pipe_close,
-    logger_channel_pipe_reopen,
-    logger_channel_pipe_sink,
-    "pipe_channel"
-};
+static const logger_channel_vtbl stream_vtbl = {logger_channel_pipe_constmsg,
+#if DNSCORE_LOGGER_CHANNEL_HAS_MSG
+                                                logger_channel_pipe_msg,
+#endif
+#if DNSCORE_LOGGER_CHANNEL_HAS_VMSG
+                                                logger_channel_pipe_vmsg,
+#endif
+                                                logger_channel_pipe_flush,
+                                                logger_channel_pipe_close,
+                                                logger_channel_pipe_reopen,
+                                                logger_channel_pipe_sink,
+                                                "pipe_channel"};
 
-ya_result
-logger_channel_pipe_open(const char *fullpath, bool forceflush, logger_channel* chan)
+ya_result logger_channel_pipe_open(const char *fullpath, bool forceflush, logger_channel_t *chan)
 {
     if(chan == NULL)
     {
         osformatln(termerr, "tried to open pipe '%s' on uninitialised channel", fullpath);
         return OBJECT_NOT_INITIALIZED;
     }
-    
-    ya_result ret;
-    
-    pipe_data* sd;
+
+    ya_result  ret;
+
+    pipe_data *sd;
     MALLOC_OBJECT_OR_DIE(sd, pipe_data, 0x4d5254534e414843); /* CHANSTRM */
 
     if(ISOK(ret = logger_channel_pipe_append(fullpath, sd)))
     {
         sd->command = strdup(fullpath);
-        //chroot_manage_path(&sd->command, fullpath, FALSE);
+        // chroot_manage_path(&sd->command, fullpath, false);
         sd->force_flush = forceflush;
 
         chan->data = sd;

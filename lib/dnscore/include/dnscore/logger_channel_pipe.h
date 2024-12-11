@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,36 +28,34 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _LOGGER_CHANNEL_PIPE_H
-#define	_LOGGER_CHANNEL_PIPE_H
+#define _LOGGER_CHANNEL_PIPE_H
 
 #include <dnscore/logger.h>
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-ya_result logger_channel_pipe_open(const char *command, bool forceflush, logger_channel *chan);
+ya_result logger_channel_pipe_open(const char *command, bool forceflush, logger_channel_t *chan);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _LOGGER_CHANNEL_STREAM_H */
+#endif /* _LOGGER_CHANNEL_STREAM_H */
 
 /** @} */

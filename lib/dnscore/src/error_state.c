@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,36 +28,33 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #include "dnscore/error_state.h"
 #include "dnscore/logger.h"
 
-bool
-error_state_log(error_state_t *es, ya_result err)
+bool error_state_log(error_state_t *es, ya_result err)
 {
-    bool log_message = FALSE;
+    bool log_message = false;
 
     if(es->error != err)
     {
-        s64 now = timeus();
+        int64_t now = timeus();
         es->error = err;
         es->count = 1;
         es->first_epoch = now;
         es->last_epoch = now;
 
-        log_message = TRUE;
+        log_message = true;
     }
     else
     {
         ++es->count;
 
-        s64 now = timeus();
+        int64_t now = timeus();
         if(now - es->last_epoch >= ERROR_STATE_FAILURE_LOG_PERIOD)
         {
-            log_message = TRUE;
+            log_message = true;
             es->last_epoch = now;
         }
     }
@@ -65,21 +62,18 @@ error_state_log(error_state_t *es, ya_result err)
     return log_message;
 }
 
-void
-error_state_clear(error_state_t *es, logger_handle *log_handle, int level, const char *notice_message)
+void error_state_clear(error_state_t *es, logger_handle_t *log_handle, int level, const char *notice_message)
 {
     if(es->error != 0)
     {
-        s64 now = timeus();
+        int64_t now = timeus();
         if(now - es->last_epoch >= ERROR_STATE_FAILURE_LOG_PERIOD)
         {
             if((log_handle != NULL) && (notice_message != NULL))
             {
                 if(log_handle->active[level] != 0)
                 {
-                    logger_handle_msg_nocull(log_handle, level,
-                                             "%s recovered from a stream of %lli issues having occurred between %llT and %llT",
-                                             notice_message, es->count, es->first_epoch, es->last_epoch);
+                    logger_handle_msg_nocull(log_handle, level, "%s recovered from a stream of %lli issues having occurred between %llT and %llT", notice_message, es->count, es->first_epoch, es->last_epoch);
                 }
             }
 
@@ -91,8 +85,7 @@ error_state_clear(error_state_t *es, logger_handle *log_handle, int level, const
     }
 }
 
-bool
-error_state_log_locked(error_state_t *es, ya_result err)
+bool error_state_log_locked(error_state_t *es, ya_result err)
 {
     mutex_lock(&es->mtx);
     bool ret = error_state_log(es, err);
@@ -100,8 +93,7 @@ error_state_log_locked(error_state_t *es, ya_result err)
     return ret;
 }
 
-void
-error_state_clear_locked(error_state_t *es, logger_handle *log_handle, int level, const char *notice_message)
+void error_state_clear_locked(error_state_t *es, logger_handle_t *log_handle, int level, const char *notice_message)
 {
     mutex_lock(&es->mtx);
     error_state_clear(es, log_handle, level, notice_message);

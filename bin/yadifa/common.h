@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
-
-
 
 #include <stdio.h>
 #include <dnscore/dnscore.h>
@@ -42,101 +38,44 @@
 #include <dnscore/timems.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-#define YADIFA_ERROR_BASE               0x82000000
-#define YADIFA_ERROR_CODE(code_)        ((s32)(YADIFA_ERROR_BASE+(code_)))
-#define YADIFA_MODULE_HELP_REQUESTED    YADIFA_ERROR_CODE(1)
+#define YADIFA_ERROR_BASE            0x82000000
+#define YADIFA_ERROR_CODE(code_)     ((int32_t)(YADIFA_ERROR_BASE + (code_)))
+#define YADIFA_MODULE_HELP_REQUESTED YADIFA_ERROR_CODE(1)
 
 typedef int symbol_t;
 
 #define THRESHOLD_DEFAULT 1.9f
 
-static inline void print_name(FILE *f, const u8 *pname, u8 padding)
+static inline void print_name(FILE *f, const uint8_t *pname, uint8_t padding)
 {
-    //fputc('"', f);
-    u8 len = pname[0];
+    // fputc('"', f);
+    uint8_t len = pname[0];
     if(len < padding)
     {
-        
-        for(u8 i = padding - len; i > 0 ; --i)
+
+        for(uint_fast8_t i = padding - len; i > 0; --i)
         {
             fputc(' ', f);
         }
     }
     fwrite(&pname[1], len, 1, f);
-    //fputc('"', f);
+    // fputc('"', f);
 }
 
-static inline u64 timeus_delta(u64 start, u64 stop)
-{
-    return (start < stop)?stop-start:0;
-}
+static inline uint64_t timeus_delta(uint64_t start, uint64_t stop) { return (start < stop) ? stop - start : 0; }
 
-static inline double timeus_delta_s(u64 start, u64 stop)
+static inline double   timeus_delta_s(uint64_t start, uint64_t stop)
 {
     double ret = timeus_delta(start, stop);
     ret /= ONE_SECOND_US_F;
     return ret;
 }
 
-static inline void
-ttylog_out(const char *format, ...)
-{
-    va_list args;
-    
-    
-#ifdef MODULE_MSG_HANDLE
-    if(logger_is_running())
-    {
-        va_start(args, format);
-        logger_handle_vmsg(MODULE_MSG_HANDLE, MSG_INFO, format, args);
-        va_end(args);
-        logger_flush();
-    }
-    // else 
-#endif
-    {
-        flushout();
-        osprint(termout, "info: ");
-        va_start(args, format);
-        vosformat(termout, format, args);
-        va_end(args);
-        osprintln(termout, "");
-        flusherr();
-    }
-}
-
-static inline void
-ttylog_err(const char *format, ...)
-{
-    va_list args;
-    
-    
-#ifdef MODULE_MSG_HANDLE
-    if(logger_is_running())
-    {
-        va_start(args, format);
-        logger_handle_vmsg(MODULE_MSG_HANDLE, MSG_ERR, format, args);
-        va_end(args);
-        logger_flush();
-    }
-    // else 
-#endif
-    {
-        flushout();
-        osprint(termerr, "error: ");
-        va_start(args, format);
-        vosformat(termerr, format, args);
-        va_end(args);
-        osprintln(termerr, "");
-        flusherr();
-    }
-}
-
-
- /**
+/**
  *  @fn const char * file_name_from_path ()
  *  @brief base_of_path
  *
@@ -146,13 +85,12 @@ ttylog_err(const char *format, ...)
  */
 const char *filename_from_path(const char *fullpath);
 
-int module_verbosity_level();
+int         module_verbosity_level();
 
-void module_arg_set(char **argv, int argc);
-int module_arg_count();
+void        module_arg_set(char **argv, int argc);
+int         module_arg_count();
 const char *module_arg_get(int index);
 
 #ifdef __cplusplus
 }
 #endif
-

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,30 +28,28 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "dnscore/mt_output_stream.h"
 #include "dnscore/mutex.h"
 #include "dnscore/bytearray_output_stream.h"
 #include "dnscore/ptr_vector.h"
-#include "dnscore/ptr_set_debug.h"
+#include "dnscore/ptr_treemap_debug.h"
 
-#define MT_OUTPUT_STREAM_TAG 0x534F544D /* MTOS */
-#define MTOSSTRM_TAG 0x4d525453534f544d
+#define MT_OUTPUT_STREAM_TAG                 0x534F544D /* MTOS */
+#define MTOSSTRM_TAG                         0x4d525453534f544d
 
 #define MT_OUTPUT_STREAM_BUFFER_INITIAL_SIZE 128U
 
@@ -59,32 +57,31 @@ typedef struct mt_output_stream_data mt_output_stream_data;
 
 struct mt_output_stream_data
 {
-    output_stream filtered;
-    mutex_t mutex;
-    ptr_set_debug writers;
+    output_stream_t     filtered;
+    mutex_t             mutex;
+    ptr_treemap_debug_t writers;
     /*
     mutex_t delayed_mutex;
-    ptr_vector delayed_writes;
+    ptr_vector_t delayed_writes;
     */
 };
 
-static ya_result
-mt_write(output_stream *stream, const u8 *buffer, u32 len)
+static ya_result mt_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
-    ya_result ret;
+    ya_result              ret;
 
-    mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
+    mt_output_stream_data *data = (mt_output_stream_data *)stream->data;
 
     mutex_lock(&data->mutex);
-    ptr_node_debug *writer_node = ptr_set_debug_insert(&data->writers, (void*)pthread_self());
-    output_stream* osp;
+    ptr_treemap_node_debug_t *writer_node = ptr_treemap_debug_insert(&data->writers, (void *)pthread_self());
+    output_stream_t          *osp;
     if(writer_node->value != NULL)
     {
-        osp = (output_stream*)writer_node->value;
+        osp = (output_stream_t *)writer_node->value;
     }
     else
     {
-        MALLOC_OBJECT_OR_DIE(osp, output_stream, MTOSSTRM_TAG);
+        MALLOC_OBJECT_OR_DIE(osp, output_stream_t, MTOSSTRM_TAG);
         bytearray_output_stream_init_ex(osp, NULL, MT_OUTPUT_STREAM_BUFFER_INITIAL_SIZE, BYTEARRAY_DYNAMIC);
         writer_node->value = osp;
     }
@@ -97,7 +94,7 @@ mt_write(output_stream *stream, const u8 *buffer, u32 len)
 
     while(len > 0)
     {
-        u8 *lfp = (u8*)memchr(buffer, '\n', len);
+        uint8_t *lfp = (uint8_t *)memchr(buffer, '\n', len);
 
         if(lfp != NULL)
         {
@@ -150,7 +147,7 @@ mt_write(output_stream *stream, const u8 *buffer, u32 len)
             mutex_unlock(&data->mutex);
             if(ISOK(err))
             {
-                return  ret;
+                return ret;
             }
             else
             {
@@ -169,15 +166,14 @@ mt_write(output_stream *stream, const u8 *buffer, u32 len)
     return ret;
 }
 
-static ya_result
-mt_flush(output_stream *stream)
+static ya_result mt_flush(output_stream_t *stream)
 {
-    mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
-    ya_result ret = SUCCESS;
+    mt_output_stream_data *data = (mt_output_stream_data *)stream->data;
+    ya_result              ret = SUCCESS;
 
     mutex_lock(&data->mutex);
 
-    FOREACH_PTR_SET_DEBUG(output_stream*,osp, &data->writers)
+    FOREACH_PTR_TREEMAP_DEBUG(output_stream_t *, osp, &data->writers)
     {
         if(bytearray_output_stream_size(osp) > 0)
         {
@@ -193,14 +189,13 @@ mt_flush(output_stream *stream)
     return ret;
 }
 
-static void
-mt_close(output_stream *stream)
+static void mt_close(output_stream_t *stream)
 {
-    mt_output_stream_data *data = (mt_output_stream_data *) stream->data;
+    mt_output_stream_data *data = (mt_output_stream_data *)stream->data;
 
     mutex_lock(&data->mutex);
 
-    FOREACH_PTR_SET_DEBUG(output_stream*,osp, &data->writers)
+    FOREACH_PTR_TREEMAP_DEBUG(output_stream_t *, osp, &data->writers)
     {
         if(bytearray_output_stream_size(osp) > 0)
         {
@@ -210,7 +205,7 @@ mt_close(output_stream *stream)
         output_stream_close(osp);
         free(osp);
     }
-    ptr_set_debug_destroy(&data->writers);
+    ptr_treemap_debug_destroy(&data->writers);
     output_stream_set_void(stream);
     output_stream_close(&data->filtered);
     mutex_unlock(&data->mutex);
@@ -218,16 +213,14 @@ mt_close(output_stream *stream)
     free(data);
 }
 
-static const output_stream_vtbl mt_output_stream_vtbl =
-{
-        mt_write,
-        mt_flush,
-        mt_close,
-        "mt_output_stream",
+static const output_stream_vtbl mt_output_stream_vtbl = {
+    mt_write,
+    mt_flush,
+    mt_close,
+    "mt_output_stream",
 };
 
-ya_result
-mt_output_stream_init(output_stream *stream, output_stream *filtered)
+ya_result mt_output_stream_init(output_stream_t *stream, output_stream_t *filtered)
 {
     mt_output_stream_data *data;
 
@@ -240,10 +233,10 @@ mt_output_stream_init(output_stream *stream, output_stream *filtered)
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
-    data->writers.compare = ptr_set_debug_ptr_node_compare;
+    data->writers.compare = ptr_treemap_debug_ptr_node_compare;
     data->writers.root = NULL;
 
-    filtered->data = NULL;            /* Clean the filtered BEFORE setting up the stream */
+    filtered->data = NULL; /* Clean the filtered BEFORE setting up the stream */
     filtered->vtbl = NULL;
 
     mutex_init(&data->mutex);
@@ -254,11 +247,10 @@ mt_output_stream_init(output_stream *stream, output_stream *filtered)
     return SUCCESS;
 }
 
-output_stream *
-mt_output_stream_get_filtered(output_stream *bos)
+output_stream_t *mt_output_stream_get_filtered(output_stream_t *bos)
 {
-    output_stream *ret;
-    mt_output_stream_data *data = (mt_output_stream_data *) bos->data;
+    output_stream_t       *ret;
+    mt_output_stream_data *data = (mt_output_stream_data *)bos->data;
     mutex_lock(&data->mutex);
     ret = &data->filtered;
     mutex_unlock(&data->mutex);
@@ -266,20 +258,19 @@ mt_output_stream_get_filtered(output_stream *bos)
     return ret;
 }
 
-void mt_output_stream_detach_filtered(output_stream *bos, output_stream *detached_filtered)
+void mt_output_stream_detach_filtered(output_stream_t *bos, output_stream_t *detached_filtered)
 {
-    mt_output_stream_data *data = (mt_output_stream_data *) bos->data;
+    mt_output_stream_data *data = (mt_output_stream_data *)bos->data;
     mutex_lock(&data->mutex);
     *detached_filtered = data->filtered;
     output_stream_set_sink(&data->filtered);
     mutex_unlock(&data->mutex);
 }
 
-void
-mt_output_stream_set_filtered(output_stream *bos, output_stream *new_os, bool also_close)
+void mt_output_stream_set_filtered(output_stream_t *bos, output_stream_t *new_os, bool also_close)
 {
-    output_stream *os;
-    mt_output_stream_data *data = (mt_output_stream_data *) bos->data;
+    output_stream_t       *os;
+    mt_output_stream_data *data = (mt_output_stream_data *)bos->data;
     mutex_lock(&data->mutex);
     os = &data->filtered;
 
@@ -294,10 +285,6 @@ mt_output_stream_set_filtered(output_stream *bos, output_stream *new_os, bool al
     mutex_unlock(&data->mutex);
 }
 
-bool
-is_mt_output_stream(const output_stream* bos)
-{
-    return (bos != NULL) && (bos->vtbl == &mt_output_stream_vtbl);
-}
+bool is_mt_output_stream(const output_stream_t *bos) { return (bos != NULL) && (bos->vtbl == &mt_output_stream_vtbl); }
 
 /** @} */

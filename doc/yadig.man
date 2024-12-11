@@ -1,0 +1,126 @@
+'\" t
+.\" Manual page created with latex2man on Tue Oct 13 12:59:04 2020
+.\" NOTE: This file is generated, DO NOT EDIT.
+.de Vb
+.ft CW
+.nf
+..
+.de Ve
+.ft R
+
+.fi
+..
+.TH "YADIG" "1" "2024\-12\-11" "YADIFA " "YADIFA "
+.SH NAME
+
+.PP
+YADIFA
+is an utility for DNS lookups 
+.PP
+.SH SYNOPSIS
+
+.PP
+yadig
+[\fB\-\-config|\-c\fP\fI configfile\fP]
+[\fB\-\-file|\-f\fP\fI file name\fP]
+[\fB\-V\fP]
+[\fB\-h\fP]
+.PP
+yadig [@server] [\-b address] [\-c class] [\-f filename] [\-k filename] [\-m] 
+[\-p port#] [\-q name] [\-t type] [\-x addr] [\-y [hmac:]name:key] [\-4] 
+[\-6] [name] [type] [class] [queryopt \&. \&. ] 
+.PP
+yadig [\-h] 
+.PP
+.SH DESCRIPTION
+
+yadig
+It sends UDP and TCP DNS queries, and gives answers from the name servers 
+.PP
+yadig
+knows the main dns protocols: 
+.TP
+.B *
+\&. . . 
+.PP
+.SH OPTIONS
+
+.TP
+[\fB\-\-config|\-c\fP\fI configfile\fP]
+ Another config file will be used (default ${HOME}/.yadig.rc). 
+.TP
+[\fB\-\-file|\-f\fP\fI file name\fP]
+ Starts the name server with the given uid. 
+.PP
+.TP
+[\fB\-V\fP]
+ Show version information. 
+.TP
+[\fB\-\-help|\-h\fP]
+ Show a help text 
+.PP
+.SH FILES
+
+.PP
+.TP
+yadifa.conf
+ The YADIFA
+configuration file. 
+.TP
+yadifa
+ The name server binary. 
+.TP
+yadifa.1
+ This man page. 
+.TP
+yadifa.conf.5
+ Configuration man page for YADIFA. 
+.PP
+.SH SEE ALSO
+
+.PP
+\fIyadifa.conf\fP(5)
+.PP
+.SH REQUIREMENTS
+
+.PP
+.TP
+OpenSSL 
+yadifad
+requires OpenSSL version 1.1.1 or later. 
+.PP
+.SH CHANGES
+
+Please check the ChangeLog
+file from the sources code. 
+.PP
+.SH VERSION
+
+.PP
+Version: 3.0.0 of 2024\-12\-11. 
+.PP
+.SH LICENSE AND COPYRIGHT
+
+.PP
+.TP
+Copyright 
+(C)2011\-2024, EURid
+.br
+B\-1831 Diegem, Belgium
+.br
+\fBinfo@yadifa.eu\fP
+.PP
+.SH AUTHORS
+
+.PP
+Gery Van Emelen 
+.br
+Email: \fBGery.VanEmelen@EURid.eu\fP
+.br
+Eric Diaz Fernandez 
+.br
+Email: \fBEric.DiazFernandez@EURid.eu\fP
+.PP
+WWW: \fBhttp://www.EURid.eu\fP
+.PP
+.\" NOTE: This file is generated, DO NOT EDIT.

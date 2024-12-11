@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,27 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup debug Debug functions
- *  @ingroup dnscore
- *  @brief Debug functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup debug Debug functions
+ * @ingroup dnscore
+ * @brief Debug functions.
  *
  *  Definitions of debug functions/hooks, mainly memory related.
  *
  * @{
- */
-#include "dnscore/dnscore-config.h"
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
+ *
+// CentOS 5.9 requires this to have PTHREAD_MUTEX_RECURSIVE
+ *
+ *----------------------------------------------------------------------------*/
+#define _GNU_SOURCE 1
+
+#include "dnscore/dnscore_config_features.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/debug_config.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -58,9 +66,11 @@
 
 #if defined(__GLIBC__) || defined(__APPLE__) || defined(__FreeBSD__)
 #include <execinfo.h>
-#include <dnscore/shared-heap.h>
+#include <dnscore/shared_heap.h>
 #include <dnscore/debug_config.h>
 #include <pthread.h>
+#include <threads.h>
+
 #endif
 
 #include "dnscore/sys_types.h"
@@ -68,9 +78,9 @@
 #include "dnscore/debug.h"
 #include "dnscore/mutex.h"
 #include "dnscore/logger.h"
-#include "dnscore/ptr_set_debug.h"
-#include "dnscore/u64_set_debug.h"
-#include "dnscore/list-sl-debug.h"
+#include "dnscore/ptr_treemap_debug.h"
+#include "dnscore/u64_treeset_debug.h"
+#include "dnscore/list_sl_debug.h"
 
 #undef malloc
 #undef free
@@ -88,45 +98,45 @@
 
 #if defined(__GLIBC__)
 void *__libc_malloc(size_t);
-void *__libc_realloc (void *__ptr, size_t __size);
-void __libc_free(void*);
-void *__libc_memalign(size_t,size_t);
+void *__libc_realloc(void *__ptr, size_t __size);
+void  __libc_free(void *);
+void *__libc_memalign(size_t, size_t);
 #endif
 
 #if defined(__linux__)
 #define DNSCORE_DEBUG_MMAP 1
 #endif
 
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 #if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
 
-static pthread_mutex_t malloc_hook_mtx = PTHREAD_MUTEX_INITIALIZER;
-static ptr_set_debug malloc_hook_tracked_set = PTR_SET_DEBUG_PTR_EMPTY;
-static ptr_set_debug malloc_hook_caller_set = PTR_SET_DEBUG_PTR_EMPTY;
-volatile size_t malloc_hook_total = 0;
-volatile size_t malloc_hook_malloc = 0;
-volatile size_t malloc_hook_free = 0;
-volatile size_t malloc_hook_realloc = 0;
-volatile size_t malloc_hook_memalign = 0;
+static pthread_mutex_t     malloc_hook_mtx = PTHREAD_MUTEX_INITIALIZER;
+static ptr_treemap_debug_t malloc_hook_tracked_set = PTR_TREEMAP_DEBUG_PTR_EMPTY;
+static ptr_treemap_debug_t malloc_hook_caller_set = PTR_TREEMAP_DEBUG_PTR_EMPTY;
+volatile size_t            malloc_hook_total = 0;
+volatile size_t            malloc_hook_malloc = 0;
+volatile size_t            malloc_hook_free = 0;
+volatile size_t            malloc_hook_realloc = 0;
+volatile size_t            malloc_hook_memalign = 0;
 
 struct malloc_hook_header_t
 {
-    u64 begin;
-    u32 magic;
-    u32 size;
+    uint64_t   begin;
+    uint32_t   magic;
+    uint32_t   size;
     stacktrace caller_stacktrace;
 #if __SIZEOF_POINTER__ == 4
-    u32 padding;
+    uint32_t padding;
 #endif
-    u64 end;
+    uint64_t end;
 };
 
 typedef struct malloc_hook_header_t malloc_hook_header_t;
 
-void debug_malloc_hook_tracked_dump();
-void debug_malloc_hook_caller_dump();
+void                                debug_malloc_hook_tracked_dump();
+void                                debug_malloc_hook_caller_dump();
 
 #endif
 
@@ -138,80 +148,75 @@ void debug_malloc_hook_caller_dump();
  *
  */
 
-#define DB_MALLOC_MAGIC 0xd1a2e81c
-#define DB_MFREED_MAGIC 0xe81cd1a2
+#define DB_MALLOC_MAGIC           0xd1a2e81c
+#define DB_MFREED_MAGIC           0xe81cd1a2
 
-#define MALLOC_PADDING  8
-#define MALLOC_REALSIZE(mr_size_) ((mr_size_+(MALLOC_PADDING-1))&(-MALLOC_PADDING))
+#define MALLOC_PADDING            8
+#define MALLOC_REALSIZE(mr_size_) ((mr_size_ + (MALLOC_PADDING - 1)) & (-MALLOC_PADDING))
 
 struct debug_memory_by_tag_info_s
 {
-    s64 allocated_bytes_peak;
-    s64 allocated_count_total;
-    s64 freed_count_total;
+    int64_t allocated_bytes_peak;
+    int64_t allocated_count_total;
+    int64_t freed_count_total;
 
-    s64 allocated_count_peak;
-    s64 allocated_bytes_total;
-    s64 freed_bytes_total;
+    int64_t allocated_count_peak;
+    int64_t allocated_bytes_total;
+    int64_t freed_bytes_total;
 
-    s64 size;
+    int64_t size;
 };
 
 typedef struct debug_memory_by_tag_info_s debug_memory_by_tag_info_t;
 
 struct debug_memory_by_tag_context_s
 {
-    u64_set_debug info_set;
-    pthread_mutex_t mtx;
+    u64_treemap_debug_t info_set;
+    pthread_mutex_t     mtx;
 
-    s64 allocated_bytes_peak;
-    s64 allocated_count_total;
-    s64 freed_count_total;
+    int64_t             allocated_bytes_peak;
+    int64_t             allocated_count_total;
+    int64_t             freed_count_total;
 
-    s64 allocated_count_peak;
-    s64 allocated_bytes_total;
-    s64 freed_bytes_total;
+    int64_t             allocated_count_peak;
+    int64_t             allocated_bytes_total;
+    int64_t             freed_bytes_total;
 
-    const char *name;
+    const char         *name;
 };
 
 typedef struct debug_memory_by_tag_context_s debug_memory_by_tag_context_t;
 
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_HAS_BLOCK_TAG
+#if(DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT) && DNSCORE_DEBUG_HAS_BLOCK_TAG
 static debug_memory_by_tag_context_t malloc_debug_memory_by_tag_ctx;
-#endif
-
-#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
-static debug_memory_by_tag_context_t *debug_memory_by_tag_contexts[8] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
-static pthread_mutex_t debug_memory_by_tag_contexts_mtx = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 struct db_header
 {
-    u32 magic;
-    u32 size;
+    uint32_t magic;
+    uint32_t size;
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
 #define HEADER_TAG_SIZE 8
-    u64 tag;
+    uint64_t tag;
 #else
 #define HEADER_TAG_SIZE 0
 #endif
 
 #if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
-    u64 serial;
+    uint64_t serial;
 #endif
 
 #if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
-#define HEADER_SIZE_CHAIN (8+(2*__SIZEOF_POINTER__))
-    struct db_header* next;
-    struct db_header* previous;
+#define HEADER_SIZE_CHAIN (8 + (2 * __SIZEOF_POINTER__))
+    struct db_header *next;
+    struct db_header *previous;
 #else
 #define HEADER_SIZE_CHAIN 0
 #endif
 
 #if DNSCORE_DEBUG_STACKTRACE
-    intptr* _trace;
+    intptr_t *_trace;
 #endif
 };
 
@@ -219,27 +224,11 @@ typedef struct db_header db_header;
 
 #define HEADER_SIZE sizeof(db_header)
 
-#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
-static db_header db_mem_first = {
-    DB_MALLOC_MAGIC, 0,
-#if DNSCORE_DEBUG_HAS_BLOCK_TAG
-    0xffffffffffffffffLL,
-#endif
-#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
-    0,
-#endif
-#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
-    &db_mem_first, &db_mem_first,
-#endif
-#if DNSCORE_DEBUG_STACKTRACE
-    NULL,
-#endif
-};
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
+static pthread_mutex_t alloc_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool            db_showallocs = DNSCORE_DEBUG_SHOW_ALLOCS;
 
-#define REAL_SIZE(rs_size_) MALLOC_REALSIZE((rs_size_)+HEADER_SIZE)
-
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_ENHANCED_STATISTICS
-
+#if DNSCORE_DEBUG_ENHANCED_STATISTICS
 
 /* [  0]   1..  8
  * [  1]   9.. 16
@@ -250,44 +239,54 @@ static db_header db_mem_first = {
  * [ 32] 257..2^31
  */
 
-static u64 db_alloc_count_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE / 8) + 1] = {
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0
-};
+static uint64_t db_alloc_count_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX / 8) + 1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-static u64 db_alloc_peak_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE / 8) + 1] = {
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0
-};
-
-static u64 db_total_allocated = 0;
-static u64 db_total_freed = 0;
-static u64 db_current_allocated = 0;
-static u64 db_current_blocks = 0;
-static u64 db_peak_allocated = 0;
+static uint64_t db_alloc_peak_by_size[(DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX / 8) + 1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 #endif
 
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
-static u64 db_next_block_serial = 0;
+static uint64_t db_total_allocated = 0;
+static uint64_t db_total_freed = 0;
+static uint64_t db_current_allocated = 0;
+static uint64_t db_current_blocks = 0;
+static uint64_t db_peak_allocated = 0;
+
 #endif
 
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
-static bool db_showallocs = DNSCORE_DEBUG_SHOW_ALLOCS;
-static pthread_mutex_t alloc_mutex = PTHREAD_MUTEX_INITIALIZER;
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
+
+static debug_memory_by_tag_context_t *debug_memory_by_tag_contexts[8] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+static pthread_mutex_t                debug_memory_by_tag_contexts_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+static db_header                      db_mem_first = {
+    DB_MALLOC_MAGIC,
+    0,
+#if DNSCORE_DEBUG_HAS_BLOCK_TAG
+    0xffffffffffffffffLL,
+#endif
+#if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
+    0,
+#endif
+#if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
+    &db_mem_first,
+    &db_mem_first,
+#endif
+#if DNSCORE_DEBUG_STACKTRACE
+    NULL,
+#endif
+};
+
+#define REAL_SIZE(rs_size_) MALLOC_REALSIZE((rs_size_) + HEADER_SIZE)
+
+#if(DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT) && DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
+static uint64_t db_next_block_serial = 0;
 #endif
 
 void debug_bench_malloc_init()
 {
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
     {
-        pthread_mutexattr_t   mta;
+        pthread_mutexattr_t mta;
         pthread_mutexattr_init(&mta);
         pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
         pthread_mutex_init(&alloc_mutex, &mta);
@@ -297,28 +296,21 @@ void debug_bench_malloc_init()
     debug_memory_by_tag_init(&malloc_debug_memory_by_tag_ctx, "malloc");
 #endif
 
-#endif
+#endif // DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 }
 
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
 
-void debug_malloc_mutex_lock()
-{
-    pthread_mutex_lock(&alloc_mutex);
-}
+void debug_malloc_mutex_lock() { pthread_mutex_lock(&alloc_mutex); }
 
-void debug_malloc_mutex_unlock()
-{
-    pthread_mutex_unlock(&alloc_mutex);
-}
+void debug_malloc_mutex_unlock() { pthread_mutex_unlock(&alloc_mutex); }
 
 #endif
 
-static void
-debug_memory_by_tag_context_register(debug_memory_by_tag_context_t* ctx)
+static void debug_memory_by_tag_context_register(debug_memory_by_tag_context_t *ctx)
 {
     pthread_mutex_lock(&debug_memory_by_tag_contexts_mtx);
-    for(int i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)); ++i)
+    for(int_fast32_t i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t *)); ++i)
     {
         if(debug_memory_by_tag_contexts[i] == NULL)
         {
@@ -334,29 +326,27 @@ debug_memory_by_tag_context_register(debug_memory_by_tag_context_t* ctx)
     pthread_mutex_unlock(&debug_memory_by_tag_contexts_mtx);
 }
 
-static void
-debug_memory_by_tag_context_unregister(debug_memory_by_tag_context_t* ctx)
+static void debug_memory_by_tag_context_unregister(debug_memory_by_tag_context_t *ctx)
 {
     pthread_mutex_lock(&debug_memory_by_tag_contexts_mtx);
-    for(int i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)); ++i)
+    for(int_fast32_t i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t *)); ++i)
     {
         if(debug_memory_by_tag_contexts[i] == ctx)
         {
-            for(;i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)) - 1; ++i)
+            for(; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t *)) - 1; ++i)
             {
                 debug_memory_by_tag_contexts[i] = debug_memory_by_tag_contexts[i + 1];
             }
-            debug_memory_by_tag_contexts[sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*) - 1] = NULL;
+            debug_memory_by_tag_contexts[sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t *) - 1] = NULL;
             break;
         }
     }
     pthread_mutex_unlock(&debug_memory_by_tag_contexts_mtx);
 }
 
-debug_memory_by_tag_context_t*
-debug_memory_by_tag_new_instance(const char* name)
+debug_memory_by_tag_context_t *debug_memory_by_tag_new_instance(const char *name)
 {
-    debug_memory_by_tag_context_t *ctx = (debug_memory_by_tag_context_t*)debug_malloc_unmonitored(sizeof(debug_memory_by_tag_context_t));
+    debug_memory_by_tag_context_t *ctx = (debug_memory_by_tag_context_t *)debug_malloc_unmonitored(sizeof(debug_memory_by_tag_context_t));
     if(ctx != NULL)
     {
         debug_memory_by_tag_init(ctx, name);
@@ -364,8 +354,7 @@ debug_memory_by_tag_new_instance(const char* name)
     return ctx;
 }
 
-void
-debug_memory_by_tag_delete(debug_memory_by_tag_context_t *ctx)
+void debug_memory_by_tag_delete(debug_memory_by_tag_context_t *ctx)
 {
     if(ctx != NULL)
     {
@@ -374,41 +363,34 @@ debug_memory_by_tag_delete(debug_memory_by_tag_context_t *ctx)
     }
 }
 
-void
-debug_memory_by_tag_init(debug_memory_by_tag_context_t *ctx, const char* name)
+void debug_memory_by_tag_init(debug_memory_by_tag_context_t *ctx, const char *name)
 {
     ZEROMEMORY(ctx, sizeof(debug_memory_by_tag_context_t));
-    u64_set_debug_init(&ctx->info_set);
+    u64_treemap_debug_init(&ctx->info_set);
     pthread_mutex_init(&ctx->mtx, NULL);
     ctx->name = name;
     debug_memory_by_tag_context_register(ctx);
 }
 
-static void
-debug_memory_by_tag_finalize_cb(u64_node_debug *node)
+static void debug_memory_by_tag_finalize_cb(u64_treemap_node_debug_t *node)
 {
     debug_free_unmonitored(node->value);
     node->value = NULL;
 }
 
-void
-debug_memory_by_tag_finalize(debug_memory_by_tag_context_t *ctx)
+void debug_memory_by_tag_finalize(debug_memory_by_tag_context_t *ctx)
 {
     debug_memory_by_tag_context_unregister(ctx);
     pthread_mutex_lock(&ctx->mtx);
-    u64_set_debug_callback_and_destroy(&ctx->info_set, debug_memory_by_tag_finalize_cb);
+    u64_treemap_debug_callback_and_finalise(&ctx->info_set, debug_memory_by_tag_finalize_cb);
     pthread_mutex_unlock(&ctx->mtx);
     pthread_mutex_destroy(&ctx->mtx);
 }
-#define ZDB_RECORD_TAG      0x4443455242445a    /** "ZDBRECD" */
+#define ZDB_RECORD_TAG 0x4443455242445a /** "ZDBRECD" */
 
-void break_here()
-{
+void break_here() {}
 
-}
-
-void
-debug_memory_by_tag_alloc_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s64 size)
+void debug_memory_by_tag_alloc_notify(debug_memory_by_tag_context_t *ctx, uint64_t tag, int64_t size)
 {
     if(tag == ZDB_RECORD_TAG)
     {
@@ -417,46 +399,44 @@ debug_memory_by_tag_alloc_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s6
 
     pthread_mutex_lock(&ctx->mtx);
     debug_memory_by_tag_info_t *info;
-    u64_node_debug *node = u64_set_debug_insert(&ctx->info_set, tag);
+    u64_treemap_node_debug_t   *node = u64_treemap_debug_insert(&ctx->info_set, tag);
     if(node->value != NULL)
     {
         info = (debug_memory_by_tag_info_t *)node->value;
     }
     else
     {
-        info = (debug_memory_by_tag_info_t*)debug_malloc_unmonitored(sizeof(debug_memory_by_tag_info_t));
+        info = (debug_memory_by_tag_info_t *)debug_malloc_unmonitored(sizeof(debug_memory_by_tag_info_t));
         ZEROMEMORY(info, sizeof(debug_memory_by_tag_info_t));
         info->size = size;
         node->value = info;
     }
 
     ++info->allocated_count_total;
-    info->allocated_bytes_total += (s64)size;
+    info->allocated_bytes_total += (int64_t)size;
     info->allocated_count_peak = MAX(info->allocated_count_peak, info->allocated_count_total - info->freed_count_total);
     info->allocated_bytes_peak = MAX(info->allocated_bytes_peak, info->allocated_bytes_total - info->freed_bytes_total);
 
     ++ctx->allocated_count_total;
-    ctx->allocated_bytes_total += (s64)size;
+    ctx->allocated_bytes_total += (int64_t)size;
     ctx->allocated_count_peak = MAX(ctx->allocated_count_peak, ctx->allocated_count_total - ctx->freed_count_total);
     ctx->allocated_bytes_peak = MAX(ctx->allocated_bytes_peak, ctx->allocated_bytes_total - ctx->freed_bytes_total);
-    
-    
+
     pthread_mutex_unlock(&ctx->mtx);
 }
 
-void
-debug_memory_by_tag_free_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s64 size)
+void debug_memory_by_tag_free_notify(debug_memory_by_tag_context_t *ctx, uint64_t tag, int64_t size)
 {
     pthread_mutex_lock(&ctx->mtx);
     debug_memory_by_tag_info_t *info;
-    u64_node_debug *node = u64_set_debug_insert(&ctx->info_set, tag);
+    u64_treemap_node_debug_t   *node = u64_treemap_debug_insert(&ctx->info_set, tag);
     if(node->value != NULL)
     {
         info = (debug_memory_by_tag_info_t *)node->value;
     }
     else
     {
-        info = (debug_memory_by_tag_info_t*)debug_malloc_unmonitored(sizeof(debug_memory_by_tag_info_t));
+        info = (debug_memory_by_tag_info_t *)debug_malloc_unmonitored(sizeof(debug_memory_by_tag_info_t));
         ZEROMEMORY(info, sizeof(debug_memory_by_tag_info_t));
         node->value = info;
     }
@@ -470,49 +450,61 @@ debug_memory_by_tag_free_notify(debug_memory_by_tag_context_t *ctx, u64 tag, s64
     pthread_mutex_unlock(&ctx->mtx);
 }
 
-void
-debug_memory_by_tag_print(debug_memory_by_tag_context_t *ctx, output_stream *os)
+union memory_tag_u
+{
+    uint64_t tag_value;
+    char     tag_chars[sizeof(uint64_t)];
+};
+
+typedef union memory_tag_u memory_tag_t;
+
+void                       debug_memory_by_tag_print(debug_memory_by_tag_context_t *ctx, output_stream_t *os)
 {
     pthread_mutex_lock(&ctx->mtx);
-    s64 now = timeus();
+    int64_t now = timeus();
 
-    osformatln(os,"debug_memory: %s set: %llT %lli", ctx->name, now, now);
+    osformatln(os, "debug_memory: %s set: %llT %lli", ctx->name, now, now);
 
-    u64_set_debug_iterator iter;
-    u64_set_debug_iterator_init(&ctx->info_set, &iter);
+    u64_treemap_debug_iterator_t iter;
+    u64_treemap_debug_iterator_init(&ctx->info_set, &iter);
 
-    osprintln(os,"    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| peak c   | mean");
-    while(u64_set_debug_iterator_hasnext(&iter))
+    osprintln(os,
+              "    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| "
+              "peak c   | mean");
+    while(u64_treemap_debug_iterator_hasnext(&iter))
     {
-        u64_node_debug *node = u64_set_debug_iterator_next_node(&iter);
-        debug_memory_by_tag_info_t *info = (debug_memory_by_tag_info_t*)node->value;
-        char tag_name[sizeof(node->key)];
-        u64 *tag_namep = (u64*)&tag_name[0];    // pointing to tag_name
-        *tag_namep = node->key;                 // setting-up 64 bits of tag_name in one operation
-        for(int i = 0; i < (int)sizeof(node->key); ++i)
+        u64_treemap_node_debug_t   *node = u64_treemap_debug_iterator_next_node(&iter);
+        debug_memory_by_tag_info_t *info = (debug_memory_by_tag_info_t *)node->value;
+
+        memory_tag_t                tag_name;
+        tag_name.tag_value = node->key;
+
+        for(int_fast32_t i = 0; i < (int)sizeof(tag_name.tag_chars); ++i)
         {
-            if(tag_name[i] == '\0') // scan-build false positive: tag_name has been fully initialised 3 lines above.
+            if(tag_name.tag_chars[i] == '\0') // scan-build false positive: tag_name has been fully initialised 3 lines above.
             {
-                tag_name[i] = 32; // space character
+                tag_name.tag_chars[i] = ' ';
             }
         }
 
         output_stream_write(os, "TAG ", 4);
-        output_stream_write(os, tag_name, sizeof(tag_name));
-        osformatln(os, " | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli | %8lli",
-                 info->allocated_bytes_total,
-                 info->freed_bytes_total,
-                 info->allocated_bytes_total - info->freed_bytes_total,
-                 info->allocated_bytes_peak,
+        output_stream_write(os, tag_name.tag_chars, sizeof(tag_name.tag_chars));
+        osformatln(os,
+                   " | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli | %8lli",
+                   info->allocated_bytes_total,
+                   info->freed_bytes_total,
+                   info->allocated_bytes_total - info->freed_bytes_total,
+                   info->allocated_bytes_peak,
 
-                 info->allocated_count_total,
-                 info->freed_count_total,
-                 info->allocated_count_total - info->freed_count_total,
-                 info->allocated_count_peak,
-                 info->allocated_bytes_total / MAX(info->allocated_count_total, 1));
+                   info->allocated_count_total,
+                   info->freed_count_total,
+                   info->allocated_count_total - info->freed_count_total,
+                   info->allocated_count_peak,
+                   info->allocated_bytes_total / MAX(info->allocated_count_total, 1));
     }
     //                  TAG XXXXXXXX
-    osformatln(os, "    TOTAL    | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli | %8lli",
+    osformatln(os,
+               "    TOTAL    | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli | %8lli",
                ctx->allocated_bytes_total,
                ctx->freed_bytes_total,
                ctx->allocated_bytes_total - ctx->freed_bytes_total,
@@ -525,7 +517,9 @@ debug_memory_by_tag_print(debug_memory_by_tag_context_t *ctx, output_stream *os)
 
                ctx->allocated_bytes_total / MAX(ctx->allocated_count_total, 1));
 
-    osprintln(os,"    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| peak c   | mean");
+    osprintln(os,
+              "    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| "
+              "peak c   | mean");
 
     pthread_mutex_unlock(&ctx->mtx);
 }
@@ -536,16 +530,13 @@ debug_memory_by_tag_print(debug_memory_by_tag_context_t *ctx, output_stream *os)
  * These functions allow to add information to an allocation (e.g. file, line, tag)
  */
 
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-
-void*
-debug_malloc(
-             size_t size_,
-             const char* file, int line
+#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
+void *debug_malloc(size_t size_, const char *file, int line
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
-        , u64 tag
+                   ,
+                   uint64_t tag
 #endif
-        )
+)
 {
     size_t size = MALLOC_REALSIZE(size_);
 
@@ -555,7 +546,7 @@ debug_malloc(
 
     pthread_mutex_lock(&alloc_mutex);
 
-    u64 current_allocated = db_current_allocated;
+    uint64_t current_allocated = db_current_allocated;
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
     debug_memory_by_tag_alloc_notify(&malloc_debug_memory_by_tag_ctx, tag, size);
@@ -573,7 +564,7 @@ debug_malloc(
         abort();
     }
 
-    db_header* ptr = (db_header*)debug_malloc_unmonitored(size + HEADER_SIZE); /* Header */
+    db_header *ptr = (db_header *)debug_malloc_unmonitored(size + HEADER_SIZE); /* Header */
 
     if(ptr == NULL)
     {
@@ -621,15 +612,15 @@ debug_malloc(
     db_current_blocks++;
 
 #if DNSCORE_DEBUG_ENHANCED_STATISTICS
-    if(size_ < DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE)
+    if(size_ < DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX)
     {
         db_alloc_count_by_size[(size_ - 1) >> 3]++;
         db_alloc_peak_by_size[(size_ - 1) >> 3]++;
     }
     else
     {
-        db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]++;
-        db_alloc_peak_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]++;
+        db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX >> 3]++;
+        db_alloc_peak_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX >> 3]++;
     }
 #endif
 
@@ -639,10 +630,10 @@ debug_malloc(
     {
         if(__termout__.vtbl != NULL)
         {
-            format("[%08x] malloc(%3x", thread_self(), (u32)size);
+            format("[%08x] malloc(%3x", thread_self(), (uint32_t)size);
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
             print(" | ");
-            debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
+            debug_dump((uint8_t *)&ptr->tag, 8, 8, false, true);
 #endif
 #if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
             format(" | #%08llx", ptr->serial);
@@ -656,27 +647,28 @@ debug_malloc(
     /* ensure the memory is not initialized "by chance" */
 
 #if DNSCORE_DEBUG_MALLOC_TRASHMEMORY
-    memset(ptr, 0xac, size_); /* AC : AlloCated */
-    memset(((u8*)ptr) + size_, 0xca, size - size_); /* CA : AlloCated for padding */
+    memset(ptr, 0xac, size_);                             /* AC : AlloCated */
+    memset(((uint8_t *)ptr) + size_, 0xca, size - size_); /* CA : AlloCated for padding */
 #endif
 
     return ptr;
 }
 
-void*
-debug_calloc(
-             size_t size_,
-             const char* file, int line
+void *debug_calloc(size_t size_, const char *file, int line
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
-        , u64 tag
+                   ,
+                   uint64_t tag
 #endif
-        )
+)
 {
-    void* p = debug_malloc(size_, file, line
+    void *p = debug_malloc(size_,
+                           file,
+                           line
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
-            , tag
+                           ,
+                           tag
 #endif
-            );
+    );
 
     if(p != NULL)
     {
@@ -686,15 +678,14 @@ debug_calloc(
     return p;
 }
 
-void
-debug_free(void* ptr_, const char* file, int line)
+void debug_free(void *ptr_, const char *file, int line)
 {
     if(ptr_ == NULL)
     {
         return;
     }
 
-    db_header* ptr = (db_header*)ptr_;
+    db_header *ptr = (db_header *)ptr_;
 
     ptr--;
 
@@ -713,12 +704,12 @@ debug_free(void* ptr_, const char* file, int line)
                 formatln("MEMORY CORRUPTED @%p (%s:%i)", ptr, file, line);
             }
         }
-        
+
         stacktrace trace = debug_stacktrace_get();
         debug_stacktrace_print(termout, trace);
 
-        debug_dump(ptr, 64, 32, TRUE, TRUE);
-        
+        debug_dump(ptr, 64, 32, true, true);
+
         flushout();
 
         abort();
@@ -730,11 +721,11 @@ debug_free(void* ptr_, const char* file, int line)
     {
         if(__termout__.vtbl != NULL)
         {
-            format("[%08x] free(%p [%3x]", thread_self(), ptr + 1, (u32)size);
+            format("[%08x] free(%p [%3x]", thread_self(), ptr + 1, (uint32_t)size);
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
             print(" | ");
-            debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
+            debug_dump((uint8_t *)&ptr->tag, 8, 8, false, true);
 #endif
 #if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
             format(" | #%08llx", ptr->serial);
@@ -752,8 +743,8 @@ debug_free(void* ptr_, const char* file, int line)
 #if DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS
     ptr->previous->next = ptr->next;
     ptr->next->previous = ptr->previous;
-    ptr->next = (void*)~0;
-    ptr->previous = (void*)~0;
+    ptr->next = (void *)~0;
+    ptr->previous = (void *)~0;
 #endif
 
     db_total_freed += size;
@@ -762,13 +753,13 @@ debug_free(void* ptr_, const char* file, int line)
 
 #if DNSCORE_DEBUG_ENHANCED_STATISTICS
 
-    if(size < DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE)
+    if(size < DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX)
     {
         db_alloc_count_by_size[(size - 1) >> 3]--;
     }
     else
     {
-        db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]--;
+        db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX >> 3]--;
     }
 
 #endif
@@ -782,31 +773,32 @@ debug_free(void* ptr_, const char* file, int line)
     debug_free_unmonitored(ptr);
 }
 
-void
-*
-debug_realloc(void* ptr, size_t size, const char* file, int line)
+void *debug_realloc(void *ptr, size_t size, const char *file, int line)
 
 {
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
-    u64 tag = 0x4c554e4152;
+    uint64_t tag = 0x4c554e4152;
 #endif
 
-    db_header* hdr;
+    db_header *hdr;
 
     if(ptr != NULL)
     {
-        hdr = (db_header*)ptr;
+        hdr = (db_header *)ptr;
         hdr--;
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
         tag = hdr->tag;
 #endif
     }
 
-    void* newptr = debug_malloc(size, file, line
+    void *newptr = debug_malloc(size,
+                                file,
+                                line
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
-            , tag
+                                ,
+                                tag
 #endif
-            );
+    );
 
     if(ptr != NULL)
     {
@@ -824,15 +816,14 @@ debug_realloc(void* ptr, size_t size, const char* file, int line)
 
 #endif
 
-void
-debug_mtest(void* ptr_)
+void debug_mtest(void *ptr_)
 {
     if(ptr_ == NULL)
     {
         return;
     }
 
-    db_header* ptr = (db_header*)ptr_;
+    db_header *ptr = (db_header *)ptr_;
 
     ptr--;
     if(ptr->magic != DB_MALLOC_MAGIC)
@@ -851,15 +842,14 @@ debug_mtest(void* ptr_)
 
         stacktrace trace = debug_stacktrace_get();
         debug_stacktrace_print(termout, trace);
-        
-        debug_dump(ptr, 64, 32, TRUE, TRUE);
+
+        debug_dump(ptr, 64, 32, true, true);
 
         abort();
     }
 }
 
-u32
-debug_get_block_count()
+uint32_t debug_get_block_count()
 {
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT && DNSCORE_DEBUG_ENHANCED_STATISTICS
     return db_current_blocks;
@@ -868,22 +858,21 @@ debug_get_block_count()
 #endif
 }
 
-bool
-debug_mallocated(void* ptr)
+bool debug_mallocated(void *ptr)
 {
     if(ptr == NULL)
     {
         /* NULL is ok */
 
-        return TRUE;
+        return true;
     }
 
-    db_header* hdr = (db_header*)ptr;
+    db_header *hdr = (db_header *)ptr;
     hdr--;
 
     if(hdr->magic == DB_MALLOC_MAGIC)
     {
-        return TRUE;
+        return true;
     }
     else if(hdr->magic == DB_MFREED_MAGIC)
     {
@@ -895,7 +884,7 @@ debug_mallocated(void* ptr)
                 debug_dump_page(ptr);
             }
         }
-        return FALSE;
+        return false;
     }
     else
     {
@@ -904,9 +893,9 @@ debug_mallocated(void* ptr)
             formatln("MEMORY CORRUPTED @%p", ptr);
             debug_dump_page(ptr);
         }
-        assert(FALSE);
+        assert(false);
 
-        return FALSE;
+        return false;
     }
 }
 
@@ -918,11 +907,11 @@ debug_mallocated(void* ptr)
  * Returns true iff the ptr is a tracked memory bloc
  */
 
-static bool debug_malloc_istracked(void* ptr)
+static bool debug_malloc_istracked(void *ptr)
 {
-    bool ret; 
+    bool ret;
     pthread_mutex_lock(&malloc_hook_mtx);
-    ptr_node_debug *node = ptr_set_debug_find(&malloc_hook_tracked_set, ptr);
+    ptr_treemap_node_debug_t *node = ptr_treemap_debug_find(&malloc_hook_tracked_set, ptr);
     ret = (node != NULL);
     pthread_mutex_unlock(&malloc_hook_mtx);
     return ret;
@@ -932,13 +921,13 @@ static bool debug_malloc_istracked(void* ptr)
  * Adds the ptr to tracked memory bloc set
  */
 
-static void debug_malloc_track_alloc_nolock(void* ptr)
+static void debug_malloc_track_alloc_nolock(void *ptr)
 {
-    //formatln("track alloc %p", ptr);
-    
-    ptr_node_debug *node = ptr_set_debug_insert(&malloc_hook_tracked_set, ptr);
-    
-    intptr flags = (intptr)node->value;
+    // formatln("track alloc %p", ptr);
+
+    ptr_treemap_node_debug_t *node = ptr_treemap_debug_insert(&malloc_hook_tracked_set, ptr);
+
+    intptr_t                  flags = (intptr_t)node->value;
     if(flags != 0)
     {
         // track bug
@@ -946,36 +935,36 @@ static void debug_malloc_track_alloc_nolock(void* ptr)
         abort();
     }
     flags |= 1;
-    node->value = (void*)flags;
+    node->value = (void *)flags;
 }
 
 /**
  * Removes the ptr to tracked memory bloc set
  */
 
-static void debug_malloc_track_free_nolock(void* ptr)
+static void debug_malloc_track_free_nolock(void *ptr)
 {
-    //formatln("track free  %p", ptr);
-    
-    ptr_node_debug *node = ptr_set_debug_find(&malloc_hook_tracked_set, ptr);
-    
+    // formatln("track free  %p", ptr);
+
+    ptr_treemap_node_debug_t *node = ptr_treemap_debug_find(&malloc_hook_tracked_set, ptr);
+
     if(node == NULL)
     {
         // free of non-existing
         pthread_mutex_unlock(&malloc_hook_mtx);
         abort();
     }
-    
-    intptr flags = (intptr)node->value;
+
+    intptr_t flags = (intptr_t)node->value;
     if((flags & 1) != 1)
     {
         // double free
         pthread_mutex_unlock(&malloc_hook_mtx);
         abort();
     }
-    
+
     flags &= ~1;
-    node->value = (void*)flags;
+    node->value = (void *)flags;
 }
 
 /**
@@ -985,14 +974,14 @@ static void debug_malloc_track_free_nolock(void* ptr)
 void debug_malloc_hook_tracked_dump()
 {
     pthread_mutex_lock(&malloc_hook_mtx);
-    ptr_set_debug_iterator iter;
-    ptr_set_debug_iterator_init(&malloc_hook_tracked_set, &iter);
-    while(ptr_set_debug_iterator_hasnext(&iter))
+    ptr_treemap_debug_iterator_t iter;
+    ptr_treemap_debug_iterator_init(&malloc_hook_tracked_set, &iter);
+    while(ptr_treemap_debug_iterator_hasnext(&iter))
     {
-        const ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
-        if(((intptr)node->value) == 1)
+        const ptr_treemap_node_debug_t *node = ptr_treemap_debug_iterator_next_node(&iter);
+        if(((intptr_t)node->value) == 1)
         {
-            const malloc_hook_header_t *hdr =  (const malloc_hook_header_t*)node->key;
+            const malloc_hook_header_t *hdr = (const malloc_hook_header_t *)node->key;
             --hdr;
             formatln("%p : size=%llu caller=%p", node->key, hdr->size, hdr->caller_stacktrace);
         }
@@ -1013,17 +1002,17 @@ typedef struct malloc_hook_caller_t malloc_hook_caller_t;
  * Adds size bytes to the caller_address (to track memory usage)
  */
 
-static void debug_malloc_caller_add(const void* caller_stacktrace, ssize_t size)
+static void debug_malloc_caller_add(const void *caller_stacktrace, ssize_t size)
 {
-    ptr_node_debug *node = ptr_set_debug_insert(&malloc_hook_caller_set, (void*)caller_stacktrace);
-    malloc_hook_caller_t *caller = (malloc_hook_caller_t*)node->value;
+    ptr_treemap_node_debug_t *node = ptr_treemap_debug_insert(&malloc_hook_caller_set, (void *)caller_stacktrace);
+    malloc_hook_caller_t     *caller = (malloc_hook_caller_t *)node->value;
     if(caller == NULL)
     {
-        caller = (malloc_hook_caller_t*)debug_malloc_unmonitored(sizeof(malloc_hook_caller_t));
+        caller = (malloc_hook_caller_t *)debug_malloc_unmonitored(sizeof(malloc_hook_caller_t));
         memset(caller, 0, sizeof(malloc_hook_caller_t));
         node->value = caller;
     }
- 
+
     if(size > 0)
     {
         ++caller->count;
@@ -1045,14 +1034,14 @@ void debug_malloc_hook_caller_dump()
     ssize_t count_total = 0;
     ssize_t size_total = 0;
     pthread_mutex_lock(&malloc_hook_mtx);
-    ptr_set_debug_iterator iter;
-    ptr_set_debug_iterator_init(&malloc_hook_caller_set, &iter);
-    while(ptr_set_debug_iterator_hasnext(&iter))
+    ptr_treemap_debug_iterator_t iter;
+    ptr_treemap_debug_iterator_init(&malloc_hook_caller_set, &iter);
+    while(ptr_treemap_debug_iterator_hasnext(&iter))
     {
-        const ptr_node_debug *node = ptr_set_debug_iterator_next_node(&iter);
-        stacktrace st = (stacktrace)node->key;
-        const malloc_hook_caller_t *caller = (malloc_hook_caller_t*)node->value;
-        ssize_t count = caller->count;
+        const ptr_treemap_node_debug_t *node = ptr_treemap_debug_iterator_next_node(&iter);
+        stacktrace                      st = (stacktrace)node->key;
+        const malloc_hook_caller_t     *caller = (malloc_hook_caller_t *)node->value;
+        ssize_t                         count = caller->count;
         if(count == 0)
         {
             continue;
@@ -1065,7 +1054,7 @@ void debug_malloc_hook_caller_dump()
         }
         debug_stacktrace_print(termout, st);
         formatln("**************** count=%lli size=%lli peak=%lli (mean bloc size=%lli)", caller->count, caller->size, caller->peak, mean);
-        
+
         count_total += caller->count;
         size_total += caller->size;
     }
@@ -1083,15 +1072,15 @@ static void *debug_malloc_hook(size_t size, const stacktrace caller_stacktrace)
 {
     void *ret = debug_malloc_unmonitored(size + sizeof(malloc_hook_header_t));
     if(ret != NULL)
-    {        
-        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ret;
+    {
+        malloc_hook_header_t *hdr = (malloc_hook_header_t *)ret;
         hdr->begin = 0x4242424242424242;
         hdr->magic = 0xd1a27344;
         hdr->size = size;
         hdr->caller_stacktrace = caller_stacktrace;
         hdr->end = 0x4545454545454545;
         ++hdr;
-        
+
         pthread_mutex_lock(&malloc_hook_mtx);
         malloc_hook_total += size;
         malloc_hook_malloc++;
@@ -1101,7 +1090,7 @@ static void *debug_malloc_hook(size_t size, const stacktrace caller_stacktrace)
 #if DEBUG_MALLOC_HOOK_DUMP
         formatln("malloc(%llu) = %p", size, hdr);
 #endif
-        
+
         return hdr;
     }
     else
@@ -1125,8 +1114,8 @@ static void *debug_realloc_hook(void *ptr, size_t size, const stacktrace caller_
 #endif
             return debug_realloc_unmonitored(ptr, size);
         }
-        
-        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ptr;
+
+        malloc_hook_header_t *hdr = (malloc_hook_header_t *)ptr;
         --hdr;
         if(hdr->magic != 0xd1a27344)
         {
@@ -1136,33 +1125,33 @@ static void *debug_realloc_hook(void *ptr, size_t size, const stacktrace caller_
         hdr->begin = 0x6262626262626262; // trashes the memory in case the ptr moves
         hdr->magic = 0xbad15bad;
         hdr->end = 0x6565656565656565;
-        
-        const void* old_caller = hdr->caller_stacktrace;
-        ssize_t old_size = hdr->size;
 
-        void *ret = debug_realloc_unmonitored(hdr, size + sizeof(malloc_hook_header_t));
-        
+        const void *old_caller = hdr->caller_stacktrace;
+        ssize_t     old_size = hdr->size;
+
+        void       *ret = debug_realloc_unmonitored(hdr, size + sizeof(malloc_hook_header_t));
+
         if(ret != NULL)
         {
-            hdr = (malloc_hook_header_t*)ret;
+            hdr = (malloc_hook_header_t *)ret;
             hdr->begin = 0x4242424242424242;
             hdr->magic = 0xd1a27344;
             hdr->size = size;
             hdr->caller_stacktrace = caller_stacktrace;
             hdr->end = 0x4545454545454545;
             ++hdr;
-            
+
             pthread_mutex_lock(&malloc_hook_mtx);
-            
+
             debug_malloc_caller_add(old_caller, -old_size);
             debug_malloc_track_free_nolock(ptr);
-            
+
             malloc_hook_total += size - old_size;
             malloc_hook_realloc++;
-            
+
             debug_malloc_caller_add(caller_stacktrace, size);
             debug_malloc_track_alloc_nolock(hdr);
-            
+
             pthread_mutex_unlock(&malloc_hook_mtx);
 #if DEBUG_MALLOC_HOOK_DUMP
             formatln("realloc(%p, %llu) = %p", ptr, size, hdr);
@@ -1200,8 +1189,8 @@ static void debug_free_hook(void *ptr)
             debug_free_unmonitored(ptr);
             return;
         }
-        
-        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ptr;
+
+        malloc_hook_header_t *hdr = (malloc_hook_header_t *)ptr;
         --hdr;
         if(hdr->magic != 0xd1a27344)
         {
@@ -1209,16 +1198,16 @@ static void debug_free_hook(void *ptr)
         }
         hdr->begin = 0x6262626262626262;
         hdr->end = 0x6565656565656565;
-        
+
         ssize_t size = hdr->size;
-        
+
         pthread_mutex_lock(&malloc_hook_mtx);
         malloc_hook_total -= size;
         malloc_hook_free++;
-        
+
         debug_malloc_caller_add(hdr->caller_stacktrace, -size);
         debug_malloc_track_free_nolock(ptr);
-        
+
         pthread_mutex_unlock(&malloc_hook_mtx);
 
         debug_free_unmonitored(hdr);
@@ -1237,14 +1226,14 @@ static void *debug_memalign_hook(size_t alignment, size_t size, const stacktrace
     void *ret = debug_memalign_unmonitored(alignment, size + sizeof(malloc_hook_header_t));
     if(ret != NULL)
     {
-        malloc_hook_header_t *hdr = (malloc_hook_header_t*)ret;
+        malloc_hook_header_t *hdr = (malloc_hook_header_t *)ret;
         hdr->begin = 0x4242424242424242;
         hdr->magic = 0xd1a27344;
         hdr->size = size;
         hdr->caller_stacktrace = caller_stacktrace;
         hdr->end = 0x4545454545454545;
         ++hdr;
-        
+
         pthread_mutex_lock(&malloc_hook_mtx);
         malloc_hook_total += size;
         malloc_hook_memalign++;
@@ -1262,27 +1251,17 @@ static void *debug_memalign_hook(size_t alignment, size_t size, const stacktrace
     }
 }
 
-void debug_malloc_hooks_init()
-{
-}
+void                    debug_malloc_hooks_init() {}
 
-void debug_malloc_hooks_finalize()
-{
-}
+void                    debug_malloc_hooks_finalize() {}
 
 static thread_local int g_malloc_busy = 0;
 
-void malloc_busy_acquire()
-{
-    ++g_malloc_busy;
-}
+void                    malloc_busy_acquire() { ++g_malloc_busy; }
 
-void malloc_busy_release()
-{
-    --g_malloc_busy;
-}
+void                    malloc_busy_release() { --g_malloc_busy; }
 
-void *malloc(size_t size)
+void                   *malloc(size_t size)
 {
     void *ret;
     if(g_malloc_busy == 0)
@@ -1299,7 +1278,7 @@ void *malloc(size_t size)
     return ret;
 }
 
-void *realloc (void *ptr, size_t size)
+void *realloc(void *ptr, size_t size)
 {
     void *ret;
     if(!g_malloc_busy)
@@ -1314,12 +1293,9 @@ void *realloc (void *ptr, size_t size)
     return ret;
 }
 
-void free(void* ptr)
-{
-    debug_free_hook(ptr);
-}
+void  free(void *ptr) { debug_free_hook(ptr); }
 
-void *memalign(size_t aligned,size_t size)
+void *memalign(size_t aligned, size_t size)
 {
     void *ret;
     if(!g_malloc_busy)
@@ -1334,35 +1310,19 @@ void *memalign(size_t aligned,size_t size)
     return ret;
 }
 
-void *debug_malloc_unmonitored(size_t size)
-{
-    return __libc_malloc(size);
-}
+void *debug_malloc_unmonitored(size_t size) { return __libc_malloc(size); }
 
-void *debug_realloc_unmonitored(void* ptr, size_t size)
-{
-    return __libc_realloc(ptr, size);
-}
+void *debug_realloc_unmonitored(void *ptr, size_t size) { return __libc_realloc(ptr, size); }
 
-void debug_free_unmonitored(void* ptr)
-{
-    __libc_free(ptr);
-}
+void  debug_free_unmonitored(void *ptr) { __libc_free(ptr); }
 
-void *debug_memalign_unmonitored(size_t alignment, size_t size)
-{
-    return __libc_memalign(alignment, size);
-}
+void *debug_memalign_unmonitored(size_t alignment, size_t size) { return __libc_memalign(alignment, size); }
 
 #else
 
-void debug_malloc_hooks_init()
-{
-}
+void  debug_malloc_hooks_init() {}
 
-void debug_malloc_hooks_finalize()
-{
-}
+void  debug_malloc_hooks_finalize() {}
 
 void *debug_malloc_unmonitored(size_t size)
 {
@@ -1374,24 +1334,17 @@ void *debug_malloc_unmonitored(size_t size)
     return ptr;
 }
 
-void debug_free_unmonitored(void* ptr)
-{
-    free(ptr);
-}
+void debug_free_unmonitored(void *ptr) { free(ptr); }
 
-void debug_malloc_hook_tracked_dump()
-{
-}
+void debug_malloc_hook_tracked_dump() {}
 
 #endif
-
 
 /**
  * Prints various statistics on stdout
  */
 
-void
-debug_memory_stat(int mask)
+void debug_memory_stat(int mask)
 {
     if(__termout__.vtbl == NULL)
     {
@@ -1406,15 +1359,9 @@ debug_memory_stat(int mask)
     formatln("%16llx | DB: MEM: Peak Usage=%llu", timeus(), db_peak_allocated);
     formatln("%16llx | DB: MEM: Allocated=%llu", timeus(), db_current_allocated);
     formatln("%16llx | DB: MEM: Blocks=%llu", timeus(), db_current_blocks);
-    formatln("%16llx | DB: MEM: Monitoring Overhead=%llu (%i)", timeus(), (u64)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
+    formatln("%16llx | DB: MEM: Monitoring Overhead=%llu (%i)", timeus(), (uint64_t)(db_current_blocks * HEADER_SIZE), (int)HEADER_SIZE);
 #if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
-    formatln("%16llx | C ALLOC: total: %llu malloc=%llu free=%llu realloc=%llu memalign=%llu",
-             timeus(),
-             malloc_hook_total,
-             malloc_hook_malloc,
-             malloc_hook_free,
-             malloc_hook_realloc,
-             malloc_hook_memalign);
+    formatln("%16llx | C ALLOC: total: %llu malloc=%llu free=%llu realloc=%llu memalign=%llu", timeus(), malloc_hook_total, malloc_hook_malloc, malloc_hook_free, malloc_hook_realloc, malloc_hook_memalign);
 #endif
 #else
     if(mask == 0)
@@ -1439,7 +1386,7 @@ debug_memory_stat(int mask)
 
         int i;
 
-        for(i = 0; i < (DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3); i++)
+        for(i = 0; i < (DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX >> 3); i++)
         {
             format("[%4i]={%8llu / %8llu} ;", (i + 1) << 3, db_alloc_count_by_size[i], db_alloc_peak_by_size[i]);
 
@@ -1451,25 +1398,23 @@ debug_memory_stat(int mask)
 
         println("");
 
-        formatln("%16llx | [++++]={%8llu / %8llu}", timeus(),
-                 db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3],
-                 db_alloc_peak_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE >> 3]);
+        formatln("%16llx | [++++]={%8llu / %8llu}", timeus(), db_alloc_count_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX >> 3], db_alloc_peak_by_size[DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX >> 3]);
     }
 #endif
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
     if(mask & DEBUG_STAT_TAGS)
     {
-        output_stream *os = termout;
-        s64 allocated_bytes_peak = 0;
-        s64 allocated_count_total = 0;
-        s64 freed_count_total = 0;
+        output_stream_t *os = termout;
+        int64_t          allocated_bytes_peak = 0;
+        int64_t          allocated_count_total = 0;
+        int64_t          freed_count_total = 0;
 
-        s64 allocated_count_peak = 0;
-        s64 allocated_bytes_total = 0;
-        s64 freed_bytes_total = 0;
+        int64_t          allocated_count_peak = 0;
+        int64_t          allocated_bytes_total = 0;
+        int64_t          freed_bytes_total = 0;
 
-        for(int i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t*)); ++i)
+        for(int_fast32_t i = 0; i < (int)(sizeof(debug_memory_by_tag_contexts) / sizeof(debug_memory_by_tag_context_t *)); ++i)
         {
             debug_memory_by_tag_context_t *ctx = debug_memory_by_tag_contexts[i];
             if(ctx == NULL)
@@ -1487,7 +1432,8 @@ debug_memory_stat(int mask)
             freed_bytes_total += ctx->freed_bytes_total;
         }
 
-        osformatln(os, " GRAND TOTAL | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli",
+        osformatln(os,
+                   " GRAND TOTAL | %10lli | %10lli | %10lli | %10lli | %8lli | %8lli | %8lli | %8lli",
                    allocated_bytes_total,
                    freed_bytes_total,
                    allocated_bytes_total - freed_bytes_total,
@@ -1498,7 +1444,9 @@ debug_memory_stat(int mask)
                    allocated_count_total - freed_count_total,
                    allocated_count_peak);
 
-        osprintln(os,"    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| peak c   |");
+        osprintln(os,
+                  "    ________ | ALLOCATED_ | FREED_____ | CURRENT___ | PEAK______ | alloc c  | freed c  | current c| "
+                  "peak c   |");
     }
 #endif
 
@@ -1507,14 +1455,14 @@ debug_memory_stat(int mask)
     {
         db_header *ptr;
 
-        u64 mintag = MAX_U64;
-        u64 nexttag;
+        uint64_t   mintag = U64_MAX;
+        uint64_t   nexttag;
 
         // find the minimum
 
         for(ptr = db_mem_first.next; ptr != &db_mem_first; ptr = ptr->next)
         {
-            u64 tag = ptr->tag;
+            uint64_t tag = ptr->tag;
             if(tag < mintag)
             {
                 mintag = tag;
@@ -1526,17 +1474,17 @@ debug_memory_stat(int mask)
         //        0123456789ABCDEF   012345678   012345678   012345678   012345678   012345678
         formatln("%16llx | [-----TAG------] :   COUNT    :    MIN     :    MAX     :    MEAN    :   TOTAL", timeus());
 
-        for(; mintag != MAX_U64; mintag = nexttag)
+        for(; mintag != U64_MAX; mintag = nexttag)
         {
-            nexttag = MAX_U64;
-            u32 count = 0;
-            u32 minsize = MAX_U32;
-            u32 maxsize = 0;
-            u64 totalsize = 0;
+            nexttag = U64_MAX;
+            uint32_t count = 0;
+            uint32_t minsize = U32_MAX;
+            uint32_t maxsize = 0;
+            uint64_t totalsize = 0;
 
             for(ptr = db_mem_first.next; ptr != &db_mem_first; ptr = ptr->next)
             {
-                u64 tag = ptr->tag;
+                uint64_t tag = ptr->tag;
 
                 if((tag > mintag) && (tag < nexttag))
                 {
@@ -1583,21 +1531,21 @@ debug_memory_stat(int mask)
 
     if(mask & DEBUG_STAT_DUMP)
     {
-        db_header* ptr = db_mem_first.next;
-        int index = 0;
+        db_header *ptr = db_mem_first.next;
+        int        index = 0;
 
         while(ptr != &db_mem_first)
         {
-            formatln("block #%04x %16p [%08x]\nBLOCK ", index, (void*)& ptr[1], ptr->size);
+            formatln("block #%04x %16p [%08x]\nBLOCK ", index, (void *)&ptr[1], ptr->size);
 
 #if DNSCORE_DEBUG_HAS_BLOCK_TAG
-            debug_dump((u8*) & ptr->tag, 8, 8, FALSE, TRUE);
+            debug_dump((uint8_t *)&ptr->tag, 8, 8, false, true);
             formatln(" | ");
 #endif
 
 #if DNSCORE_DEBUG_STACKTRACE
-            int n = 0;
-            intptr *st = ptr->_trace;
+            int       n = 0;
+            intptr_t *st = ptr->_trace;
             if(st != NULL)
             {
                 while(st[n] != 0)
@@ -1605,10 +1553,10 @@ debug_memory_stat(int mask)
                     ++n;
                 }
 
-                char **trace_strings = (char**)st[n + 1];
-                for(int i = 0; i < n; i++)
+                char **trace_strings = (char **)st[n + 1];
+                for(int_fast32_t i = 0; i < n; i++)
                 {
-                    formatln("%p %s", (void*)st[i], (trace_strings != NULL) ? trace_strings[i] : "???");
+                    formatln("%p %s", (void *)st[i], (trace_strings != NULL) ? trace_strings[i] : "???");
                 }
             }
 #endif
@@ -1616,7 +1564,7 @@ debug_memory_stat(int mask)
 #if DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS
             formatln("#%08llx | ", ptr->serial);
 #endif
-            osprint_dump(termout, & ptr[1], MIN(ptr->size, 128), 32, OSPRINT_DUMP_ALL);
+            osprint_dump(termout, &ptr[1], MIN(ptr->size, 128), 32, OSPRINT_DUMP_ALL);
 
             formatln("\n");
             ptr = ptr->next;
@@ -1625,8 +1573,8 @@ debug_memory_stat(int mask)
 
         flushout();
         flusherr();
-        //malloc_stats();
-        //malloc_info(0, stdout);
+        // malloc_stats();
+        // malloc_info(0, stdout);
     }
 #endif
 
@@ -1646,6 +1594,5 @@ debug_memory_stat(int mask)
     pthread_mutex_unlock(&alloc_mutex);
 #endif
 }
-
 
 /** @} */

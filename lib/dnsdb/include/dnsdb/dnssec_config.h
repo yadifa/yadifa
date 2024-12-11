@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,35 +28,38 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbdnssec DNSSEC functions
- *  @ingroup dnsdb
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbdnssec DNSSEC functions
+ * @ingroup dnsdb
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
 
 #ifndef _DNSSEC_CONFIG_H
-#define	_DNSSEC_CONFIG_H
+#define _DNSSEC_CONFIG_H
 
 #if !ZDB_HAS_DNSSEC_SUPPORT
 #error "Please do not include dnssec_config.h if ZDB_HAS_DNSSEC_SUPPORT is 0 (Not NSEC3 nor NSEC)"
 #endif
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _DNSSEC_CONFIG_H */
+#endif /* _DNSSEC_CONFIG_H */
 
 /** @} */

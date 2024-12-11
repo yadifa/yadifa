@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,53 +28,50 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #ifndef __CTRL_QUERY__H__
 #define __CTRL_QUERY__H__
 
-#include "server-config.h"
+#include "server_config.h"
 
 #if !HAS_CTRL
 #error "CTRL has not been enabled : do not include this"
 #endif
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/host_address.h>
-#include <dnscore/packet_writer.h>
-#include <dnscore/host_address.h>
+#include <dnscore/dns_packet_writer.h>
 
 #include "zone_desc.h"
 
-ya_result ctrl_query_message_add_soa(packet_writer *pw, zone_desc_s *zone_desc);
+ya_result ctrl_query_message_add_soa(dns_packet_writer_t *pw, zone_desc_t *zone_desc);
 
 /* Adds record using the TXT type */
 
-ya_result ctrl_query_message_add_u32_txt(packet_writer *pw, const char* name, u32 value);
-ya_result ctrl_query_message_add_type_txt(packet_writer *pw, const char* name, u16 value);
-ya_result ctrl_query_message_add_class_txt(packet_writer *pw, const char* name, u16 value);
-ya_result ctrl_query_message_add_hosts_txt(packet_writer *pw, const char* name, host_address *hosts);
-ya_result ctrl_query_message_add_time_txt(packet_writer *pw, const char* name, u32 value);
-ya_result ctrl_query_message_add_text_txt(packet_writer *pw, const char* name, const char* value);
-ya_result ctrl_query_message_add_aml_txt(packet_writer *pw, const char* name, const address_match_list *aml);
-ya_result ctrl_query_message_add_ams_txt(packet_writer *pw, const char* name, const address_match_set *ams);
+ya_result ctrl_query_message_add_u32_txt(dns_packet_writer_t *pw, const char *name, uint32_t value);
+ya_result ctrl_query_message_add_type_txt(dns_packet_writer_t *pw, const char *name, uint16_t value);
+ya_result ctrl_query_message_add_class_txt(dns_packet_writer_t *pw, const char *name, uint16_t value);
+ya_result ctrl_query_message_add_hosts_txt(dns_packet_writer_t *pw, const char *name, host_address_t *hosts);
+ya_result ctrl_query_message_add_time_txt(dns_packet_writer_t *pw, const char *name, uint32_t value);
+ya_result ctrl_query_message_add_text_txt(dns_packet_writer_t *pw, const char *name, const char *value);
+ya_result ctrl_query_message_add_aml_txt(dns_packet_writer_t *pw, const char *name, const address_match_list_t *aml);
+ya_result ctrl_query_message_add_ams_txt(dns_packet_writer_t *pw, const char *name, const address_match_set_t *ams);
 
-ya_result ctrl_query_message_add_u8(packet_writer *pw, const u8 *origin, u16 rtype, u8 value);
-ya_result ctrl_query_message_add_u32(packet_writer *pw, const u8 *origin, u16 rtype, u32 value);
-ya_result ctrl_query_message_add_utf8(packet_writer *pw, const u8 *origin, u16 rtype, const char *value);
-ya_result ctrl_query_message_add_hosts(packet_writer *pw, const u8 *origin, u16 rtype, const host_address *value);
+ya_result ctrl_query_message_add_u8(dns_packet_writer_t *pw, const uint8_t *origin, uint16_t rtype, uint8_t value);
+ya_result ctrl_query_message_add_u32(dns_packet_writer_t *pw, const uint8_t *origin, uint16_t rtype, uint32_t value);
+ya_result ctrl_query_message_add_utf8(dns_packet_writer_t *pw, const uint8_t *origin, uint16_t rtype, const char *value);
+ya_result ctrl_query_message_add_hosts(dns_packet_writer_t *pw, const uint8_t *origin, uint16_t rtype, const host_address_t *value);
 
 /** @} */
 

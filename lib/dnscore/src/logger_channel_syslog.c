@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,26 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
 
 #define LOGGER_CHANNEL_SYSLOG_MULTITHREADED 0
-#define SYSLOG_IS_THREADSAFE 0
+#define SYSLOG_IS_THREADSAFE                0
 
 #if !LOGGER_CHANNEL_SYSLOG_MULTITHREADED
 #undef SYSLOG_IS_THREADSAFE
@@ -62,21 +60,20 @@
 #include "dnscore/sys_types.h"
 #include "dnscore/format.h"
 
-#define SYSLOG_MAX_LINE_SIZE 1024
-#define SYSLOG_FORMATTING_ERROR_TEXT "internal syslog formatting error"
+#define SYSLOG_LINE_SIZE_MAX                1024
+#define SYSLOG_FORMATTING_ERROR_TEXT        "internal syslog formatting error"
 #define SYSLOG_FORMATTING_ERROR_TEXT_LENGTH 33
 
 struct logger_syslog_data
 {
-    char* ident;
-    int options;
-    int facility;
+    char *ident;
+    int   options;
+    int   facility;
 };
 
 typedef struct logger_syslog_data logger_syslog_data;
 
-static ya_result
-logger_channel_syslog_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
+static ya_result                  logger_channel_syslog_constmsg(logger_channel_t *chan, int level, char *text, uint32_t text_len, uint32_t date_offset)
 {
     (void)chan;
     (void)text_len;
@@ -85,16 +82,16 @@ logger_channel_syslog_constmsg(logger_channel* chan, int level, char* text, u32 
         level = LOG_DEBUG;
     }
     syslog(level, "%s", &text[date_offset]); /* don't worry about not being a string literal */
-    
+
     return SUCCESS;
 }
 
-static ya_result
-logger_channel_syslog_msg(logger_channel* chan, int level, char* text, ...)
+#if DNSCORE_LOGGER_CHANNEL_HAS_MSG
+static ya_result logger_channel_syslog_msg(logger_channel_t *chan, int level, char *text, ...)
 {
     (void)chan;
 
-    char tmp[SYSLOG_MAX_LINE_SIZE];
+    char    tmp[SYSLOG_LINE_SIZE_MAX];
 
     va_list args;
     va_start(args, text);
@@ -113,12 +110,13 @@ logger_channel_syslog_msg(logger_channel* chan, int level, char* text, ...)
 
     return return_code;
 }
+#endif
 
-static ya_result
-logger_channel_syslog_vmsg(logger_channel* chan, int level, char* text, va_list args)
+#if DNSCORE_LOGGER_CHANNEL_HAS_VMSG
+static ya_result logger_channel_syslog_vmsg(logger_channel_t *chan, int level, char *text, va_list args)
 {
     (void)chan;
-    char tmp[SYSLOG_MAX_LINE_SIZE];
+    char      tmp[SYSLOG_LINE_SIZE_MAX];
 
     ya_result return_code = vsnformat(tmp, sizeof(tmp), text, args);
 
@@ -130,24 +128,23 @@ logger_channel_syslog_vmsg(logger_channel* chan, int level, char* text, va_list 
     /*
      * NOTE: LOG_DEBUG is the last supported level
      */
-    
+
     syslog(level & LOG_PRIMASK, "%s", tmp);
 
     return return_code;
 }
+#endif
 
-static void
-logger_channel_syslog_flush(logger_channel* chan)
+static void logger_channel_syslog_flush(logger_channel_t *chan)
 {
     /* NOP */
 
     (void)chan;
 }
 
-static void
-logger_channel_syslog_close(logger_channel* chan)
+static void logger_channel_syslog_close(logger_channel_t *chan)
 {
-    logger_syslog_data *sd = (logger_syslog_data*)chan->data;
+    logger_syslog_data *sd = (logger_syslog_data *)chan->data;
 
     free(sd->ident);
     free(sd);
@@ -158,10 +155,9 @@ logger_channel_syslog_close(logger_channel* chan)
     chan->vtbl = NULL;
 }
 
-static ya_result
-logger_channel_syslog_reopen(logger_channel* chan)
+static ya_result logger_channel_syslog_reopen(logger_channel_t *chan)
 {
-    logger_syslog_data *sd = (logger_syslog_data*)chan->data;
+    logger_syslog_data *sd = (logger_syslog_data *)chan->data;
     closelog();
 
     openlog(sd->ident, sd->options, sd->facility);
@@ -169,32 +165,29 @@ logger_channel_syslog_reopen(logger_channel* chan)
     return SUCCESS;
 }
 
-static void
-logger_channel_syslog_sync(logger_channel* chan)
-{
-    (void)chan;
-}
+static void                      logger_channel_syslog_sync(logger_channel_t *chan) { (void)chan; }
 
-static const logger_channel_vtbl syslog_vtbl = {
-    logger_channel_syslog_constmsg,
-    logger_channel_syslog_msg,
-    logger_channel_syslog_vmsg,
-    logger_channel_syslog_flush,
-    logger_channel_syslog_close,
-    logger_channel_syslog_reopen,
-    logger_channel_syslog_sync,
-    "syslog_channel"
-};
+static const logger_channel_vtbl syslog_vtbl = {logger_channel_syslog_constmsg,
+#if DNSCORE_LOGGER_CHANNEL_HAS_MSG
+                                                logger_channel_syslog_msg,
+#endif
+#if DNSCORE_LOGGER_CHANNEL_HAS_VMSG
+                                                logger_channel_syslog_vmsg,
+#endif
+                                                logger_channel_syslog_flush,
+                                                logger_channel_syslog_close,
+                                                logger_channel_syslog_reopen,
+                                                logger_channel_syslog_sync,
+                                                "syslog_channel"};
 
-void
-logger_channel_syslog_open(const char* ident, int options, int facility, logger_channel* chan)
+void logger_channel_syslog_open(const char *ident, int options, int facility, logger_channel_t *chan)
 {
     if(chan == NULL)
     {
         osformatln(termerr, "tried to open syslog (%s) on uninitialised channel", ident);
         return;
     }
-    
+
     logger_syslog_data *sd;
     MALLOC_OBJECT_OR_DIE(sd, logger_syslog_data, 0x4d5254534e414843); /* CHANSTRM */
     sd->ident = strdup(ident);
@@ -204,9 +197,7 @@ logger_channel_syslog_open(const char* ident, int options, int facility, logger_
     chan->data = sd;
 
     chan->vtbl = &syslog_vtbl;
-    
+
     openlog(sd->ident, options, facility);
 }
 /** @} */
-
-/*----------------------------------------------------------------------------*/

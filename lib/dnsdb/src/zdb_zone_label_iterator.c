@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to iterate through the labels of a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to iterate through the labels of a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -48,7 +47,7 @@
 #include "dnsdb/zdb_zone_label_iterator.h"
 #include "dnsdb/zdb_rr_label.h"
 
-extern logger_handle* g_database_logger;
+extern logger_handle_t *g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 /**
@@ -61,25 +60,23 @@ extern logger_handle* g_database_logger;
  *
  */
 
+#define ZLI_DEBUG         0
 
-#define ZLI_DEBUG 0
-
-void
-zdb_zone_label_iterator_init(zdb_zone_label_iterator* iter, const zdb_zone* zone)
+void zdb_zone_label_iterator_init(const zdb_zone_t *zone, zdb_zone_label_iterator_t *iter)
 {
 #if DEBUG
-    memset(iter, 0xff, sizeof(zdb_zone_label_iterator));
+    memset(iter, 0xff, sizeof(zdb_zone_label_iterator_t));
 #endif
-    
-    s32 top;
-    
+
+    int32_t top;
+
     if(*zone->origin != '\0')
-    {    
+    {
         top = dnsname_to_dnslabel_stack(zone->origin, iter->dnslabels);
 
         // sets an empty iterator for the labels in the path of the zone
 
-        for(s32 i = 0; i < top; i++)
+        for(int_fast32_t i = 0; i < top; i++)
         {
             dictionary_empty_iterator_init(&iter->stack[i]);
         }
@@ -108,64 +105,63 @@ zdb_zone_label_iterator_init(zdb_zone_label_iterator* iter, const zdb_zone* zone
     }
 }
 
-void
-zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone* zone, const u8 *from_name)
+void zdb_zone_label_iterator_init_from(zdb_zone_label_iterator_t *iter, const zdb_zone_t *zone, const uint8_t *from_name)
 {
 #if DEBUG
-    memset(iter, 0xff, sizeof(zdb_zone_label_iterator));
+    memset(iter, 0xff, sizeof(zdb_zone_label_iterator_t));
 #endif
-    
-    dnslabel_stack from_name_stack;
-            
+
+    dnslabel_stack_t from_name_stack;
+
     if(from_name == NULL) // from not set : initialise from the start
     {
-        zdb_zone_label_iterator_init(iter, zone);
+        zdb_zone_label_iterator_init(zone, iter);
         return;
     }
-    
-    s32 top = dnsname_to_dnslabel_stack(zone->origin, iter->dnslabels);
-    s32 real_top = dnsname_to_dnslabel_stack(from_name, from_name_stack);
-    
+
+    int32_t top = dnsname_to_dnslabel_stack(zone->origin, iter->dnslabels);
+    int32_t real_top = dnsname_to_dnslabel_stack(from_name, from_name_stack);
+
     if(real_top <= top)
     {
-        zdb_zone_label_iterator_init(iter, zone);
+        zdb_zone_label_iterator_init(zone, iter);
         return;
     }
-    
-    for(s32 i = 0; i < top; i++)
+
+    for(int_fast32_t i = 0; i < top; i++)
     {
         if(!dnslabel_equals(iter->dnslabels[i], from_name_stack[i]))
         {
-            zdb_zone_label_iterator_init(iter, zone);
+            zdb_zone_label_iterator_init(zone, iter);
             return;
         }
     }
-    
+
     // sets an empty iterator for the labels in the path of the zone
 
-    for(s32 i = 0; i < top; i++)
+    for(int_fast32_t i = 0; i < top; i++)
     {
         dictionary_empty_iterator_init(&iter->stack[i]);
     }
-    
+
     // while there are labels in from_name
     //   find if the next level exists
     //     if yes, initialise the iterator from it
     //  initialise an iterator for the next level
-    
+
     // note: real_top > top
-    
-    zdb_rr_label *parent = zone->apex;
-    
+
+    zdb_rr_label_t *parent = zone->apex;
+
     do
     {
-        zdb_rr_label *child = zdb_rr_label_find_child(parent, from_name_stack[top + 1]);
-        
+        zdb_rr_label_t *child = zdb_rr_label_find_child(parent, from_name_stack[top + 1]);
+
         if(child == NULL)
         {
             break;
         }
-        
+
         iter->dnslabels[top + 1] = child->name;
         /*
         hashcode key = hash_dnslabel(child->name);
@@ -173,11 +169,10 @@ zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone*
         */
         dictionary_iterator_init_from(&parent->sub, &iter->stack[top], child->name);
         parent = child;
-    }
-    while( ++top < real_top);
-    
+    } while(++top < real_top);
+
     dictionary_iterator_init(&parent->sub, &iter->stack[top]);
-    
+
     iter->top = top;
     iter->current_label = parent;
     iter->zone = zone;
@@ -194,15 +189,11 @@ zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone*
  *
  * @param[in] iter a pointer to the iterator
  *
- * @return TRUE if data is available, FALSE otherwise.
+ * @return true if data is available, false otherwise.
  *
  */
 
-bool
-zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator* iter)
-{
-    return iter->current_label != NULL;
-}
+bool zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator_t *iter) { return iter->current_label != NULL; }
 
 /**
  * @brief Copies the full name of the next label returned by the "next" call.
@@ -216,11 +207,10 @@ zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator* iter)
  *
  */
 
-u32
-zdb_zone_label_iterator_nextname_to_cstr(zdb_zone_label_iterator* iter, char* buffer256)
+uint32_t zdb_zone_label_iterator_nextname_to_cstr(zdb_zone_label_iterator_t *iter, char *buffer256)
 {
-    u32 ret = dnslabel_stack_to_cstr(iter->dnslabels, iter->top, buffer256);
-    
+    uint32_t ret = dnslabel_stack_to_cstr(iter->dnslabels, iter->top, buffer256);
+
 #if ZLI_DEBUG
     zdb_rr_label *label = iter->current_label;
     if(label != NULL)
@@ -231,26 +221,25 @@ zdb_zone_label_iterator_nextname_to_cstr(zdb_zone_label_iterator* iter, char* bu
     {
         log_debug1("zli: %{dnsname}%NULL nextname=%s (%u)", iter->zone->origin, buffer256, ret);
     }
-    u32 real_len = strlen(buffer256);
+    uint32_t real_len = strlen(buffer256);
     if(real_len != ret)
     {
         log_err("zli: %d != %d", real_len, ret);
     }
 #endif
-    
+
     return ret;
 }
 
-u32
-zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer256)
+uint32_t zdb_zone_label_iterator_nextname(zdb_zone_label_iterator_t *iter, uint8_t *buffer256)
 { /* TOP-DOWN stack */
-    u32 ret = dnslabel_stack_to_dnsname(iter->dnslabels, iter->top, buffer256);
-    
+    uint32_t ret = dnslabel_stack_to_dnsname(iter->dnslabels, iter->top, buffer256);
+
     if(*iter->zone->origin == 0)
     {
         --ret;
     }
-    
+
 #if ZLI_DEBUG
     zdb_rr_label *label = iter->current_label;
     if(label != NULL)
@@ -261,13 +250,13 @@ zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer256)
     {
         log_debug1("zli: %{dnsname}%NULL nextname=%{dnsname} (%u)", iter->zone->origin, buffer256, ret);
     }
-    u32 real_len = dnsname_len(buffer256);
+    uint32_t real_len = dnsname_len(buffer256);
     if(real_len != ret)
     {
         log_err("zli: %d != %d", real_len, ret);
     }
 #endif
-    
+
     return ret;
 }
 
@@ -282,10 +271,9 @@ zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer256)
  *
  */
 
-zdb_rr_label*
-zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
+zdb_rr_label_t *zdb_zone_label_iterator_next(zdb_zone_label_iterator_t *iter)
 {
-    zdb_rr_label* ret = iter->current_label;
+    zdb_rr_label_t *ret = iter->current_label;
 #if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
     iter->prev_top = iter->current_top;
 #endif
@@ -296,7 +284,7 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
     {
         if(dictionary_iterator_hasnext(&iter->stack[iter->top]))
         {
-            iter->current_label = *(zdb_rr_label**)dictionary_iterator_next(&iter->stack[iter->top]);
+            iter->current_label = *(zdb_rr_label_t **)dictionary_iterator_next(&iter->stack[iter->top]);
             iter->current_top = iter->top + 1;
 
             dictionary_iterator_init(&iter->current_label->sub, &iter->stack[++iter->top]);
@@ -304,15 +292,15 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
 
             break;
         }
-        
+
 #if DEBUG
-        iter->dnslabels[iter->top] = (u8*)(intptr)0xfefefefefefefefeLL;
+        iter->dnslabels[iter->top] = (uint8_t *)(intptr_t)0xfefefefefefefefeLL;
         memset(&iter->stack[iter->top], 0xfe, sizeof(iter->stack[iter->top]));
 #endif
 
         iter->top--;
     }
-    
+
     return ret;
 }
 
@@ -327,8 +315,7 @@ zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter)
  *
  */
 
-void
-zdb_zone_label_skip_children(zdb_zone_label_iterator* iter)
+void zdb_zone_label_skip_children(zdb_zone_label_iterator *iter)
 {
     /*
      * If we are on a brother or on a parent there is nothing to do.
@@ -347,7 +334,7 @@ zdb_zone_label_skip_children(zdb_zone_label_iterator* iter)
     {
         if(dictionary_iterator_hasnext(&iter->stack[iter->top]))
         {
-            iter->current_label = *(zdb_rr_label**)dictionary_iterator_next(&iter->stack[iter->top]);
+            iter->current_label = *(zdb_rr_label **)dictionary_iterator_next(&iter->stack[iter->top]);
             iter->current_top = iter->top + 1;
 
             dictionary_iterator_init(&iter->current_label->sub, &iter->stack[++iter->top]);

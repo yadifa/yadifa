@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logging Server logging
- *  @ingroup yadifad
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup logging Server logging
+ * @ingroup yadifad
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _LOG_STATISTICS_H
 #define _LOG_STATISTICS_H
@@ -50,15 +48,188 @@
  *
  ******************************************************************************************************************/
 
-#include "server.h"
+#include <dnscore/mutex.h>
+#include <dnscore/logger.h>
 
-
-#ifndef LOG_STATISTICS_C_
-extern logger_handle* g_statistics_logger;
+#ifndef SERVER_C_
+extern logger_handle_t *g_server_logger;
 #endif
 
-void log_statistics_legend();
-void log_statistics(server_statistics_t *server_statistics);
+#ifndef LOG_STATISTICS_C_
+extern logger_handle_t *g_statistics_logger;
+#endif
+
+#define SVRSTATS_TAG                        0x5354415453525653
+
+#define SERVER_STATISTICS_ERROR_CODES_COUNT 32 // RCODE 5 bits
+
+#define USE_SERVER_STATISTICS_ATOMICS       0
+
+#ifndef USE_SERVER_STATISTICS_ATOMICS
+#if HAS_QUERY_LOG_AGGREGATION
+#define USE_SERVER_STATISTICS_ATOMICS 0 // uses mutex and a sum
+#else
+#define USE_SERVER_STATISTICS_ATOMICS 1 // uses atomics
+#endif
+#endif
+
+#if USE_SERVER_STATISTICS_ATOMICS
+
+#ifndef STATS_NAME
+#define STATS_NAME log_statistics_atomic
+#endif
+
+#define TCPSTATS(__field__) STATS_NAME.__field__
+
+#define TCPSTATS_LOCK()
+#define TCPSTATS_FIELD(__field__) STATS_NAME.__field__
+#define TCPSTATS_UNLOCK()
+
+struct server_statistics_s
+{
+    atomic_uint64_t input_loop_count;
+    atomic_uint64_t input_timeout_count;
+
+    atomic_uint64_t loop_rate_counter;
+    atomic_uint64_t loop_rate_elapsed;
+
+    /* udp */
+#if __unix__
+    atomic_uint64_t udp_input_count __attribute__((aligned(64)));
+    atomic_uint64_t udp_queries_count __attribute__((aligned(64)));
+#else
+    atomic_uint64_t udp_input_count;
+    atomic_uint64_t udp_queries_count;
+#endif
+    atomic_uint64_t udp_notify_input_count;
+    atomic_uint64_t udp_updates_count;
+    atomic_uint64_t udp_dropped_count;
+    atomic_uint64_t udp_output_size_total;
+    atomic_uint64_t udp_undefined_count;
+    atomic_uint64_t udp_referrals_count;
+
+    /* tcp */
+
+    atomic_uint64_t tcp_input_count;
+    atomic_uint64_t tcp_queries_count;
+    atomic_uint64_t tcp_notify_input_count;
+    atomic_uint64_t tcp_updates_count;
+    atomic_uint64_t tcp_dropped_count;
+    atomic_uint64_t tcp_output_size_total;
+    atomic_uint64_t tcp_undefined_count;
+    atomic_uint64_t tcp_referrals_count;
+    atomic_uint64_t tcp_axfr_count;
+    atomic_uint64_t tcp_ixfr_count;
+    atomic_uint64_t tcp_overflow_count;
+
+    /* rrl */
+
+#if HAS_RRL_SUPPORT
+    atomic_uint64_t rrl_slip;
+    atomic_uint64_t rrl_drop;
+#endif
+
+    /* answers */
+
+    atomic_uint64_t udp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
+
+    atomic_uint64_t tcp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
+};
+
+typedef struct server_statistics_s server_statistics_t;
+
+#ifndef LOG_STATISTICS_C_
+extern server_statistics_t log_statistics_atomic;
+#endif
+
+#else
+
+#ifndef STATS_NAME
+#define STATS_NAME log_statistics_tcp
+#endif
+
+#define TCPSTATS(__field__)                                                                                                                                                                                                                    \
+    mutex_lock(&STATS_NAME.mtx);                                                                                                                                                                                                               \
+    STATS_NAME.__field__;                                                                                                                                                                                                                      \
+    mutex_unlock(&STATS_NAME.mtx)
+
+#define TCPSTATS_LOCK()           mutex_lock(&STATS_NAME.mtx)
+#define TCPSTATS_FIELD(__field__) STATS_NAME.__field__
+#define TCPSTATS_UNLOCK()         mutex_unlock(&STATS_NAME.mtx)
+
+struct server_statistics_s
+{
+    mutex_t  mtx;
+
+    uint64_t input_loop_count;
+    uint64_t input_timeout_count;
+
+    uint64_t loop_rate_counter;
+    uint64_t loop_rate_elapsed;
+
+    /* udp */
+#if __unix__
+    uint64_t udp_input_count __attribute__((aligned(64)));
+    uint64_t udp_queries_count __attribute__((aligned(64)));
+#else
+    uint64_t udp_input_count;
+    uint64_t udp_queries_count;
+#endif
+    uint64_t udp_notify_input_count;
+    uint64_t udp_updates_count;
+    uint64_t udp_dropped_count;
+    uint64_t udp_output_size_total;
+    uint64_t udp_undefined_count;
+    uint64_t udp_referrals_count;
+
+    /* tcp */
+
+    uint64_t tcp_input_count;
+    uint64_t tcp_queries_count;
+    uint64_t tcp_notify_input_count;
+    uint64_t tcp_updates_count;
+    uint64_t tcp_dropped_count;
+    uint64_t tcp_output_size_total;
+    uint64_t tcp_undefined_count;
+    uint64_t tcp_referrals_count;
+    uint64_t tcp_axfr_count;
+    uint64_t tcp_ixfr_count;
+    uint64_t tcp_overflow_count;
+
+    /* rrl */
+
+#if HAS_RRL_SUPPORT
+    uint64_t rrl_slip;
+    uint64_t rrl_drop;
+#endif
+
+    /* answers */
+
+    uint64_t udp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
+
+    uint64_t tcp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
+};
+
+typedef struct server_statistics_s server_statistics_t;
+
+void                               log_statistics_register(server_statistics_t *server_statistics);
+void                               log_statistics_unregister(server_statistics_t *server_statistics);
+
+server_statistics_t               *log_statistics_alloc_register();
+void                               log_statistics_unregister_free(server_statistics_t *server_statistics);
+
+#ifndef LOG_STATISTICS_C_
+extern server_statistics_t log_statistics_tcp;
+#endif
+
+#endif
+
+void                 log_statistics_init();
+server_statistics_t *log_statistics_get();
+
+void                 log_statistics_struct(server_statistics_t *server_statistics);
+
+void                 log_statistics_legend();
+void                 log_statistics();
 
 #endif /* _LOG_STATISTICS_H */
-

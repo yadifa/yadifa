@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup debug Debug functions
- *  @ingroup dnscore
- *  @brief Debug functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup debug Debug functions
+ * @ingroup dnscore
+ * @brief Debug functions.
  *
  *  Definitions of debug functions/hooks, mainly memory related.
  *
  * @{
- */
-#include "dnscore/dnscore-config.h"
+ *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore_config.h"
 #include "dnscore/debug_config.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -58,7 +57,7 @@
 
 #if defined(__GLIBC__) || defined(__APPLE__)
 #include <execinfo.h>
-#include <dnscore/shared-heap.h>
+#include <dnscore/shared_heap.h>
 #include <dnscore/debug_config.h>
 
 #endif
@@ -70,7 +69,7 @@
 #include "dnscore/logger.h"
 #include "dnscore/ptr_set_debug.h"
 #include "dnscore/u64_set_debug.h"
-#include "dnscore/list-sl-debug.h"
+#include "dnscore/list_sl_debug.h"
 
 #if defined(__GLIBC__) || defined(__APPLE__)
 #define DNSCORE_DEBUG_STACKTRACE 1
@@ -82,59 +81,49 @@
 #define DNSCORE_DEBUG_MMAP 1
 #endif
 
-#ifdef    __cplusplus
-extern "C" output_stream __termout__;
-extern "C" output_stream __termerr__;
+#ifdef __cplusplus
+extern "C" output_stream_t __termout__;
+extern "C" output_stream_t __termerr__;
 #else
-extern output_stream __termout__;
-extern output_stream __termerr__;
+extern output_stream_t __termout__;
+extern output_stream_t __termerr__;
 #endif
 
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 /****************************************************************************/
 
-void
-debug_dump(void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text)
-{
-    debug_dump_ex(data_pointer_, size_, line_size, hex, text, FALSE);
-}
+void debug_dump(void *data_pointer_, size_t size_, size_t line_size, bool hex, bool text) { debug_dump_ex(data_pointer_, size_, line_size, hex, text, false); }
 
 /****************************************************************************/
 
-void
-debug_dump_ex(void* data_pointer_, size_t size_, size_t line_size, bool hex, bool text, bool address)
+void debug_dump_ex(void *data_pointer_, size_t size_, size_t line_size, bool hex, bool text, bool address)
 {
     if(__termout__.vtbl == NULL)
     {
         return;
     }
-    
-    osprint_dump(termout, data_pointer_, size_, line_size,
-        ((address)?OSPRINT_DUMP_ADDRESS:0)  |
-        ((hex)?OSPRINT_DUMP_HEX:0)          |
-        ((text)?OSPRINT_DUMP_TEXT:0));
+
+    osprint_dump(termout, data_pointer_, size_, line_size, ((address) ? OSPRINT_DUMP_ADDRESS : 0) | ((hex) ? OSPRINT_DUMP_HEX : 0) | ((text) ? OSPRINT_DUMP_TEXT : 0));
 }
 
-char*
-debug_strdup(const char* str)
+char *debug_strdup(const char *str)
 {
     size_t l = strlen(str) + 1;
-    char* out;
-    MALLOC_OR_DIE(char*, out, l, ZDB_STRDUP_TAG); /* ZALLOC IMPOSSIBLE, MUST KEEP MALLOC_OR_DIE */
+    char  *out;
+    MALLOC_OR_DIE(char *, out, l, ZDB_STRDUP_TAG); /* ZALLOC IMPOSSIBLE, MUST KEEP MALLOC_OR_DIE */
     MEMCOPY(out, str, l);
     return out;
 }
 
-#if (DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT || DNSCORE_HAS_MMAP_DEBUG_SUPPORT)
+#if(DNSCORE_HAS_MALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT || DNSCORE_HAS_ZALLOC_STATISTICS_SUPPORT || DNSCORE_HAS_MMAP_DEBUG_SUPPORT)
 
 #if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
 void debug_memory_stat(int mask);
 #endif
 
-void
-debug_stat(int mask)
+void debug_stat(int mask)
 {
     (void)mask;
     if(__termout__.vtbl == NULL)
@@ -152,8 +141,7 @@ debug_stat(int mask)
  * Dumps the 4K-aligned page containing the pointer on stdout.
  */
 
-void
-debug_dump_page(void* ptr)
+void debug_dump_page(void *ptr)
 {
     if(__termout__.vtbl != NULL)
     {
@@ -161,9 +149,9 @@ debug_dump_page(void* ptr)
 
         if(ptr != NULL)
         {
-            intptr p = (intptr)ptr;
+            intptr_t p = (intptr_t)ptr;
             p = p & (~4095);
-            debug_dump_ex((void*)p, 4096, 32, TRUE, TRUE, TRUE);
+            debug_dump_ex((void *)p, 4096, 32, true, true, true);
         }
     }
 }

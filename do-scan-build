@@ -1,0 +1,71 @@
+#!/bin/sh
+
+# sometimes it's scan-build-XXX
+
+SB="$SCANBUILD"
+SB_HI=17
+SB_LO=9
+
+if [ "x$SB" = "x" ]; then
+scan_build_ver=''
+for ver in $(seq $SB_HI -1 $SB_LO); do scan_build_ver="scan-build-$ver $scan_build_ver"; done
+for NAME in scan-build $scan_build_ver
+do
+    SBPATH=$(which "$NAME" 2> /dev/null)
+    if [ ! "x$SBPATH" = "x" ]
+    then
+        if [ -x "$SBPATH" ]
+        then
+#				echo "$NAME => '$SBPATH' : found"
+            SB="$SBPATH"
+            break;
+        fi
+    fi
+
+#		echo "$NAME => '$SBPATH' : not found"
+done
+fi
+
+if [ ! -f "$SB" ]
+then
+    SB=""
+fi
+
+if [ "x$SB" = "x" ]
+then
+	echo "no scan-build executable has been found"
+	echo "install it or set the SCANBUILD environment variable to set your own e.g. SCANBUILD=/usr/local/bin/scan-build-99 ./do-scan-build $*"
+	exit 1
+fi
+
+echo "using scanbuild: '$SB'"
+
+YDF=$(dirname $0)
+echo "YADIFA source code: $YDF"
+
+TS=$(date +'%s%N')
+
+TARGET=/tmp
+SRC=$TARGET/yadifa-trunk-$TS
+BLD=$TARGET/yadifa-trunk-build-$TS
+
+mkdir -p $TARGET
+rm -rf "$SRC"
+rm -rf "$BLD"
+mkdir -p "$BLD"
+
+echo "copying to $SRC"
+
+cp -a "$YDF" "$SRC"
+
+echo "autogen"
+
+cd "$SRC"
+./autogen.sh
+
+echo "building in $BLD"
+
+cd "$BLD"
+"$SRC/configure" --disable-zalloc --without-tests CFLAGS='-O0 -g3 -DDEBUG=1' $*
+$SB -maxloop 10 make -j 16
+

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,34 +28,40 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
+
 #pragma once
 
 #include <dnscore/sys_types.h>
 
-#define EDNS0_NSID_SIZE_MAX                 512
+#define EDNS0_NSID_SIZE_MAX 512
 
 #ifndef DNSCORE_NSID_C
-extern u32 edns0_record_size;
-extern u8 *edns0_rdatasize_nsid_option_wire;
-extern u32 edns0_rdatasize_nsid_option_wire_size;
+extern uint32_t edns0_record_size;
+extern uint8_t *edns0_rdatasize_nsid_option_wire;
+extern uint8_t *edns0_rdatasize_nsid_cookie_option_wire;
+extern uint32_t edns0_rdatasize_nsid_option_wire_size;
 #endif
 
-void edns0_set_nsid(u8 *bytes, u16 size);
+/**
+ * Sets the NSID fields.
+ * If called with NULL, resets the value to default.
+ *
+ * @param bytes the NSID or NULL
+ * @param size the size of the NSID, ignored if bytes is NULL
+ * @return an error code
+ */
+
+ya_result edns0_set_nsid(const uint8_t *bytes, uint16_t size);
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

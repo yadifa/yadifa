@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,41 +28,40 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Functions used to hash a dns formatted string
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Functions used to hash a dns formatted string
  *
  *  Implements the functions used to hash a dns formatted string.
  *  There functions require the call to an initialization function (hash_init);
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 #ifndef _HASH_H
-#define	_HASH_H
+#define _HASH_H
 
 #include <dnscore/sys_types.h>
 
-typedef u32 hashcode;
+typedef uint32_t hashcode;
 
 #include <dnscore/dnsname.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
 #define DNSCORE_HASH_TABLE_CHAR_SET_SIZE 37
 
-// the result of hash_dnslabel((const u8*)"\001*");
-#define WILD_LABEL_HASH 3479673052
+// the result of hash_dnslabel((const uint8_t*)"\001*");
+#define WILD_LABEL_HASH                  3479673052
 
-extern const u32 DNSCORE_HASH_TABLE[256][DNSCORE_HASH_TABLE_CHAR_SET_SIZE];
-extern const u32 DNSCORE_HASH_TABLE_MAP[256];
-extern const u8* WILD_LABEL;
+extern const uint32_t DNSCORE_HASH_TABLE[256][DNSCORE_HASH_TABLE_CHAR_SET_SIZE];
+extern const uint32_t DNSCORE_HASH_TABLE_MAP[256];
+extern const uint8_t *WILD_LABEL;
 extern const hashcode WILD_HASH;
 
 /** @brief Initializes the hash functions
@@ -84,7 +83,7 @@ void hash_init();
  *  @return the hash code as a 32 bits integer
  */
 
-hashcode hash_dnsname(const u8* dns_name);
+hashcode hash_dnsname(const uint8_t *dns_name);
 
 /** @brief Compute the hash code of a dns label (one pascal string)
  *
@@ -98,13 +97,13 @@ hashcode hash_dnsname(const u8* dns_name);
  *  @return the hash code as a 32 bits integer
  */
 
-static inline hashcode hash_dnslabel(const u8 *dns_label)
+static inline hashcode hash_dnslabel(const uint8_t *dns_label)
 {
-    u32 len = *dns_label++;
-    u32 hash = DNSCORE_HASH_TABLE[len][0];
+    uint32_t             len = *dns_label++;
+    uint32_t             hash = DNSCORE_HASH_TABLE[len][0];
 
-    const u32 *hash_line = (const u32*) & DNSCORE_HASH_TABLE[1][0];
-    const u8 * const limit = &dns_label[len];
+    const uint32_t      *hash_line = (const uint32_t *)&DNSCORE_HASH_TABLE[1][0];
+    const uint8_t *const limit = &dns_label[len];
 
     while(dns_label != limit)
     {
@@ -126,7 +125,7 @@ static inline hashcode hash_dnslabel(const u8 *dns_label)
  *  @return the hash code as a 32 bits integer
  */
 
-hashcode hash_pascalname(const u8* pascal_name);
+hashcode hash_pascalname(const uint8_t *pascal_name);
 
 /** @brief Compute the hash code of an asciiz name
  *
@@ -138,8 +137,7 @@ hashcode hash_pascalname(const u8* pascal_name);
  *  @return the hash code as a 32 bits integer
  */
 
-hashcode hash_asciizname(const char* asciiz_name);
-
+hashcode hash_asciizname(const char *asciiz_name);
 
 /** @brief Compute the hash code of a char array
  *
@@ -152,12 +150,12 @@ hashcode hash_asciizname(const char* asciiz_name);
  *  @return the hash code as a 32 bits integer
  */
 
-hashcode hash_chararray(const char* ascii, size_t len);
+hashcode hash_chararray(const char *ascii, size_t len);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 
 #endif
 
-#endif	/* _HASH_H */
+#endif /* _HASH_H */
 
 /** @} */

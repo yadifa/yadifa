@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,39 +28,37 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #ifndef __CTRL_QUERY_AXFR__H__
 #define __CTRL_QUERY_AXFR__H__
 
-#include "server-config.h"
+#include "server_config.h"
 
 #if !HAS_CTRL
 #error "CTRL has not been enabled : do not include this"
 #endif
 
 #include <dnscore/host_address.h>
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 
 #if HAS_DYNAMIC_PROVISIONING
 
-void ctrl_query_axfr_make_answer(message_data *mesg);
+void ctrl_query_axfr_make_answer(dns_message_t *mesg);
 
 void ctrl_query_axfr_start();
-void ctrl_query_axfr_enqueue(u8 *origin, host_address *master);
-void ctrl_query_axfr_enqueue_from_message(message_data *mesg);
+void ctrl_query_axfr_enqueue(uint8_t *origin, host_address *host);
+void ctrl_query_axfr_enqueue_from_message(dns_message_t *mesg);
 void ctrl_query_axfr_stop();
 #endif
 

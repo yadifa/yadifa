@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -68,32 +66,31 @@
 
 #define FILE_CHANNEL_BUFFER_SIZE 65536
 
-#define DEBUG_LOG_CHANNEL 0
+#define DEBUG_LOG_CHANNEL        0
 
-typedef struct file_data file_data;
+typedef struct logger_channel_file_s logger_channel_file_t;
 
-struct file_data
+struct logger_channel_file_s
 {
-    output_stream os;
-    char *file_name;
-    int fd;
-    uid_t uid;
-    gid_t gid;
-    u16 mode;
-    bool force_flush;
+    output_stream_t os;
+    char           *file_name;
+    int             fd;
+    uid_t           uid;
+    gid_t           gid;
+    uint16_t        mode;
+    bool            force_flush;
 };
 
-static ya_result
-logger_channel_file_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
+static ya_result logger_channel_file_constmsg(logger_channel_t *chan, int level, char *text, uint32_t text_len, uint32_t date_offset)
 {
     (void)level;
     (void)date_offset;
 
-    file_data* sd = (file_data*)chan->data;
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
 
-    output_stream_write(&sd->os, (const u8*)text, text_len);
+    output_stream_write(&sd->os, (const uint8_t *)text, text_len);
 
-    ya_result ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
+    ya_result ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
 
     if(sd->force_flush)
     {
@@ -103,16 +100,15 @@ logger_channel_file_constmsg(logger_channel* chan, int level, char* text, u32 te
     return ret;
 }
 
-static ya_result
-logger_channel_file_vmsg(logger_channel* chan, int level, char* text, va_list args)
+static ya_result logger_channel_file_vmsg(logger_channel_t *chan, int level, char *text, va_list args)
 {
     (void)level;
 
-    file_data* sd = (file_data*)chan->data;
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
 
     vosformat(&sd->os, text, args);
 
-    ya_result ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
+    ya_result ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
 
     if(sd->force_flush)
     {
@@ -122,8 +118,7 @@ logger_channel_file_vmsg(logger_channel* chan, int level, char* text, va_list ar
     return ret;
 }
 
-static ya_result
-logger_channel_file_msg(logger_channel* chan, int level, char* text, ...)
+static ya_result logger_channel_file_msg(logger_channel_t *chan, int level, char *text, ...)
 {
     va_list args;
     va_start(args, text);
@@ -135,26 +130,24 @@ logger_channel_file_msg(logger_channel* chan, int level, char* text, ...)
     return ret;
 }
 
-static void
-logger_channel_file_flush(logger_channel* chan)
+static void logger_channel_file_flush(logger_channel_t *chan)
 {
-    file_data* sd = (file_data*)chan->data;
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
 
     output_stream_flush(&sd->os);
 }
 
-static void
-logger_channel_file_close(logger_channel* chan)
+static void logger_channel_file_close(logger_channel_t *chan)
 {
-    file_data* sd = (file_data*)chan->data;
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
 
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
 #if __unix__
     chroot_unmanage_path(&sd->file_name);
-#endif    
+#endif
     free(sd->file_name);
-    
+
     chan->vtbl = NULL;
     sd->os.data = NULL;
     sd->os.vtbl = NULL;
@@ -163,22 +156,17 @@ logger_channel_file_close(logger_channel* chan)
     chan->data = NULL;
 }
 
-static ya_result
-logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode, file_data* sd)
+static ya_result logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, uint16_t mode, logger_channel_file_t *sd)
 {
 #if DEBUG_LOG_CHANNEL
     osformatln(termerr, "logger_channel_file_append(%s, %i, %i, %o, %p)", fullpath, uid, gid, mode, sd);
 #endif
-    
-    output_stream errlog_os;
-    output_stream buffered_errlog_os;
-    ya_result return_code;
 
-    if(FAIL(return_code = file_output_stream_open_ex_nolog(
-                    &errlog_os,
-                    fullpath,
-                    O_CREAT|O_APPEND|O_RDWR|O_CLOEXEC,
-                    mode)))
+    output_stream_t errlog_os;
+    output_stream_t buffered_errlog_os;
+    ya_result       return_code;
+
+    if(FAIL(return_code = file_output_stream_open_ex_nolog(&errlog_os, fullpath, O_CREAT | O_APPEND | O_RDWR | O_CLOEXEC, mode)))
     {
 #if DEBUG_LOG_CHANNEL
         osformatln(termerr, "logger_channel_file_append(%s, %i, %i, %o, %p) failed at open", fullpath, uid, gid, mode, sd);
@@ -208,13 +196,13 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
     }
 #endif
     sd->fd = fd;
-    
+
     if(FAIL(return_code = buffer_output_stream_init(&buffered_errlog_os, &errlog_os, FILE_CHANNEL_BUFFER_SIZE)))
     {
 #if DEBUG_LOG_CHANNEL
         osformatln(termerr, "logger_channel_file_append(%s, %i, %i, %o, %p) failed at buffering", fullpath, uid, gid, mode, sd);
 #endif
-        
+
         output_stream_close(&errlog_os);
         sd->fd = -1;
         return return_code;
@@ -226,18 +214,17 @@ logger_channel_file_append(const char *fullpath, uid_t uid, gid_t gid, u16 mode,
     return SUCCESS;
 }
 
-static ya_result
-logger_channel_file_reopen(logger_channel* chan)
-{    
-    ya_result return_code;        
-    file_data* sd = (file_data*)chan->data;
-    struct timeval tv;
-    struct tm t;
-    
+static ya_result logger_channel_file_reopen(logger_channel_t *chan)
+{
+    ya_result              return_code;
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
+    struct timeval         tv;
+    struct tm              t;
+
 #if DEBUG_LOG_CHANNEL
     osformatln(termerr, "logger_channel_file_reopen(%s)", sd->file_name);
 #endif
-    
+
 #if DNSCORE_HAS_LOG_THREAD_TAG
     char thread_tag_buffer[9];
 #endif
@@ -246,52 +233,57 @@ logger_channel_file_reopen(logger_channel* chan)
 
     sd->uid = logger_get_uid();
     sd->gid = logger_get_gid();
-    
-    ///
-    
-    /* open a new file stream */
-    
-    output_stream errlog_os;
 
-    if(FAIL(return_code = file_output_stream_open_ex_nolog(
-                    &errlog_os,
-                    sd->file_name,
-                    O_CREAT|O_APPEND|O_RDWR|O_CLOEXEC,
-                    sd->mode)))
+    ///
+
+    /* open a new file stream */
+
+    output_stream_t errlog_os;
+
+    if(FAIL(return_code = file_output_stream_open_ex_nolog(&errlog_os, sd->file_name, O_CREAT | O_APPEND | O_RDWR | O_CLOEXEC, sd->mode)))
     {
 #if DEBUG_LOG_CHANNEL
-        osformatln(termerr, "failed to file_output_stream_open_ex_nolog(os,%s,CREATE+APPEND+RDWR,%o)",
-                sd->file_name,
-                sd->mode
-                );
+        osformatln(termerr, "failed to file_output_stream_open_ex_nolog(os,%s,CREATE+APPEND+RDWR,%o)", sd->file_name, sd->mode);
 #endif
-        
+
         logger_channel_file_flush(chan);
 
         gettimeofday(&tv, NULL);
         localtime_r(&tv.tv_sec, &t);
 
-        logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | unable to reopen '%s': %r, resuming on original",
-                                t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                                t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
-                                getpid_ex(), thread_self(),  "system",
-                                sd->file_name, return_code);
+        logger_channel_file_msg(chan,
+                                LOG_NOTICE,
+                                "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | unable to reopen '%s': "
+                                "%r, resuming on original",
+                                t.tm_year + 1900,
+                                t.tm_mon + 1,
+                                t.tm_mday,
+                                t.tm_hour,
+                                t.tm_min,
+                                t.tm_sec,
+                                tv.tv_usec,
+                                getpid_ex(),
+                                thread_self(),
+                                "system",
+                                sd->file_name,
+                                return_code);
         logger_channel_file_flush(chan);
-        
+
         return return_code;
     }
 
     /* change ownership of the file */
 
     int fd = fd_output_stream_get_filedescriptor(&errlog_os);
-    
+
 #if DEBUG_LOG_CHANNEL
     if(fd < 0)
     {
-        osformatln(termerr, "failed to file_output_stream_open_ex_nolog(os,%s,CREATE+APPEND+RDWR,%o), got fd=-1 when everyting else looked fine",
-                sd->file_name,
-                sd->mode
-                );
+        osformatln(termerr,
+                   "failed to file_output_stream_open_ex_nolog(os,%s,CREATE+APPEND+RDWR,%o), got fd=-1 when everyting "
+                   "else looked fine",
+                   sd->file_name,
+                   sd->mode);
     }
 #endif
 #if __unix__
@@ -300,25 +292,34 @@ logger_channel_file_reopen(logger_channel* chan)
         if(fchown(fd, sd->uid, sd->gid) < 0)
         {
 #if DEBUG_LOG_CHANNEL
-            osformatln(termerr, "failed to chown(%i,%i,%i)",
-                    fd, sd->uid, sd->gid
-                    );
+            osformatln(termerr, "failed to chown(%i,%i,%i)", fd, sd->uid, sd->gid);
 #endif
-            
+
             return_code = ERRNO_ERROR;
 
             output_stream_close(&errlog_os);
 
             logger_channel_file_flush(chan);
-            
+
             gettimeofday(&tv, NULL);
             localtime_r(&tv.tv_sec, &t);
 
-            logger_channel_file_msg(chan, LOG_NOTICE, "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | unable to fchown '%s': %r, resuming on original",
-                                    t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                                    t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
-                                    getpid_ex(), thread_self(),  "system",
-                                    sd->file_name, return_code);
+            logger_channel_file_msg(chan,
+                                    LOG_NOTICE,
+                                    "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | N | unable to fchown "
+                                    "'%s': %r, resuming on original",
+                                    t.tm_year + 1900,
+                                    t.tm_mon + 1,
+                                    t.tm_mday,
+                                    t.tm_hour,
+                                    t.tm_min,
+                                    t.tm_sec,
+                                    tv.tv_usec,
+                                    getpid_ex(),
+                                    thread_self(),
+                                    "system",
+                                    sd->file_name,
+                                    return_code);
 
             logger_channel_file_flush(chan);
 
@@ -326,19 +327,20 @@ logger_channel_file_reopen(logger_channel* chan)
         }
     }
 #endif
-    
+
     logger_channel_file_flush(chan);
-    
+
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
-    
+
 #if DNSCORE_HAS_LOG_THREAD_TAG
     thread_copy_tag_with_pid_and_tid(getpid_ex(), thread_self(), thread_tag_buffer);
 #endif
-    
-    logger_channel_file_msg(chan, LOG_NOTICE,
 
-#if (DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
+    logger_channel_file_msg(chan,
+                            LOG_NOTICE,
+
+#if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %s | %8s | I | reopening '%s'",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %08x | %8s | I | reopening '%s'",
@@ -351,48 +353,54 @@ logger_channel_file_reopen(logger_channel* chan)
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopening '%s'",
 #endif
-                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                            t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                            t.tm_year + 1900,
+                            t.tm_mon + 1,
+                            t.tm_mday,
+                            t.tm_hour,
+                            t.tm_min,
+                            t.tm_sec,
+                            tv.tv_usec,
 #if DEBUG || HAS_LOG_PID
                             getpid_ex(),
 #endif
 #if DNSCORE_HAS_LOG_THREAD_TAG
                             thread_tag_buffer,
 #else
-    #if DEBUG || HAS_LOG_THREAD_ID
+#if DEBUG || HAS_LOG_THREAD_ID
                             thread_self(),
-    #endif
+#endif
 #endif
                             "system",
                             sd->file_name);
-    
+
     logger_channel_file_flush(chan);
-    
+
 #if DEBUG_LOG_CHANNEL
     osformatln(termerr, "so far so good: will exchange fds %i and %i in the channel", fd, sd->fd);
 #endif
-    
-    output_stream* fos = buffer_output_stream_get_filtered(&sd->os);
-    
+
+    output_stream_t *fos = buffer_output_stream_get_filtered(&sd->os);
+
     /* exchange the file descriptors */
     fd_output_stream_attach(fos, fd);
     fd_output_stream_attach(&errlog_os, sd->fd);
     sd->fd = fd;
-    
+
 #if DEBUG_LOG_CHANNEL
     osformatln(termerr, "closing the stream supposed to contain", sd->fd);
 #endif
-    
+
     file_output_stream_close_nolog(&errlog_os); // and NOT output_stream_close(&errlog_os);
-    
+
     logger_channel_file_flush(chan);
-    
+
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &t);
 
-    logger_channel_file_msg(chan, LOG_NOTICE,
-    
-#if (DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
+    logger_channel_file_msg(chan,
+                            LOG_NOTICE,
+
+#if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %s | %8s | I | reopened '%s'",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %08x | %8s | I | reopened '%s'",
@@ -405,63 +413,67 @@ logger_channel_file_reopen(logger_channel* chan)
 #else
                             "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopened '%s'",
 #endif
-                            t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-                            t.tm_hour, t.tm_min, t.tm_sec, tv.tv_usec,
+                            t.tm_year + 1900,
+                            t.tm_mon + 1,
+                            t.tm_mday,
+                            t.tm_hour,
+                            t.tm_min,
+                            t.tm_sec,
+                            tv.tv_usec,
 #if DEBUG || HAS_LOG_PID
                             getpid_ex(),
 #endif
 #if DNSCORE_HAS_LOG_THREAD_TAG
                             thread_tag_buffer,
 #else
-    #if DEBUG || HAS_LOG_THREAD_ID
+#if DEBUG || HAS_LOG_THREAD_ID
                             thread_self(),
-    #endif
+#endif
 #endif
                             "system",
                             sd->file_name);
     logger_channel_file_flush(chan);
-        
+
     return return_code;
 }
 
-static void
-logger_channel_file_sink(logger_channel* chan)
+static void logger_channel_file_sink(logger_channel_t *chan)
 {
-    file_data* sd = (file_data*)chan->data;
-    
-//    fcntl(fd, F_GETFD);
-    
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
+
+    //    fcntl(fd, F_GETFD);
+
     struct stat st;
     st.st_nlink = 0;
     fstat(sd->fd, &st);
-    
+
 #if DEBUG_LOG_CHANNEL
     osformatln(termerr, "logger_channel_file_sink(%s = %i) (going to /dev/null): %r", sd->file_name, sd->fd, ERRNO_ERROR);
 #endif
-        
+
     if(st.st_nlink == 0)
     {
         int ret = 0;
         // deleted
         // close and open /dev/null instead
 
-        int dev_null = open_ex("/dev/null", O_WRONLY);
-        
+        int dev_null = open_ex(DEV_NULL_PATH, O_WRONLY);
+
         if(dev_null >= 0)
         {
 #if DEBUG_LOG_CHANNEL
             osformatln(termerr, "logger_channel_file_sink(%s) file is not referenced anymore: sinking it to /dev/null with fd=%i", sd->file_name, dev_null);
 #endif
             if(ISOK(ret = dup2_ex(dev_null, sd->fd)))
-            {        
+            {
                 close_ex(dev_null);
-/*
-                if(ret < 0)
-                {
-                    close_ex(sd->fd);
-                    sd->fd = -1;
-                }
- */
+                /*
+                                if(ret < 0)
+                                {
+                                    close_ex(sd->fd);
+                                    sd->fd = -1;
+                                }
+                 */
             }
             else
             {
@@ -469,12 +481,12 @@ logger_channel_file_sink(logger_channel* chan)
                 osformatln(termerr, "logger_channel_file_sink(%s) dup_ex(%i,%i) failed (%r)", sd->file_name, ret);
 #endif
                 // more involved work
-                
+
 #if DEBUG_LOG_CHANNEL
                 osformatln(termerr, "instead will put fd %i in the channel, replacing %i", dev_null, sd->fd);
 #endif
-    
-                output_stream* fos = buffer_output_stream_get_filtered(&sd->os);
+
+                output_stream_t *fos = buffer_output_stream_get_filtered(&sd->os);
 
                 /* exchange the file descriptors */
                 fd_output_stream_attach(fos, dev_null);
@@ -485,14 +497,14 @@ logger_channel_file_sink(logger_channel* chan)
 #endif
                     close_ex(sd->fd);
                 }
-                sd->fd = dev_null;                
+                sd->fd = dev_null;
             }
         }
         else
         {
 #if DEBUG_LOG_CHANNEL
             osformatln(termerr, "logger_channel_file_sink(%s) failed to open /dev/null : cannot sink the output", sd->file_name, ret);
-#endif            
+#endif
         }
     }
     else
@@ -503,37 +515,37 @@ logger_channel_file_sink(logger_channel* chan)
     }
 }
 
-static const logger_channel_vtbl stream_vtbl =
-{
-    logger_channel_file_constmsg,
-    logger_channel_file_msg,
-    logger_channel_file_vmsg,
-    logger_channel_file_flush,
-    logger_channel_file_close,
-    logger_channel_file_reopen,
-    logger_channel_file_sink,
-    "file_channel"
-};
+static const logger_channel_vtbl stream_vtbl = {logger_channel_file_constmsg,
+#if DNSCORE_LOGGER_CHANNEL_HAS_MSG
+                                                logger_channel_file_msg,
+#endif
+#if DNSCORE_LOGGER_CHANNEL_HAS_VMSG
+                                                logger_channel_file_vmsg,
+#endif
+                                                logger_channel_file_flush,
+                                                logger_channel_file_close,
+                                                logger_channel_file_reopen,
+                                                logger_channel_file_sink,
+                                                "file_channel"};
 
-ya_result
-logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, bool forceflush, logger_channel* chan)
+ya_result logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, uint16_t mode, bool forceflush, logger_channel_t *chan)
 {
     if(chan == NULL)
     {
         osformatln(termerr, "tried to open file '%s' on uninitialised channel", fullpath);
         return OBJECT_NOT_INITIALIZED;
     }
-    
-    ya_result return_code;
-    
-    file_data* sd;
-    MALLOC_OBJECT_OR_DIE(sd, file_data, 0x4d5254534e414843); /* CHANSTRM */
+
+    ya_result              return_code;
+
+    logger_channel_file_t *sd;
+    MALLOC_OBJECT_OR_DIE(sd, logger_channel_file_t, 0x4d5254534e414843); /* CHANSTRM */
 
     if(ISOK(return_code = logger_channel_file_append(fullpath, uid, gid, mode, sd)))
     {
         sd->file_name = strdup(fullpath);
 #if __unix__
-        chroot_manage_path(&sd->file_name, fullpath, FALSE);
+        chroot_manage_path(&sd->file_name, fullpath, false);
 #endif
         sd->uid = uid;
         sd->gid = gid;
@@ -551,10 +563,9 @@ logger_channel_file_open(const char *fullpath, uid_t uid, gid_t gid, u16 mode, b
     return return_code;
 }
 
-ya_result
-logger_channel_file_rename(logger_channel *chan, const char *newpath)
+ya_result logger_channel_file_rename(logger_channel_t *chan, const char *newpath)
 {
-    file_data* sd = (file_data*)chan->data;
+    logger_channel_file_t *sd = (logger_channel_file_t *)chan->data;
 
     if(sd != NULL)
     {
@@ -562,11 +573,11 @@ logger_channel_file_rename(logger_channel *chan, const char *newpath)
         {
             free(sd->file_name);
             sd->file_name = strdup(newpath);
-            
+
             return SUCCESS;
         }
     }
-    
+
     return INVALID_STATE_ERROR;
 }
 

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #include <stdlib.h>
@@ -72,46 +70,37 @@
 
 #define RESOLVER_TAG 0x7A457E72757B457A
 
-
-
-void
-resolv_without_forward(void)
+void resolv_without_forward(void)
 {
     //
 }
 
-void
-resolv_print_version(void)
+void resolv_print_version(void)
 {
     printf("1.0.1");
 
     return;
 }
 
-
-ya_result
-resolv_lookup_name_server(host_address **dest)
+ya_result resolv_lookup_name_server(host_address_t **dest)
 {
-    ya_result                                                   return_code;
-    host_address                                                   *address;
+    ya_result       return_code;
+    host_address_t *address;
 
-    u8                                         dname[MAX_DOMAIN_LENGTH + 1];
-///    tsig_item                                                  *tsig = NULL;
+    uint8_t         dname[DOMAIN_LENGTH_MAX + 1];
+    ///    tsig_key_t                                                  *tsig = NULL;
 
-    u16                                                        ip_port = 53;
-    u8                                                        ip_buffer[16];
-    u8                                                              ip_size;
+    uint16_t ip_port = 53;
+    uint8_t  ip_buffer[16];
+    uint8_t  ip_size;
 
-    u32                                                     port_value = 53; /// @todo 20130618 gve -- needs to be more generic
+    uint32_t port_value = 53; /// @todo 20130618 gve -- needs to be more generic
 
-    char                                            *value = "172.19.110.8";
+    char    *value = "127.0.0.1";
 
     /*    ------------------------------------------------------------    */
 
-
-
     // 1. GET THE IP ADDRESS(ES) FROM "/etc/resolv.conf"
-
 
     if(FAIL(return_code = parse_ip_address(value, strlen(value), ip_buffer, sizeof(ip_buffer))))
     {
@@ -119,37 +108,30 @@ resolv_lookup_name_server(host_address **dest)
         return_code = 255;
     }
 
-    ip_size = (u8)return_code;
-    ip_port = (u16)port_value;
-
+    ip_size = (uint8_t)return_code;
+    ip_port = (uint16_t)port_value;
 
     // 2. STORE THE IP ADDRESS(ES) IN "dest"
-    
-    MALLOC_OBJECT_OR_DIE(address, host_address, HOSTADDR_TAG);
 
-    address->next = NULL;
-
-#if DNSCORE_HAS_TSIG_SUPPORT
-    address->tsig = NULL;
-#endif
+    address = host_address_new_instance();
 
     switch(ip_size)
     {
         case 4:
-            {
-                host_address_set_ipv4(address, ip_buffer, htons(ip_port));
-                break;
-            }
+        {
+            host_address_set_ipv4(address, ip_buffer, htons(ip_port));
+            break;
+        }
         case 16:
-            {
-                host_address_set_ipv6(address, ip_buffer, htons(ip_port));
-                break;
-            }
+        {
+            host_address_set_ipv6(address, ip_buffer, htons(ip_port));
+            break;
+        }
         case 255:
-            {
-                host_address_set_dname(address, dname, htons(ip_port));
-                break;
-            }
+        {
+            host_address_set_dname(address, dname, htons(ip_port));
+            break;
+        }
     }
 
     *dest = address;
@@ -157,48 +139,34 @@ resolv_lookup_name_server(host_address **dest)
     return SUCCESS;
 }
 
-
-
-
-ya_result
-resolv_init(resolver_s *resolv)
+ya_result resolv_init(resolver_s *resolv)
 {
     ZEROMEMORY(resolv, sizeof(struct resolver_s));
-/*** @todo 20130823 gve -- implement
-    resolv->option_attempts =  RES_OPTION_ATTEMPTS_DEFAULT;
-    resolv->option_ndots    = RES_OPTION_NDOTS_DEFAULT;
-    resolv->option_timeout  =  RES_TIMEOUT_DEFAULT;
-*/
+    /*** @todo 20130823 gve -- implement
+        resolv->option_attempts =  RES_OPTION_ATTEMPTS_DEFAULT;
+        resolv->option_ndots    = RES_OPTION_NDOTS_DEFAULT;
+        resolv->option_timeout  =  RES_TIMEOUT_DEFAULT;
+    */
 
     return OK;
 }
 
-
-ya_result
-resolv_add_hostaddress(resolver_s *resolv, host_address *address)
+ya_result resolv_add_hostaddress(resolver_s *resolv, host_address_t *address)
 {
-
-//    host_address **nameserver;
+    (void)resolv;
+    (void)address;
+    //    host_address **nameserver;
 
     return 0;
 }
 
-
-
-
-// 172.19.110.8
-// 172.31.110.8
-// search be.eurid.eu vt.eurid.eu tc.eurid.eu eurid.eu int.eurid.eu
-
-
-    /*    ------------------------------------------------------------    */
-
+/*    ------------------------------------------------------------    */
 
 /**
  *
  *  Resolving
  *
- *  - 
+ *  -
  *
  *
  *
@@ -207,22 +175,21 @@ resolv_add_hostaddress(resolver_s *resolv, host_address *address)
  */
 
 // remove addrinfo structure
-static void
-free_addrinfo(struct addrinfo *ai)
+static void free_addrinfo(struct addrinfo *ai)
 {
-    struct addrinfo                                                *temp_ai;
+    struct addrinfo *temp_ai;
 
     /*    ------------------------------------------------------------    */
 
-    while (ai != NULL)
+    while(ai != NULL)
     {
         temp_ai = ai->ai_next;
 
-        if (ai->ai_addr != NULL)
+        if(ai->ai_addr != NULL)
         {
             free(ai->ai_addr);
         }
-        if (ai->ai_canonname)
+        if(ai->ai_canonname)
         {
             free(ai->ai_canonname);
         }
@@ -232,126 +199,116 @@ free_addrinfo(struct addrinfo *ai)
     }
 }
 
-
-ya_result
-resolv_address(host_address *src, host_address *dst, int ip_flags)
+ya_result resolv_address(host_address_t *src, host_address_t *dst, int ip_flags)
 {
-    struct addrinfo                                                  hints;
-    struct addrinfo                                               *ai_list;
-    struct addrinfo                                                    *ai;
+    struct addrinfo     hints;
+    struct addrinfo    *ai_list;
+    struct addrinfo    *ai;
 
-    struct sockaddr_in                                                *sin;
+    struct sockaddr_in *sin;
 
-/// @todo 20160308 gve -- needs to be checked for linux
+    /// @todo 20160308 gve -- needs to be checked for linux
 
+    int       error_code;
 
-    int                                                         error_code;
+    ya_result return_code = true;
 
-    ya_result                                            return_code = TRUE;
-
-    char                                   fqdn[MAX_DOMAIN_TEXT_LENGTH + 1];
+    char      fqdn[DOMAIN_TEXT_BUFFER_SIZE];
 
     /*    ------------------------------------------------------------    */
-
 
     // 1. PREPARE THE HINTS
     //
     memset(&hints, 0, sizeof(hints));
-    hints.ai_flags     |= AI_CANONNAME;
+    hints.ai_flags |= AI_CANONNAME;
 
     // no need to search for IPv6, IPv4 only
-    if (! (ip_flags & HAS_IPV6))
+    if(!(ip_flags & HAS_IPV6))
     {
-        hints.ai_family     = PF_INET;
+        hints.ai_family = PF_INET;
     }
     // no need to search for IPv4, IPv6 only
-    if (! (ip_flags & HAS_IPV4))
+    if(!(ip_flags & HAS_IPV4))
     {
-        hints.ai_family     = PF_INET6;
+        hints.ai_family = PF_INET6;
     }
     // go search for IPv4 and IPv6
     else
     {
-        hints.ai_family     = PF_UNSPEC;
+        hints.ai_family = PF_UNSPEC;
     }
 
-    hints.ai_socktype   = SOCK_STREAM;
-    hints.ai_addr       = NULL;
-    hints.ai_next       = NULL;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_addr = NULL;
+    hints.ai_next = NULL;
 
-
-    // 2. GET THE IP ADDRESS 
+    // 2. GET THE IP ADDRESS
     //
-    dnsname_to_cstr(fqdn, src->ip.dname.dname);
+    cstr_init_with_dnsname(fqdn, src->ip.dname.dname);
 #if DEBUG
     formatln("dname: %{hostaddr}", src);
 #endif
 
-//    size_t len = strlen(fqdn);
-//    fqdn[len -1] = '\0';
-//    formatln("dname: %s", fqdn);
+    //    size_t len = strlen(fqdn);
+    //    fqdn[len -1] = '\0';
+    //    formatln("dname: %s", fqdn);
 
     error_code = getaddrinfo(fqdn, NULL, &hints, &ai_list);
 
-    if (error_code != 0)
+    if(error_code != 0)
     {
-        perror ("getaddrinfo");
+        perror("getaddrinfo");
 
         return -1; // @todo 20140509 gve -- nicer error code ---
     }
 
-
     // 3. WRITE THE RESULT INTO HOST_ADDRESS LIST
     //
     int i;
-    for (ai = ai_list, i = 0; ai != NULL && i < IP_LIST_MAX; ai = ai->ai_next)
+    for(ai = ai_list, i = 0; ai != NULL && i < IP_LIST_MAX; ai = ai->ai_next)
     {
-        switch (ai->ai_family)
+        switch(ai->ai_family)
         {
             case AF_INET:
-                    sin = (struct sockaddr_in *)ai->ai_addr;
+                sin = (struct sockaddr_in *)ai->ai_addr;
 
-                    if (dst->version == 0)
-                    {
-                        host_address_set_ipv4(dst, (const u8 *)&sin->sin_addr.s_addr, dst->port); /// @note use host_address_set_with_sockaddr (translates v4 & v6)
-                    }
-                    else
-                    {
-                        host_address_append_ipv4(dst, (const u8 *)&sin->sin_addr.s_addr, dst->port);
-                    }
+                if(dst->version == HOST_ADDRESS_NONE)
+                {
+                    host_address_set_ipv4(dst, (const uint8_t *)&sin->sin_addr.s_addr,
+                                          dst->port); /// @note use host_address_set_with_socketaddress (translates v4 & v6)
+                }
+                else
+                {
+                    host_address_append_ipv4(dst, (const uint8_t *)&sin->sin_addr.s_addr, dst->port);
+                }
 
                 break;
-
         }
         i++;
     }
     free_addrinfo(ai);
 
-
     return return_code;
 }
 
-
-ya_result
-resolv_host_address_list(host_address *src, host_address *dst)
+ya_result resolv_host_address_list(host_address_t *src, host_address_t *dst)
 {
-    ya_result                                            return_code = TRUE;
-//    char                                   fqdn[MAX_DOMAIN_TEXT_LENGTH + 1];
-//    s32                                                            fqdn_len;
+    ya_result return_code = true;
+    //    char                                   fqdn[DOMAIN_TEXT_LENGTH_MAX + 1];
+    //    int32_t                                                            fqdn_len;
 
     /*    ------------------------------------------------------------    */
 
     // init destination host address list
-    host_address_clear(dst);
+    host_address_finalise(dst);
     dst->next = NULL;
-
 
     // go thru the list and all fqdn will be resolved into a new list (dst)
     while(src != NULL)
     {
-        if (src->version == HOST_ADDRESS_DNAME)
+        if(src->version == HOST_ADDRESS_DNAME)
         {
-//            fqdn_len = dnsname_to_cstr(fqdn, src->ip.dname.dname);
+            //            fqdn_len = cstr_init_with_dnsname(fqdn, src->ip.dname.dname);
 
             if(FAIL(return_code = resolv_address(src, dst, HAS_IPV4 | HAS_IPV6)))
             {
@@ -365,11 +322,7 @@ resolv_host_address_list(host_address *src, host_address *dst)
         src = src->next;
     }
 
-
     return return_code;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/

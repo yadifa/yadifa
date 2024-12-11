@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #pragma once
@@ -54,7 +52,7 @@
 ya_result dynupdate_query_service_init();
 ya_result dynupdate_query_service_start();
 ya_result dynupdate_query_service_stop();
-void dynupdate_query_service_finalise();
+void      dynupdate_query_service_finalise();
 
 /**
  * This is only used by the UDP side.
@@ -62,7 +60,7 @@ void dynupdate_query_service_finalise();
  * direct socket reference may have some bad side effects if the network is restarted or stopped
  */
 
-ya_result dynupdate_query_service_enqueue(zdb *db, message_data *msg, int sockfd);
-void dynupdate_query_service_reset();
+ya_result dynupdate_query_service_enqueue(zdb_t *db, dns_message_t *msg, int sockfd);
+void      dynupdate_query_service_reset();
 
 /** @} */

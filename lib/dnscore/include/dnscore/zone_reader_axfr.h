@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,24 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup zoneaxfr AXFR file loader module
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup zoneaxfr AXFR file loader module
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
-/* 
+/*------------------------------------------------------------------------------
+ *
  * File:   zone_reader_axfr.h
  * Author: ericdf
  *
  * Created on June 16, 2011, 12:03 PM
- */
+ *
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -64,6 +64,6 @@
  *  @retval     else : an error occurred
  */
 
-ya_result zone_reader_axfr_open(zone_reader *dst, const char *file_path);
+ya_result zone_reader_axfr_open(zone_reader_t *dst, const char *file_path);
 
 /** @} */

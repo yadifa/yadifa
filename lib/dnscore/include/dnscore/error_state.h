@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,9 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -42,10 +40,10 @@
 struct error_state_s
 {
     mutex_t mtx;
-    s64 first_epoch;
-    s64 last_epoch;
-    s64 count;
-    int error;
+    int64_t first_epoch;
+    int64_t last_epoch;
+    int64_t count;
+    int     error;
 };
 
 typedef struct error_state_s error_state_t;
@@ -53,6 +51,6 @@ typedef struct error_state_s error_state_t;
 #define ERROR_STATE_INITIALIZER {MUTEX_INITIALIZER, 0, 0, 0, 0}
 
 bool error_state_log(error_state_t *es, ya_result err);
-void error_state_clear(error_state_t *es, logger_handle *log_handle, int level, const char *notice_message);
+void error_state_clear(error_state_t *es, logger_handle_t *log_handle, int level, const char *notice_message);
 bool error_state_log_locked(error_state_t *es, ya_result err);
-void error_state_clear_locked(error_state_t *es, logger_handle *log_handle, int level, const char *notice_message);
+void error_state_clear_locked(error_state_t *es, logger_handle_t *log_handle, int level, const char *notice_message);

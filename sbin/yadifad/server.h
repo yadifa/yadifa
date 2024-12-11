@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,17 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/**
- *  @defgroup server Server
- *  @ingroup yadifad
- *  @brief Server initialisation and launch
+/**-----------------------------------------------------------------------------
+ * @defgroup server Server
+ * @ingroup yadifad
+ * @brief Server initialisation and launch
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -46,9 +44,8 @@
  *
  * USE INCLUDES */
 
-#include <poll.h>
-
-#include <dnscore/message.h>
+#include <dnscore/sys_types.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/logger.h>
 #include <dnscore/service.h>
 
@@ -56,22 +53,36 @@
 
 #include "server_context.h"
 #include "server_error.h"
+#include "log_statistics.h"
 
 #ifndef SERVER_C_
-extern logger_handle *g_server_logger;
-extern volatile int program_mode;
+extern logger_handle_t *g_server_logger;
+extern volatile int     program_mode;
 #endif
 
 #include <dnscore/mutex.h>
 
-#define SOA_MIN_REFRESH 60
-#define SOA_MIN_RETRY   60
-#define SOA_MIN_EXPIRE  60
+#define SOA_REFRESH_MIN         60
+#define SOA_RETRY_MIN           60
+#define SOA_EXPIRE_MIN          60
 
-#define TPROCPRM_TAG 0x4d5250434f525054
-#define POLLFDBF_TAG 0x464244464c4c4f50
+#define TPROCPRM_TAG            0x4d5250434f525054
+#define POLLFDBF_TAG            0x464244464c4c4f50
+#define SOCKET_TAG              0x54454b434f53
+#define SVRINSTS_TAG            0x5354534e49525653
+#define SVRPLBIN_TAG            0x4e49424c50525653
+#define SVRPLBOT_TAG            0x544f424c50525653
 
 #define SERVER_POOL_BUFFER_SIZE 0x20000
+
+#ifndef SERVER_L1_DATA_LINE_ALIGNED_SIZE
+
+#define SERVER_L1_DATA_LINE_ALIGNED_SIZE  128
+#define SERVER_L1_DATA_LINE_ALIGNED_SHIFT 7
+
+#elif((1 << SERVER_L1_DATA_LINE_ALIGNED_SHIFT) != SERVER_L1_DATA_LINE_ALIGNED_SIZE)
+#error "2^" TOSTRING(SERVER_L1_DATA_LINE_ALIGNED_SHIFT) " != " TOSTRING(SERVER_L1_DATA_LINE_ALIGNED_SIZE) " : please fix"
+#endif
 
 /*    ------------------------------------------------------------
  *
@@ -85,12 +96,10 @@ extern volatile int program_mode;
 
 struct server_desc_s
 {
-    ya_result (* const context_init)(int workers_per_interface);
-    ya_result (* const loop)(struct service_worker_s *worker);
+    ya_result (*const context_init)(int workers_per_interface);
+    ya_result (*const loop)(struct service_worker_s *worker);
     const char *name;
 };
-
-typedef struct server_statistics_t server_statistics_t;
 
 #define SUCCESS_DROPPED ((int)0x80ff0001)
 
@@ -98,112 +107,50 @@ typedef struct server_statistics_t server_statistics_t;
  * volatile is only needed for variables changed by another thread
  */
 
-#define SERVER_STATISTICS_ERROR_CODES_COUNT 32
-
-struct server_statistics_t
-{
-    mutex_t mtx;
-    
-    volatile u64 input_loop_count;
-    volatile u64 input_timeout_count;
-
-    volatile u64 loop_rate_counter;
-    volatile u64 loop_rate_elapsed;
-    
-    /* udp */
-#ifndef WIN32
-    volatile u64 udp_input_count __attribute__ ((aligned (64)));
-    volatile u64 udp_queries_count __attribute__ ((aligned (64)));
-#else
-    volatile u64 udp_input_count;
-    volatile u64 udp_queries_count;
-#endif
-    volatile u64 udp_notify_input_count;
-    volatile u64 udp_updates_count;
-    volatile u64 udp_dropped_count;
-    volatile u64 udp_output_size_total;
-    volatile u64 udp_undefined_count;
-    volatile u64 udp_referrals_count;
-    
-    /* tcp */
-
-    volatile u64 tcp_input_count;    
-    volatile u64 tcp_queries_count;
-    volatile u64 tcp_notify_input_count;
-    volatile u64 tcp_updates_count;
-    volatile u64 tcp_dropped_count;
-    volatile u64 tcp_output_size_total;
-    volatile u64 tcp_undefined_count;
-    volatile u64 tcp_referrals_count;
-    volatile u64 tcp_axfr_count;
-    volatile u64 tcp_ixfr_count;
-    volatile u64 tcp_overflow_count;    
-    
-    /* rrl */
-    
-#if HAS_RRL_SUPPORT
-    volatile u64 rrl_slip;
-    volatile u64 rrl_drop;
-#endif
-    
-    /* answers */
-    
-    volatile u64 udp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
-    
-    volatile u64 tcp_fp[SERVER_STATISTICS_ERROR_CODES_COUNT];
-};
-
 struct network_thread_context_base_s
 {
     struct service_worker_s *worker;
-    server_statistics_t *statisticsp;
-    thread_t idr;
-    int sockfd;
-    u16 idx;
-    volatile bool must_stop;
+    server_statistics_t     *statisticsp;
+    thread_t                 idr;
+    int                      sockfd;
+    uint16_t                 idx;
+    volatile bool            must_stop;
 };
 
 typedef struct network_thread_context_base_s network_thread_context_base_t;
 
-void server_process_message_udp_set_database(zdb *db);
+struct network_thread_dns_tcp_context_s
+{
+    network_thread_context_base_t base;
+    // tcp_manager_socket_context_t* sctx;
+    // mutex_t mtx; // to lock writes
+};
 
-int server_process_message_udp(network_thread_context_base_t *ctx, message_data *mesg);
+typedef struct network_thread_dns_tcp_context_s network_thread_dns_tcp_context_t;
 
-#define TCPSTATS(__field__) mutex_lock(&server_statistics.mtx);server_statistics. __field__ ;mutex_unlock(&server_statistics.mtx)
+void                                            server_process_message_udp_set_database(zdb_t *db);
 
-#define TCPSTATS_LOCK() mutex_lock(&server_statistics.mtx)
-#define TCPSTATS_FIELD(__field__) server_statistics. __field__
-#define TCPSTATS_UNLOCK() mutex_unlock(&server_statistics.mtx)
-
-#ifndef SERVER_C_
-extern server_statistics_t server_statistics;
-#endif
-
-void server_tcp_allocate_poll(struct pollfd **pollfdsp, unsigned int *pollfds_sizep);
-
-void server_tcp_accept_loop(struct service_worker_s *worker, server_statistics_t **statistics_array, u32 statistics_array_size);
-
-void server_tcp_process(int sockfd);
+int                                             server_process_message_udp(network_thread_context_base_t *ctx, dns_message_t *mesg);
 
 /**
  * Initialises the DNS service.
- * 
+ *
  * @return an error code
  */
 
 ya_result server_service_init();
 
 /**
- * Returns TRUE iff the service has been started.
- * 
- * @return TRUE iff the service has been started.
+ * Returns true iff the service has been started.
+ *
+ * @return true iff the service has been started.
  */
 
 bool server_service_started();
 
 /**
  * Starts the DNS service.
- * 
+ *
  * @return an error code
  */
 
@@ -212,7 +159,7 @@ ya_result server_service_start();
 /**
  * Starts the DNS service and waits for it to stop.
  * This is the most efficient startup when its use is possible.
- * 
+ *
  * @return an error code
  */
 
@@ -220,7 +167,7 @@ ya_result server_service_start_and_wait();
 
 /**
  * Waits for the DNS service to stop
- * 
+ *
  * @return an error code
  */
 
@@ -228,7 +175,7 @@ ya_result server_service_wait();
 
 /**
  * Tells the DNS service to reconfigure at the earliest convenience
- * 
+ *
  * @return an error code
  */
 
@@ -240,7 +187,6 @@ ya_result server_service_reconfigure();
  * @return an error code
  */
 
-
 ya_result server_service_stop_nowait();
 
 /**
@@ -250,7 +196,7 @@ ya_result server_service_stop_nowait();
 void server_context_close();
 /**
  * Stops the DNS service.
- * 
+ *
  * @return an error code
  */
 
@@ -258,13 +204,13 @@ ya_result server_service_stop();
 
 /**
  * Finalise the DNS service.
- * 
+ *
  * @return an error code
  */
 
 ya_result server_service_finalize();
 
-void server_tcp_client_register(const struct sockaddr_storage* sa, s64 connections_max);
-s64 server_tcp_client_connections_max(const struct sockaddr_storage* sa, s64 default_value);
+void      server_tcp_client_register(const struct sockaddr_storage *sa, int64_t connections_max);
+int64_t   server_tcp_client_connections_max(const struct sockaddr_storage *sa, int64_t default_value);
 
 /** @} */

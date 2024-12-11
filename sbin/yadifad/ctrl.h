@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,34 +28,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #ifndef __CTRL__H__
 #define __CTRL__H__
 
 #include <dnscore/host_address.h>
 #include <dnscore/tsig.h>
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 
-#include "server-config.h"
+#include "server_config.h"
 
 #if !HAS_CTRL
 #error "CTRL has not been enabled : do not include this"
 #endif
 
-#define CTRL_PORT_DEFAULT 1021 // highest prime under 1023
+#define CTRL_PORT_DEFAULT             1021 // highest prime under 1023
 
 #define HAS_CTRL_DYNAMIC_PROVISIONING 0
 
@@ -63,27 +61,75 @@
  * CTRL handling
  */
 
-typedef struct config_control config_control;
-
-struct config_control
+struct config_control_s
 {
+#if DNSCORE_HAS_CTRL_DYNAMIC_PROVISIONING
+    host_address_t *primaries; /* all the recognised primaries are listed here */
 
-    host_address *listen;
-    bool enabled;
+    /* So that the zone contains more than an SOA : */
+
+    uint8_t      *dynamic_mname;              /* current name server */
+    uint8_t      *dynamic_rname;              /* admin email (rname form) */
+    host_address *dynamic_mname_ip_addresses; /* list of IPs for the current name server (IPv4 & IPv6) */
+#endif
+    host_address_t *listen;
+    bool            enabled;
 };
 
-void ctrl_set_listen(host_address *hosts);
-void ctrl_exclude_listen(host_address *address_list);
-host_address* ctrl_get_listen();
+typedef struct config_control_s config_control_t;
 
-static inline bool ctrl_has_dedicated_listen() { return ctrl_get_listen() != NULL; }
+void                            ctrl_set_listen(host_address_t *hosts);
+void                            ctrl_exclude_listen(host_address_t *address_list);
+host_address_t                 *ctrl_get_listen();
 
-void ctrl_set_enabled(bool b);
-bool ctrl_get_enabled();
+static inline bool              ctrl_has_dedicated_listen() { return ctrl_get_listen() != NULL; }
 
-ya_result  ctrl_message_process(message_data *mesg);
+void                            ctrl_set_enabled(bool b);
+bool                            ctrl_get_enabled();
 
+ya_result                       ctrl_config_reload();
 
+ya_result                       ctrl_message_process(dns_message_t *mesg);
+
+#if DNSCORE_HAS_CTRL_DYNAMIC_PROVISIONING
+
+host_address         *ctrl_get_primaries();
+void                  ctrl_set_primaries(host_address *hosts);
+
+const uint8_t        *ctrl_get_dynamic_mname();
+void                  ctrl_set_dynamic_mname(const uint8_t *fqdn);
+
+const uint8_t        *ctrl_get_dynamic_rname();
+void                  ctrl_set_dynamic_rname(const uint8_t *fqdn);
+
+host_address         *ctrl_get_dynamic_mname_ip_addresses();
+void                  ctrl_set_dynamic_mname_ip_addresses(host_address *hosts);
+
+const config_control *ctrl_get_config();
+
+bool                  ctrl_is_host_primary(const host_address *host);
+
+bool                  ctrl_is_ip_tsig_primary(const socketaddress *sa, const tsig_key_t *tsig);
+
+ya_result             ctrl_store_dynamic_config();
+
+ya_result             ctrl_drop_dynamic_config();
+
+/**
+ * all secondaries of the dynamic provisioning space will be notified of all zones they are supposed to handle
+ */
+
+void ctrl_notify_all_secondaries();
+
+/**
+ * all primaries of the dynamic provisioning space will be notified that this secondary just came up
+ */
+
+void ctrl_notify_all_primaries();
+
+void ctrl_notify_secondary(host_address *secondary);
+
+#endif
 
 /** @} */
 

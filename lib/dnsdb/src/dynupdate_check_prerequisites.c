@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbupdate Dynamic update functions
- *  @ingroup dnsdb
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbupdate Dynamic update functions
+ * @ingroup dnsdb
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
-#include "dnsdb/dnsdb-config.h"
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -65,23 +67,22 @@ typedef struct name_type_rdata name_type_rdata;
 
 struct name_type_rdata
 {
-    u8* rname;
-    u8* rdata;
-    u16 rtype;
-    u16 rdata_size;
+    uint8_t *rname;
+    uint8_t *rdata;
+    uint16_t rtype;
+    uint16_t rdata_size;
 };
 
-static int
-name_type_rdata_compare(const void* a, const void* b)
+static int name_type_rdata_compare(const void *a, const void *b)
 {
-    int cmp;
+    int              cmp;
 
-    name_type_rdata* ia = (name_type_rdata*)a;
-    name_type_rdata* ib = (name_type_rdata*)b;
+    name_type_rdata *ia = (name_type_rdata *)a;
+    name_type_rdata *ib = (name_type_rdata *)b;
 
     /* strcmp is adequate for this test */
 
-    if((cmp = strcmp((char*)ia->rname, (char*)ib->rname)) != 0)
+    if((cmp = strcmp((char *)ia->rname, (char *)ib->rname)) != 0)
     {
         return cmp;
     }
@@ -92,17 +93,12 @@ name_type_rdata_compare(const void* a, const void* b)
     return cmp;
 }
 
-static void
-name_type_rdata_free(void* a)
-{
-    free(a);
-}
+static void name_type_rdata_free(void *a) { free(a); }
 
-static void
-free_rrsets(ptr_vector* rrsetsp)
+static void free_rrsets(ptr_vector_t *rrsetsp)
 {
     ptr_vector_callback_and_clear(rrsetsp, name_type_rdata_free);
-    ptr_vector_destroy(rrsetsp);
+    ptr_vector_finalise(rrsetsp);
 }
 
 /*
@@ -114,31 +110,30 @@ free_rrsets(ptr_vector* rrsetsp)
  *    never a string.
  */
 
-ya_result
-dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count)
+ya_result dynupdate_check_prerequisites(zdb_zone_t *zone, dns_packet_reader_t *reader, uint16_t count)
 {
     if(zdb_zone_invalid(zone))
     {
         return ZDB_ERROR_ZONE_INVALID;
     }
-    
+
     if(count == 0)
     {
         return SUCCESS;
     }
-    
-    dnsname_vector *origin_path;
-    dnsname_vector name_path;
 
-    ptr_vector rrsets;
+    dnsname_vector_t *origin_path;
+    dnsname_vector_t  name_path;
 
-    u8* rname;
-    u8* rdata;
-    u32 rname_size;
-    u16 rtype;
-    u16 rclass;
-    u16 rdata_size;
-    u8 wire[MAX_DOMAIN_LENGTH + 10 + 65536];
+    ptr_vector_t      rrsets;
+
+    uint8_t          *rname;
+    uint8_t          *rdata;
+    uint32_t          rname_size;
+    uint16_t          rtype;
+    uint16_t          rclass;
+    uint16_t          rdata_size;
+    uint8_t           wire[DOMAIN_LENGTH_MAX + 10 + 65536];
 
     origin_path = &zone->origin_vector;
 
@@ -147,23 +142,23 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
     while(count-- > 0)
     {
         ya_result return_value;
-        
-        if(FAIL(return_value = packet_reader_read_record(reader, wire, sizeof(wire))))
+
+        if(FAIL(return_value = dns_packet_reader_read_record(reader, wire, sizeof(wire))))
         {
             free_rrsets(&rrsets);
             return RCODE_ERROR_CODE(RCODE_FORMERR);
         }
-        
+
         rname = wire;
         rname_size = dnsname_len(wire);
         rtype = GET_U16_AT(wire[rname_size]);
         rclass = GET_U16_AT(wire[rname_size + 2]);
-        rdata_size = ntohs(GET_U16_AT(wire[rname_size + 8]));        
+        rdata_size = ntohs(GET_U16_AT(wire[rname_size + 8]));
         rdata = &wire[rname_size + 10];
 
         dnsname_to_dnsname_vector(rname, &name_path);
 
-        s32 idx;
+        int32_t idx;
 
         for(idx = 0; idx < origin_path->size; idx++)
         {
@@ -182,7 +177,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
 
-            zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
+            zdb_rr_label_t *label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
 
             if(rtype == TYPE_ANY)
             {
@@ -200,7 +195,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                     return RCODE_ERROR_CODE(RCODE_NXRRSET);
                 }
 
-                if(zdb_record_find(&label->resource_record_set, rtype) == NULL)
+                if(zdb_resource_record_sets_has_type(&label->resource_record_set, rtype))
                 {
                     free_rrsets(&rrsets);
                     return RCODE_ERROR_CODE(RCODE_NXRRSET);
@@ -215,7 +210,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
                 return RCODE_ERROR_CODE(RCODE_FORMERR);
             }
 
-            zdb_rr_label* label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
+            zdb_rr_label_t *label = zdb_rr_label_find_exact(zone->apex, name_path.labels, (name_path.size - origin_path->size) - 1);
 
             if(rtype == TYPE_ANY)
             {
@@ -229,7 +224,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
             {
                 if(label != NULL)
                 {
-                    if(zdb_record_find(&label->resource_record_set, rtype) != NULL)
+                    if(zdb_resource_record_sets_has_type(&label->resource_record_set, rtype))
                     {
                         free_rrsets(&rrsets);
                         return RCODE_ERROR_CODE(RCODE_YXRRSET);
@@ -239,7 +234,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
         }
         else if(rclass == zdb_zone_getclass(zone))
         {
-            name_type_rdata* item;
+            name_type_rdata *item;
             MALLOC_OBJECT_OR_DIE(item, name_type_rdata, ZDB_DYNUPDATE_TAG);
             item->rname = rname;
             item->rdata = rdata;
@@ -253,7 +248,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
             return RCODE_ERROR_CODE(RCODE_FORMERR);
         }
     }
-    
+
     ptr_vector_qsort(&rrsets, name_type_rdata_compare);
 
     /*
@@ -268,21 +263,21 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
     if(ptr_vector_size(&rrsets) > 0)
     {
-        zdb_rr_label* label = NULL;
-        zdb_packed_ttlrdata* rr_sll = NULL;
+        zdb_rr_label_t            *label = NULL;
+        zdb_resource_record_set_t *rrset = NULL;
 
-        u8* last_name = (u8*)"\0377";
-        u16 last_type = 0;
-        s32 required_matches = 0;
+        uint8_t                   *last_name = (uint8_t *)"\0377";
+        uint16_t                   last_type = 0;
+        int32_t                    required_matches = 0;
 
-        name_type_rdata** itemp;
-        s32 record_count = ptr_vector_last_index(&rrsets); // record_count >= 0
+        name_type_rdata          **itemp;
+        int32_t                    record_count = ptr_vector_last_index(&rrsets); // record_count >= 0
 
-        itemp = (name_type_rdata**)rrsets.data;
+        itemp = (name_type_rdata **)rrsets.data;
 
         while(record_count-- >= 0)
         {
-            name_type_rdata* item = *itemp++;
+            name_type_rdata *item = *itemp++;
 
             if(!dnsname_equals(item->rname, last_name))
             {
@@ -328,22 +323,15 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
                 if(label != NULL)
                 {
-                    rr_sll = zdb_record_find(&label->resource_record_set, last_type);
+                    rrset = zdb_resource_record_sets_find(&label->resource_record_set, last_type);
+
+                    required_matches = 0; // ???
+                    required_matches += zdb_resource_record_set_size(rrset);
                 }
                 else
                 {
-                    rr_sll = NULL;
-                }
-
-                required_matches = 0;
-
-                zdb_packed_ttlrdata* rr = rr_sll;
-
-                while(rr != NULL)
-                {
-                    required_matches++;
-
-                    rr = rr->next;
+                    required_matches = 0; // ???
+                    rrset = NULL;
                 }
             }
 
@@ -355,31 +343,38 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
              * if yes: decrement the counter
              */
 
-            zdb_packed_ttlrdata* rr = rr_sll;
+            bool matched = false;
 
-            while(rr != NULL)
+            if(rrset != NULL)
             {
-                if(rr->rdata_size == item->rdata_size)
+                zdb_resource_record_set_const_iterator iter;
+                zdb_resource_record_set_const_iterator_init(rrset, &iter);
+                while(zdb_resource_record_set_const_iterator_has_next(&iter))
                 {
-                    /*
-                     * the records are read canonised to lower-case 
-                     */
+                    const zdb_resource_record_data_t *record = zdb_resource_record_set_const_iterator_next(&iter);
 
-                    if(memcmp(&rr->rdata_start[0], item->rdata, item->rdata_size) == 0)
+                    if(zdb_resource_record_data_rdata_size(record) == item->rdata_size)
                     {
                         /*
-                         * match
+                         * the records are read canonised to lower-case
                          */
 
-                        required_matches--;
-                        break;
+                        if(memcmp(zdb_resource_record_data_rdata_const(record), item->rdata, item->rdata_size) == 0)
+                        {
+                            /*
+                             * match
+                             */
+
+                            matched = true;
+
+                            required_matches--;
+                            break;
+                        }
                     }
                 }
-
-                rr = rr->next;
             }
 
-            if(rr == NULL)
+            if(!matched)
             {
                 /*
                  * no match
@@ -393,7 +388,7 @@ dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader,
 
     free_rrsets(&rrsets);
 
-    return reader->offset;
+    return reader->packet_offset;
 }
 
 /** @} */

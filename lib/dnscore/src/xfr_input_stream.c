@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -50,7 +49,7 @@
 #include "dnscore/xfr_input_stream.h"
 
 #include "dnscore/zalloc.h"
-#include "dnscore/packet_reader.h"
+#include <dnscore/dns_packet_reader.h>
 #include "dnscore/format.h"
 #include "dnscore/file_input_stream.h"
 #include "dnscore/file_output_stream.h"
@@ -58,7 +57,7 @@
 #include "dnscore/buffer_output_stream.h"
 #include "dnscore/fdtools.h"
 #include "dnscore/pipe_stream.h"
-#include "dnscore/message.h"
+#include "dnscore/dns_message.h"
 #include "dnscore/pool.h"
 #include "dnscore/random.h"
 #include "dnscore/thread_pool.h"
@@ -73,71 +72,73 @@
 #include <linux/limits.h>
 #endif /* HAVE_SYS_SYSLIMITS_H */
 
-#define MODULE_MSG_HANDLE g_system_logger
+#define MODULE_MSG_HANDLE      g_system_logger
 
 #define DEBUG_XFR_INPUT_STREAM 0
 
-typedef struct xfr_input_stream_data xfr_input_stream_data;
-
-#define XFRISDTA_TAG 0x4154445349524658
-#define XFRISSOA_TAG 0x414f535349524658
-#define XFRPOOL_TAG 0x4c4f4f50524658
+#define XFRISDTA_TAG           0x4154445349524658
+#define XFRISSOA_TAG           0x414f535349524658
+#define XFRPOOL_TAG            0x4c4f4f50524658
 
 struct xfr_input_stream_data
 {
-    output_stream pipe_stream_output;
-    input_stream pipe_stream_input;
-    input_stream source_stream;
-    output_stream source_output_stream;
-    packet_unpack_reader_data reader;
-    
-    message_data *message;
-    const u8 *origin;
-    u8 *pool;   // 64KB
-        
-    u8 *first_soa_record;
-    u32 first_soa_record_size;
-    
-    u16 ancount;
-    u16 xfr_mode;
-    u32 record_index;                   // index of the record in the stream
+    output_stream_t     pipe_stream_output;
+    input_stream_t      pipe_stream_input;
+    input_stream_t      source_stream;
+    output_stream_t     source_output_stream;
+    dns_packet_reader_t reader;
 
-    u32 last_serial;
-    u32 last_refresh;
-    u32 last_retry;
-    u32 last_expire;
-    u32 last_nttl;
+    dns_message_t      *message;
+    const uint8_t      *origin;
+    uint8_t            *pool; // 64KB
 
-    u64 mesg_hdr_mask;
-    u64 mesg_hdr_result;
-    u64 next_hdr_mask;
-    u64 next_hdr_result;
+    uint8_t            *first_soa_record;
+    uint32_t            first_soa_record_size;
 
-    ya_result last_error;
-    bool eos;
-    bool ixfr_mark;
-    bool owns_message;
-    bool owns_input_stream;
+    uint16_t            ancount;
+    uint16_t            xfr_mode;
+    uint32_t            record_index; // index of the record in the stream
+
+    uint32_t            last_serial;
+    uint32_t            last_refresh;
+    uint32_t            last_retry;
+    uint32_t            last_expire;
+    uint32_t            last_nttl;
+
+    uint64_t            mesg_hdr_mask;
+    uint64_t            mesg_hdr_result;
+    uint64_t            next_hdr_mask;
+    uint64_t            next_hdr_result;
+
+    uint64_t            size_total;
+    uint32_t            mesg_count;
+
+    ya_result           last_error;
+    bool                eos;
+    bool                ixfr_mark;
+    bool                owns_message;
+    bool                owns_input_stream;
 #if DNSCORE_HAS_TSIG_SUPPORT
     bool last_message_had_tsig;
     bool need_cleanup_tsig;
 #endif
 };
 
-static pool_s xfr_pool;
-static mutex_t xfr_pool_init_mtx = MUTEX_INITIALIZER;
-static bool xfr_pool_initialised = FALSE;
+typedef struct xfr_input_stream_data xfr_input_stream_data;
 
-static void *xfr_pool_alloc(void *args)
+static pool_t                        g_xfr_pool;
+static initialiser_state_t           xfr_pool_init_state = INITIALISE_STATE_INIT;
+
+static void                         *xfr_pool_alloc(void *args)
 {
     (void)args;
     void *p;
-    MALLOC_OBJECT_ARRAY(p, u8, 0x1010a, XFRPOOL_TAG);
+    MALLOC_OBJECT_ARRAY(p, uint8_t, 0x1010a, XFRPOOL_TAG);
     // void *p = malloc(0x1010a);
     return p;
 }
 
-static void xfr_pool_free(void *ptr, void* args)
+static void xfr_pool_free(void *ptr, void *args)
 {
     (void)args;
     free(ptr);
@@ -151,93 +152,65 @@ static void xfr_pool_free(void *ptr, void* args)
  * @return error code
  */
 
-//#if HAS_NON_AA_AXFR_SUPPORT
+// #if HAS_NON_AA_AXFR_SUPPORT
 
 /*
  * Non-RFC-compliant masks (allows AA bit not set)
- * 
+ *
  * It seems (some?) Microsoft DNS answers to an AXFR query without setting the AA bit
- * 
+ *
  * The RFC 5936 states that in the case of an AXFR answer with no error (RCODE set to 0),
  * the AA bit MUST be set.
- * 
+ *
  */
 
 #ifdef WORDS_BIGENDIAN
-#define AXFR_MESSAGE_LENIENT_HEADER_MASK    (( (u64) 0 )                                    | \
-                                     (((u64) (QR_BITS  | TC_BITS )) << 40 )| \
-                                     (((u64) ( RA_BITS | RCODE_BITS )) << 32 )      | \
-                                     ( (u64) 1LL << 16 ))
+#define AXFR_MESSAGE_LENIENT_HEADER_MASK        (((uint64_t)0) | (((uint64_t)(QR_BITS | TC_BITS)) << 40) | (((uint64_t)(RA_BITS | RCODE_BITS)) << 32) | ((uint64_t)1LL << 16))
 
-#define AXFR_MESSAGE_LENIENT_HEADER_RESULT  (( (u64) (QR_BITS ) << 40 )            | \
-                                     ( ((u64) 1LL) << 16 ))
+#define AXFR_MESSAGE_LENIENT_HEADER_RESULT      (((uint64_t)(QR_BITS) << 40) | (((uint64_t)1LL) << 16))
 
-#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_MASK (( (u64) 0LL )                                   | \
-                                      (((u64) ( QR_BITS  | TC_BITS )) << 40 )| \
-                                      (((u64) ( RCODE_BITS )) << 32 ))
+#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_MASK   (((uint64_t)0LL) | (((uint64_t)(QR_BITS | TC_BITS)) << 40) | (((uint64_t)(RCODE_BITS)) << 32))
 
-
-#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_RESULT   (((u64) ( QR_BITS  )) << 40 )
+#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_RESULT (((uint64_t)(QR_BITS)) << 40)
 
 #else
-#define AXFR_MESSAGE_LENIENT_HEADER_MASK     (( (u64) 0LL )                                   | \
-                                      (((u64) ( QR_BITS  | TC_BITS )) << 16 )| \
-                                      (((u64) ( RCODE_BITS )) << 24 )       | \
-                                      (((u64) 1LL) << 40 ))
+#define AXFR_MESSAGE_LENIENT_HEADER_MASK        (((uint64_t)0LL) | (((uint64_t)(QR_BITS | TC_BITS)) << 16) | (((uint64_t)(RCODE_BITS)) << 24) | (((uint64_t)1LL) << 40))
 
-#define AXFR_MESSAGE_LENIENT_HEADER_RESULT   ((((u64) ( QR_BITS  )) << 16 )| \
-                                      (((u64) 1LL) << 40 ))
+#define AXFR_MESSAGE_LENIENT_HEADER_RESULT      ((((uint64_t)(QR_BITS)) << 16) | (((uint64_t)1LL) << 40))
 
-#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_MASK     (( (u64) 0LL )                                   | \
-                                      (((u64) ( QR_BITS  | TC_BITS )) << 16 )| \
-                                      (((u64) ( RCODE_BITS )) << 24 ))
+#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_MASK   (((uint64_t)0LL) | (((uint64_t)(QR_BITS | TC_BITS)) << 16) | (((uint64_t)(RCODE_BITS)) << 24))
 
-
-#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_RESULT   (((u64) ( QR_BITS  )) << 16 )
+#define AXFR_NEXT_MESSAGE_LENIENT_HEADER_RESULT (((uint64_t)(QR_BITS)) << 16)
 
 #endif
 
-//#else
+// #else
 
 /*
- * RFC compliant masks (AA bit must be set) 
+ * RFC compliant masks (AA bit must be set)
  */
 
 #ifdef WORDS_BIGENDIAN
-#define AXFR_MESSAGE_HEADER_MASK    (( (u64) 0 )                                    | \
-                                     (((u64) (QR_BITS | AA_BITS | TC_BITS )) << 40 )| \
-                                     (((u64) ( RA_BITS | RCODE_BITS )) << 32 )      | \
-                                     ( (u64) 1LL << 16 ))
+#define AXFR_MESSAGE_HEADER_MASK        (((uint64_t)0) | (((uint64_t)(QR_BITS | AA_BITS | TC_BITS)) << 40) | (((uint64_t)(RA_BITS | RCODE_BITS)) << 32) | ((uint64_t)1LL << 16))
 
-#define AXFR_MESSAGE_HEADER_RESULT  (( (u64) (QR_BITS | AA_BITS) << 40 )            | \
-                                     ( ((u64) 1LL) << 16 ))
+#define AXFR_MESSAGE_HEADER_RESULT      (((uint64_t)(QR_BITS | AA_BITS) << 40) | (((uint64_t)1LL) << 16))
 
-#define AXFR_NEXT_MESSAGE_HEADER_MASK (( (u64) 0LL )                                   | \
-                                      (((u64) ( QR_BITS | AA_BITS | TC_BITS )) << 40 )| \
-                                      (((u64) ( RCODE_BITS )) << 32 ))
+#define AXFR_NEXT_MESSAGE_HEADER_MASK   (((uint64_t)0LL) | (((uint64_t)(QR_BITS | AA_BITS | TC_BITS)) << 40) | (((uint64_t)(RCODE_BITS)) << 32))
 
-
-#define AXFR_NEXT_MESSAGE_HEADER_RESULT   (((u64) ( QR_BITS | AA_BITS )) << 40 )
+#define AXFR_NEXT_MESSAGE_HEADER_RESULT (((uint64_t)(QR_BITS | AA_BITS)) << 40)
 
 #else
-#define AXFR_MESSAGE_HEADER_MASK     (( (u64) 0LL )                                   | \
-                                      (((u64) ( QR_BITS | AA_BITS | TC_BITS )) << 16 )| \
-                                      (((u64) ( RCODE_BITS )) << 24 )       | \
-                                      (((u64) 1LL) << 40 ))
+#define AXFR_MESSAGE_HEADER_MASK        (((uint64_t)0LL) | (((uint64_t)(QR_BITS | AA_BITS | TC_BITS)) << 16) | (((uint64_t)(RCODE_BITS)) << 24) | (((uint64_t)1LL) << 40))
 
-#define AXFR_MESSAGE_HEADER_RESULT   ((((u64) ( QR_BITS | AA_BITS )) << 16 )| \
-                                      (((u64) 1LL) << 40 ))
+#define AXFR_MESSAGE_HEADER_RESULT      ((((uint64_t)(QR_BITS | AA_BITS)) << 16) | (((uint64_t)1LL) << 40))
 
-#define AXFR_NEXT_MESSAGE_HEADER_MASK     (( (u64) 0LL )                                   | \
-                                      (((u64) ( QR_BITS | AA_BITS | TC_BITS )) << 16 )| \
-                                      (((u64) ( RCODE_BITS )) << 24 ))
+#define AXFR_NEXT_MESSAGE_HEADER_MASK   (((uint64_t)0LL) | (((uint64_t)(QR_BITS | AA_BITS | TC_BITS)) << 16) | (((uint64_t)(RCODE_BITS)) << 24))
 
-
-#define AXFR_NEXT_MESSAGE_HEADER_RESULT   (((u64) ( QR_BITS | AA_BITS )) << 16 )
+#define AXFR_NEXT_MESSAGE_HEADER_RESULT (((uint64_t)(QR_BITS | AA_BITS)) << 16)
 
 #endif
 
-//#endif
+// #endif
 
 /*
  * Reads the content of a message from the reader field in data (packet reader)
@@ -245,28 +218,26 @@ static void xfr_pool_free(void *ptr, void* args)
  * Every record read is written to the output pipe
  */
 
-static ya_result
-xfr_input_stream_read_packet(xfr_input_stream_data *data)
+static ya_result xfr_input_stream_read_packet(xfr_input_stream_data *data)
 {
-    //message_data *message = data->message;
-    packet_unpack_reader_data *reader = &data->reader;
-    u8 *record = data->pool; // no persistence of content needed
-    s32 record_len;
-    ya_result return_value = SUCCESS;
-        
+    dns_packet_reader_t *reader = &data->reader;
+    uint8_t             *record = data->pool; // no persistence of content needed
+    int32_t              record_len;
+    ya_result            return_value = SUCCESS;
+
 #if DEBUG_XFR_INPUT_STREAM
     log_debug("xfr_input_stream_read_packet(%p) ancount=%hd record_index=%u", data, data->ancount, data->record_index);
 #endif
-    
-    while((data->ancount > 0) && (pipe_stream_write_available(&data->pipe_stream_output) > 2048 ))
+
+    while((data->ancount > 0) && (pipe_stream_write_available(&data->pipe_stream_output) > 2048))
     {
         --data->ancount;
-        
-        if(FAIL(record_len = packet_reader_read_record(reader, record, RDATA_MAX_LENGTH + 1)))
+
+        if(FAIL(record_len = dns_packet_reader_read_record(reader, record, RDATA_LENGTH_MAX + 1)))
         {
             if(record_len != UNSUPPORTED_TYPE)
             {
-                data->eos = TRUE;
+                data->eos = true;
 
                 return_value = record_len;
 
@@ -282,10 +253,10 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
 #if DEBUG_XFR_INPUT_STREAM
         log_debug("xfr_input_stream: <%u %{recordwire}", data->record_index, record);
 #endif
-        
-        const u8 *ptr = record + dnsname_len(record);
 
-        u16 rtype = GET_U16_AT(*ptr);
+        const uint8_t *ptr = record + dnsname_len(record);
+
+        uint16_t       rtype = GET_U16_AT(*ptr);
 
         switch(rtype)
         {
@@ -295,38 +266,38 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
 
                 if(!dnsname_equals(record, data->origin))
                 {
-                    data->eos = TRUE;
+                    data->eos = true;
 
-                    return_value = MAKE_DNSMSG_ERROR(FP_XFR_QUERYERROR); // OWNER OF SOA RECORD SHOULD BE ORIGIN (protocol error)
+                    return_value = MAKE_RCODE_ERROR(FP_XFR_QUERYERROR); // OWNER OF SOA RECORD SHOULD BE ORIGIN (protocol error)
 
                     return return_value;
                 }
 
-                ptr += 10;                  /* type class ttl rdata_size */
+                ptr += 10; /* type class ttl rdata_size */
                 ptr += dnsname_len(ptr);
                 ptr += dnsname_len(ptr);
-                u32 soa_serial = ntohl(GET_U32_AT(*ptr));
+                uint32_t soa_serial = ntohl(GET_U32_AT(*ptr));
 
                 if(data->xfr_mode == TYPE_ANY) // the type of stream has not been decided yet
                 {
                     if(data->record_index == 1)
                     {
                         // second record is an SOA: this is an IXFR, the first record is not sent up
-                        
+
 #if DEBUG_XFR_INPUT_STREAM
                         log_debug("xfr_input_stream: #%u %{recordwire} ; (IXFR START)", data->record_index, data->first_soa_record);
 #endif
-                         
+
                         data->xfr_mode = TYPE_IXFR;
                     }
                     else
                     {
                         // second record is not an SOA: this is an AXFR, the first record is sent up
-                        
+
 #if DEBUG_XFR_INPUT_STREAM
                         log_debug("xfr_input_stream: #%u %{recordwire} ; (AXFR START)", data->record_index, record);
 #endif
-                        
+
                         output_stream_write(&data->pipe_stream_output, data->first_soa_record, data->first_soa_record_size);
                         data->xfr_mode = TYPE_AXFR;
                     }
@@ -335,8 +306,9 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
                 if(soa_serial == data->last_serial)
                 {
                     // the SOA serial has the same value as the last record we expect
-                    // if it's an AXFR or this is the second time it happens on an IXFR, then it's then end of the stream
-                    
+                    // if it's an AXFR or this is the second time it happens on an IXFR, then it's then end of the
+                    // stream
+
                     if(data->xfr_mode == TYPE_AXFR || ((data->xfr_mode == TYPE_IXFR) && data->ixfr_mark))
                     {
                         return_value = SUCCESS;
@@ -351,7 +323,7 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
 #if DEBUG_XFR_INPUT_STREAM
                             log_debug("xfr_input_stream: #%u %{recordwire} ; (AXFR END)", data->record_index, record);
 #endif
-                            
+
                             return_value = output_stream_write(&data->pipe_stream_output, record, record_len);
                         }
 #if DEBUG_XFR_INPUT_STREAM
@@ -362,20 +334,20 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
 #endif
 
                         // done
-                        data->eos = TRUE;                       
+                        data->eos = true;
 
                         return return_value; // reached the end
                     }
 
                     // IXFR needs to find the mark twice
-                    
+
 #if DEBUG_XFR_INPUT_STREAM
                     log_debug("xfr_input_stream: #%u %{recordwire} ; (IXFR LAST)", data->record_index, record);
 #endif
 
-                    data->ixfr_mark = TRUE;
+                    data->ixfr_mark = true;
                 }
-                
+
                 break;
             }
 
@@ -389,11 +361,11 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
                 if(data->record_index == 1)
                 {
                     // special case to detect an AXFR returned by an IXFR query
-                    
+
                     if(data->xfr_mode == TYPE_ANY)
                     {
                         data->xfr_mode = TYPE_AXFR;
-                        
+
                         if(FAIL(return_value = output_stream_write(&data->pipe_stream_output, data->first_soa_record, data->first_soa_record_size)))
                         {
                             return return_value;
@@ -402,58 +374,57 @@ xfr_input_stream_read_packet(xfr_input_stream_data *data)
                     else
                     {
                         return_value = INVALID_STATE_ERROR; // XFR mode should be "ANY"
-                        return return_value;    // invalid status
+                        return return_value;                // invalid status
                     }
                 }
 
                 break;
             }
         }
-        
+
 #if DEBUG_XFR_INPUT_STREAM
         log_debug("xfr_input_stream: >%u %{recordwire}", data->record_index, record);
 #endif
 
         if(FAIL(return_value = output_stream_write(&data->pipe_stream_output, record, record_len)))
         {
-            data->eos = TRUE;
+            data->eos = true;
 
             break;
         }
-        
-        if(return_value != (s32)record_len)
+
+        if(return_value != (int32_t)record_len)
         {
             return UNEXPECTED_EOF;
         }
 
         data->record_index++;
     }
-    
+
     return return_value;
 }
 
-static ya_result
-xfr_input_stream_fill(input_stream *is, u32 len)
+static ya_result xfr_input_stream_fill(input_stream_t *is, uint32_t len)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)is->data;
-    input_stream *source_stream = &data->source_stream;
-    message_data *mesg = data->message;
+    xfr_input_stream_data *data = (xfr_input_stream_data *)is->data;
+    input_stream_t        *source_stream = &data->source_stream;
+    dns_message_t         *mesg = data->message;
 #if DNSCORE_HAS_TSIG_SUPPORT
-    const tsig_item *tsig = message_tsig_get_key(mesg);
+    const tsig_key_t *tsig = dns_message_tsig_get_key(mesg);
 #endif
-    packet_unpack_reader_data *pr = &data->reader;
-    
+    dns_packet_reader_t *pr = &data->reader;
+
     if(FAIL(data->last_error))
     {
         return data->last_error;
     }
-    
+
     ya_result ret = SUCCESS;
-    
-    while(pipe_stream_read_available(&data->pipe_stream_input) < (s32)len)
+
+    while(pipe_stream_read_available(&data->pipe_stream_input) < (int32_t)len)
     {
         /* read the packet and write on the output (so it can be read back on the input) */
-        
+
         if(FAIL(ret = xfr_input_stream_read_packet(data)))
         {
             break;
@@ -463,20 +434,20 @@ xfr_input_stream_fill(input_stream *is, u32 len)
         {
             break;
         }
-        
+
         if(data->ancount > 0)
         {
             break;
         }
 
         /* next TCP chunk */
-        
+
 #if DEBUG
-        message_debug_trash_buffer(mesg);
+        dns_message_debug_trash_buffer(mesg);
 #endif
-        
-        u16 tcplen;
-        
+
+        uint16_t tcplen;
+
         ret = input_stream_read_nu16(source_stream, &tcplen); /* this is wrong ... */
 
         if(ret != 2)
@@ -493,42 +464,44 @@ xfr_input_stream_fill(input_stream *is, u32 len)
             break;
         }
 
-        if(FAIL(ret = input_stream_read_fully(source_stream, message_get_buffer(mesg), tcplen)))
+        if(FAIL(ret = input_stream_read_fully(source_stream, dns_message_get_buffer(mesg), tcplen)))
         {
             break;
         }
-               
-        message_set_size(mesg, ret);
+
+        dns_message_set_size(mesg, ret);
+
+        data->mesg_count++;
+        data->size_total += ret;
 
 #if DEBUG_XFR_INPUT_STREAM
         LOGGER_EARLY_CULL_PREFIX(MSG_INFO) message_log(MODULE_MSG_HANDLE, MSG_INFO, mesg);
 #endif
 
-
 #if DEBUG
-        memset(&message_get_buffer(mesg)[tcplen], 0xdd, DNSPACKET_MAX_LENGTH + 1 - tcplen);
+        memset(&dns_message_get_buffer(mesg)[tcplen], 0xdd, DNSPACKET_LENGTH_MAX + 1 - tcplen);
 #endif
         /*
          * Check the headers
          */
 
-        const u64 *h64 = (u64*)message_get_buffer(mesg);
-        const u64 m64 = data->next_hdr_mask; // AXFR_NEXT_MESSAGE_HEADER_MASK;
-        const u64 r64 = data->next_hdr_result; // AXFR_NEXT_MESSAGE_HEADER_RESULT;
+        const uint64_t *h64 = (uint64_t *)dns_message_get_buffer(mesg);
+        const uint64_t  m64 = data->next_hdr_mask;   // AXFR_NEXT_MESSAGE_HEADER_MASK;
+        const uint64_t  r64 = data->next_hdr_result; // AXFR_NEXT_MESSAGE_HEADER_RESULT;
 
-        if(((*h64&m64) != r64) || (message_get_authority_count_ne(mesg) != 0))
+        if(((*h64 & m64) != r64) || (dns_message_get_authority_count_ne(mesg) != 0))
         {
-            u8 code = message_get_rcode(mesg);
+            uint8_t code = dns_message_get_rcode(mesg);
 
             if(code != 0)
             {
-                ret = MAKE_DNSMSG_ERROR(code);
+                ret = MAKE_RCODE_ERROR(code);
             }
             else
             {
                 ret = UNPROCESSABLE_MESSAGE;
             }
-            
+
             break;
         }
 #if DNSCORE_HAS_TSIG_SUPPORT
@@ -544,14 +517,14 @@ xfr_input_stream_fill(input_stream *is, u32 len)
              *
              */
 
-            message_tsig_clear_key(mesg);
+            dns_message_tsig_clear_key(mesg);
 
             if(FAIL(ret = tsig_message_extract(mesg)))
             {
                 break;
             }
-            
-            if((ret == 1) && (message_tsig_get_key(mesg) != tsig))
+
+            if((ret == 1) && (dns_message_tsig_get_key(mesg) != tsig))
             {
                 /* This is not the one we started with */
 
@@ -567,22 +540,22 @@ xfr_input_stream_fill(input_stream *is, u32 len)
             }
         }
 #endif
-        message_header *header = message_get_header(mesg);
-        
+        dns_message_header_t *header = dns_message_get_header(mesg);
+
         data->ancount = ntohs(header->ancount);
 
-        packet_reader_init_from_message_at(pr, mesg, DNS_HEADER_LENGTH);
+        dns_packet_reader_init_from_message_at(pr, mesg, DNS_HEADER_LENGTH);
 
-        u16 n = ntohs(header->qdcount);
-        
+        uint16_t n = ntohs(header->qdcount);
+
         while(n > 0)
         {
-            if(FAIL(ret = packet_reader_skip_fqdn(pr))) // this is the domain already used for this query
+            if(FAIL(ret = dns_packet_reader_skip_fqdn(pr))) // this is the domain already used for this query
             {
                 break;
             }
 
-            if(FAIL(ret = packet_reader_skip(pr, 4)))
+            if(FAIL(ret = dns_packet_reader_skip(pr, 4)))
             {
                 break;
             }
@@ -590,30 +563,29 @@ xfr_input_stream_fill(input_stream *is, u32 len)
             n--;
         }
     } // for(;;) /* process all TCP chunks */
-    
+
     return ret;
 }
 
-static ya_result
-xfr_input_stream_read(input_stream *is, void *buffer_, u32 len)
+static ya_result xfr_input_stream_read(input_stream_t *is, void *buffer_, uint32_t len)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)is->data;
-    message_data *mesg = data->message;
+    xfr_input_stream_data *data = (xfr_input_stream_data *)is->data;
+    dns_message_t         *mesg = data->message;
 #if DNSCORE_HAS_TSIG_SUPPORT
-    const tsig_item *tsig = message_tsig_get_key(mesg);
+    const tsig_key_t *tsig = dns_message_tsig_get_key(mesg);
 #endif
 
     if(FAIL(data->last_error))
     {
         return data->last_error;
     }
-    
-    u8 *buffer = (u8*)buffer_;
-    
+
+    uint8_t  *buffer = (uint8_t *)buffer_;
+
     ya_result return_value = xfr_input_stream_fill(is, len);
-    
+
     /* while there is not enough bytes on the input */
-    
+
     if(ISOK(return_value))
     {
         if((return_value = pipe_stream_read_available(&data->pipe_stream_input)) > 0) // never fails
@@ -624,7 +596,7 @@ xfr_input_stream_read(input_stream *is, void *buffer_, u32 len)
                 if(data->need_cleanup_tsig)
                 {
                     tsig_verify_tcp_last_message(mesg);
-                    data->need_cleanup_tsig = FALSE;
+                    data->need_cleanup_tsig = false;
                 }
 #endif
             }
@@ -636,7 +608,7 @@ xfr_input_stream_read(input_stream *is, void *buffer_, u32 len)
             if(tsig != NULL)
             {
                 tsig_verify_tcp_last_message(mesg);
-                data->need_cleanup_tsig = FALSE;
+                data->need_cleanup_tsig = false;
 
                 if(!data->last_message_had_tsig)
                 {
@@ -659,58 +631,56 @@ xfr_input_stream_read(input_stream *is, void *buffer_, u32 len)
 #if DNSCORE_HAS_TSIG_SUPPORT
         // cleanup
         tsig_verify_tcp_last_message(mesg);
-        data->need_cleanup_tsig = FALSE;
+        data->need_cleanup_tsig = false;
 #endif
     }
-    
+
     data->last_error = return_value;
 
     return return_value;
 }
 
-static ya_result
-xfr_input_stream_skip(input_stream *is, u32 len)
+static ya_result xfr_input_stream_skip(input_stream_t *is, uint32_t len)
 {
     /*
      * The reader is too complicated to implement a skip, so skip is a wrapped read
      */
-    
-    u32 remaining = len;
+
+    uint32_t  remaining = len;
     ya_result return_value = SUCCESS;
-    
-    u8 buffer[512];
-    
+
+    uint8_t   buffer[512];
+
     while(remaining > 0)
     {
-        u32 n = MIN(remaining, sizeof(buffer));
-        
+        uint32_t n = MIN(remaining, sizeof(buffer));
+
         return_value = xfr_input_stream_read(is, buffer, n);
-        
+
         if(return_value <= 0) /* FAIL or EOF */
         {
             break;
         }
-        
+
         remaining -= return_value;
     }
-    
+
     if(len != remaining)
     {
         return_value = len - remaining;
     }
-    
+
     return return_value;
 }
 
-static void
-xfr_input_stream_close(input_stream *is)
+static void xfr_input_stream_close(input_stream_t *is)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)is->data;
+    xfr_input_stream_data *data = (xfr_input_stream_data *)is->data;
 
 #if DNSCORE_HAS_TSIG_SUPPORT
     if(data->need_cleanup_tsig)
     {
-        message_clear_hmac(data->message);
+        dns_message_clear_hmac(data->message);
 
         if(ISOK(data->last_error))
         {
@@ -720,42 +690,41 @@ xfr_input_stream_close(input_stream *is)
             log_debug("xfr: %{dnsname}: TSIG has not been cleared (%r)", data->origin, data->last_error);
 #endif
         }
-        data->need_cleanup_tsig = FALSE;
+        data->need_cleanup_tsig = false;
     }
 #endif
-    
+
 #if DEBUG_XFR_INPUT_STREAM
     log_debug("xfr_input_stream: %{dnsname}: close, last serial is %i //////////////////////////////", data->origin, data->last_serial);
 #endif
-    
-    pool_release(&xfr_pool, data->pool);
-    
+
+    pool_release(&g_xfr_pool, data->pool);
+
     output_stream_close(&data->pipe_stream_output);
     input_stream_close(&data->pipe_stream_input);
     free(data->first_soa_record);
-    
+
     if(data->owns_message)
     {
-        message_free(data->message);
+        dns_message_delete(data->message);
     }
-    
+
     if(data->owns_input_stream)
     {
         input_stream_close(&data->source_stream);
         output_stream_close(&data->source_output_stream);
     }
-        
+
 #if DEBUG
     memset(data, 0xfe, sizeof(xfr_input_stream_data));
 #endif
-    
+
     ZFREE(data, xfr_input_stream_data); // used to be leaked ?
-    
+
     input_stream_set_void(is);
 }
 
-static const input_stream_vtbl xfr_input_stream_vtbl =
-{
+static const input_stream_vtbl xfr_input_stream_vtbl = {
     xfr_input_stream_read,
     xfr_input_stream_skip,
     xfr_input_stream_close,
@@ -763,7 +732,7 @@ static const input_stream_vtbl xfr_input_stream_vtbl =
 };
 
 /**
- * 
+ *
  * @param is the input stream with the AXFR or IXFR, wire format
  * @param flags mostly XFR_ALLOW_AXFR or XFR_ALLOW_IXFR
  * @param origin the domain of the zone
@@ -771,201 +740,197 @@ static const input_stream_vtbl xfr_input_stream_vtbl =
  * @param current_serial the serial currently available
  * @param loaded_serial a pointer to get the serial available after loading
  * @param message the message that led to this download
- * 
+ *
  * @return an error code, TYPE_AXFR, TYPE_IXFR, TYPE_NONE
  */
 
-ya_result
-xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_stream *xfr_source_stream, message_data *mesg, u32 current_serial, xfr_copy_flags flags)
+ya_result xfr_input_stream_init(input_stream_t *filtering_stream, const uint8_t *origin, input_stream_t *xfr_source_stream, dns_message_t *mesg, uint32_t current_serial, xfr_copy_flags flags)
 {
     yassert(filtering_stream != NULL && origin != NULL && xfr_source_stream != NULL && mesg != NULL);
-    
-    mutex_lock(&xfr_pool_init_mtx);
-    if(!xfr_pool_initialised)
+
+    if(initialise_state_begin(&xfr_pool_init_state))
     {
-        xfr_pool_initialised = TRUE;
-        pool_init(&xfr_pool, xfr_pool_alloc, xfr_pool_free, NULL, "xfr stream data pool");
+        pool_init(&g_xfr_pool, xfr_pool_alloc, xfr_pool_free, NULL, "xfr stream data pool");
+        initialise_state_ready(&xfr_pool_init_state);
     }
-    mutex_unlock(&xfr_pool_init_mtx);
-    
-    input_stream *is = xfr_source_stream;
-    
-    packet_unpack_reader_data pr;
-    u8 *buffer;
-    u8 *record;
-    u8 *ptr;
-    u8 *pool = NULL;   // 128KB
+
+    input_stream_t     *is = xfr_source_stream;
+
+    dns_packet_reader_t pr;
+    uint8_t            *buffer;
+    uint8_t            *record;
+    uint8_t            *ptr;
+    uint8_t            *pooled_65802_bytes_buffer = NULL; // 128KB
 #if DNSCORE_HAS_TSIG_SUPPORT
-    const tsig_item *tsig;
+    const tsig_key_t *tsig;
 #endif
     ya_result record_len;
     ya_result return_value;
-    u32 origin_len;
-    u32 last_serial = 0;
+    uint32_t  origin_len;
+    uint32_t  last_serial = 0;
 
-    u16 tcplen;
-    u16 qtype;
-    u16 qclass;
+    uint16_t  tcplen;
+    uint16_t  qtype;
+    uint16_t  qclass;
 
-    u16 old_mac_size;
-    
-    bool last_message_had_tsig;
-    bool need_cleanup_tsig = FALSE;
+    uint16_t  old_mac_size;
+
+    bool      last_message_had_tsig;
+    bool      need_cleanup_tsig = false;
 
 #if DNSCORE_HAS_TSIG_SUPPORT
-    u8 old_mac[64];
+    uint8_t old_mac[HMAC_BUFFER_SIZE];
 #endif
-    
+
 #if DEBUG_XFR_INPUT_STREAM
     log_debug("xfr_input_stream: %{dnsname}: init, current serial is %i //////////////////////////////", origin, current_serial);
 #endif
-    
+
     /*
      * ensure the stream will be unusable if the initialisation fails
      */
-    
+
     input_stream_set_sink(filtering_stream);
-    
+
     /*
      * Start by reading the first packet, and determine if it's an AXFR or an IXFR (for the name)
      * note: it's read and converted to the host endianness
      */
-    
-    if(!is_fd_input_stream(is))
-    {
-        // expected file input stream
-        return INVALID_ARGUMENT_ERROR;
-    }
-    
-    //buffer_input_stream_init(is, is, 4096);
-    
+
     /* TCP length */
 
     if(FAIL(return_value = input_stream_read_nu16(is, &tcplen)))
     {
         return return_value;
     }
-    
+
     if(return_value != 2)
     {
         return UNEXPECTED_EOF;
     }
-    
-    /* if the length is not enough, return the most appropriate error code */
+
+    // if the length is not enough, return the most appropriate error code
 
     origin_len = dnsname_len(origin);
+
+    // this ensures both the rtype and rclass are present
 
     if(tcplen < DNS_HEADER_LENGTH + origin_len + 4)
     {
         return_value = UNEXPECTED_EOF;
-        
+
         if(tcplen >= DNS_HEADER_LENGTH)
         {
-            u8 tmp_hdr[DNS_HEADER_LENGTH];
-            
+            uint8_t tmp_hdr[DNS_HEADER_LENGTH];
+
+            // see if there is an error code in the header
+
             if(ISOK(return_value = input_stream_read_fully(is, tmp_hdr, DNS_HEADER_LENGTH)))
             {
-                return_value = MAKE_DNSMSG_ERROR(MESSAGE_RCODE(tmp_hdr));
+                int32_t message_error_code = MAKE_RCODE_ERROR(MESSAGE_RCODE(tmp_hdr));
+                if(message_error_code == MAKE_RCODE_ERROR(0))
+                {
+                    // no error, it's clearly an EOF
+                    return_value = UNEXPECTED_EOF;
+                }
+                else
+                {
+                    return_value = message_error_code;
+                }
             }
         }
 
         return return_value;
     }
-    
-    pool = pool_alloc(&xfr_pool);
-    
+
+    pooled_65802_bytes_buffer = pool_alloc(&g_xfr_pool); // the allocator will either return an item or abort
+
     /* read the whole message */
 
-    buffer = message_get_buffer(mesg);
-    record = pool; // no persistence required
+    buffer = dns_message_get_buffer(mesg);
+    record = pooled_65802_bytes_buffer; // no persistence required
 
     if(FAIL(return_value = input_stream_read_fully(is, buffer, tcplen)))
     {
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return return_value;
     }
 
-    message_set_size(mesg, return_value);
-    
+    dns_message_set_size(mesg, return_value);
+
+    uint32_t data_mesg_count = 1;
+    uint64_t data_size_total = return_value;
+
 #if DEBUG_XFR_INPUT_STREAM
     LOGGER_EARLY_CULL_PREFIX(MSG_INFO) message_log(MODULE_MSG_HANDLE, MSG_INFO, mesg);
 #endif
-    
+
     /* check the message makes sense */
 
-    bool axfr_strict_authority = (flags & XFR_LOOSE_AUTHORITY) == 0;
+    bool            axfr_strict_authority = (flags & XFR_LOOSE_AUTHORITY) == 0;
 
-    const u64 *h64 = (u64*)buffer;
-    u64 m64 = axfr_strict_authority ? AXFR_MESSAGE_HEADER_MASK : AXFR_MESSAGE_LENIENT_HEADER_MASK;
-    u64 r64 = axfr_strict_authority ? AXFR_MESSAGE_HEADER_RESULT : AXFR_MESSAGE_LENIENT_HEADER_RESULT;
+    const uint64_t *h64 = (uint64_t *)buffer;
+    uint64_t        m64 = axfr_strict_authority ? AXFR_MESSAGE_HEADER_MASK : AXFR_MESSAGE_LENIENT_HEADER_MASK;
+    uint64_t        r64 = axfr_strict_authority ? AXFR_MESSAGE_HEADER_RESULT : AXFR_MESSAGE_LENIENT_HEADER_RESULT;
 
-    if(((*h64&m64) != r64) || (message_get_authority_count_ne(mesg) != 0))
+    if(((*h64 & m64) != r64) || (dns_message_get_authority_count_ne(mesg) != 0))
     {
-        u8 code = message_get_rcode(mesg);
+        uint8_t code = dns_message_get_rcode(mesg);
 
         if(code != 0)
         {
-            return_value = MAKE_DNSMSG_ERROR(code);
+            return_value = MAKE_RCODE_ERROR(code);
         }
         else
         {
             return_value = UNPROCESSABLE_MESSAGE;
         }
 
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return return_value;
     }
 
-    if(message_get_rcode(mesg) != RCODE_NOERROR)
-    {
-        pool_release(&xfr_pool, pool);
-        return MAKE_DNSMSG_ERROR(message_get_rcode(mesg));
-    }
+    /*
+     * @note 20240320 edf -- in the above if, the mask in m64 masks for RCODE and the expected value is always 0
+     *                       this means that if we reach here, RCODE is always RCODE_NOERROR
+     */
 
-    packet_reader_init_from_message(&pr, mesg);
+    dns_packet_reader_init_from_message(&pr, mesg);
 
-    if(FAIL(packet_reader_read_fqdn(&pr, record, RDATA_MAX_LENGTH + 1)))
+    if(FAIL(dns_packet_reader_read_fqdn(&pr, record, RDATA_LENGTH_MAX + 1)))
     {
-        pool_release(&xfr_pool, pool);
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
         return INVALID_PROTOCOL;
     }
 
     if(!dnsname_equals(record, origin))
     {
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return INVALID_PROTOCOL;
     }
 
-    if(FAIL(return_value = packet_reader_read_u16(&pr, &qtype)))
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return return_value;
-    }
-    
-    if(return_value != 2)
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return UNEXPECTED_EOF;
-    }
+    dns_packet_reader_read_u16(&pr, &qtype); // cannot fail because an ealier test ensures the rtype is present
 
-    /* 
+    /*
+     * @note 20240320 edf -- dns_packet_reader_read_u16 can only return 2 or UNEXPECTED_EOF
+     */
+
+    /*
      * check that we are allowed to process this particular kind of transfer
      * note : this does not determine what is REALLY begin transferred
      */
-    
+
     switch(qtype)
     {
         case TYPE_AXFR:
         {
             if((flags & XFR_ALLOW_AXFR) == 0)
             {
-                pool_release(&xfr_pool, pool);
-                
+                pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
                 return INVALID_PROTOCOL;
             }
             break;
@@ -974,42 +939,37 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
         {
             if((flags & XFR_ALLOW_IXFR) == 0)
             {
-                pool_release(&xfr_pool, pool);
-                
+                pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
                 return INVALID_PROTOCOL;
             }
             break;
         }
         default:
         {
-            pool_release(&xfr_pool, pool);
-            
+            pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
             return INVALID_PROTOCOL;
         }
     }
 
-    if(FAIL(return_value = packet_reader_read_u16(&pr, &qclass)))
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return return_value;
-    }
+    dns_packet_reader_read_u16(&pr, &qclass); // cannot fail because an earlier test ensures the rclass is present
 
     if(qclass != CLASS_IN)
     {
         // wrong answer
-        
-        pool_release(&xfr_pool, pool);
-        
+
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return INVALID_PROTOCOL;
     }
-    
+
     /* check for TSIG and verify */
 
-    u16 ancount = ntohs(MESSAGE_AN(buffer));
-    
+    uint16_t ancount = ntohs(MESSAGE_AN(buffer));
+
 #if DNSCORE_HAS_TSIG_SUPPORT
-    if((last_message_had_tsig = ((tsig = message_tsig_get_key(mesg)) != NULL)))
+    if((last_message_had_tsig = ((tsig = dns_message_tsig_get_key(mesg)) != NULL)))
     {
         /* verify the TSIG
          *
@@ -1020,18 +980,17 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
          * verify it
          *
          */
-        
-        message_tsig_clear_key(mesg);
 
-        old_mac_size = message_tsig_mac_get_size(mesg);
-        message_tsig_mac_copy(mesg, old_mac);
+        dns_message_tsig_clear_key(mesg);
+        old_mac_size = dns_message_tsig_mac_get_size(mesg);
+        dns_message_tsig_mac_copy(mesg, old_mac);
 
         if(FAIL(return_value = tsig_message_extract(mesg)))
         {
             log_debug("xfr_input_stream: error extracting the signature");
 
-            pool_release(&xfr_pool, pool);
-            
+            pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
             return return_value;
         }
 
@@ -1039,131 +998,116 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
         {
             log_debug("xfr_input_stream: no signature when one was requested");
 
-            pool_release(&xfr_pool, pool);
-            
+            pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
             return TSIG_BADSIG; /* no signature, when one was requested, is a bad signature */
         }
 
-        if(tsig != message_tsig_get_key(mesg))
+        if(tsig != dns_message_tsig_get_key(mesg))
         {
             /* This is not the one we started with */
 
             log_debug("xfr_input_stream: signature key does not match");
 
-            pool_release(&xfr_pool, pool);
-            
+            pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
             return TSIG_BADSIG;
         }
 
-        /// check that the tsig in the message matches theh one that was sent
+        /// check that the tsig in the message matches the one that was sent
 
         if(FAIL(return_value = tsig_verify_tcp_first_message(mesg, old_mac, old_mac_size)))
         {
-            pool_release(&xfr_pool, pool);
-            
+            pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
             return return_value;
         }
 
-        pr.packet_size = message_get_size(mesg);
-        
-        need_cleanup_tsig = TRUE;
+        pr.packet_size = dns_message_get_size(mesg);
+
+        need_cleanup_tsig = true;
     }
 #endif
-    
-    log_debug("xfr_input_stream: expecting %5d answer records", ancount);    
+
+    log_debug("xfr_input_stream: expecting %5d answer records", ancount);
 
     /*
      * read the SOA (it MUST be an SOA)
      */
 
-    if(FAIL(record_len = packet_reader_read_record(&pr, record, RDATA_MAX_LENGTH + 1)))
+    if(FAIL(record_len = dns_packet_reader_read_record(&pr, record, RDATA_LENGTH_MAX + 1)))
     {
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return record_len;
     }
 
     if(!dnsname_equals(record, origin))
     {
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return INVALID_PROTOCOL;
     }
 
-    ptr = &record[origin_len];
+    ptr = &record[origin_len]; // points to the rtype
 
     if(GET_U16_AT(*ptr) != TYPE_SOA)
     {
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return INVALID_PROTOCOL;
     }
 
-    ptr += 8; /* type class ttl */
-    
-    u16 rdata_size = ntohs(GET_U16_AT(*ptr));
-    
-    if(rdata_size < 22)
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return INVALID_PROTOCOL;
-    }
+    ptr += 8; // skips rtype rclass rttl
 
-    rdata_size -= 16;
+#ifndef NDEBUG
+    uint16_t rdata_size = ntohs(GET_U16_AT(*ptr));
+#endif
 
-    ptr += 2; /* rdata size */
+    /// @note 20240320 edf -- as the SOA record has been read with dns_packet_reader_read_record,
+    ///                       it's guaranteed to be at least 22 bytes long
 
-    s32 len = dnsname_len(ptr);
+    ptr += 2; // rdata size
 
-    if(len >= rdata_size)
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return INVALID_PROTOCOL;
-    }
-    rdata_size -= len;
-    ptr += len;
+    int32_t mname_len = dnsname_len(ptr);
 
-    len = dnsname_len(ptr);
-    if(len >= rdata_size)
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return INVALID_PROTOCOL;
-    }
-    rdata_size -= len;
+    /// @note 20240320 edf -- as the SOA record has been read with dns_packet_reader_read_record,
+    ///                       it's guaranteed that the rdata_size has been updated and is correct
+    ///                       for the content of the rdata
+    ///                       the two fqdn in the SOA rdata plus 20 is the total length of the rdata
 
-    if(rdata_size != 4)
-    {
-        pool_release(&xfr_pool, pool);
-        
-        return INVALID_PROTOCOL;
-    }
+    ptr += mname_len;
 
-    ptr += len;
+    int32_t rname_len = dnsname_len(ptr);
+
+    ptr += rname_len;
+
+    assert(mname_len + rname_len + 20 == rdata_size);
 
     // if the serial of the SOA is the same one as we know, then there is no
     // need to download the zone
-    
+
     last_serial = ntohl(GET_U32_AT(ptr[0]));
-    
+
     if(last_serial == current_serial)
     {
-        pool_release(&xfr_pool, pool);
-        
+        pool_release(&g_xfr_pool, pooled_65802_bytes_buffer);
+
         return ZONE_ALREADY_UP_TO_DATE;
     }
 
-    u32 last_refresh = ntohl(GET_U32_AT(ptr[4]));
-    u32 last_retry = ntohl(GET_U32_AT(ptr[8]));
-    u32 last_expire = ntohl(GET_U32_AT(ptr[12]));
-    u32 last_nttl = ntohl(GET_U32_AT(ptr[16]));
+    uint32_t               last_refresh = ntohl(GET_U32_AT(ptr[4]));
+    uint32_t               last_retry = ntohl(GET_U32_AT(ptr[8]));
+    uint32_t               last_expire = ntohl(GET_U32_AT(ptr[12]));
+    uint32_t               last_nttl = ntohl(GET_U32_AT(ptr[16]));
 
-    xfr_input_stream_data *data;    
-    ZALLOC_OBJECT_OR_DIE( data, xfr_input_stream_data, XFRISDTA_TAG);
+    xfr_input_stream_data *data;
+    ZALLOC_OBJECT_OR_DIE(data, xfr_input_stream_data, XFRISDTA_TAG);
     ZEROMEMORY(data, sizeof(xfr_input_stream_data));
-    
+
+    data->mesg_count = data_mesg_count;
+    data->size_total = data_size_total;
+
     /*
      * We have got the first SOA
      * Next time we find this SOA (second next time for IXFR) the stream, it will be the end of the stream
@@ -1173,29 +1117,29 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
      * The stream can be AXFR or IXFR.
      * The only way to know this is to look at the records, maybe on many packets.
      * If there are two SOA (different serial numbers) for the start, then it's an IXFR, else it's an AXFR.
-     * 
+     *
      * OPEN A PIPE STREAM "XFRs"
      *
      * Save the first SOA
      */
 
-    MALLOC_OR_DIE(u8*, data->first_soa_record, record_len, XFRISSOA_TAG);
+    MALLOC_OR_DIE(uint8_t *, data->first_soa_record, record_len, XFRISSOA_TAG);
     MEMCOPY(data->first_soa_record, record, record_len);
-    data->first_soa_record_size = record_len;         
+    data->first_soa_record_size = record_len;
 
     filtering_stream->vtbl = &xfr_input_stream_vtbl;
     filtering_stream->data = data;
-    
-    u32 pipe_buffer_size = 0x10000;
-    
+
+    uint32_t pipe_buffer_size = 0x10000;
+
     pipe_stream_init(&data->pipe_stream_output, &data->pipe_stream_input, pipe_buffer_size);
-    MEMCOPY(&data->reader, &pr, sizeof(packet_unpack_reader_data));
-    
+    MEMCOPY(&data->reader, &pr, sizeof(dns_packet_reader_t));
+
     data->origin = origin;
     data->message = mesg;
-    
-    data->pool = pool;
-    
+
+    data->pool = pooled_65802_bytes_buffer;
+
     data->ancount = ancount - 1;
     data->record_index++;
     data->last_serial = last_serial;
@@ -1220,13 +1164,15 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
     }
 
     data->xfr_mode = TYPE_ANY;
-    data->ixfr_mark = FALSE;
-    data->last_message_had_tsig = last_message_had_tsig;
+    data->ixfr_mark = false;
     data->source_stream = *is;
+    data->owns_message = false;
+    data->owns_input_stream = false;
+#if DNSCORE_HAS_TSIG_SUPPORT
+    data->last_message_had_tsig = last_message_had_tsig;
     data->need_cleanup_tsig = need_cleanup_tsig;
-    data->owns_message = FALSE;
-    data->owns_input_stream = FALSE;
-    
+#endif
+
     /*
      * Then we read all records for all packets
      * If we find an SOA ...
@@ -1235,12 +1181,12 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
      *            AND once we have reached the "last serial" once, the next hit is the end of the stream.
      */
 
-    data->eos = FALSE;
-    
+    data->eos = false;
+
     /*
      * In order to know what the type is, read the first packet.
      */
-    
+
     if(ISOK(return_value = xfr_input_stream_fill(filtering_stream, pipe_buffer_size / 2)))
     {
         if(ISOK(return_value = xfr_input_stream_read_packet(data)))
@@ -1248,38 +1194,37 @@ xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_st
             return return_value;
         }
     }
-    
+
     xfr_input_stream_close(filtering_stream);
-    
+
     return return_value;
 }
 
-ya_result
-xfr_input_stream_init_with_query(input_stream* filtering_stream, const host_address *server, const u8 *origin, s32 ttl, const u8 *soa_rdata, int soa_rdata_size, xfr_copy_flags flags)
+ya_result xfr_input_stream_init_with_query_and_timeout(input_stream_t *filtering_stream, const host_address_t *server, const uint8_t *origin, int32_t ttl, const uint8_t *soa_rdata, int soa_rdata_size, xfr_copy_flags flags, int32_t timeout)
 {
-    input_stream is;
-    output_stream os;
-    random_ctx rndctx = thread_pool_get_random_ctx();
-    message_data *mesg = message_new_instance();
-    ya_result ret;
-    u32 serial;
-    u16 id;
-    
+    input_stream_t  is;
+    output_stream_t os;
+    random_ctx_t    rndctx = thread_pool_get_random_ctx();
+    dns_message_t  *mesg = dns_message_new_instance();
+    ya_result       ret;
+    uint32_t        serial;
+    uint16_t        id;
+
     if(FAIL(ret = rr_soa_get_serial(soa_rdata, soa_rdata_size, &serial)))
     {
         return ret;
     }
-    
-     id = (u16)random_next(rndctx);
-             
-    message_make_ixfr_query(mesg, id, origin, ttl, soa_rdata_size, soa_rdata);
-    
+
+    id = (uint16_t)random_next(rndctx);
+
+    dns_message_make_ixfr_query(mesg, id, origin, ttl, soa_rdata_size, soa_rdata);
+
 #if DNSCORE_HAS_TSIG_SUPPORT
     if(server->tsig != NULL)
     {
-        if(FAIL(ret = message_sign_query(mesg, server->tsig)))
+        if(FAIL(ret = dns_message_sign_query(mesg, server->tsig)))
         {
-            message_free(mesg);
+            dns_message_delete(mesg);
             return ret;
         }
     }
@@ -1293,84 +1238,103 @@ xfr_input_stream_init_with_query(input_stream* filtering_stream, const host_addr
     {
         if(ret != MAKE_ERRNO_ERROR(EINTR))
         {
-            message_free(mesg);
+            dns_message_delete(mesg);
             return ret;
         }
     }
-    
-    if(FAIL(ret = message_write_tcp(mesg, &os)))
+
+    if(FAIL(ret = dns_message_write_tcp(mesg, &os)))
     {
         input_stream_close(&is);
         output_stream_close(&os);
 
-        message_free(mesg);
+        dns_message_delete(mesg);
 
         return ret;
     }
-    
+
     output_stream_flush(&os);
 
     int fd = fd_input_stream_get_filedescriptor(&is);
 
-    tcp_set_sendtimeout(fd, 10, 0);
-    tcp_set_recvtimeout(fd, 10, 0);
-    
-    if(FAIL(xfr_input_stream_init(filtering_stream, origin, &is, mesg, serial, flags)))
+    tcp_set_sendtimeout(fd, timeout, 0);
+    tcp_set_recvtimeout(fd, timeout, 0);
+
+    if(FAIL(ret = xfr_input_stream_init(filtering_stream, origin, &is, mesg, serial, flags)))
     {
         input_stream_close(&is);
         output_stream_close(&os);
 
-        message_free(mesg);
+        dns_message_delete(mesg);
 
         return ret;
     }
-    
-    xfr_input_stream_data *data = (xfr_input_stream_data*)filtering_stream->data;
-    data->owns_message = TRUE;
-    data->owns_input_stream = TRUE;
+
+    xfr_input_stream_data *data = (xfr_input_stream_data *)filtering_stream->data;
+    data->owns_message = true;
+    data->owns_input_stream = true;
     data->source_output_stream = os;
 
     return SUCCESS;
 }
 
-ya_result
-xfr_input_stream_get_type(input_stream *in_xfr_input_stream)
+ya_result xfr_input_stream_init_with_query(input_stream_t *filtering_stream, const host_address_t *server, const uint8_t *origin, int32_t ttl, const uint8_t *soa_rdata, int soa_rdata_size, xfr_copy_flags flags)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)in_xfr_input_stream->data;
+    ya_result ret = xfr_input_stream_init_with_query_and_timeout(filtering_stream, server, origin, ttl, soa_rdata, soa_rdata_size, flags, 10);
+    return ret;
+}
+
+ya_result xfr_input_stream_get_type(input_stream_t *in_xfr_input_stream)
+{
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
     return data->xfr_mode;
 }
 
-const u8*
-xfr_input_stream_get_origin(input_stream *in_xfr_input_stream)
+const uint8_t *xfr_input_stream_get_origin(input_stream_t *in_xfr_input_stream)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)in_xfr_input_stream->data;
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
     return data->origin;
 }
 
-u32
-xfr_input_stream_get_serial(input_stream *in_xfr_input_stream)
+uint32_t xfr_input_stream_get_serial(input_stream_t *in_xfr_input_stream)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)in_xfr_input_stream->data;
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
     return data->last_serial;
 }
 
-u32
-xfr_input_stream_get_refresh(input_stream *in_xfr_input_stream)
+uint32_t xfr_input_stream_get_refresh(input_stream_t *in_xfr_input_stream)
 {
-    xfr_input_stream_data *data = (xfr_input_stream_data*)in_xfr_input_stream->data;
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
     return data->last_refresh;
 }
 
-void
-xfr_input_stream_finalize()
+uint32_t xfr_input_stream_get_message_count(input_stream_t *in_xfr_input_stream)
 {
-    mutex_lock(&xfr_pool_init_mtx);
-    if(xfr_pool_initialised)
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
+    return data->mesg_count;
+}
+
+uint32_t xfr_input_stream_get_record_count(input_stream_t *in_xfr_input_stream)
+{
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
+    return data->record_index;
+}
+
+uint64_t xfr_input_stream_get_size_total(input_stream_t *in_xfr_input_stream)
+{
+    xfr_input_stream_data *data = (xfr_input_stream_data *)in_xfr_input_stream->data;
+    return data->size_total;
+}
+
+void xfr_input_stream_finalize()
+{
+    /*
+    if(initialise_state_unready(&xfr_pool_init_state))
     {
-        pool_finalize(&xfr_pool);
-        xfr_pool_initialised = FALSE;
+        pool_finalize(&g_xfr_pool);
+        initialise_state_end(&xfr_pool_init_state);
     }
-    mutex_unlock(&xfr_pool_init_mtx);
+    */
 }
 
 /** @} */

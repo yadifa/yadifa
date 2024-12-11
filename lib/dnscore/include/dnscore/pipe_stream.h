@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,24 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef PIPE_STREAM_H_
 #define PIPE_STREAM_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <dnscore/input_stream.h>
@@ -55,37 +54,36 @@ extern "C" {
  * Creates both output and input stream
  * Writing in the output stream makes it available for the input stream
  * This is not thread-safe.
- * 
+ *
  * This is used in the XFR input stream.  The internal processing of the XFR stream
  * writes the available bytes to the output so the reader can get them from the
  * input.
- * 
+ *
  * @param output
  * @param input
  */
-    
 
-void pipe_stream_init(output_stream *output, input_stream *input, u32 buffer_size);
+void pipe_stream_init(output_stream_t *output, input_stream_t *input, uint32_t buffer_size);
 
 /**
- * 
+ *
  * Number of available bytes in the input stream
- * 
+ *
  * @param input
- * @return 
+ * @return
  */
 
-ya_result pipe_stream_read_available(input_stream *input);
+ya_result pipe_stream_read_available(input_stream_t *input);
 
 /**
- * 
+ *
  * Room for bytes in the output stream
- * 
+ *
  * @param input
- * @return 
+ * @return
  */
 
-ya_result pipe_stream_write_available(output_stream *input);
+ya_result pipe_stream_write_available(output_stream_t *input);
 
 #ifdef __cplusplus
 }
@@ -96,6 +94,3 @@ ya_result pipe_stream_write_available(output_stream *input);
 /*    ------------------------------------------------------------    */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

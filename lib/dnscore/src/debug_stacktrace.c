@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup stacktrace Stack trace debug functions
- *  @ingroup dnscore
- *  @brief Debug functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup stacktrace Stack trace debug functions
+ * @ingroup dnscore
+ * @brief Debug functions.
  *
  *  Definitions of stacktrace functions
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/debug_config.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -60,13 +59,13 @@
 #if HAS_BFD_DEBUG_SUPPORT
 #include <bfd.h>
 #ifndef DMGL_PARAMS
-    #define DMGL_PARAMS      (1 << 0)       /* Include function args */
-    #define DMGL_ANSI        (1 << 1)       /* Include const, volatile, etc */
+#define DMGL_PARAMS (1 << 0) /* Include function args */
+#define DMGL_ANSI   (1 << 1) /* Include const, volatile, etc */
 #endif
 #endif
 #endif
 
-#include <dnscore/list-sl-debug.h>
+#include <dnscore/list_sl_debug.h>
 #include <dnscore/logger_handle.h>
 
 #include "dnscore/sys_types.h"
@@ -86,21 +85,20 @@
 //
 //////////////////////////////////////////////////////////////////////////////
 
-bool debug_bfd_resolve_address(void *address, const char *binary_file_path, const char **out_file, const char **out_function, u32 *out_line);
+bool debug_bfd_resolve_address(void *address, const char *binary_file_path, const char **out_file, const char **out_function, uint32_t *out_line);
 void debug_bfd_clear();
 
 #if HAS_BACKTRACE
-typedef u64_set_debug stacktrace_set;
-static stacktrace_set stacktraces_list_set = U64_SET_EMPTY;
-static pthread_mutex_t stacktraces_mutex = PTHREAD_MUTEX_INITIALIZER;
+typedef u64_treemap_debug_t stacktrace_set;
+static stacktrace_set       stacktraces_list_set = U64_TREEMAP_EMPTY;
+static pthread_mutex_t      stacktraces_mutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 void malloc_busy_acquire();
 void malloc_busy_release();
 
 #if HAS_BACKTRACE
-static ya_result 
-debug_stacktraces_list_set_search(void* data, void* parm)
+static ya_result debug_stacktraces_list_set_search(void *data, void *parm)
 {
     stacktrace trace_a = (stacktrace)data;
     stacktrace trace_b = (stacktrace)parm;
@@ -116,7 +114,7 @@ debug_stacktraces_list_set_search(void* data, void* parm)
         {
             break;
         }
-        if((*trace_a|*trace_b) == 0)
+        if((*trace_a | *trace_b) == 0)
         {
             return COLLECTION_ITEM_PROCESS_THEN_STOP;
         }
@@ -124,22 +122,21 @@ debug_stacktraces_list_set_search(void* data, void* parm)
         trace_b++;
     }
 
-    return COLLECTION_ITEM_STOP;            
+    return COLLECTION_ITEM_STOP;
 }
 #endif
 
-stacktrace
-debug_stacktrace_get_ex(int index)
+stacktrace debug_stacktrace_get_ex(int index)
 {
 #if HAS_BACKTRACE
-    void* buffer_[1024];
+    void *buffer_[1024];
 #if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
     malloc_busy_acquire();
 #endif
 
-    int n = backtrace(buffer_, sizeof(buffer_) / sizeof(void*));
-    
-    void** buffer = &buffer_[index];
+    int    n = backtrace(buffer_, sizeof(buffer_) / sizeof(void *));
+
+    void **buffer = &buffer_[index];
     n -= index; // minus this function
 
     if(n < 0)
@@ -151,50 +148,50 @@ debug_stacktrace_get_ex(int index)
     }
 
     // backtrace to key
-    
+
     stacktrace sp = (stacktrace)buffer;
-    u64 key = 0;
-    for(int i = 0; i < n; i++)
+    uint64_t   key = 0;
+    for(int_fast32_t i = 0; i < n; i++)
     {
-        key += sp[i] << ( n & ((__SIZEOF_POINTER__ * 8) - 1) );
+        key += sp[i] << (n & ((__SIZEOF_POINTER__ * 8) - 1));
     }
-    
+
     pthread_mutex_lock(&stacktraces_mutex);
-    
-    stacktrace trace;
-    u64_node_debug *node = u64_set_debug_insert(&stacktraces_list_set, key);
+
+    stacktrace                trace;
+    u64_treemap_node_debug_t *node = u64_treemap_debug_insert(&stacktraces_list_set, key);
     if(node->value == NULL)
     {
-        list_sl_debug_s *sll;
-        sll = (list_sl_debug_s*)debug_malloc_unmonitored(sizeof(list_sl_debug_s));
+        list_sl_debug_t *sll;
+        sll = (list_sl_debug_t *)debug_malloc_unmonitored(sizeof(list_sl_debug_t));
         list_sl_debug_init(sll);
         node->value = sll;
-        trace = (stacktrace)debug_malloc_unmonitored((n + 2) * sizeof(intptr));
-        memcpy(trace, buffer, n * sizeof(void*));
+        trace = (stacktrace)debug_malloc_unmonitored((n + 2) * sizeof(intptr_t));
+        memcpy(trace, buffer, n * sizeof(void *));
         trace[n] = 0;
         list_sl_debug_insert(sll, trace);
-        trace[n+1] = (intptr)backtrace_symbols(buffer, n);
+        trace[n + 1] = (intptr_t)backtrace_symbols(buffer, n);
     }
     else
     {
-        list_sl_debug_s *sll;
-        sll = (list_sl_debug_s *)node->value;
+        list_sl_debug_t *sll;
+        sll = (list_sl_debug_t *)node->value;
         trace = (stacktrace)list_sl_debug_search(sll, debug_stacktraces_list_set_search, buffer);
         if(trace == NULL)
         {
-            trace = (stacktrace)debug_malloc_unmonitored((n + 2) * sizeof(intptr));
-            memcpy(trace, buffer, n * sizeof(void*));
+            trace = (stacktrace)debug_malloc_unmonitored((n + 2) * sizeof(intptr_t));
+            memcpy(trace, buffer, n * sizeof(void *));
             trace[n] = 0;
             list_sl_debug_insert(sll, trace);
-            trace[n+1] = (intptr)backtrace_symbols(buffer, n);
+            trace[n + 1] = (intptr_t)backtrace_symbols(buffer, n);
         }
     }
-    
+
     pthread_mutex_unlock(&stacktraces_mutex);
 #if DNSCORE_HAS_LIBC_MALLOC_DEBUG_SUPPORT
     malloc_busy_release();
 #endif
-    
+
     return trace;
 #else
     (void)index;
@@ -202,8 +199,7 @@ debug_stacktrace_get_ex(int index)
 #endif
 }
 
-stacktrace
-debug_stacktrace_get()
+stacktrace debug_stacktrace_get()
 {
     stacktrace st = debug_stacktrace_get_ex(1);
     return st;
@@ -215,10 +211,9 @@ debug_stacktrace_get()
  */
 
 #if HAS_BACKTRACE
-static void
-debug_stacktrace_clear_delete(u64_node_debug *node)
+static void debug_stacktrace_clear_delete(u64_treemap_node_debug_t *node)
 {
-    list_sl_debug_s *sll = (list_sl_debug_s *)node->value;
+    list_sl_debug_t *sll = (list_sl_debug_t *)node->value;
     if(sll != NULL)
     {
         stacktrace trace;
@@ -230,7 +225,7 @@ debug_stacktrace_clear_delete(u64_node_debug *node)
                 ++n;
             }
 
-            char **trace_strings = (char**)trace[n + 1];
+            char **trace_strings = (char **)trace[n + 1];
             debug_free_unmonitored(trace_strings);
             debug_free_unmonitored(trace);
         }
@@ -241,12 +236,11 @@ debug_stacktrace_clear_delete(u64_node_debug *node)
 }
 #endif
 
-void
-debug_stacktrace_clear()
+void debug_stacktrace_clear()
 {
 #if HAS_BACKTRACE
     pthread_mutex_lock(&stacktraces_mutex);
-    u64_set_debug_callback_and_destroy(&stacktraces_list_set, debug_stacktrace_clear_delete);
+    u64_treemap_debug_callback_and_finalise(&stacktraces_list_set, debug_stacktrace_clear_delete);
     pthread_mutex_unlock(&stacktraces_mutex);
 #if !DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
 #if HAS_BFD_DEBUG_SUPPORT
@@ -256,8 +250,7 @@ debug_stacktrace_clear()
 #endif
 }
 
-void
-debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
+void debug_stacktrace_log(logger_handle_t *handle, uint32_t level, stacktrace trace)
 {
 #if HAS_BACKTRACE
     int n = 0;
@@ -268,33 +261,33 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
         {
             ++n;
         }
-    
-        char **trace_strings = (char**)trace[n + 1];
-        for(int i = 0; i < n; i++)
+
+        char **trace_strings = (char **)trace[n + 1];
+        for(int_fast32_t i = 0; i < n; i++)
         {
-            void *address = (void*)trace[i];
+            void       *address = (void *)trace[i];
             const char *text = (trace_strings != NULL) ? trace_strings[i] : "???";
-        
+
 #if HAS_BFD_DEBUG_SUPPORT
             char *parenthesis = strchr(text, '(');
             if(parenthesis != NULL)
             {
-                u32 n = parenthesis - text;
+                uint32_t n = parenthesis - text;
 
                 assert(n < PATH_MAX);
 
-                char binary[PATH_MAX];            
+                char binary[PATH_MAX];
                 memcpy(binary, text, n);
                 binary[n] = '\0';
 
                 const char *file = NULL;
                 const char *function = NULL;
-                u32 line;
+                uint32_t    line;
 
                 debug_bfd_resolve_address(address, binary, &file, &function, &line);
 
                 if((file != NULL) && (*file != '\0'))
-                {                    
+                {
                     logger_handle_msg(handle, level, "%p: %s (%s:%i)", address, function, file, line);
                 }
                 else
@@ -306,8 +299,8 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
             {
 #endif
                 logger_handle_msg(handle, level, "%p %s", address, text);
-#if HAS_BFD_DEBUG_SUPPORT     
-           }
+#if HAS_BFD_DEBUG_SUPPORT
+            }
 #endif
         }
     }
@@ -317,8 +310,13 @@ debug_stacktrace_log(logger_handle* handle, u32 level, stacktrace trace)
 #endif
 }
 
-void
-debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace trace, const char *prefix)
+void debug_stacktrace_log_system_error(stacktrace trace)
+{
+    debug_stacktrace_log(g_system_logger, LOG_ERR, trace);
+    logger_flush();
+}
+
+void debug_stacktrace_log_with_prefix(logger_handle_t *handle, uint32_t level, stacktrace trace, const char *prefix)
 {
 #if HAS_BACKTRACE
     int n = 0;
@@ -329,33 +327,33 @@ debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace tr
         {
             ++n;
         }
-    
-        char **trace_strings = (char**)trace[n + 1];
-        for(int i = 0; i < n; i++)
+
+        char **trace_strings = (char **)trace[n + 1];
+        for(int_fast32_t i = 0; i < n; i++)
         {
-            void *address = (void*)trace[i];
+            void       *address = (void *)trace[i];
             const char *text = (trace_strings != NULL) ? trace_strings[i] : "???";
-        
+
 #if HAS_BFD_DEBUG_SUPPORT
             char *parenthesis = strchr(text, '(');
             if(parenthesis != NULL)
             {
-                u32 n = parenthesis - text;
+                uint32_t n = parenthesis - text;
 
                 assert(n < PATH_MAX);
 
-                char binary[PATH_MAX];            
+                char binary[PATH_MAX];
                 memcpy(binary, text, n);
                 binary[n] = '\0';
 
                 const char *file = NULL;
                 const char *function = NULL;
-                u32 line;
+                uint32_t    line;
 
                 debug_bfd_resolve_address(address, binary, &file, &function, &line);
 
                 if((file != NULL) && (*file != '\0'))
-                {                    
+                {
                     logger_handle_msg(handle, level, "%s%p: %s (%s:%i)", prefix, address, function, file, line);
                 }
                 else
@@ -367,8 +365,8 @@ debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace tr
             {
 #endif
                 logger_handle_msg(handle, level, "%s%p %s", prefix, address, text);
-#if HAS_BFD_DEBUG_SUPPORT     
-           }
+#if HAS_BFD_DEBUG_SUPPORT
+            }
 #endif
         }
     }
@@ -379,8 +377,7 @@ debug_stacktrace_log_with_prefix(logger_handle* handle, u32 level, stacktrace tr
 #endif
 }
 
-void
-debug_stacktrace_try_log(logger_handle* handle, u32 level, stacktrace trace)
+void debug_stacktrace_try_log(logger_handle_t *handle, uint32_t level, stacktrace trace)
 {
 #if HAS_BACKTRACE
     int n = 0;
@@ -391,33 +388,33 @@ debug_stacktrace_try_log(logger_handle* handle, u32 level, stacktrace trace)
         {
             ++n;
         }
-    
-        char **trace_strings = (char**)trace[n + 1];
-        for(int i = 0; i < n; i++)
+
+        char **trace_strings = (char **)trace[n + 1];
+        for(int_fast32_t i = 0; i < n; i++)
         {
-            void *address = (void*)trace[i];
+            void       *address = (void *)trace[i];
             const char *text = (trace_strings != NULL) ? trace_strings[i] : "???";
-        
+
 #if HAS_BFD_DEBUG_SUPPORT
             char *parenthesis = strchr(text, '(');
             if(parenthesis != NULL)
             {
-                u32 n = parenthesis - text;
+                uint32_t n = parenthesis - text;
 
                 assert(n < PATH_MAX);
 
-                char binary[PATH_MAX];            
+                char binary[PATH_MAX];
                 memcpy(binary, text, n);
                 binary[n] = '\0';
 
                 const char *file = NULL;
                 const char *function = NULL;
-                u32 line;
+                uint32_t    line;
 
                 debug_bfd_resolve_address(address, binary, &file, &function, &line);
 
                 if((file != NULL) && (*file != '\0'))
-                {                    
+                {
                     logger_handle_msg(handle, level, "%p: %s (%s:%i)", address, function, file, line);
                 }
                 else
@@ -429,8 +426,8 @@ debug_stacktrace_try_log(logger_handle* handle, u32 level, stacktrace trace)
             {
 #endif
                 logger_handle_try_msg(handle, level, "%p %s", address, text);
-#if HAS_BFD_DEBUG_SUPPORT     
-           }
+#if HAS_BFD_DEBUG_SUPPORT
+            }
 #endif
         }
     }
@@ -440,8 +437,7 @@ debug_stacktrace_try_log(logger_handle* handle, u32 level, stacktrace trace)
 #endif
 }
 
-void
-debug_stacktrace_print(output_stream *os, stacktrace trace)
+void debug_stacktrace_print(output_stream_t *os, stacktrace trace)
 {
     if(trace == NULL)
     {
@@ -457,10 +453,10 @@ debug_stacktrace_print(output_stream *os, stacktrace trace)
         ++n;
     }
 
-    char **trace_strings = (char**)trace[n + 1];
-    for(int i = 0; i < n; i++)
+    char **trace_strings = (char **)trace[n + 1];
+    for(int_fast32_t i = 0; i < n; i++)
     {
-        osformatln(os, "%p %s", (void*)trace[i], (trace_strings != NULL) ? trace_strings[i] : "???");
+        osformatln(os, "%p %s", (void *)trace[i], (trace_strings != NULL) ? trace_strings[i] : "???");
     }
 #else
     osformatln(os, "backtrace not supported");
@@ -469,42 +465,41 @@ debug_stacktrace_print(output_stream *os, stacktrace trace)
 
 #if defined(__GLIBC__)
 
-bool
-debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
+bool debug_log_stacktrace(logger_handle_t *handle, uint32_t level, const char *prefix)
 {
-    void* addresses[1024];
+    void *addresses[1024];
 #if HAS_BFD_DEBUG_SUPPORT
     char binary[PATH_MAX];
 #endif
 
 #if defined(__GLIBC__)
-    
-    int n = backtrace(addresses, sizeof(addresses) / sizeof(void*));
-    
+
+    int n = backtrace(addresses, sizeof(addresses) / sizeof(void *));
+
     if(n > 0)
     {
         char **symbols = backtrace_symbols(addresses, n);
-    
+
         if(symbols != NULL)
         {
-            for(int i = 1; i < n; i++)
+            for(int_fast32_t i = 1; i < n; i++)
             {
                 char *parenthesis = strchr(symbols[i], '(');
                 if(parenthesis != NULL)
                 {
 #if HAS_BFD_DEBUG_SUPPORT
-                    u32 n = parenthesis - symbols[i];
+                    uint32_t n = parenthesis - symbols[i];
                     memcpy(binary, symbols[i], n);
                     binary[n] = '\0';
-                    
+
                     const char *func = "?";
                     const char *file = "?";
-                    u32 line = ~0;
-                    
-                    debug_bfd_resolve_address(addresses[i], binary, &file, &func, &line);                                       
-                    
+                    uint32_t    line = ~0;
+
+                    debug_bfd_resolve_address(addresses[i], binary, &file, &func, &line);
+
                     if((file != NULL) && (*file != '\0'))
-                    {                    
+                    {
                         logger_handle_msg(handle, level, "%s: %p: %s (%s:%i)", prefix, addresses[i], func, file, line);
                     }
                     else
@@ -521,7 +516,7 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
         }
         else
         {
-            for(int i = 1; i < n; i++)
+            for(int_fast32_t i = 1; i < n; i++)
             {
                 logger_handle_msg(handle, level, "%s: %p: ?", prefix, addresses[i]);
             }
@@ -532,19 +527,18 @@ debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
     {
         logger_handle_msg(handle, level, "%s: ?: ?", prefix);
     }
-    
-    return TRUE;
+
+    return true;
 }
 
 #else
 
-bool
-debug_log_stacktrace(logger_handle *handle, u32 level, const char *prefix)
+bool debug_log_stacktrace(logger_handle_t *handle, uint32_t level, const char *prefix)
 {
     (void)handle;
     (void)level;
     (void)prefix;
-    return TRUE;
+    return true;
 }
 
 #endif

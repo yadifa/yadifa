@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,65 +28,58 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #include <dnscore/format.h>
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/config_settings.h"
 
-static ya_result
-config_section_struct_init(struct config_section_descriptor_s *csd)
+static ya_result config_section_struct_init(struct config_section_descriptor_s *csd)
 {
     // NOP
     (void)csd;
     return SUCCESS;
 }
 
-static ya_result
-config_section_struct_start(struct config_section_descriptor_s *csd)
+static ya_result config_section_struct_start(struct config_section_descriptor_s *csd)
 {
     // NOP
     (void)csd;
     return SUCCESS;
 }
 
-static ya_result
-config_section_struct_stop(struct config_section_descriptor_s *csd)
+static ya_result config_section_struct_stop(struct config_section_descriptor_s *csd)
 {
     // NOP
     (void)csd;
     return SUCCESS;
 }
 
-static ya_result
-config_section_struct_postprocess(struct config_section_descriptor_s *csd)
+static ya_result config_section_struct_postprocess(struct config_section_descriptor_s *csd, config_error_t *cfgerr)
 {
     // NOP
     (void)csd;
+    (void)cfgerr;
     return SUCCESS;
 }
 
-static ya_result
-config_section_struct_finalize(struct config_section_descriptor_s *csd)
+static ya_result config_section_struct_finalize(struct config_section_descriptor_s *csd)
 {
     if(csd != NULL)
     {
         if(csd->vtbl != NULL)
         {
-            free((char*)csd->vtbl->name);
-            free((config_section_descriptor_vtbl_s*)csd->vtbl);
+            free((char *)csd->vtbl->name);
+            free((config_section_descriptor_vtbl_s *)csd->vtbl);
         }
-        
-        free(csd);
+
+        config_section_descriptor_delete(csd);
     }
-    
+
     return SUCCESS;
 }
 
-static ya_result
-config_section_struct_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
+static ya_result config_section_struct_set_wild(struct config_section_descriptor_s *csd, const char *key, const char *value)
 {
     (void)csd;
     (void)key;
@@ -95,8 +88,7 @@ config_section_struct_set_wild(struct config_section_descriptor_s *csd, const ch
     return CONFIG_UNKNOWN_SETTING;
 }
 
-static ya_result
-config_section_struct_print_wild(const struct config_section_descriptor_s *csd, output_stream *os, const char *key, void **context)
+static ya_result config_section_struct_print_wild(const struct config_section_descriptor_s *csd, output_stream_t *os, const char *key, void **context)
 {
     (void)csd;
     (void)os;
@@ -106,22 +98,11 @@ config_section_struct_print_wild(const struct config_section_descriptor_s *csd, 
     return CONFIG_UNKNOWN_SETTING;
 }
 
-static const config_section_descriptor_vtbl_s config_section_struct_descriptor =
-{
-    NULL,
-    NULL,
-    config_section_struct_set_wild,
-    config_section_struct_print_wild,
-    config_section_struct_init,
-    config_section_struct_start,
-    config_section_struct_stop,
-    config_section_struct_postprocess,
-    config_section_struct_finalize
-};
+static const config_section_descriptor_vtbl_s config_section_struct_descriptor = {
+    NULL, NULL, config_section_struct_set_wild, config_section_struct_print_wild, config_section_struct_init, config_section_struct_start, config_section_struct_stop, config_section_struct_postprocess, config_section_struct_finalize};
 
 /// register a simple (static) struct
-ya_result
-config_register_struct(const char *name, config_table_descriptor_item_s *table, void *data_struct, s32 priority)
+ya_result config_register_struct(const char *name, config_table_descriptor_item_t *table, void *data_struct, int32_t priority)
 {
     config_section_descriptor_vtbl_s *vtbl;
     MALLOC_OBJECT_OR_DIE(vtbl, config_section_descriptor_vtbl_s, CFGSVTBL_TAG);
@@ -129,7 +110,7 @@ config_register_struct(const char *name, config_table_descriptor_item_s *table, 
     vtbl->name = strdup(name);
     vtbl->table = table;
 
-    const config_table_descriptor_item_s *t = table;
+    const config_table_descriptor_item_t *t = table;
     while(t->name != NULL)
     {
         size_t expected = t->expected_size;
@@ -139,45 +120,53 @@ config_register_struct(const char *name, config_table_descriptor_item_s *table, 
         {
             osformatln(termerr, "config descriptor: '%s' field '%s': expected size: %i, field size: %i", name, t->name, expected, field);
             flusherr();
+            free((void *)vtbl->name);
+            free(vtbl);
+            return INVALID_ARGUMENT_ERROR;
         }
         ++t;
     }
-    
-    config_section_descriptor_s *desc;
-    MALLOC_OBJECT_OR_DIE(desc, config_section_descriptor_s, CFGSDESC_TAG);
-    desc->base = data_struct;
-    desc->vtbl = vtbl;
-    
-    ya_result return_code = config_register(desc, priority);
-    
+
+    config_section_descriptor_t *desc = config_section_descriptor_new_instance_ex(vtbl, data_struct);
+
+    ya_result                    return_code = config_register(desc, priority);
+
     if(FAIL(return_code))
     {
-        free((char*)vtbl->name);
+        free((char *)vtbl->name);
         free(vtbl);
         free(desc);
     }
-    
+
     return return_code;
 }
 
-void*
-config_unregister_struct(const char *name, const config_table_descriptor_item_s *table)
+/**
+ *
+ * Removes the registeration of a struct descriptor and name.
+ *
+ * @param name name of the struct
+ * @param table table describing the struct
+ *
+ * @return an pointer to the base address of the struct
+ */
+
+void *config_unregister_struct(const char *name, const config_table_descriptor_item_t *table)
 {
-    void *data_struct = NULL;
-    config_section_descriptor_s *desc = config_unregister_by_name(name);
-    
+    void                        *data_struct = NULL;
+    config_section_descriptor_t *desc = config_unregister_by_name(name);
+
     if(desc != NULL)
     {
-        config_section_descriptor_vtbl_s *vtbl = (config_section_descriptor_vtbl_s*)desc->vtbl;
+        config_section_descriptor_vtbl_s *vtbl = (config_section_descriptor_vtbl_s *)desc->vtbl;
         assert(vtbl != NULL);
         assert(vtbl->table == table);
         (void)table;
-        free((char*)vtbl->name);
+        free((char *)vtbl->name);
         free(vtbl);
-        data_struct = desc->base;        
+        data_struct = desc->base;
         free(desc);
     }
 
     return data_struct;
 }
-

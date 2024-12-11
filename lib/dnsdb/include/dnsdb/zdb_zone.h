@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,20 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to manipulate a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _ZDB_ZONE_H
-#define	_ZDB_ZONE_H
+#define _ZDB_ZONE_H
 
 #include <dnscore/input_stream.h>
 #include <dnscore/output_stream.h>
@@ -52,17 +51,16 @@
 #endif
 
 #include <dnsdb/zdb_types.h>
-#include <dnsdb/dnsrdata.h>
 
-#include <dnsdb/zdb-zone-lock.h>
-#include <dnsdb/zdb-zone-arc.h>
+#include <dnsdb/zdb_zone_lock.h>
+#include <dnsdb/zdb_zone_arc.h>
 
 #if ZDB_HAS_NSEC3_SUPPORT
 #include <dnsdb/nsec3_types.h>
 #include <dnsdb/zdb_record.h>
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -82,7 +80,7 @@ extern "C"
  */
 
 /* 2 USES */
-zdb_zone *zdb_zone_find(zdb *db, dnsname_vector* exact_match_origin);
+zdb_zone_t *zdb_zone_find(zdb_t *db, dnsname_vector_t *exact_match_origin);
 
 /**
  * @brief Get the zone with the given name
@@ -96,7 +94,7 @@ zdb_zone *zdb_zone_find(zdb *db, dnsname_vector* exact_match_origin);
  *
  */
 
-zdb_zone *zdb_zone_find_from_name(zdb *db, const char* name);
+zdb_zone_t *zdb_zone_find_from_name(zdb_t *db, const char *name);
 
 /**
  * @brief Adds a record to a zone
@@ -111,7 +109,9 @@ zdb_zone *zdb_zone_find_from_name(zdb *db, const char* name);
  */
 
 /* 2 USES */
-void zdb_zone_record_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 labels_top, u16 type, zdb_packed_ttlrdata* ttlrdata); /* class is implicit */
+void zdb_zone_record_add(zdb_zone_t *zone, dnslabel_vector_reference_t labels, int32_t labels_top, uint16_t type, int32_t ttl, zdb_resource_record_data_t *ttlrdata); /* class is implicit */
+
+void zdb_zone_record_add_with_mp(zdb_zone_t *zone, dnslabel_vector_reference_t labels, int32_t labels_top, uint16_t type, int32_t ttl, zdb_resource_record_data_t *ttlrdata, memory_pool_t *mp);
 
 /**
  * @brief Search for a record in a zone
@@ -125,7 +125,7 @@ void zdb_zone_record_add(zdb_zone* zone, dnslabel_vector_reference labels, s32 l
  */
 
 /* 4 USES */
-zdb_packed_ttlrdata* zdb_zone_record_find(zdb_zone *zone, dnslabel_vector_reference labels, s32 labels_top, u16 type);
+zdb_resource_record_set_t *zdb_zone_find_resource_record_set(zdb_zone_t *zone, dnslabel_vector_reference_t labels, int32_t labels_top, uint16_t type);
 
 /**
  * Searches the zone for the zdb_rr_label of an fqdn if it exists.
@@ -136,7 +136,7 @@ zdb_packed_ttlrdata* zdb_zone_record_find(zdb_zone *zone, dnslabel_vector_refere
  * @return a pointer the label, or NULL if it was not found.
  */
 
-zdb_rr_label* zdb_zone_find_label_from_fqdn(zdb_zone *zone, const u8 *fqdn);
+zdb_rr_label_t *zdb_zone_find_label_from_fqdn(zdb_zone_t *zone, const uint8_t *fqdn);
 
 /**
  * @brief Creates a zone
@@ -148,21 +148,20 @@ zdb_rr_label* zdb_zone_find_label_from_fqdn(zdb_zone *zone, const u8 *fqdn);
 
 /* 2 USES */
 
-zdb_zone *zdb_zone_create(const u8 *origin);
+zdb_zone_t *zdb_zone_create(const uint8_t *origin);
 
 /*
  * Sets a zone as invalid.
  * This will put the (content of the) zone in a garbage to be freed at some point in the future (when nolonger used)
  * Also an invalid zone ... the .axfr and journal files should probably be trashed
- * 
+ *
  */
 
-void zdb_zone_invalidate(zdb_zone *zone);
+void zdb_zone_invalidate(zdb_zone_t *zone);
 
+void zdb_zone_truncate_invalidate(zdb_zone_t *zone);
 
-void zdb_zone_truncate_invalidate(zdb_zone *zone);
-
-void zdb_zone_destroy_nolock(zdb_zone *zone);
+void zdb_zone_destroy_nolock(zdb_zone_t *zone);
 
 /**
  * @brief Destroys a zone and all its content
@@ -173,7 +172,7 @@ void zdb_zone_destroy_nolock(zdb_zone *zone);
  */
 
 /* 10 USES */
-void zdb_zone_destroy(zdb_zone *zone);
+void zdb_zone_destroy(zdb_zone_t *zone);
 
 /**
  * @brief Copies the soa of a zone to an soa_rdata structure.
@@ -186,9 +185,9 @@ void zdb_zone_destroy(zdb_zone *zone);
  * @param[out] soa_out a pointer to an soa_rdata structure
  */
 
-ya_result zdb_zone_getsoa(const zdb_zone *zone, soa_rdata *soa_out);
+ya_result zdb_zone_getsoa(const zdb_zone_t *zone, zdb_soa_rdata_t *soa_out);
 
-ya_result zdb_zone_getsoa_ttl_rdata(const zdb_zone* zone, u32 *ttl, u16 *rdata_size, const u8 **rdata);
+ya_result zdb_zone_getsoa_ttl_rdata(const zdb_zone_t *zone, uint32_t *ttl, uint16_t *rdata_size, const uint8_t **rdata);
 
 /**
  * @brief Retrieve the serial of a zone
@@ -196,124 +195,129 @@ ya_result zdb_zone_getsoa_ttl_rdata(const zdb_zone* zone, u32 *ttl, u16 *rdata_s
  * Retrieve the serial of a zone
  *
  * @param[in] zone a pointer to the zone
- * @param[out] serial a pointer to an u32 that will get the serial
+ * @param[out] serial a pointer to an uint32_t that will get the serial
  */
 
-ya_result zdb_zone_getserial(const zdb_zone* zone, u32 *serial);
+ya_result zdb_zone_getserial(const zdb_zone_t *zone, uint32_t *serial);
 
 /**
  * @brief Retrieve the minttl of a zone
  *
- * Retrieve the serial of a zone
- *
  * @param[in] zone a pointer to the zone
- * @param[out] serial a pointer to an u32 that will get the minttl
+ * @param[out] serial a pointer to an uint32_t that will get the minttl
  */
 
-static inline void zdb_zone_getminttl(const zdb_zone *zone, s32 *minttl)
-{
-    *minttl = zone->min_ttl;
-}
+static inline void zdb_zone_getminttl(const zdb_zone_t *zone, int32_t *minttl) { *minttl = zone->min_ttl; }
 
-#if ZDB_RECORDS_MAX_CLASS == 1
-static inline u16 zdb_zone_getclass(const zdb_zone *zone)
+/**
+ * @brief Retrieve the minimum between the minttl/nttl and the SOA ttl of a zone
+ *
+ * @param[in] zone a pointer to the zone
+ * @param[out] serial a pointer to an uint32_t that will get the minttl
+ */
+
+static inline void zdb_zone_getminttlsoa(const zdb_zone_t *zone, int32_t *minttl) { *minttl = zone->min_ttl_soa; }
+
+#if ZDB_RECORDS_CLASS_MAX == 1
+static inline uint16_t zdb_zone_getclass(const zdb_zone_t *zone)
 {
     (void)zone;
     return CLASS_IN;
 }
 
 #else
-static inline u16 zdb_zone_getclass(const zdb_zone *zone)
-{
-    return zone->zclass;
-}
+static inline uint16_t zdb_zone_getclass(const zdb_zone *zone) { return zone->zclass; }
 #endif
 
-ya_result zdb_zone_store_axfr(zdb_zone *zone, output_stream* os);
+ya_result                        zdb_zone_store_axfr(zdb_zone_t *zone, output_stream_t *os);
 
-const zdb_packed_ttlrdata *zdb_zone_get_dnskey_rrset(zdb_zone *zone);
+ya_result                        zdb_zone_store_czf(zdb_zone_t *zone, output_stream_t *os);
 
-static inline u8 zdb_zone_get_flags(const zdb_zone *zone)
+static inline ya_result          zdb_zone_store_binary(zdb_zone_t *zone, output_stream_t *os) { return zdb_zone_store_axfr(zone, os); }
+
+const zdb_resource_record_set_t *zdb_zone_get_dnskey_rrset(zdb_zone_t *zone);
+
+static inline uint8_t            zdb_zone_get_flags(const zdb_zone_t *zone)
 {
-    //mutex_lock(&zone->lock_mutex);
-    u8 ret = zone->_flags;
-    //mutex_unlock(&zone->lock_mutex);
+    // mutex_lock(&zone->lock_mutex);
+    uint8_t ret = zone->_flags;
+    // mutex_unlock(&zone->lock_mutex);
     return ret;
 }
 
-static inline u8  zdb_zone_set_flags(zdb_zone *zone, u8 flags)
+static inline uint8_t zdb_zone_set_flags(zdb_zone_t *zone, uint8_t flags)
 {
-    //mutex_lock(&zone->lock_mutex);
-    u8 ret = zone->_flags;
+    // mutex_lock(&zone->lock_mutex);
+    uint8_t ret = zone->_flags;
     zone->_flags |= flags;
-    //mutex_unlock(&zone->lock_mutex);
+    // mutex_unlock(&zone->lock_mutex);
     return ret;
 }
 
-static inline u8 zdb_zone_clear_flags(zdb_zone *zone, u8 flags)
+static inline uint8_t zdb_zone_clear_flags(zdb_zone_t *zone, uint8_t flags)
 {
-    //mutex_lock(&zone->lock_mutex);
-    u8 ret = zone->_flags;
+    // mutex_lock(&zone->lock_mutex);
+    uint8_t ret = zone->_flags;
     zone->_flags &= ~flags;
-    //mutex_unlock(&zone->lock_mutex);
+    // mutex_unlock(&zone->lock_mutex);
     return ret;
 }
 
-static inline u8 zdb_zone_set_clear_flags(zdb_zone *zone, u8 set_flags, u8 clear_flags)
+static inline uint8_t zdb_zone_set_clear_flags(zdb_zone_t *zone, uint8_t set_flags, uint8_t clear_flags)
 {
-    //mutex_lock(&zone->lock_mutex);
-    u8 ret = zone->_flags;
+    // mutex_lock(&zone->lock_mutex);
+    uint8_t ret = zone->_flags;
     zone->_flags &= ~clear_flags;
     zone->_flags |= set_flags;
-    //mutex_unlock(&zone->lock_mutex);
+    // mutex_unlock(&zone->lock_mutex);
     return ret;
 }
 
 /**
  * Tells if the apex of the zone has an NSEC3 extension
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_is_nsec3(const zdb_zone* zone)
+static inline bool zdb_zone_is_nsec3(const zdb_zone_t *zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
     return (zone->apex->_flags & ZDB_RR_LABEL_NSEC3) != 0;
 #else
-    return FALSE;
+    return false;
 #endif
 }
 
 /**
  * Tells if the apex of the zone has an NSEC3 extension with opt-out
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_is_nsec3_optout(const zdb_zone* zone)
+static inline bool zdb_zone_is_nsec3_optout(const zdb_zone_t *zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
     return ((zone->apex->_flags & ZDB_RR_LABEL_NSEC3_OPTOUT) != 0);
 #else
-    return FALSE;
+    return false;
 #endif
 }
 
 /**
  * Tells if the apex of the zone has an NSEC3 extension without opt-out
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_is_nsec3_optin(const zdb_zone* zone)
+static inline bool zdb_zone_is_nsec3_optin(const zdb_zone_t *zone)
 {
 #if ZDB_HAS_NSEC3_SUPPORT
     return ((zone->apex->_flags & ZDB_RR_LABEL_NSEC3_OPTOUT) == 0);
 #else
-    return FALSE;
+    return false;
 #endif
 }
 
@@ -321,15 +325,15 @@ static inline bool zdb_zone_is_nsec3_optin(const zdb_zone* zone)
 
 /**
  * Returns the nth nsec3 chain or NULL if the chain does not exists
- * 
+ *
  * @param zone
  * @param idx
- * @return 
+ * @return
  */
 
-static inline nsec3_zone* zdb_zone_get_nsec3chain(const zdb_zone *zone, s8 idx)
+static inline nsec3_zone_t *zdb_zone_get_nsec3chain(const zdb_zone_t *zone, int8_t idx)
 {
-    nsec3_zone *n3 = zone->nsec.nsec3;
+    nsec3_zone_t *n3 = zone->nsec.nsec3;
     while(n3 != NULL && --idx >= 0)
     {
         n3 = n3->next;
@@ -339,124 +343,109 @@ static inline nsec3_zone* zdb_zone_get_nsec3chain(const zdb_zone *zone, s8 idx)
 
 /**
  * Tells if a zone has an NSEC3 chain
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_has_nsec3_chain(const zdb_zone *zone)
-{
-    return zone->nsec.nsec3 != NULL;
-}
+static inline bool zdb_zone_has_nsec3_chain(const zdb_zone_t *zone) { return zone->nsec.nsec3 != NULL; }
 
 /**
  * Tells if a zone has an NSEC3 chain with opt-out
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_has_nsec3_optout_chain(zdb_zone *zone)
+static inline bool zdb_zone_has_nsec3_optout_chain(zdb_zone_t *zone)
 {
     return (zone->nsec.nsec3 != NULL) && (zdb_zone_get_flags(zone) & ZDB_ZONE_HAS_OPTOUT_COVERAGE); /// and ?
 }
 
-static inline bool zdb_zone_has_nsec3_records(const zdb_zone *zone)
+static inline bool zdb_zone_has_nsec3_records(const zdb_zone_t *zone)
 {
-    nsec3_zone *n3 = zone->nsec.nsec3;
+    nsec3_zone_t *n3 = zone->nsec.nsec3;
     while(n3 != NULL)
     {
         if(n3->items != NULL)
         {
-            return TRUE;
+            return true;
         }
         n3 = n3->next;
     }
-    return FALSE;
+    return false;
 }
 
-static inline bool zdb_zone_has_nsec3param_records(const zdb_zone *zone)
-{
-    return zdb_record_find(&zone->apex->resource_record_set, TYPE_NSEC3PARAM) != NULL;
-}
+static inline bool zdb_zone_has_nsec3param_records(const zdb_zone_t *zone) { return zdb_resource_record_sets_find_set_const(&zone->apex->resource_record_set, TYPE_NSEC3PARAM) != NULL; }
 
-static inline bool zdb_zone_maintenance_queued(zdb_zone *zone)
+static inline bool zdb_zone_maintenance_queued(zdb_zone_t *zone)
 {
     bool ret = (zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAIN_QUEUED) != 0;
     return ret;
 }
 
 /**
- * Returns TRUE if the zne was not already marked as maintained
+ * Returns true if the zne was not already marked as maintained
  */
 
-static inline bool zdb_zone_set_maintenance_queued(zdb_zone *zone)
+static inline bool zdb_zone_set_maintenance_queued(zdb_zone_t *zone)
 {
     bool not_already_set = (zdb_zone_set_flags(zone, ZDB_ZONE_MAINTAIN_QUEUED) & ZDB_ZONE_MAINTAIN_QUEUED) == 0;
     return not_already_set;
 }
 
-static inline void zdb_zone_clear_maintenance_queued(zdb_zone *zone)
-{
-    zdb_zone_clear_flags(zone, ZDB_ZONE_MAINTAIN_QUEUED);
-}
+static inline void zdb_zone_clear_maintenance_queued(zdb_zone_t *zone) { zdb_zone_clear_flags(zone, ZDB_ZONE_MAINTAIN_QUEUED); }
 
 #endif
 
 /**
  * Tells if the apex of the zone has an NSEC extension
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_is_nsec(const zdb_zone *zone)
+static inline bool zdb_zone_is_nsec(const zdb_zone_t *zone)
 {
 #if ZDB_HAS_NSEC_SUPPORT
     return (zone->apex->_flags & ZDB_RR_LABEL_NSEC) != 0;
 #else
-    return FALSE;
+    return false;
 #endif
 }
 
 #if ZDB_HAS_NSEC_SUPPORT
 /**
  * Tells if a zone has an NSEC chain
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_has_nsec_chain(const zdb_zone *zone)
-{
-    return zone->nsec.nsec != NULL;
-}
+static inline bool zdb_zone_has_nsec_chain(const zdb_zone_t *zone) { return zone->nsec.nsec != NULL; }
 
-static inline bool zdb_zone_has_nsec_records(const zdb_zone *zone)
-{
-    return zdb_zone_has_nsec_chain(zone);
-}
+static inline bool zdb_zone_has_nsec_records(const zdb_zone_t *zone) { return zdb_zone_has_nsec_chain(zone); }
 
 #endif
 
-#if ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT
+#if HAS_RRSIG_MANAGEMENT_SUPPORT
 
 /**
  * True for zones that are to be maintained.
  * This covers DNSSEC zones, but also zones in the process of being
  * DNSSEC.
- * 
+ *
  * @param zone
- * @return 
+ * @return
  */
 
-static inline bool zdb_zone_is_maintained(zdb_zone *zone)
+static inline bool zdb_zone_is_maintained(zdb_zone_t *zone)
 {
     bool ret = (zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAINED) != 0;
     return ret;
 }
 
-static inline void zdb_zone_set_maintained(zdb_zone *zone, bool maintained)
+static inline void zdb_zone_set_maintained(zdb_zone_t *zone, bool maintained)
 {
     if(maintained)
     {
@@ -468,14 +457,14 @@ static inline void zdb_zone_set_maintained(zdb_zone *zone, bool maintained)
     }
 }
 
-static inline bool zdb_zone_is_maintenance_paused(zdb_zone *zone)
+static inline bool zdb_zone_is_maintenance_paused(zdb_zone_t *zone)
 {
-    u8 flags = zdb_zone_get_flags(zone);
-    bool ret = (flags & (ZDB_ZONE_MAINTENANCE_PAUSED|ZDB_ZONE_MAINTAINED)) == ZDB_ZONE_MAINTENANCE_PAUSED;
+    uint8_t flags = zdb_zone_get_flags(zone);
+    bool    ret = (flags & (ZDB_ZONE_MAINTENANCE_PAUSED | ZDB_ZONE_MAINTAINED)) == ZDB_ZONE_MAINTENANCE_PAUSED;
     return ret;
 }
 
-static inline void zdb_zone_set_maintenance_paused(zdb_zone *zone, bool maintenance_paused)
+static inline void zdb_zone_set_maintenance_paused(zdb_zone_t *zone, bool maintenance_paused)
 {
     mutex_lock(&zone->lock_mutex);
     if(maintenance_paused)
@@ -489,47 +478,45 @@ static inline void zdb_zone_set_maintenance_paused(zdb_zone *zone, bool maintena
     mutex_unlock(&zone->lock_mutex);
 }
 
-static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
+static inline void zone_set_maintain_mode(zdb_zone_t *zone, uint8_t mode)
 {
     yassert((mode & ZDB_ZONE_MAINTAIN_MASK) == mode);
+
     zdb_zone_set_clear_flags(zone, mode, ZDB_ZONE_MAINTAIN_MASK);
-#if OBSOLETE
-    // this is part of a branch
+
     if((mode & ~ZDB_ZONE_HAS_OPTOUT_COVERAGE) == ZDB_ZONE_MAINTAIN_NSEC3)
     {
-        u8 flags = mode & ZDB_ZONE_HAS_OPTOUT_COVERAGE;
-        nsec3_zone *n3 = zone->nsec.nsec3;
+        uint8_t       flags = mode & ZDB_ZONE_HAS_OPTOUT_COVERAGE;
+        nsec3_zone_t *n3 = zone->nsec.nsec3;
         while(n3 != NULL)
         {
-            n3->rdata[1] = flags;
+            n3->nsec3_rdata_prefix[1] = flags;
             n3 = n3->next;
         }
     }
-#endif
 }
 
-static inline u8 zone_get_maintain_mode(zdb_zone *zone)
+static inline uint8_t zone_get_maintain_mode(zdb_zone_t *zone)
 {
-    u8 ret = zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAIN_MASK;
+    uint8_t ret = zdb_zone_get_flags(zone) & ZDB_ZONE_MAINTAIN_MASK;
     return ret;
 }
 
 #else // HAS_RRSIG_MANAGEMENT_SUPPORT
 
-static inline bool zdb_zone_is_maintained(const zdb_zone *zone)
+static inline bool zdb_zone_is_maintained(const zdb_zone_t *zone)
 {
     (void)zone;
-    return FALSE;
+    return false;
 }
 
-
-static inline u8 zone_get_maintain_mode(const zdb_zone *zone)
+static inline uint8_t zone_get_maintain_mode(const zdb_zone_t *zone)
 {
     (void)zone;
     return 0;
 }
 
-static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
+static inline void zone_set_maintain_mode(zdb_zone_t *zone, uint8_t mode)
 {
     (void)zone;
     (void)mode;
@@ -537,16 +524,16 @@ static inline void zone_set_maintain_mode(zdb_zone *zone, u8 mode)
 
 #endif
 
-static inline bool zdb_zone_is_dnssec(zdb_zone *zone)
+static inline bool zdb_zone_is_dnssec(zdb_zone_t *zone)
 {
 #if ZDB_HAS_DNSSEC_SUPPORT
     return (zone->apex->_flags & (ZDB_RR_LABEL_NSEC | ZDB_RR_LABEL_NSEC3)) != 0;
 #else
-    return FALSE;
-#endif    
+    return false;
+#endif
 }
 
-static inline void zdb_zone_set_rrsig_push_allowed(zdb_zone *zone, bool allowed)
+static inline void zdb_zone_set_rrsig_push_allowed(zdb_zone_t *zone, bool allowed)
 {
     if(allowed)
     {
@@ -558,63 +545,58 @@ static inline void zdb_zone_set_rrsig_push_allowed(zdb_zone *zone, bool allowed)
     }
 }
 
-static inline bool zdb_zone_get_rrsig_push_allowed(zdb_zone *zone)
+static inline bool zdb_zone_get_rrsig_push_allowed(zdb_zone_t *zone)
 {
     bool ret = zdb_zone_get_flags(zone) & ZDB_ZONE_RRSIG_PUSH_ALLOWED;
     return ret;
 }
 
-bool zdb_zone_isinvalid(zdb_zone *zone);
+bool               zdb_zone_isinvalid(zdb_zone_t *zone);
 
-static inline bool zdb_zone_isvalid(zdb_zone *zone)
-{
-    return !zdb_zone_isinvalid(zone);
-}
+static inline bool zdb_zone_isvalid(zdb_zone_t *zone) { return !zdb_zone_isinvalid(zone); }
 
 #if DNSCORE_HAS_DNSSEC_SUPPORT
 
 /**
- * Adds a DNSKEY record in a zone from the dnssec_key object.
- * 
+ * Adds a DNSKEY record in a zone from the dnskey_t object.
+ *
  * @param key
- * @return TRUE iff the record has been added
+ * @return true iff the record has been added
  */
 
-
-bool zdb_zone_add_dnskey_from_key(zdb_zone *zone, const dnssec_key *key);
+bool zdb_zone_add_dnskey_from_key(zdb_zone_t *zone, const dnskey_t *key);
 
 /**
- * Removes a DNSKEY record in a zone from the dnssec_key object.
- * 
+ * Removes a DNSKEY record in a zone from the dnskey_t object.
+ *
  * @param key
- * @return TRUE iff the record has been found and removed
+ * @return true iff the record has been found and removed
  */
 
-
-bool zdb_zone_remove_dnskey_from_key(zdb_zone *zone, const dnssec_key *key);
+bool zdb_zone_remove_dnskey_from_key(zdb_zone_t *zone, const dnskey_t *key);
 
 /**
- * 
- * Returns TRUE iff the key is present as a record in the zone
- * 
+ *
+ * Returns true iff the key is present as a record in the zone
+ *
  * @param zone
  * @param key
- * @return 
+ * @return
  */
 
-bool zdb_zone_contains_dnskey_record_for_key(zdb_zone *zone, const dnssec_key *key);
+bool zdb_zone_contains_dnskey_record_for_key(zdb_zone_t *zone, const dnskey_t *key);
 
 /**
- * Returns TRUE iff there is at least one RRSIG record with the tag and algorithm of the key
- * 
+ * Returns true iff there is at least one RRSIG record with the tag and algorithm of the key
+ *
  * @param zone
  * @param key
- * @return 
+ * @return
  */
 
-bool zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone *zone, const dnssec_key *key);
+bool zdb_zone_apex_contains_rrsig_record_by_key(zdb_zone_t *zone, const dnskey_t *key);
 
-void zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone, u8 secondary_lock);
+void zdb_zone_update_keystore_keys_from_zone(zdb_zone_t *zone, uint8_t secondary_lock);
 
 #endif
 
@@ -624,15 +606,15 @@ void zdb_zone_update_keystore_keys_from_zone(zdb_zone *zone, u8 secondary_lock);
  * DEBUG
  */
 
-void zdb_zone_print_indented(zdb_zone* zone, output_stream *os, int indent);
-void zdb_zone_print(zdb_zone *zone, output_stream *os);
+void zdb_zone_print_indented(zdb_zone_t *zone, output_stream_t *os, int indent);
+void zdb_zone_print(zdb_zone_t *zone, output_stream_t *os);
 
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _ZDB_ZONE_H */
+#endif /* _ZDB_ZONE_H */
 
 /** @} */

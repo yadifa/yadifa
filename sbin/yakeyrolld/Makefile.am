@@ -1,39 +1,40 @@
 ################################################################################
 #
-#  Copyright (c) 2011-2023, EURid vzw. All rights reserved.
-#  The YADIFA TM software product is provided under the BSD 3-clause license:
+# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# The YADIFA TM software product is provided under the BSD 3-clause license:
 #
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions
-#  are met:
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
 #
-#         * Redistributions of source code must retain the above copyright
-#           notice, this list of conditions and the following disclaimer.
-#         * Redistributions in binary form must reproduce the above copyright
-#           notice, this list of conditions and the following disclaimer in the
-#           documentation and/or other materials provided with the distribution.
-#         * Neither the name of EURid nor the names of its contributors may be
-#           used to endorse or promote products derived from this software
-#           without specific prior written permission.
+#        * Redistributions of source code must retain the above copyright
+#          notice, this list of conditions and the following disclaimer.
+#        * Redistributions in binary form must reproduce the above copyright
+#          notice, this list of conditions and the following disclaimer in the
+#          documentation and/or other materials provided with the distribution.
+#        * Neither the name of EURid nor the names of its contributors may be
+#          used to endorse or promote products derived from this software
+#          without specific prior written permission.
 #
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################        
+################################################################################
 
 ACLOCAL_AMFLAGS = -I ../../m4
 
-include ../../mk/common-settings.mk
+include ../../mk/common_settings.mk
 
-BUILT_SOURCES=buildinfo.h keyroll-config.h
+BUILT_SOURCES=buildinfo.h keyroll_config.h
 
 if HAS_TOOLS
 
@@ -42,23 +43,23 @@ AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/inclu
 
 sbin_PROGRAMS = yakeyrolld
 
-yakeyrolld_SOURCES = main.c config-dnssec-policy.c config-key-roll.c config-key-roll-parser.c config-key-suite.c config-key-template.c date-next.c date-prev.c dnssec-policy.c keyroll.c
+yakeyrolld_SOURCES = main.c config_dnssec_policy.c config_key_roll.c config_key_roll_parser.c config_key_suite.c config_key_template.c date_next.c date_prev.c dnssec_policy.c keyroll.c rest_server.c
 yakeyrolld_LDADD = $(top_builddir)/lib/dnscore/libdnscore.la
 yakeyrolld_LDADD += $(top_builddir)/lib/dnsdb/libdnsdb.la
 
-noinst_HEADERS = config-dnssec-policy.h config-key-roll-parser.h dnssec-policy.h keyroll.h
+noinst_HEADERS = config_dnssec_policy.h config_key_roll_parser.h config_settings.h dnssec_policy.h keyroll.h rest_server.h
 
-yakeyrolld_DEPENDENCIES = keyroll-config.h
+yakeyrolld_DEPENDENCIES = keyroll_config.h
 
 
 
 endif
-include ../../mk/common-labels.mk
+include ../../mk/common_labels.mk
 
-keyroll-config.h: ../../config.h
-	cp ../../config.h keyroll-config.h
+keyroll_config.h: ../../config.h
+	cp ../../config.h keyroll_config.h
 
-CLEANFILES += keyroll-config.h
+CLEANFILES += keyroll_config.h
 
 features:
 

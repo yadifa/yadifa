@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,28 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _TYPEBITMAP_H
-#define	_TYPEBITMAP_H
+#define _TYPEBITMAP_H
 
 #include <dnscore/sys_types.h>
 
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
-
-typedef struct type_bit_maps_context type_bit_maps_context;
-
 
 /*
  * Maximum type bitmap size =
@@ -63,76 +58,77 @@ typedef struct type_bit_maps_context type_bit_maps_context;
  *
  */
 
-#define TYPE_BIT_MAPS_MAX_RDATA_SIZE 8704
+#define TYPE_BIT_MAPS_RDATA_SIZE_MAX 8704
 
-struct type_bit_maps_context
+struct type_bit_maps_context_s
 {
-    u32 type_bit_maps_size;
-    s32 last_type_window;
-    u8 window_size[256];
-    u8 type_bitmap_field[8192];
+    uint32_t type_bit_maps_size;      // ?
+    int32_t  last_type_window;        // ?
+    uint8_t  window_size[256];        // the size of each encoded window
+    uint8_t  type_bitmap_field[8192]; // a field of bits, one bit per DNS type
 };
 
-void type_bit_maps_init(type_bit_maps_context *context);
+typedef struct type_bit_maps_context_s type_bit_maps_context_t;
 
-static inline void type_bit_maps_finalize(type_bit_maps_context *context) { (void)context; }
+void                                   type_bit_maps_init(type_bit_maps_context_t *context);
 
-void type_bit_maps_set_type(type_bit_maps_context *context, u16 rtype);
+static inline void                     type_bit_maps_finalize(type_bit_maps_context_t *context) { (void)context; }
 
-void type_bit_maps_clear_type(type_bit_maps_context *context, u16 rtype);
+void                                   type_bit_maps_set_type(type_bit_maps_context_t *context, uint16_t rtype);
 
-u16 type_bit_maps_update_size(type_bit_maps_context *context);
+void                                   type_bit_maps_clear_type(type_bit_maps_context_t *context, uint16_t rtype);
+
+uint16_t                               type_bit_maps_update_size(type_bit_maps_context_t *context);
 
 /**
  * Compares two types bit maps.
- * 
+ *
  * type_bit_maps_update_size(a) must have been called before.
  * type_bit_maps_update_size(b) must have been called before.
- * 
+ *
  * @param a
  * @param b
- * @return 
+ * @return
  */
 
-int type_bit_maps_compare(const type_bit_maps_context *a, const type_bit_maps_context *b);
+int type_bit_maps_compare(const type_bit_maps_context_t *a, const type_bit_maps_context_t *b);
 
 /*
  *  Once initialized properly, a bitmap context can be written as an (NSEC, NSEC3) bitmap using this function
  */
- 
-void type_bit_maps_write(const type_bit_maps_context* context, u8* output);
+
+void type_bit_maps_write(const type_bit_maps_context_t *context, uint8_t *output);
 
 /*
  * Converts a (compressed) bitmap to its bit field (expanded)
  */
 
-s32 type_bit_maps_expand(type_bit_maps_context* context, u8* type_bitmap, u32 size);
+int32_t type_bit_maps_expand(type_bit_maps_context_t *context, uint8_t *type_bitmap, uint32_t size);
 
 /*
  * Takes two (compressed) bitmaps and merge them.
  * Used for DNSSEC
  */
 
-bool type_bit_maps_merge(type_bit_maps_context* context, u8* type_bitmap_a, u32 a_size, u8* type_bitmap_b, u32 b_size);
+bool type_bit_maps_merge(type_bit_maps_context_t *context, uint8_t *type_bitmap_a, uint32_t a_size, uint8_t *type_bitmap_b, uint32_t b_size);
 
 /*
- * Takes two bitmaps and merge them into a stream
- * Used by the zone reader
+ * Prints an type bit maps
  */
 
-void type_bit_maps_output_stream_write(const type_bit_maps_context* context, output_stream* os);
+void type_bit_maps_output_stream_write(const type_bit_maps_context_t *context, output_stream_t *os);
 
 /*
- * Returns TRUE if the type is enabled in the packed_type_bitmap
+ * Returns true if the type is enabled in the packed_type_bitmap
  * (The buffer format matches the type bitmap in the NSEC/NSEC3 wire format)
  */
 
-bool type_bit_maps_gettypestatus(u8* packed_type_bitmap, u32 size, u16 type);
+bool type_bit_maps_gettypestatus(uint8_t *packed_type_bitmap, uint32_t size, uint16_t type);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _NSEC_COMMON_H */
+#endif /* _NSEC_COMMON_H */
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,56 +28,57 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
  *  This version of the ring buffer uses the condition-wait mechanism instead of the 3-mutex one.
  *  I'll have to bench both versions but the main incentive is to get rid of complains from helgrind
- * 
- * @{
  *
+ * @{
  *----------------------------------------------------------------------------*/
 #pragma once
 
 #include <dnscore/thread.h>
 
 #include <dnscore/mutex.h>
-#include <dnscore/list-dl.h>
+#include <dnscore/list_dl.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-struct threaded_dll_cw
+struct threaded_dll_cw_s
 {
-    list_dl_s queue;
-    list_dl_node_s *pool;
-    mutex_t mutex;
-    cond_t  cond_read;
-    cond_t  cond_write;
+    list_dl_t       queue;
+    list_dl_node_t *pool;
+    mutex_t         mutex;
+    cond_t          cond_read;
+    cond_t          cond_write;
 
-    u32             max_size;
+    uint32_t        max_size;
 };
 
-typedef struct threaded_dll_cw threaded_dll_cw;
+typedef struct threaded_dll_cw_s threaded_dll_cw_t;
 
-#define THREADED_SLL_CW_EMPTY {{NULL,NULL},{NULL,NULL},0}, NULL, MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,PTHREAD_COND_INITIALIZER,MAX_U32}
+#define THREADED_SLL_CW_EMPTY                                                                                                                                                                                                                  \
+    {{NULL, NULL}, {NULL, NULL}, 0}, NULL, MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, PTHREAD_COND_INITIALIZER, U32_MAX                                                                                                                      \
+    }
 
-void  threaded_dll_cw_init(threaded_dll_cw *queue, int max_size);
-void  threaded_dll_cw_finalize(threaded_dll_cw *queue);
-void  threaded_dll_cw_enqueue(threaded_dll_cw *queue,void* constant_pointer);
-bool  threaded_dll_cw_try_enqueue(threaded_dll_cw *queue,void* constant_pointer);
-void* threaded_dll_cw_dequeue(threaded_dll_cw *queue);
-void* threaded_dll_cw_try_dequeue(threaded_dll_cw *queue);
-void* threaded_dll_cw_dequeue_with_timeout(threaded_dll_cw *queue, s64 timeout_us);
-void  threaded_dll_cw_wait_empty(threaded_dll_cw *queue);
-int   threaded_dll_cw_size(threaded_dll_cw *queue);
-int   threaded_dll_cw_room(threaded_dll_cw *queue);
+void  threaded_dll_cw_init(threaded_dll_cw_t *queue, int max_size);
+void  threaded_dll_cw_finalize(threaded_dll_cw_t *queue);
+void  threaded_dll_cw_enqueue(threaded_dll_cw_t *queue, void *constant_pointer);
+bool  threaded_dll_cw_try_enqueue(threaded_dll_cw_t *queue, void *constant_pointer);
+void *threaded_dll_cw_dequeue(threaded_dll_cw_t *queue);
+void *threaded_dll_cw_try_dequeue(threaded_dll_cw_t *queue);
+void *threaded_dll_cw_dequeue_with_timeout(threaded_dll_cw_t *queue, int64_t timeout_us);
+void  threaded_dll_cw_wait_empty(threaded_dll_cw_t *queue);
+int   threaded_dll_cw_size(threaded_dll_cw_t *queue);
+int   threaded_dll_cw_room(threaded_dll_cw_t *queue);
 
 /*
  * The queue will block (write) if bigger than this.
@@ -85,9 +86,9 @@ int   threaded_dll_cw_room(threaded_dll_cw *queue);
  * the content is emptied by the readers.
  */
 
-ya_result threaded_dll_cw_set_maxsize(threaded_dll_cw *queue, int max_size);
+ya_result threaded_dll_cw_set_maxsize(threaded_dll_cw_t *queue, int max_size);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

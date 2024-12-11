@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,46 +28,43 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _MT_OUTPUT_STREAM_H
-#define	_MT_OUTPUT_STREAM_H
+#define _MT_OUTPUT_STREAM_H
 
 #include <dnscore/thread.h>
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 /**
  * Can only fail if in_filtered has not been set
  */
 
-ya_result mt_output_stream_init(output_stream *out_stream, output_stream *in_filtered);
+ya_result        mt_output_stream_init(output_stream_t *out_stream, output_stream_t *in_filtered);
 
-output_stream *mt_output_stream_get_filtered(output_stream *bos);
-void mt_output_stream_detach_filtered(output_stream *bos, output_stream *detached_filtered);
-void mt_output_stream_set_filtered(output_stream *bos, output_stream *new_os, bool also_close);
+output_stream_t *mt_output_stream_get_filtered(output_stream_t *bos);
+void             mt_output_stream_detach_filtered(output_stream_t *bos, output_stream_t *detached_filtered);
+void             mt_output_stream_set_filtered(output_stream_t *bos, output_stream_t *new_os, bool also_close);
 
-bool is_mt_output_stream(const output_stream *bos);
+bool             is_mt_output_stream(const output_stream_t *bos);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _MT_OUTPUT_STREAM_H */
+#endif /* _MT_OUTPUT_STREAM_H */
 /** @} */
-
-

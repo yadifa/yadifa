@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,39 +28,35 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _PRINT_STREAM_H
-#define	_PRINT_STREAM_H
+#define _PRINT_STREAM_H
 
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-    ya_result os_print(output_stream_ptr stream,const char* text);
-    ya_result os_println(output_stream_ptr stream,const char* text);
-    ya_result os_format(output_stream_ptr stream,const char* text,...);
-    ya_result os_formatln(output_stream_ptr stream,const char* text,...);
+ya_result os_print(output_stream_ptr stream, const char *text);
+ya_result os_println(output_stream_ptr stream, const char *text);
+ya_result os_format(output_stream_ptr stream, const char *text, ...);
+ya_result os_formatln(output_stream_ptr stream, const char *text, ...);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _OUTPUT_STREAM_H */
+#endif /* _OUTPUT_STREAM_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

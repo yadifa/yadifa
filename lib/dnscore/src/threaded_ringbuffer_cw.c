@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{ *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -61,15 +60,14 @@
  *
  */
 
-void
-threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size)
+void threaded_ringbuffer_cw_init(threaded_ringbuffer_cw_t *queue, int max_size)
 {
 #if DEBUG
-    memset(queue, 0xff, sizeof(threaded_ringbuffer_cw));
-#endif  
-    
-    MALLOC_OR_DIE(void**, queue->buffer, sizeof(void*) * max_size, THREADED_QUEUE_RINGBUFFERCW_TAG);
- 
+    memset(queue, 0xff, sizeof(threaded_ringbuffer_cw_t));
+#endif
+
+    MALLOC_OR_DIE(void **, queue->buffer, sizeof(void *) * max_size, THREADED_QUEUE_RINGBUFFERCW_TAG);
+
     queue->buffer_limit = &queue->buffer[max_size];
     queue->write_slot = queue->buffer;
     queue->read_slot = queue->buffer;
@@ -82,8 +80,7 @@ threaded_ringbuffer_cw_init(threaded_ringbuffer_cw *queue, int max_size)
     queue->size = 0;
 }
 
-void
-threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw *queue)
+void threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw_t *queue)
 {
     /**
      * If the queue is not empty : too bad !
@@ -99,12 +96,11 @@ threaded_ringbuffer_cw_finalize(threaded_ringbuffer_cw *queue)
 
     mutex_destroy(&queue->mutex);
 #if DEBUG
-    memset(queue, 0xde, sizeof(threaded_ringbuffer_cw));
+    memset(queue, 0xde, sizeof(threaded_ringbuffer_cw_t));
 #endif
 }
 
-void
-threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue, void *constant_pointer)
+void threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw_t *queue, void *constant_pointer)
 {
     assert(queue->max_size > 0);
     /*
@@ -112,7 +108,7 @@ threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue, void *constant_poi
      */
 
     mutex_lock(&queue->mutex);
-    while( queue->size >= queue->max_size )
+    while(queue->size >= queue->max_size)
     {
         cond_wait(&queue->cond_write, &queue->mutex);
     }
@@ -144,18 +140,17 @@ threaded_ringbuffer_cw_enqueue(threaded_ringbuffer_cw *queue, void *constant_poi
     mutex_unlock(&queue->mutex);
 }
 
-void
-threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constant_pointer_array, u32 count)
+void threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw_t *queue, void **constant_pointer_array, uint32_t count)
 {
     assert(queue->max_size > 0);
     assert(queue->max_size >= count);
-    
+
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
      */
-    
+
     mutex_lock(&queue->mutex);
-    while( queue->size + count > queue->max_size )
+    while(queue->size + count > queue->max_size)
     {
         cond_wait(&queue->cond_write, &queue->mutex);
     }
@@ -170,7 +165,7 @@ threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constan
      * @note: "if(overflow) reset" is (much) faster than MOD(limit)
      */
 
-    for(u32 i = 0; i < count; ++i)
+    for(uint_fast32_t i = 0; i < count; ++i)
     {
         *queue->write_slot++ = constant_pointer_array[i];
 
@@ -179,7 +174,7 @@ threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constan
             queue->write_slot = queue->buffer;
         }
     }
-    
+
     queue->size += count;
 
     /*
@@ -190,8 +185,7 @@ threaded_ringbuffer_cw_enqueue_set(threaded_ringbuffer_cw *queue, void **constan
     mutex_unlock(&queue->mutex);
 }
 
-bool
-threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant_pointer)
+bool threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw_t *queue, void *constant_pointer)
 {
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
@@ -199,13 +193,13 @@ threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant
 
     if(!mutex_trylock(&queue->mutex))
     {
-        return FALSE;
+        return false;
     }
 
-    if( queue->size >= queue->max_size )
+    if(queue->size >= queue->max_size)
     {
         mutex_unlock(&queue->mutex);
-        return FALSE;
+        return false;
     }
 
     /*
@@ -234,11 +228,10 @@ threaded_ringbuffer_cw_try_enqueue(threaded_ringbuffer_cw* queue, void* constant
     cond_notify(&queue->cond_read);
     mutex_unlock(&queue->mutex);
 
-    return TRUE;
+    return true;
 }
 
-void*
-threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue)
+void *threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw_t *queue)
 {
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
@@ -246,9 +239,9 @@ threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue)
 
     mutex_lock(&queue->mutex);
 
-    while( queue->size == 0 )
+    while(queue->size == 0)
     {
-        cond_wait(&queue->cond_read,&queue->mutex);
+        cond_wait(&queue->cond_read, &queue->mutex);
     }
 
     /*
@@ -257,67 +250,7 @@ threaded_ringbuffer_cw_peek(threaded_ringbuffer_cw *queue)
      *
      */
 
-    void* data = *queue->read_slot;
-   
-    /*
-     * We are done here.
-     */
-
-    mutex_unlock(&queue->mutex);
-
-    return data;
-}
-
-void*
-threaded_ringbuffer_cw_try_peek(threaded_ringbuffer_cw *queue)
-{
-    mutex_lock(&queue->mutex);
-
-    if( queue->size == 0 )
-    {
-        mutex_unlock(&queue->mutex);
-
-        return NULL;
-    }
-
-    /*
-     * Get the data from the read position,
-     * and move the read position to the next slot
-     *
-     */
-
-    void* data = *queue->read_slot;
-
-    /*
-     * We are done here.
-     */
-
-    mutex_unlock(&queue->mutex);
-
-    return data;
-}
-
-void*
-threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
-{
-    /*
-     * Ensure I'm allowed to work on queue (only one working on it)
-     */
-
-    mutex_lock(&queue->mutex);
-
-    while( queue->size == 0 )
-    {
-        cond_wait(&queue->cond_read,&queue->mutex);
-    }
-
-    /*
-     * Get the data from the read position,
-     * and move the read position to the next slot
-     *
-     */
-
-    void* data = *queue->read_slot++;
+    void *data = *queue->read_slot++;
     if(queue->read_slot == queue->buffer_limit)
     {
         queue->read_slot = queue->buffer;
@@ -343,8 +276,7 @@ threaded_ringbuffer_cw_dequeue(threaded_ringbuffer_cw *queue)
     return data;
 }
 
-void*
-threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 timeout_us)
+void *threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw_t *queue, int64_t timeout_us)
 {
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
@@ -352,9 +284,9 @@ threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 t
 
     mutex_lock(&queue->mutex);
 
-    while( queue->size == 0 )
+    while(queue->size == 0)
     {
-        if(cond_timedwait(&queue->cond_read,&queue->mutex, timeout_us) != 0)
+        if(cond_timedwait(&queue->cond_read, &queue->mutex, timeout_us) != 0)
         {
             mutex_unlock(&queue->mutex);
             return NULL;
@@ -367,7 +299,7 @@ threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 t
      *
      */
 
-    void* data = *queue->read_slot++;
+    void *data = *queue->read_slot++;
     if(queue->read_slot == queue->buffer_limit)
     {
         queue->read_slot = queue->buffer;
@@ -393,12 +325,11 @@ threaded_ringbuffer_cw_dequeue_with_timeout(threaded_ringbuffer_cw *queue, s64 t
     return data;
 }
 
-void*
-threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
+void *threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw_t *queue)
 {
     mutex_lock(&queue->mutex);
 
-    if( queue->size == 0 )
+    if(queue->size == 0)
     {
         mutex_unlock(&queue->mutex);
 
@@ -411,7 +342,7 @@ threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
      *
      */
 
-    void* data = *queue->read_slot++;
+    void *data = *queue->read_slot++;
     if(queue->read_slot == queue->buffer_limit)
     {
         queue->read_slot = queue->buffer;
@@ -420,10 +351,10 @@ threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
     if(queue->size-- == queue->max_size) /* enqueue has just been locked  -> unlock */
     {
         /*
-        * The queue is full : the queuers are waiting.
-        * Since we will are removing something, we car free (one of) them.
-        * (They will however still be locked until the queue mutex is released)
-        */
+         * The queue is full : the queuers are waiting.
+         * Since we will are removing something, we can free (one of) them.
+         * (They will however still be locked until the queue mutex is released)
+         */
 
         cond_notify(&queue->cond_write);
     }
@@ -437,8 +368,7 @@ threaded_ringbuffer_cw_try_dequeue(threaded_ringbuffer_cw *queue)
     return data;
 }
 
-u32
-threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, u32 array_size)
+uint32_t threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw_t *queue, void **array, uint32_t array_size)
 {
     /*
      * Ensure I'm allowed to work on queue (only one working on it)
@@ -446,9 +376,9 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, 
 
     mutex_lock(&queue->mutex);
 
-    while( queue->size == 0 )
+    while(queue->size == 0)
     {
-        cond_wait(&queue->cond_read,&queue->mutex);
+        cond_wait(&queue->cond_read, &queue->mutex);
     }
 
     /*
@@ -457,15 +387,15 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, 
      *
      */
 
-    bool unlock_enqueue = queue->size == queue->max_size; /* enqueue has just been locked -> schedule unlock */
+    bool         unlock_enqueue = queue->size == queue->max_size; /* enqueue has just been locked -> schedule unlock */
 
-    u32 loops = MIN(queue->size, array_size);		  /* The amount we will be able to extract */
-    
-    void ** const limit = &array[loops];		  /* compute the limit so we only have one increment and one compare */
+    uint32_t     loops = MIN(queue->size, array_size); /* The amount we will be able to extract */
+
+    void **const limit = &array[loops]; /* compute the limit so we only have one increment and one compare */
 
     while(array < limit)
     {
-        void* data = *queue->read_slot++;
+        void *data = *queue->read_slot++;
         *array++ = data;
 
         if(queue->read_slot == queue->buffer_limit)
@@ -473,25 +403,25 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, 
             queue->read_slot = queue->buffer;
         }
 
-        if(data == NULL)				    /* Break if a terminator is found*/
+        if(data == NULL) /* Break if a terminator is found*/
         {
             loops -= limit - array;
             break;
         }
     }
 
-    queue->size -= loops;				  /* adjust the size */
+    queue->size -= loops; /* adjust the size */
 
     if(unlock_enqueue) /* enqueue has just been locked -> unlock */
     {
         /*
          * The queue is full : the queuers are waiting.
-         * Since we will are removing something, we car free (one of) them.
+         * Since we will are removing something, we can free (one of) them.
          * (They will however still be locked until the queue mutex is released)
          */
 
         cond_notify(&queue->cond_write);
-    }   
+    }
 
     /*
      * We are done here.
@@ -499,11 +429,10 @@ threaded_ringbuffer_cw_dequeue_set(threaded_ringbuffer_cw *queue, void **array, 
 
     mutex_unlock(&queue->mutex);
 
-    return loops;	    /* Return the amount we got from the queue */
+    return loops; /* Return the amount we got from the queue */
 }
 
-void
-threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue)
+void threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw_t *queue)
 {
     int size;
 
@@ -524,10 +453,9 @@ threaded_ringbuffer_cw_wait_empty(threaded_ringbuffer_cw *queue)
     }
 }
 
-u32
-threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue)
+uint32_t threaded_ringbuffer_cw_size(threaded_ringbuffer_cw_t *queue)
 {
-    u32 size;
+    uint32_t size;
 
     mutex_lock(&queue->mutex);
 
@@ -538,8 +466,7 @@ threaded_ringbuffer_cw_size(threaded_ringbuffer_cw *queue)
     return size;
 }
 
-int
-threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue)
+int threaded_ringbuffer_cw_room(threaded_ringbuffer_cw_t *queue)
 {
     int room;
 
@@ -552,8 +479,7 @@ threaded_ringbuffer_cw_room(threaded_ringbuffer_cw *queue)
     return room;
 }
 
-ya_result
-threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
+ya_result threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw_t *queue, int max_size)
 {
     ya_result ret = INVALID_ARGUMENT_ERROR; // can only grow
 
@@ -561,22 +487,22 @@ threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
 
     if(max_size >= (int)queue->size)
     {
-        void** tmp;
-        MALLOC_OR_DIE(void**, tmp, sizeof(void*) * max_size, THREADED_QUEUE_RINGBUFFERCW_TAG);
+        void **tmp;
+        MALLOC_OR_DIE(void **, tmp, sizeof(void *) * max_size, THREADED_QUEUE_RINGBUFFERCW_TAG);
 
         /*
          * Copy from the read to the write position
          */
 
-        void** p = tmp;
-        u32 count = queue->size;
+        void   **p = tmp;
+        uint32_t count = queue->size;
 
         while(count-- > 0)
         {
             *p++ = *queue->read_slot++;
 
             // wrap when the end is reached
-            
+
             if(queue->read_slot == queue->buffer_limit)
             {
                 queue->read_slot = queue->buffer;
@@ -604,9 +530,9 @@ threaded_ringbuffer_cw_set_maxsize(threaded_ringbuffer_cw *queue, int max_size)
         queue->write_slot = p;
         queue->max_size = max_size;
     }
-    
+
     ret = queue->max_size;
-    
+
     mutex_unlock(&queue->mutex);
 
     return ret;

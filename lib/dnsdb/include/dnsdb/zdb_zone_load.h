@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to manipulate a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -47,7 +46,7 @@
 #include <dnscore/zone_reader.h>
 #include <dnsdb/zdb_sanitize.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -56,7 +55,7 @@ extern "C"
  * @brief Load a zone in the database.
  *
  * Load a zone in the database.
- * This is clearly MASTER oriented.
+ * This is clearly PRIMARY oriented.
  *
  * @param[in] db a pointer to the database
  * @param[in] filename a pointer to the filename of the zone
@@ -66,94 +65,91 @@ extern "C"
  *
  */
 
-#define ZDB_ZONE_NO_MAINTENANCE     0x01   // do not maintain the zone DNSSEC state
-#define ZDB_ZONE_REPLAY_JOURNAL     0x02   // replay the journal after the load
-#define ZDB_ZONE_DESTROY_JOURNAL    0x04   // destroys the journal after a successful load
-#define ZDB_ZONE_IS_SLAVE           0x08   // any NSEC3 inconsistencies must trigger an AXFR reload
+#define ZDB_ZONE_NO_MAINTENANCE   0x01   // do not maintain the zone DNSSEC state
+#define ZDB_ZONE_REPLAY_JOURNAL   0x02   // replay the journal after the load
+#define ZDB_ZONE_DESTROY_JOURNAL  0x04   // destroys the journal after a successful load
+#define ZDB_ZONE_IS_SECONDARY     0x08   // any NSEC3 inconsistencies must trigger an AXFR reload
+#define ZDB_ZONE_NOKEYSTOREUPDATE 0x1000 // do not load any DNSKEY in the keystore
 
-#define ZDB_ZONE_DNSSEC_SHIFT           4
-#define ZDB_ZONE_DNSSEC_MASK       0x0070
-#define ZDB_ZONE_NOSEC             0x0000
-#define ZDB_ZONE_NSEC              0x0010
-#define ZDB_ZONE_NSEC3             0x0020
-#define ZDB_ZONE_NSEC3_OPTOUT      0x0030
+#define ZDB_ZONE_DNSSEC_SHIFT     4
+#define ZDB_ZONE_DNSSEC_MASK      0x0070
+#define ZDB_ZONE_NOSEC            0x0000
+#define ZDB_ZONE_NSEC             0x0010
+#define ZDB_ZONE_NSEC3            0x0020
+#define ZDB_ZONE_NSEC3_OPTOUT     0x0030
 
-#if BYTE_ORDER == LITTLE_ENDIAN
 struct zdb_zone_load_dnskey_id_fields
 {
-    u16 tag;
-    u8 algorithm;
-    u8 must_be_zero;
+    uint16_t tag;
+    uint8_t  algorithm;
+    uint8_t  must_be_zero;
 };
-#elif BYTE_ORDER == BIG_ENDIAN
-struct zdb_zone_load_dnskey_id_fields
-{
-    u8 must_be_zero;
-    u8 algorithm;
-    u16 tag;
-};
-#else
-#error "BYTE_ORDER value is not supported"
-#endif
 
 union zdb_zone_load_dnskey_id
 {
-    u32 id;
+    uint32_t                              id;
     struct zdb_zone_load_dnskey_id_fields fields;
 };
 
-#define ZDB_ZONE_LOAD_DNSKEY_STATE_FLAG_HAS_PUBKEY 1
-#define ZDB_ZONE_LOAD_DNSKEY_STATE_FLAG_HAS_PRIVKEY 2
-#define ZDB_ZONE_LOAD_DNSKEY_STATE_FLAG_MISSING_SIGNATURES 4
+#define ZDB_ZONE_LOAD_DNSKEY_STATE_FLAG_HAS_PUBKEY                1
+#define ZDB_ZONE_LOAD_DNSKEY_STATE_FLAG_HAS_PRIVKEY               2
+#define ZDB_ZONE_LOAD_DNSKEY_STATE_FLAG_MISSING_SIGNATURES        4
 
-#define ZDB_ZONE_LOAD_STATE_SANITIZE_FIELD_AVAIABLE 8
-#define ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_AVAILABLE 16
+#define ZDB_ZONE_LOAD_STATE_SANITIZE_FIELD_AVAIABLE               8
+#define ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_AVAILABLE            16
 #define ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_MAINTENANCE_REQUIRED 32
-#define ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_NSEC3_CHAIN_FIXED 64
+#define ZDB_ZONE_LOAD_STATE_SANITIZE_SUMMARY_NSEC3_CHAIN_FIXED    64
+#define ZDB_ZONE_LOAD_STATE_SANITIZE_HAS_NOT_RECOMMENDED          128
+#define ZDB_ZONE_LOAD_STATE_SANITIZE_HAS_MUST_NOT                 256
+// note: state is 16 bits
 
-#define ZZLDSKEY_TAG 0x59454b53444c5a5a
+#define ZZLDSKEY_TAG                                              0x59454b53444c5a5a
 
 struct zdb_zone_load_dnskey_state_for_key
 {
-    s32 signed_until;
-    s32 signed_from;
-    u32 rrsig_count;
-    u16 key_flags;
-    u8 flags;
+    int32_t  signed_until;
+    int32_t  signed_from;
+    uint32_t rrsig_count;
+    uint16_t key_flags;
+    uint8_t  flags;
 };
 
-typedef u32_set zdb_zone_load_dnskey_state;
+typedef u32_treemap_t zdb_zone_load_dnskey_state;
 
 struct zdb_zone_load_parms
 {
-    zone_reader *zr;
-    const u8 *expected_origin;
+    zone_reader_t             *zr;
+    const uint8_t             *expected_origin;
     zdb_zone_load_dnskey_state dnskey_state;
-    zdb_zone *out_zone;
-    struct zdb_sanitize_parms sanitize_parms;
-    ya_result result_code;
-    u16 flags;
-    u16 state;
-    u8 expected_dnssec;
+    zdb_zone_t                *out_zone;
+    struct zdb_sanitize_parms  sanitize_parms;
+    ya_result                  result_code;
+    uint16_t                   flags;
+    uint16_t                   state;
+    uint8_t                    expected_dnssec;
 };
 
-void zdb_zone_load_parms_init(struct zdb_zone_load_parms *parms, zone_reader *zr, const u8 *expected_origin, u16 flags);
-void zdb_zone_load_parms_dnskey_add(struct zdb_zone_load_parms *parms, const u8 *dnskey_rdata, u16 dnskey_rdata_size);
-u16  zdb_zone_load_parms_get_key_flags_from_rrsig_rdata(struct zdb_zone_load_parms *parms, const u8 *rrsig_rdata, u16 rrsig_rdata_size);
-void zdb_zone_load_parms_rrsig_add(struct zdb_zone_load_parms *parms, const u8 *rrsig_rdata, u16 rrsig_rdata_size);
-zdb_zone *zdb_zone_load_parms_zone_detach(struct zdb_zone_load_parms *parms);
-zdb_zone *zdb_zone_load_parms_zone_get(struct zdb_zone_load_parms *parms);
-ya_result zdb_zone_load_parms_result_code(struct zdb_zone_load_parms *parms);
-void zdb_zone_load_parms_finalize(struct zdb_zone_load_parms *parms);
+void        zdb_zone_load_nsec3param_ttl_override_set(int32_t ttl);
+int32_t     zdb_zone_load_nsec3param_ttl_override_get();
 
-ya_result zdb_zone_load_ex(struct zdb_zone_load_parms *parms);
+void        zdb_zone_load_parms_init(struct zdb_zone_load_parms *parms, zone_reader_t *zr, const uint8_t *expected_origin, uint16_t flags);
+void        zdb_zone_load_parms_dnskey_add(struct zdb_zone_load_parms *parms, const uint8_t *dnskey_rdata, uint16_t dnskey_rdata_size);
+uint16_t    zdb_zone_load_parms_get_key_flags_from_rrsig_rdata(struct zdb_zone_load_parms *parms, const uint8_t *rrsig_rdata, uint16_t rrsig_rdata_size);
+void        zdb_zone_load_parms_rrsig_add(struct zdb_zone_load_parms *parms, const uint8_t *rrsig_rdata, uint16_t rrsig_rdata_size);
+zdb_zone_t *zdb_zone_load_parms_zone_detach(struct zdb_zone_load_parms *parms);
+zdb_zone_t *zdb_zone_load_parms_zone_get(struct zdb_zone_load_parms *parms);
+ya_result   zdb_zone_load_parms_result_code(struct zdb_zone_load_parms *parms);
+void        zdb_zone_load_parms_finalize(struct zdb_zone_load_parms *parms);
+
+ya_result   zdb_zone_load_ex(struct zdb_zone_load_parms *parms);
 
 /**
  * @brief Load a zone file.
  *
  * Load a zone file.
  *
- * @note It is not a good idea to scan the zone content in here. ie: getting the earliest signature expiration. (It's counter-productive and pointless)
+ * @note It is not a good idea to scan the zone content in here. ie: getting the earliest signature expiration. (It's
+ * counter-productive and pointless)
  *
  * @param[in] db_UNUSED a pointer to the database, obsolete, should be set to NULL
  * @param[in] zr a pointer to an opened zone_reader
@@ -165,13 +161,13 @@ ya_result zdb_zone_load_ex(struct zdb_zone_load_parms *parms);
  *
  */
 
-ya_result zdb_zone_load(zdb* db_UNUSED, zone_reader* zr, zdb_zone** zone_out, const u8 *expected_origin, u16 flags);
+ya_result zdb_zone_load(zdb_t *db_UNUSED, zone_reader_t *zr, zdb_zone_t **zone_out, const uint8_t *expected_origin, uint16_t flags);
 
 /**
  * @brief Load the zone SOA.
  *
  * Load the zone SOA record
- * This is meant mainly for the slave that could choose between, ie: zone file or axfr zone file
+ * This is meant mainly for the secondary that could choose between, ie: zone file or axfr zone file
  * The SOA MUST BE the first record
  *
  * @param[in] db a pointer to the database
@@ -181,9 +177,9 @@ ya_result zdb_zone_load(zdb* db_UNUSED, zone_reader* zr, zdb_zone** zone_out, co
  * @return an error code.
  *
  */
-ya_result zdb_zone_get_soa(zone_reader *zone_data, u16 *rdata_size, u8 *rdata);
+ya_result zdb_zone_get_soa(zone_reader_t *zone_data, uint16_t *rdata_size, uint8_t *rdata);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

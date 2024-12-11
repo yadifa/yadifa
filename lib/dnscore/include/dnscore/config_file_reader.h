@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,9 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -38,29 +36,31 @@
 #include <dnscore/input_stream.h>
 
 /**
- * 
+ *
  * Parses an input stream for a section/container defined by its config sectiondescriptor.
  * The input stream will be closed by the function.
- * 
+ *
  * @param stream_name a name to identify the stream in case of error
  * @param ins the input stream to parse
  * @param csd the descriptor of the section to parse
  * @param cfgerr if not NULL, the error reporting structure to fill in case of error
- * 
+ *
  * @return an error code
  */
 
-ya_result config_file_reader_parse_stream(const char* stream_name, input_stream *ins, struct config_section_descriptor_s *csd, config_error_s *cfgerr);
+ya_result config_file_reader_parse_stream(const char *stream_name, input_stream_t *ins, struct config_section_descriptor_s *csd, config_error_t *cfgerr);
 
+#if NOTUSED
 /**
- * 
+ *
  * Parses a file for a section/container defined by its config sectiondescriptor.
- * 
+ *
  * @param fullpath the file path
  * @param csd the descriptor of the section to parse
  * @param cfgerr if not NULL, the error reporting structure to fill in case of error
- * 
+ *
  * @return an error code
  */
 
-ya_result config_file_reader_open(const char* fullpath, struct config_section_descriptor_s *csd, config_error_s *cfgerr);
+ya_result config_file_reader_open(const char *fullpath, struct config_section_descriptor_s *csd, config_error_t *cfgerr);
+#endif

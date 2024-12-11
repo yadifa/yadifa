@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
 
-#include "server-config.h"
+#include "server_config.h"
 
 #define _GNU_SOURCE 1
 
@@ -55,7 +57,7 @@
 
 #if defined(__linux__) || defined(__gnu_hurd__)
 #define _GNU_SOURCE 1
-//#include <execinfo.h>
+// #include <execinfo.h>
 #include <sys/mman.h>
 #include <ucontext.h>
 #elif defined(__sun)
@@ -68,19 +70,19 @@
 #include <dnscore/signals.h>
 #include <dnscore/timems.h>
 #include <dnscore/thread_pool.h>
-#include <dnscore/socket-server.h>
+#include <dnscore/socket_server.h>
 
 #include "signals.h"
 #include "server_context.h"
 #include "server.h"
 #if DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && DNSCORE_HAS_DNSSEC_SUPPORT
-#include "database-service-zone-resignature.h"
+#include "database_service_zone_resignature.h"
 #endif
 
-#define MODULE_MSG_HANDLE g_server_logger
-#define MAXTRACE 128
+#define MODULE_MSG_HANDLE           g_server_logger
+#define MAXTRACE                    128
 
-#define LOGGER_REOPEN_MIN_PERIOD_US 1000000
+#define LOGGER_REOPEN_PERIOD_US_MIN 1000000
 
 ya_result database_store_all_zones_to_disk();
 
@@ -89,26 +91,25 @@ ya_result database_store_all_zones_to_disk();
 
 static volatile time_t signal_task_logger_handle_reopen_last_active = 0;
 
-static void
-signal_task_reconfigure_reopen_log()
-{  
+static void            signal_task_reconfigure_reopen_log()
+{
     // TRY debug as else there is a risk of deadlock
     log_try_debug1("signal_task_reconfigure_reopen_log()");
-    
-    u64 now = timeus();
-        
-    if(now - signal_task_logger_handle_reopen_last_active > LOGGER_REOPEN_MIN_PERIOD_US)
-    {        
+
+    uint64_t now = timeus();
+
+    if(now - signal_task_logger_handle_reopen_last_active > LOGGER_REOPEN_PERIOD_US_MIN)
+    {
         signal_task_logger_handle_reopen_last_active = now;
-        
+
         log_try_debug1("signal_task_reconfigure_reopen_log(): setting the sink");
-        
+
         logger_sink();
-        
+
         if(g_config->reloadable)
         {
             log_try_debug1("signal_task_reconfigure_reopen_log(): reloading configuration");
-            
+
             yadifad_config_update(g_config->config_file);
         }
         else
@@ -116,70 +117,68 @@ signal_task_reconfigure_reopen_log()
             // TRY error as else there is a risk of deadlock
             log_try_err("cannot reopen configuration file(s): '%s' is outside of jail", g_config->config_file);
         }
-        
+
 #if DEBUG
         log_try_debug1("signal_task_reconfigure_reopen_log(): reopening log files");
 #endif
-        
+
         logger_reopen();
-        
+
         if(!server_context_matches_config())
         {
             log_try_debug1("network configuration has changed");
-            
+
             server_service_reconfigure();
         }
         else
         {
             log_try_debug1("network configuration has not changed");
         }
-        
-#if DNSCORE_HAS_DNSSEC_SUPPORT && DNSCORE_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_MASTER_SUPPORT
+
+#if DNSCORE_HAS_DNSSEC_SUPPORT && HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_PRIMARY_SUPPORT
         database_service_zone_dnskey_set_alarms_on_all_zones();
 #endif
     }
 #if DEBUG
     else
     {
-        double dt = LOGGER_REOPEN_MIN_PERIOD_US - (now - signal_task_logger_handle_reopen_last_active);
+        double dt = LOGGER_REOPEN_PERIOD_US_MIN - (now - signal_task_logger_handle_reopen_last_active);
         dt /= ONE_SECOND_US_F;
-        
+
         log_try_debug1("signal_task_reconfigure_reopen_log(): ignore for %.3fs", dt);
     }
 #endif
-    
+
     // TRY debug as else there is a risk of deadlock
     log_try_debug1("signal_task_reconfigure_reopen_log(): end");
 }
 
 /***/
 
-static void
-signal_task_database_store_all_zones_to_disk()
+static void signal_task_database_store_all_zones_to_disk()
 {
     log_debug("signal_task_database_store_all_zones_to_disk()");
-    
+
     if(g_config->database != NULL)
     {
         database_store_all_zones_to_disk();
     }
-    
+
     log_debug("signal_task_database_store_all_zones_to_disk(): end");
 }
 
 /**/
 
-static void
-signal_task_shutdown()
+static void signal_task_shutdown()
 {
 #if DEBUG
     log_info("signal_task_shutdown()");
 #else
     log_debug("signal_task_shutdown()");
 #endif
-    
+
     program_mode = SA_SHUTDOWN;
-    
+
     if(!dnscore_shuttingdown())
     {
         dnscore_shutdown();
@@ -187,22 +186,20 @@ signal_task_shutdown()
         program_mode = SA_SHUTDOWN;
 
         socket_server_finalize();
-        //notify_service_stop();
         server_service_stop();
         server_context_close();
 #if DEBUG
         log_debug("stopping program");
 #endif
     }
-    
+
     log_debug("signal_task_shutdown(): end");
 }
 
-static void
-signal_hup(u8 signum)
+static void signal_hup(uint8_t signum)
 {
     (void)signum;
-    
+
     // that was a bad idea as logs may be full and this is the only way
     // to save the situation :
     // log_info("signal: HUP");
@@ -213,8 +210,7 @@ signal_hup(u8 signum)
     }
 }
 
-static void
-signal_usr1(u8 signum)
+static void signal_usr1(uint8_t signum)
 {
     (void)signum;
     log_info("signal: USR1");
@@ -224,15 +220,9 @@ signal_usr1(u8 signum)
     }
 }
 
-static void
-signal_usr2(u8 signum)
-{
-    (void)signum;
-    
-}
+static void signal_usr2(uint8_t signum) { (void)signum; }
 
-static void
-signal_int(u8 signum)
+static void signal_int(uint8_t signum)
 {
     (void)signum;
     log_info("signal: INT");
@@ -243,8 +233,7 @@ signal_int(u8 signum)
 #endif
 }
 
-static void
-signal_term(u8 signum)
+static void signal_term(uint8_t signum)
 {
     (void)signum;
     log_info("signal: TERM");

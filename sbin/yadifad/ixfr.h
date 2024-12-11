@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,52 +28,45 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _IXFR_H
-#define	_IXFR_H
+#define _IXFR_H
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/host_address.h>
-#if DNSCORE_HAS_TCP_MANAGER
-#include <dnscore/tcp_manager.h>
-#endif
+#include <dnscore/tcp_manager2.h>
 
 #include "database.h"
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#if DNSCORE_HAS_TCP_MANAGER
-ya_result ixfr_process(message_data *mesg, tcp_manager_socket_context_t *sctx);
-#else
-ya_result ixfr_process(message_data *mesg, int sockfd);
-#endif
+ya_result ixfr_process(dns_message_t *mesg, tcp_manager_channel_t *tmc);
 
 /**
- * 
- * Send an IXFR query to a master and handle the answer (loads the zone).
- * 
+ *
+ * Send an IXFR query to a primary and handle the answer (loads the zone).
+ *
  */
 
-ya_result ixfr_query(const host_address *servers, zdb_zone *zone, u32 *output_loaded_serial);
+ya_result ixfr_query(const host_address_t *servers, zdb_zone_t *zone, uint32_t *output_loaded_serial);
 
 /**
  * Connects to the server and sends an IXFR query with the given parameters.
  * In case of success the input and output streams are tcp streams to the server, ready to read the answer
  * In case of error the streams are undefined
- * 
+ *
  * @param servers
  * @param origin
  * @param ttl
@@ -81,16 +74,15 @@ ya_result ixfr_query(const host_address *servers, zdb_zone *zone, u32 *output_lo
  * @param rdata_size
  * @param is
  * @param os
- * @return 
+ * @return
  */
 
-ya_result ixfr_start_query(const host_address *servers, const u8 *origin, u32 ttl, const u8 *rdata, u16 rdata_size, input_stream *is, output_stream *os, message_data *ixfr_queryp);
+ya_result ixfr_start_query(const host_address_t *servers, const uint8_t *origin, int32_t ttl, const uint8_t *rdata, uint16_t rdata_size, input_stream_t *is, output_stream_t *os, dns_message_t *ixfr_queryp);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _IXFR_H */
+#endif /* _IXFR_H */
 
 /** @} */
-

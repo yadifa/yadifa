@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,60 +28,59 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef XFR_H
-#define	XFR_H
+#define XFR_H
 
 #include <dirent.h>
 
 #include <dnscore/xfr_input_stream.h>
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/fdtools.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-#define XFR_FULL_FILE_MODE      0600
+#define XFR_FULL_FILE_MODE 0600
 
 /**
- * 
+ *
  * Deletes the AXFR wire dumps of a zone. Hashed folders are not removed.
- * 
+ *
  * @param origin
  * @param base_data_path where to remove the file from (and its hashed folders)
- * @return 
+ * @return
  */
 
-ya_result xfr_delete_axfr(const u8 *origin);
+ya_result xfr_delete_axfr(const uint8_t *origin);
 
 /**
- * 
+ *
  * Copies an AXFR stream from an XFR (xfr_input_stream) into a wire dump (.axfr)
- * 
- * @param xis the xfr_input_stream
+ *
+ * @param xis the xfr_input_stream_t
  * @param base_data_path where to put the file (and its hashed folder)
- * 
+ *
  * @return an error code
  */
 
-ya_result xfr_copy(input_stream *xis, const char *base_data_path, bool base_data_path_is_target);
+ya_result xfr_copy(input_stream_t *xis, const char *base_data_path, bool base_data_path_is_target);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* XFR_H */
-
+#endif /* XFR_H */
 
 /** @} */

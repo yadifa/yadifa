@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,11 +28,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
 #if DEBUG
@@ -44,7 +42,7 @@
 
 #include <dnscore/thread.h>
 
-#include "dnscore/ptr_set.h"
+#include "dnscore/ptr_treemap.h"
 #include "dnscore/logger.h"
 #include "dnscore/thread_pool.h"
 
@@ -52,28 +50,31 @@
 #include "dnscore/thread.h"
 #include "dnscore/signals.h"
 
-extern logger_handle *g_system_logger;
-#define MODULE_MSG_HANDLE g_system_logger
+extern logger_handle_t *g_system_logger;
+#define MODULE_MSG_HANDLE          g_system_logger
 
 #define SERVICE_WAKE_USING_SIGUSR2 0 // don't use signals
 
-static int service_ptr_set_compare(const void *node_a, const void *node_b)
+static int service_ptr_treemap_compare(const void *node_a, const void *node_b)
 {
-    
+
     struct service_s *a = (struct service_s *)node_a;
     struct service_s *b = (struct service_s *)node_b;
-    
+
     return strcmp(a->name, b->name);
 }
 
-static ptr_set service_set = {NULL, service_ptr_set_compare};
-static mutex_t service_set_mutex = MUTEX_INITIALIZER;
+static ptr_treemap_t service_set = {NULL, service_ptr_treemap_compare};
+static mutex_t       service_set_mutex = MUTEX_INITIALIZER;
 
-static noreturn void*
-service_thread(void *args)
+/**
+ * Service thread main.
+ */
+
+static /*_Noreturn*/ void *service_thread(void *args)
 {
     struct service_worker_s *worker = (struct service_worker_s *)args;
-    
+
     yassert(worker != NULL);
 
     sigset_t set;
@@ -84,9 +85,9 @@ service_thread(void *args)
     sigaddset(&set, SIGSTOP);
     sigaddset(&set, SIGCONT);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
-    
+
     struct service_s *desc = (struct service_s *)worker->service;
-        
+
     thread_pool_setup_random_ctx();
 
     thread_set_name(desc->name, worker->worker_index, worker->service->worker_count);
@@ -115,13 +116,13 @@ service_thread(void *args)
 #endif
         log_debug("service: %s starting (%i/%i)", desc->name, worker->worker_index + 1, worker->service->worker_count);
     }
-    
+
     if(desc->entry_point != NULL)
     {
         worker->return_code = desc->entry_point(worker);
-        
+
         log_debug("service: %s terminated with: %r", desc->name, worker->return_code);
-        
+
         mutex_lock(&worker->lock);
         worker->flags = SERVICE_OFF;
         mutex_unlock(&worker->lock);
@@ -129,12 +130,12 @@ service_thread(void *args)
     else
     {
         worker->return_code = SERVICE_WITHOUT_ENTRY_POINT;
-        
+
         log_debug("service: NULL entry point", worker->return_code);
     }
-    
+
     thread_pool_destroy_random_ctx();
-    
+
     mutex_lock(&worker->service->wait_lock);
     cond_notify(&worker->service->wait_cond);
     mutex_unlock(&worker->service->wait_lock);
@@ -142,15 +143,18 @@ service_thread(void *args)
 #if DNSCORE_HAS_LOG_THREAD_TAG
     logger_handle_clear_thread_tag();
 #endif
-    
+
     thread_exit(NULL);
 
     // unreachable
     // return NULL;
 }
 
-static void*
-service_on_main_thread(void *args)
+/**
+ * Service main thread used to execute the service in the main program thread. (a.k.a. : not in a thread)
+ */
+
+static void *service_on_main_thread(void *args)
 {
     struct service_worker_s *worker = (struct service_worker_s *)args;
 
@@ -171,7 +175,7 @@ service_on_main_thread(void *args)
     if(worker->service->entry_point == NULL)
     {
         log_err("service: with NULL entry point");
-        
+
         mutex_lock(&worker->service->wait_lock);
         cond_notify(&worker->service->wait_cond);
         mutex_unlock(&worker->service->wait_lock);
@@ -187,11 +191,11 @@ service_on_main_thread(void *args)
     sigaddset(&set, SIGSTOP);
     sigaddset(&set, SIGCONT);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
-    
+
     struct service_s *desc = (struct service_s *)worker->service;
-        
+
     thread_pool_setup_random_ctx();
-    
+
     yassert(worker->service->worker_count == 1);
 
     log_debug("service: %s starting", desc->name);
@@ -205,9 +209,9 @@ service_on_main_thread(void *args)
     if(desc->entry_point != NULL)
     {
         worker->return_code = desc->entry_point(worker);
-        
+
         log_debug("service: %s terminated with: %r", desc->name, worker->return_code);
-        
+
         mutex_lock(&worker->lock);
         worker->flags = SERVICE_OFF;
         mutex_unlock(&worker->lock);
@@ -215,12 +219,12 @@ service_on_main_thread(void *args)
     else
     {
         worker->return_code = SERVICE_WITHOUT_ENTRY_POINT;
-        
+
         log_debug("service: NULL entry point", worker->return_code);
     }
 
     thread_pool_destroy_random_ctx();
-    
+
     mutex_lock(&worker->service->wait_lock);
     cond_notify(&worker->service->wait_cond);
     mutex_unlock(&worker->service->wait_lock);
@@ -232,30 +236,32 @@ service_on_main_thread(void *args)
     return NULL;
 }
 
-static void service_wakeup_no_operation(struct service_s *desc)
-{
-    (void)desc;
-}
+static void service_wakeup_no_operation(struct service_s *desc) { (void)desc; }
 
 /**
  * Initialises service with an entry point, a name, and a number of workers
  * Each worker will know its index (from 0 to count-1).
  * No threads are started yet after this call.
- * 
+ *
  * @param desc the service
  * @param entry_point the function of the service, it must be of the type service_main
- * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a reconfiguration or shutdown)
+ * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a
+ * reconfiguration or shutdown)
  * @param name the name of the service
  * @param count the number of workers for the service
  * @return an error code
  */
 
-int
-service_init_ex2(struct service_s *desc, service_main *entry_point, service_wakeup *wakeup_function, const char* name, u32 count)
+int service_init_ex2(struct service_s *desc, service_entry_point_t *entry_point, service_wakeup_t *wakeup_function, const char *name, uint32_t count)
 {
     if(count == 0)
     {
         return INVALID_ARGUMENT_ERROR;
+    }
+
+    if(wakeup_function == NULL)
+    {
+        wakeup_function = service_wakeup_no_operation;
     }
 
     mutex_lock(&service_set_mutex);
@@ -270,13 +276,13 @@ service_init_ex2(struct service_s *desc, service_main *entry_point, service_wake
 
     mutex_init(&desc->wait_lock);
     cond_init(&desc->wait_cond);
-    
-    desc->name = (char*)name;
-    
+
+    desc->name = (char *)name;
+
     mutex_lock(&service_set_mutex);
-    ptr_node *node = ptr_set_find(&service_set, desc);
+    ptr_treemap_node_t *node = ptr_treemap_find(&service_set, desc);
     mutex_unlock(&service_set_mutex);
-    
+
     if(node == NULL)
     {
         log_debug("service: %s init %i workers", name, count);
@@ -284,9 +290,10 @@ service_init_ex2(struct service_s *desc, service_main *entry_point, service_wake
         desc->entry_point = entry_point;
         desc->wakeup_all_workers = wakeup_function;
         desc->name = strdup(name);
-        MALLOC_OR_DIE(struct service_worker_s*, desc->worker, sizeof(struct service_worker_s) * count, SRVCWRKR_TAG); // DON'T POOL
+        MALLOC_OR_DIE(struct service_worker_s *, desc->worker, sizeof(struct service_worker_s) * count,
+                      SRVCWRKR_TAG); // DON'T POOL
         desc->worker_count = count;
-        for(u32 i = 0; i < count; i++)
+        for(uint_fast32_t i = 0; i < count; i++)
         {
             mutex_init(&desc->worker[i].lock);
             desc->worker[i].service = desc;
@@ -299,10 +306,10 @@ service_init_ex2(struct service_s *desc, service_main *entry_point, service_wake
         desc->args = NULL;
 
         mutex_lock(&service_set_mutex);
-        desc->_not_initialised = FALSE;
-        ptr_set_insert(&service_set, desc);
+        desc->_not_initialised = false;
+        ptr_treemap_insert(&service_set, desc);
         mutex_unlock(&service_set_mutex);
-        
+
         return SUCCESS;
     }
     else
@@ -320,14 +327,14 @@ service_init_ex2(struct service_s *desc, service_main *entry_point, service_wake
  *
  * @param desc the service
  * @param entry_point the function of the service, it must be of the type service_main
- * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a reconfiguration or shutdown)
+ * @param wakeup_function a function that will wakup-up all the workers of the service (e.g. so they can notice a
+ * reconfiguration or shutdown)
  * @param name the name of the service
  * @param count the number of workers for the service
  * @return an error code
  */
 
-int
-service_init_ex(struct service_s *desc, service_main *entry_point, const char* name, u32 count)
+int service_init_ex(struct service_s *desc, service_entry_point_t *entry_point, const char *name, uint32_t count)
 {
     int ret = service_init_ex2(desc, entry_point, service_wakeup_no_operation, name, count);
     return ret;
@@ -336,37 +343,31 @@ service_init_ex(struct service_s *desc, service_main *entry_point, const char* n
 /**
  * Initialises service with an entry point, a name, and one worker
  * No threads are started yet after this call.
- * 
+ *
  * This is basically calling service_init_ex(desc, entry_point, name, 1);
- * 
+ *
  * @param desc the service
  * @param entry_point the function of the service, it must be of the type service_main
  * @param name the name of the service
  * @return an error code
  */
 
-int
-service_init(struct service_s *desc, service_main *entry_point, const char* name)
+int service_init(struct service_s *desc, service_entry_point_t *entry_point, const char *name)
 {
     int ret = service_init_ex(desc, entry_point, name, 1);
     return ret;
 }
 
-bool
-service_initialised(struct service_s *desc)
-{
-    return !desc->_not_initialised;
-}
+bool service_initialised(struct service_s *desc) { return !desc->_not_initialised; }
 
 /**
  * Set service args.
- * 
+ *
  * @param desc a pointer to the service
  * @param args a pointer to the args
  */
 
-void
-service_args_set(struct service_s *desc, void *args)
+void service_args_set(struct service_s *desc, void *args)
 {
     mutex_lock(&desc->wait_lock);
     desc->args = args;
@@ -375,14 +376,13 @@ service_args_set(struct service_s *desc, void *args)
 
 /**
  * Get service args.
- * 
+ *
  * @param desc a pointer to the service
  *
  * @return a pointer to the args
  */
 
-void*
-service_args_get(struct service_s *desc)
+void *service_args_get(struct service_s *desc)
 {
     mutex_lock(&desc->wait_lock);
     void *ret = desc->args;
@@ -393,31 +393,35 @@ service_args_get(struct service_s *desc)
 /**
  * Stops then waits for all workers of the service.
  * Then destroy the service and release its content.
- * 
+ *
  * @param desc the service
  * @return an error code
  */
 
-int
-service_finalize(struct service_s *desc)
+int service_finalise(struct service_s *desc)
 {
+    if(!service_initialised(desc))
+    {
+        return INVALID_STATE_ERROR;
+    }
+
     log_debug("service: %s finalize", STRNULL(desc->name));
-    
+
     if(desc->name == NULL)
     {
         return INVALID_STATE_ERROR;
     }
-    
+
     service_stop(desc);
     service_wait(desc);
-    
+
     mutex_lock(&service_set_mutex);
-    ptr_set_delete(&service_set, desc);
+    ptr_treemap_delete(&service_set, desc);
     mutex_unlock(&service_set_mutex);
 
     mutex_lock(&desc->wait_lock);
 
-    for(u32 i = 0; i < desc->worker_count; i++)
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         mutex_destroy(&desc->worker[i].lock);
     }
@@ -427,13 +431,13 @@ service_finalize(struct service_s *desc)
     desc->worker = NULL;
     desc->worker_count = 0;
     desc->entry_point = NULL;
-    
+
     cond_finalize(&desc->wait_cond);
 
     free(desc->name);
     desc->name = NULL;
     mutex_lock(&service_set_mutex);
-    desc->_not_initialised = TRUE;
+    desc->_not_initialised = true;
     mutex_unlock(&service_set_mutex);
 
     mutex_unlock(&desc->wait_lock);
@@ -442,7 +446,7 @@ service_finalize(struct service_s *desc)
 
     static const struct service_s dummy_uninitialised_service = UNINITIALIZED_SERVICE;
     *desc = dummy_uninitialised_service;
-    
+
     return SUCCESS;
 }
 
@@ -450,28 +454,32 @@ service_finalize(struct service_s *desc)
  * Starts all workers of the service
  * If a worker is already running, it is left alone with undefined results.
  * A service should be fully stopped and waited on before being started again.
- * 
+ *
  * @param desc the service
  * @return an error code
  */
 
-int
-service_start(struct service_s *desc)
+int service_start(struct service_s *desc)
 {
+    if(!service_initialised(desc))
+    {
+        return INVALID_STATE_ERROR;
+    }
+
     log_debug("service: %s start", desc->name);
-    
-    u32 success = 0;
-    u32 failure = 0;
+
+    uint32_t success = 0;
+    uint32_t failure = 0;
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
-    u32 now = time(NULL);
+    uint32_t now = time(NULL);
     desc->last_seen_alive = now;
 #endif
 
-    for(u32 i = 0; i < desc->worker_count; i++)
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
-        
+
         mutex_lock(&worker->lock);
         if(worker->flags == SERVICE_OFF)
         {
@@ -485,11 +493,10 @@ service_start(struct service_s *desc)
             mutex_unlock(&worker->lock);
 
             log_warn("service_start: %s worker #%u already up and running", desc->name, i);
-            
+
             // service worker already up, ignore
-            continue;            
+            continue;
         }
-        
 
         if(thread_create(&worker->tid, service_thread, worker) == 0)
         {
@@ -511,25 +518,25 @@ service_start(struct service_s *desc)
             worker->flags = SERVICE_OFF;
 
             mutex_unlock(&worker->lock);
-            
+
             log_err("service_start: failed with: %r", err);
 
             failure++;
         }
     }
-    
+
     if(failure > 0)
     {
         log_err("service_start: service workers did not initialise properly (%u failures over %u workers)", failure, desc->worker_count);
-        
+
         if(success > 0)
         {
             log_err("service_start: but %u of the workers have been properly initialised", success);
         }
-        
+
         return INVALID_STATE_ERROR;
     }
-    
+
     return success;
 }
 
@@ -541,14 +548,18 @@ service_start(struct service_s *desc)
  * It is useful when you have a model where the main thread of the program
  * could change behaviour with an option.
  * ie: the server service (nudge nudge, wink wink ...)
- * 
+ *
  * @param desc
- * @return 
+ * @return
  */
 
-int
-service_start_and_wait(struct service_s *desc)
+int service_start_and_wait(struct service_s *desc)
 {
+    if(!service_initialised(desc))
+    {
+        return INVALID_STATE_ERROR;
+    }
+
     int ret;
     if(desc->worker_count != 1)
     {
@@ -563,7 +574,7 @@ service_start_and_wait(struct service_s *desc)
         log_debug("service: %s start", desc->name);
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
-        u32 now = time(NULL);
+        uint32_t now = time(NULL);
         desc->last_seen_alive = now;
 #endif
 
@@ -575,9 +586,9 @@ service_start_and_wait(struct service_s *desc)
             worker->flags = SERVICE_START;
 
             mutex_unlock(&worker->lock);
-            
+
             service_on_main_thread(worker);
-            
+
             ret = SUCCESS;
         }
         else
@@ -591,45 +602,49 @@ service_start_and_wait(struct service_s *desc)
             ret = service_wait(desc);
         }
     }
-    
+
     return ret;
 }
 
 /**
  * Set the status of all workers of the service to "STOP" and sends SIGUSR2 to
  * each of them.
- * 
+ *
  * The signal is meant to interrupt blocking IOs and the worker should notice
  * it 'in time' and finish.
- * 
+ *
  * @param desc the service
- * 
+ *
  * @return an error code
  */
 
-int
-service_stop(struct service_s *desc)
+int service_stop(struct service_s *desc)
 {
+    if(!service_initialised(desc))
+    {
+        return INVALID_STATE_ERROR;
+    }
+
     log_debug("service: %s stop", desc->name);
 
     int err = SERVICE_NOT_RUNNING;
-    
-    for(u32 i = 0; i < desc->worker_count; i++)
+
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
-        
-        mutex_lock(&worker->lock);
-        
-        u8 f = worker->flags;
 
-        if((f & (SERVICE_START|SERVICE_STOP)) == SERVICE_START)
+        mutex_lock(&worker->lock);
+
+        uint8_t f = worker->flags;
+
+        if((f & (SERVICE_START | SERVICE_STOP)) == SERVICE_START)
         {
             worker->flags |= SERVICE_STOP;
             err = SUCCESS;
         }
 
         mutex_unlock(&worker->lock);
-        
+
 #if SERVICE_WAKE_USING_SIGUSR2
         if((f != 0) && (worker->tid != 0))
         {
@@ -639,36 +654,40 @@ service_stop(struct service_s *desc)
     }
 
     desc->wakeup_all_workers(desc);
-    
+
     return err;
 }
 
 /**
  * Set the status of all workers of the service to "RECONFIGURE" and sends SIGUSR2 to
  * each of them.
- * 
+ *
  * The signal is meant to interrupt blocking IOs and the worker should notice
  * it 'in time' and finish.
- * 
+ *
  * @param desc the service
- * 
+ *
  * @return an error code
  */
 
-int
-service_reconfigure(struct service_s *desc)
+int service_reconfigure(struct service_s *desc)
 {
+    if(!service_initialised(desc))
+    {
+        return INVALID_STATE_ERROR;
+    }
+
     log_debug("service: %s stop", desc->name);
 
     int err = SERVICE_NOT_RUNNING;
-    
-    for(u32 i = 0; i < desc->worker_count; i++)
+
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
-        
+
         mutex_lock(&worker->lock);
-        
-        u8 f = worker->flags;
+
+        uint8_t f = worker->flags;
 
         if((f & SERVICE_RECONFIGURE) != SERVICE_RECONFIGURE)
         {
@@ -677,7 +696,7 @@ service_reconfigure(struct service_s *desc)
         }
 
         mutex_unlock(&worker->lock);
-        
+
 #if SERVICE_WAKE_USING_SIGUSR2
         if((f != 0) && (worker->tid != 0))
         {
@@ -687,36 +706,39 @@ service_reconfigure(struct service_s *desc)
     }
 
     desc->wakeup_all_workers(desc);
-    
+
     return err;
 }
 
-
 /**
  * Waits for all threads of the service to be stopped.
- * 
+ *
  * @param desc the service descriptor
- * @return 
+ * @return
  */
 
-int
-service_wait(struct service_s *desc)
+int service_wait(struct service_s *desc)
 {
-    log_debug("service: %s wait", desc->name);
-    
-    mutex_lock(&desc->wait_lock);
-    for(int tries = 0;;++tries)
+    if(!service_initialised(desc))
     {
-        u32 running = desc->worker_count;
-        
-        for(u32 i = 0; i < desc->worker_count; i++)
+        return INVALID_STATE_ERROR;
+    }
+
+    log_debug("service: %s wait", desc->name);
+
+    mutex_lock(&desc->wait_lock);
+    for(int_fast32_t tries = 0;; ++tries)
+    {
+        uint32_t running = desc->worker_count;
+
+        for(uint_fast32_t i = 0; i < desc->worker_count; i++)
         {
             struct service_worker_s *worker = &desc->worker[i];
             mutex_lock(&worker->lock);
-            u8 f = worker->flags;    
+            uint8_t  f = worker->flags;
             thread_t tid = worker->tid;
             mutex_unlock(&worker->lock);
-            
+
             if(f == SERVICE_OFF)
             {
                 running--;
@@ -739,7 +761,7 @@ service_wait(struct service_s *desc)
                     {
                         // if the worker is meant to stop but is not stopping yet, then signal it
 
-                        if((worker->flags & (SERVICE_STOP|SERVICE_STOPPING)) == SERVICE_STOP)
+                        if((worker->flags & (SERVICE_STOP | SERVICE_STOPPING)) == SERVICE_STOP)
                         {
                             if(tries > 0)
                             {
@@ -767,31 +789,31 @@ service_wait(struct service_s *desc)
                 }
             }
         }
-        
+
         if(running == 0)
         {
             break;
         }
-        
+
         cond_wait(&desc->wait_cond, &desc->wait_lock);
 
         log_debug("service: %s wait ... (%u/%u running)", desc->name, running, desc->worker_count);
     }
     mutex_unlock(&desc->wait_lock);
-    
-    for(u32 i = 0; i < desc->worker_count; i++)
+
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
-        
+
         if(worker->tid == 0)
         {
             continue;
         }
-        
+
         log_debug("service: %s join ... (%u/%u)", desc->name, i, desc->worker_count);
-        
+
         int err = thread_join(worker->tid, NULL);
-        
+
         switch(err)
         {
             case 0:
@@ -820,111 +842,117 @@ service_wait(struct service_s *desc)
                 break;
             }
         }
-        
+
         mutex_lock(&worker->lock);
         worker->flags = SERVICE_OFF;
         worker->tid = 0;
         mutex_unlock(&worker->lock);
     }
-    
+
     log_debug("service: %s all %u workers are stopped", desc->name, desc->worker_count);
-    
+
     return 0;
 }
 
 /**
- * Returns TRUE if all the workers of the service have notified they had started
- * 
+ * Returns true if all the workers of the service have notified they had started
+ *
  * @param desc the service
- * @return TRUE iff all the workers of the service have notified they started
+ * @return true iff all the workers of the service have notified they started
  */
 
-bool
-service_servicing(struct service_s *desc)
+bool service_servicing(struct service_s *desc)
 {
-    for(u32 i = 0; i < desc->worker_count; i++)
+    if(!service_initialised(desc))
+    {
+        return false;
+    }
+
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
 
         mutex_lock(&worker->lock);
-        u8 f = worker->flags;    
+        uint8_t f = worker->flags;
         mutex_unlock(&worker->lock);
 
-        if((f & (SERVICE_START|SERVICE_STOP|SERVICE_SERVICING|SERVICE_STOPPING)) != (SERVICE_START|SERVICE_SERVICING))
+        if((f & (SERVICE_START | SERVICE_STOP | SERVICE_SERVICING | SERVICE_STOPPING)) != (SERVICE_START | SERVICE_SERVICING))
         {
-            return FALSE;
+            return false;
         }
     }
-    
-    return TRUE;
+
+    return true;
 }
 
 /**
  * Only to be called by the worker of the service itself when it has started.
  * Calling it is not mandatory but give more accuracy to the status of the service.
- * 
+ *
  * @param worker the worker calling this function
  */
 
-int
-service_set_servicing(struct service_worker_s *worker)
+int service_set_servicing(struct service_worker_s *worker)
 {
     int err = SERVICE_NOT_RUNNING;
-    
+
     log_debug("service: %s running", worker->service->name);
-    
+
     mutex_lock(&worker->lock);
-    if((worker->flags & (SERVICE_START|SERVICE_STOP)) == SERVICE_START)
+    if((worker->flags & (SERVICE_START | SERVICE_STOP)) == SERVICE_START)
     {
         worker->flags |= SERVICE_SERVICING;
         err = SUCCESS;
     }
     mutex_unlock(&worker->lock);
-    
+
     return err;
 }
 
 /**
- * Returns TRUE if none of the workers of the service are running
- * 
+ * Returns true if none of the workers of the service are running
+ *
  * @param desc the service
- * @return TRUE iff none of the workers of the service are running
+ * @return true iff none of the workers of the service are running
  */
 
-bool
-service_stopped(struct service_s *desc)
+bool service_stopped(struct service_s *desc)
 {
-    for(u32 i = 0; i < desc->worker_count; i++)
+    if(!service_initialised(desc))
+    {
+        return true;
+    }
+
+    for(uint_fast32_t i = 0; i < desc->worker_count; i++)
     {
         struct service_worker_s *worker = &desc->worker[i];
 
         mutex_lock(&worker->lock);
-        u8 f = worker->flags;    
+        uint8_t f = worker->flags;
         mutex_unlock(&worker->lock);
 
         if(f != SERVICE_OFF)
         {
-            return FALSE;
+            return false;
         }
     }
-    
-    return TRUE;
+
+    return true;
 }
 
 /**
  * Only to be called by the worker of the service itself when it is stopping.
  * Calling it is not mandatory but give more accuracy to the status of the service.
- * 
+ *
  * @param worker the worker calling this function
  */
 
-int
-service_set_stopping(struct service_worker_s *worker)
+int service_set_stopping(struct service_worker_s *worker)
 {
     int err = SERVICE_NOT_RUNNING;
-    
+
     log_debug("service: %s stopping", worker->service->name);
-    
+
     mutex_lock(&worker->lock);
     if((worker->flags & SERVICE_STOP) != 0)
     {
@@ -933,23 +961,23 @@ service_set_stopping(struct service_worker_s *worker)
         err = SUCCESS;
     }
     mutex_unlock(&worker->lock);
-    
+
     return err;
 }
 
 /**
  * Only to be called by the worker of the service itself when it has reconfigured.
  * Calling it is not mandatory but give more accuracy to the status of the service.
- * 
+ *
  * @param worker the worker calling this function
  */
 
 int service_clear_reconfigure(struct service_worker_s *worker)
 {
     int err = SERVICE_NOT_RUNNING;
-    
+
     log_debug("service: %s reconfigured", worker->service->name);
-    
+
     mutex_lock(&worker->lock);
     if((worker->flags & SERVICE_RECONFIGURE) != 0)
     {
@@ -957,7 +985,7 @@ int service_clear_reconfigure(struct service_worker_s *worker)
         err = SUCCESS;
     }
     mutex_unlock(&worker->lock);
-    
+
     return err;
 }
 
@@ -965,13 +993,12 @@ int service_clear_reconfigure(struct service_worker_s *worker)
  * Waits until all workers have notified they were servicing.
  * Calling this on a service that does not call service_set_servicing will
  * potentially wait forever (or until the program is shutting down).
- * 
+ *
  * @param desc the service
  * @return an error code
  */
 
-ya_result
-service_wait_servicing(struct service_s *desc)
+ya_result service_wait_servicing(struct service_s *desc)
 {
     while(service_started(desc))
     {
@@ -985,19 +1012,18 @@ service_wait_servicing(struct service_s *desc)
             {
                 return STOPPED_BY_APPLICATION_SHUTDOWN;
             }
-            
+
             sleep(1);
         }
     }
-    
+
     return SERVICE_NOT_RUNNING;
 }
 
-int
-service_should_run(struct service_worker_s *worker)
+int service_should_run(struct service_worker_s *worker)
 {
     mutex_lock(&worker->lock);
-    u8 f = worker->flags;    
+    uint8_t f = worker->flags;
     mutex_unlock(&worker->lock);
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
@@ -1007,15 +1033,14 @@ service_should_run(struct service_worker_s *worker)
     worker->service->last_seen_alive = now;
     mutex_unlock(&worker->lock);
 #endif
-    
+
     return (f & (SERVICE_START | SERVICE_STOP)) == SERVICE_START;
 }
 
-int
-service_should_reconfigure(struct service_worker_s *worker)
+int service_should_reconfigure(struct service_worker_s *worker)
 {
     mutex_lock(&worker->lock);
-    u8 f = worker->flags;    
+    uint8_t f = worker->flags;
     mutex_unlock(&worker->lock);
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
@@ -1023,15 +1048,14 @@ service_should_reconfigure(struct service_worker_s *worker)
     worker->last_seen_alive = now;
     worker->service->last_seen_alive = now;
 #endif
-    
+
     return (f & (SERVICE_START | SERVICE_STOP | SERVICE_STOPPING | SERVICE_RECONFIGURE)) == (SERVICE_START | SERVICE_RECONFIGURE);
 }
 
-int
-service_should_reconfigure_or_stop(struct service_worker_s *worker)
+int service_should_reconfigure_or_stop(struct service_worker_s *worker)
 {
     mutex_lock(&worker->lock);
-    u8 f = worker->flags;    
+    uint8_t f = worker->flags;
     mutex_unlock(&worker->lock);
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
@@ -1039,33 +1063,32 @@ service_should_reconfigure_or_stop(struct service_worker_s *worker)
     worker->last_seen_alive = now;
     worker->service->last_seen_alive = now;
 #endif
-    
+
     return f & (SERVICE_STOP | SERVICE_STOPPING | SERVICE_RECONFIGURE);
 }
 
 #if SERVICE_HAS_LAST_SEEN_ALIVE_SUPPORT
-int
-service_check_all_alive()
+int service_check_all_alive()
 {
     time_t now = time(NULL);
-    
+
     mutex_lock(&service_set_mutex);
-    ptr_set_iterator iter;
-    ptr_set_iterator_init(&service_set, &iter);
-    while(ptr_set_iterator_hasnext(&iter))
+    ptr_treemap_iterator_t iter;
+    ptr_treemap_iterator_init(&service_set, &iter);
+    while(ptr_treemap_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_iterator_next_node(&iter);
-        struct service_s *desc = (struct service_s *)node->key;
-        
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        struct service_s   *desc = (struct service_s *)node->key;
+
         if(desc->last_seen_alive > 0)
         {
-            s32 adt = now - desc->last_seen_alive;
-            
+            int32_t adt = now - desc->last_seen_alive;
+
             if(adt > 5)
             {
                 log_warn("service '%s' has not been seen alive for %u seconds", desc->name, adt);
 
-                for(u32 i = 0; i < desc->worker_count; i++)
+                for(uint_fast32_t i = 0; i < desc->worker_count; i++)
                 {
                     adt = now - desc->worker[i].last_seen_alive;
 
@@ -1082,14 +1105,13 @@ service_check_all_alive()
             // ignore it
         }
     }
-    
+
     mutex_unlock(&service_set_mutex);
-    
+
     return SUCCESS;
 }
 #else
-int
-service_check_all_alive()
+int service_check_all_alive()
 {
     // not available in release
     return SUCCESS;
@@ -1098,35 +1120,34 @@ service_check_all_alive()
 
 /**
  * Appends all services references to the array.
- * 
+ *
  * Services are supposed to be defined statically.
  * Their reference will never point to an unmapped space.
- * 
- * @param services a pointer to the ptr_vector to append the services to
+ *
+ * @param services a pointer to the ptr_vector_t to append the services to
  * @return the number of services added to the vector
  */
 
-int
-service_get_all(ptr_vector *services)
+int service_get_all(ptr_vector_t *services)
 {
     int ret = 0;
     mutex_lock(&service_set_mutex);
-    ptr_set_iterator iter;
-    ptr_set_iterator_init(&service_set, &iter);
-    while(ptr_set_iterator_hasnext(&iter))
+    ptr_treemap_iterator_t iter;
+    ptr_treemap_iterator_init(&service_set, &iter);
+    while(ptr_treemap_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_iterator_next_node(&iter);
-        struct service_s *desc = (struct service_s *)node->key;
-        
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        struct service_s   *desc = (struct service_s *)node->key;
+
         ptr_vector_append(services, desc);
         ++ret;
     }
-    
+    mutex_unlock(&service_set_mutex);
+
     return ret;
 }
 
-struct service_worker_s*
-service_worker_get_sibling(const struct service_worker_s* worker, u32 idx)
+struct service_worker_s *service_worker_get_sibling(const struct service_worker_s *worker, uint32_t idx)
 {
     if(worker != NULL)
     {
@@ -1138,12 +1159,11 @@ service_worker_get_sibling(const struct service_worker_s* worker, u32 idx)
             }
         }
     }
-    
+
     return NULL;
 }
 
-struct service_worker_s*
-service_get_worker(const struct service_s *service, u32 idx)
+struct service_worker_s *service_get_worker(const struct service_s *service, uint32_t idx)
 {
     if(service != NULL)
     {
@@ -1152,56 +1172,54 @@ service_get_worker(const struct service_s *service, u32 idx)
             return &service->worker[idx];
         }
     }
-    
+
     return NULL;
 }
 
-void
-service_stop_all()
+void service_stop_all()
 {
     mutex_lock(&service_set_mutex);
-    ptr_set_iterator iter;
-    
-    ptr_set_iterator_init(&service_set, &iter);
-    while(ptr_set_iterator_hasnext(&iter))
+    ptr_treemap_iterator_t iter;
+
+    ptr_treemap_iterator_init(&service_set, &iter);
+    while(ptr_treemap_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_iterator_next_node(&iter);
-        struct service_s *desc = (struct service_s *)node->key;
-    
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        struct service_s   *desc = (struct service_s *)node->key;
+
         log_debug("service_stop_all: stop '%s'", STRNULL(desc->name));
-        
-        service_stop(desc);    
+
+        service_stop(desc);
     }
-    
-    ptr_set_iterator_init(&service_set, &iter);
-    while(ptr_set_iterator_hasnext(&iter))
+
+    ptr_treemap_iterator_init(&service_set, &iter);
+    while(ptr_treemap_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_iterator_next_node(&iter);
-        struct service_s *desc = (struct service_s *)node->key;
-    
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        struct service_s   *desc = (struct service_s *)node->key;
+
         log_debug("service_stop_all: wait '%s'", STRNULL(desc->name));
-        
-        service_wait(desc);    
+
+        service_wait(desc);
     }
-    
+
     mutex_unlock(&service_set_mutex);
 }
 
-void
-service_start_all()
+void service_start_all()
 {
     mutex_lock(&service_set_mutex);
-    ptr_set_iterator iter;
-    
-    ptr_set_iterator_init(&service_set, &iter);
-    while(ptr_set_iterator_hasnext(&iter))
+    ptr_treemap_iterator_t iter;
+
+    ptr_treemap_iterator_init(&service_set, &iter);
+    while(ptr_treemap_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_iterator_next_node(&iter);
-        struct service_s *desc = (struct service_s *)node->key;
-    
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        struct service_s   *desc = (struct service_s *)node->key;
+
         log_debug("service_start_all: start '%s'", STRNULL(desc->name));
-        
-        service_start(desc);    
+
+        service_start(desc);
     }
     mutex_unlock(&service_set_mutex);
 }

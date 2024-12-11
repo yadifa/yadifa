@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
-
-
 
 /** @defgroup yadifa
  *  @ingroup ###
@@ -45,35 +41,36 @@
 
 #include <dnscore/host_address.h>
 
-struct tsig_item;
+struct tsig_key_s;
 
 typedef struct yadifa_zonesign_settings_s yadifa_zonesign_settings_s;
 struct yadifa_zonesign_settings_s
 {
-    char *keys_path;
-    char *output_file;
-    char *input_file;
-    char *journal_file;
-    char *from_time_text;
-    char *to_time_text;
-    char *nsec3_salt_text;
-    char *now_text;
-    s64 now;
-    u8 *origin;
-    u32 new_serial;
-    u32 from_time;
-    u32 to_time;
-    u32 interval;
-    u32 jitter;
-    s32 dnskey_ttl;
-    u32 dnssec_mode;
-    s32 nsec3_salt_size;
-    u16 nsec3_iterations;
-    u8 verbose;
-    bool read_journal;
-    bool nsec3_optout;
-    bool smart_signing;
-    u8 nsec3_salt[256];
+    char    *keys_path;
+    char    *output_file;
+    char    *input_file;
+    char    *journal_file;
+    char    *from_time_text;
+    char    *to_time_text;
+    char    *nsec3_salt_text;
+    char    *now_text;
+    int64_t  now;
+    uint8_t *origin;
+    uint32_t new_serial;
+    uint32_t from_time;
+    uint32_t to_time;
+    uint32_t interval;
+    uint32_t jitter;
+    int32_t  dnskey_ttl;
+    uint32_t workers;
+    uint32_t dnssec_mode;
+    int32_t  nsec3_salt_size;
+    uint16_t nsec3_iterations;
+    uint8_t  verbose;
+    bool     read_journal;
+    bool     nsec3_optout;
+    bool     smart_signing;
+    uint8_t  nsec3_salt[256];
 };
 
 #ifndef ZONSIGN_C_

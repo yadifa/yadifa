@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,42 +28,41 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _ZDB_WRITE_ZONE_H
-#define	_ZDB_WRITE_ZONE_H
+#define _ZDB_WRITE_ZONE_H
 
 #include <dnscore/output_stream.h>
 #include <dnsdb/zdb_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-ya_result zdb_zone_write_text_ex(zdb_zone *zone, output_stream *fos, bool force_label, bool allow_shutdown);
-ya_result zdb_zone_write_text(zdb_zone* zone, output_stream *fos, bool force_label);
+ya_result zdb_zone_write_text_ex(zdb_zone_t *zone, output_stream_t *fos, bool force_label, bool allow_shutdown);
+ya_result zdb_zone_write_text(zdb_zone_t *zone, output_stream_t *fos, bool force_label);
 
-#define ZDB_ZONE_WRITE_TEXT_FILE_DEFAULTS 0
-#define ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL 1
+#define ZDB_ZONE_WRITE_TEXT_FILE_DEFAULTS        0
+#define ZDB_ZONE_WRITE_TEXT_FILE_FORCE_LABEL     1
 #define ZDB_ZONE_WRITE_TEXT_FILE_IGNORE_SHUTDOWN 2
 
-ya_result zdb_zone_write_text_file(zdb_zone* zone, const char* output_file, u8 flags);
-ya_result zdb_zone_write_unbound(const zdb_zone* zone, const char* output_file);
+ya_result zdb_zone_write_text_file(zdb_zone_t *zone, const char *output_file, uint8_t flags);
+ya_result zdb_zone_write_unbound(const zdb_zone_t *zone, const char *output_file);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _ZDB_WRITE_ZONE_H */
+#endif /* _ZDB_WRITE_ZONE_H */
 /** @} */

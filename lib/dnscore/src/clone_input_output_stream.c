@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -54,29 +52,27 @@ typedef struct clone_input_output_stream_data clone_input_output_stream_data;
 
 struct clone_input_output_stream_data
 {
-    input_stream cloned;
-    output_stream copy;
+    input_stream_t  cloned;
+    output_stream_t copy;
 };
 
-static ya_result
-clone_input_output_stream_read(input_stream* stream, void* buffer, u32 len)
+static ya_result clone_input_output_stream_read(input_stream_t *stream, void *buffer, uint32_t len)
 {
-    clone_input_output_stream_data* data = (clone_input_output_stream_data*)stream->data;
-    
-    ya_result return_value;
-    
+    clone_input_output_stream_data *data = (clone_input_output_stream_data *)stream->data;
+
+    ya_result                       return_value;
+
     if(ISOK(return_value = input_stream_read(&data->cloned, buffer, len)))
     {
-        output_stream_write(&data->copy, buffer, (u32)return_value);
-    }    
+        output_stream_write(&data->copy, buffer, (uint32_t)return_value);
+    }
 
     return return_value;
 }
 
-static void
-clone_input_output_stream_close(input_stream* stream)
+static void clone_input_output_stream_close(input_stream_t *stream)
 {
-    clone_input_output_stream_data* data = (clone_input_output_stream_data*)stream->data;
+    clone_input_output_stream_data *data = (clone_input_output_stream_data *)stream->data;
     input_stream_close(&data->cloned);
     output_stream_close(&data->copy);
     ZFREE(data, clone_input_output_stream_data);
@@ -84,15 +80,14 @@ clone_input_output_stream_close(input_stream* stream)
     input_stream_set_void(stream);
 }
 
-static u8 skip[4] = {'S', 'K', 'I', 'P'};
+static uint8_t   skip[4] = {'S', 'K', 'I', 'P'};
 
-static ya_result
-clone_input_output_stream_skip(input_stream* stream, u32 len)
+static ya_result clone_input_output_stream_skip(input_stream_t *stream, uint32_t len)
 {
-    clone_input_output_stream_data* data = (clone_input_output_stream_data*)stream->data;
-    
-    ya_result return_code;
-    
+    clone_input_output_stream_data *data = (clone_input_output_stream_data *)stream->data;
+
+    ya_result                       return_code;
+
     if(ISOK(return_code = input_stream_skip(&data->cloned, len)))
     {
         int n = return_code;
@@ -101,42 +96,35 @@ clone_input_output_stream_skip(input_stream* stream, u32 len)
             output_stream_write(&data->copy, skip, 4);
             n -= 4;
         }
-        
-        output_stream_write(&data->copy, skip, (u32)n);
+
+        output_stream_write(&data->copy, skip, (uint32_t)n);
     }
 
     return return_code;
 }
 
-static const input_stream_vtbl clone_input_output_stream_vtbl ={
-    clone_input_output_stream_read,
-    clone_input_output_stream_skip,
-    clone_input_output_stream_close,
-    "clone_input_output_stream"
-};
+static const input_stream_vtbl clone_input_output_stream_vtbl = {clone_input_output_stream_read, clone_input_output_stream_skip, clone_input_output_stream_close, "clone_input_output_stream"};
 
-ya_result
-clone_input_output_stream_init(input_stream *cis, input_stream *in_cloned, output_stream *out_stream)
+ya_result                      clone_input_output_stream_init(input_stream_t *cis, input_stream_t *in_cloned, output_stream_t *out_stream)
 {
-    clone_input_output_stream_data* data;
+    clone_input_output_stream_data *data;
 
     if((in_cloned->vtbl == NULL) || (out_stream == NULL))
     {
         return OBJECT_NOT_INITIALIZED;
     }
 
-    ZALLOC_OBJECT_OR_DIE( data, clone_input_output_stream_data, CLONE_INPUT_OUTPUT_STREAM_TAG);
+    ZALLOC_OBJECT_OR_DIE(data, clone_input_output_stream_data, CLONE_INPUT_OUTPUT_STREAM_TAG);
 
     data->cloned.data = in_cloned->data;
     data->cloned.vtbl = in_cloned->vtbl;
-    
+
     data->copy.data = out_stream->data;
     data->copy.vtbl = out_stream->vtbl;
 
-
     in_cloned->data = NULL;
     in_cloned->vtbl = NULL;
-    
+
     out_stream->data = NULL;
     out_stream->vtbl = NULL;
 
@@ -146,23 +134,18 @@ clone_input_output_stream_init(input_stream *cis, input_stream *in_cloned, outpu
     return SUCCESS;
 }
 
-input_stream *
-clone_input_output_stream_get_cloned(input_stream *cis)
+input_stream_t *clone_input_output_stream_get_cloned(input_stream_t *cis)
 {
-    clone_input_output_stream_data *data = (clone_input_output_stream_data*)cis->data;
-    
+    clone_input_output_stream_data *data = (clone_input_output_stream_data *)cis->data;
+
     return &data->cloned;
 }
 
-output_stream *
-clone_input_output_stream_get_copy(input_stream *cis)
+output_stream_t *clone_input_output_stream_get_copy(input_stream_t *cis)
 {
-    clone_input_output_stream_data *data = (clone_input_output_stream_data*)cis->data;
-    
+    clone_input_output_stream_data *data = (clone_input_output_stream_data *)cis->data;
+
     return &data->copy;
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

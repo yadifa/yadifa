@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,26 +28,25 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to manipulate a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to manipulate a zone
  *
  *  Functions used to manipulate a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
 #include <dnsdb/zdb_types.h>
 
-#define ZDB_ZONE_PROCESS_CONTINUE       0
-#define ZDB_ZONE_PROCESS_SKIP_LABEL     1
-#define ZDB_ZONE_PROCESS_STOP           2
+#define ZDB_ZONE_PROCESS_CONTINUE   0
+#define ZDB_ZONE_PROCESS_SKIP_LABEL 1
+#define ZDB_ZONE_PROCESS_STOP       2
 
 struct zdb_zone_process_rrset_callback_parms;
 
@@ -55,13 +54,13 @@ typedef ya_result zdb_zone_process_rrset_callback(struct zdb_zone_process_rrset_
 
 struct zdb_zone_process_rrset_callback_parms
 {
-    zdb_zone_process_rrset_callback *cb;
-    const zdb_zone *zone;
-    void *args;
-    const zdb_rr_label *rr_label;
-    const zdb_packed_ttlrdata *rrset;
-    u16 record_type;
-    dnsname_stack fqdn_stack;
+    zdb_zone_process_rrset_callback  *cb;
+    const zdb_zone_t                 *zone;
+    void                             *args;
+    const zdb_rr_label_t             *rr_label;
+    const zdb_resource_record_data_t *rrset;
+    uint16_t                          record_type;
+    dnsname_stack_t                   fqdn_stack;
 };
 
 typedef struct zdb_zone_process_rrset_callback_parms zdb_zone_process_rrset_callback_parms;
@@ -73,44 +72,43 @@ typedef ya_result zdb_zone_process_label_callback(struct zdb_zone_process_label_
 struct zdb_zone_process_label_callback_parms
 {
     zdb_zone_process_label_callback *cb;
-    zdb_zone *zone;
-    void *args;
-    zdb_rr_label *rr_label;
-    dnsname_stack fqdn_stack;
+    zdb_zone_t                      *zone;
+    void                            *args;
+    zdb_rr_label_t                  *rr_label;
+    dnsname_stack_t                  fqdn_stack;
 };
 
 typedef struct zdb_zone_process_label_callback_parms zdb_zone_process_label_callback_parms;
 
 /**
- * 
+ *
  * All zdb_rr_label of the zone will be passed to the callback
  * through a zdb_zone_process_label_callback_parms structure
- * 
+ *
  * @param zone
  * @param cb
  * @param args
- * @return 
+ * @return
  */
 
-ya_result zdb_zone_process_all_labels_from_zone(zdb_zone *zone, zdb_zone_process_label_callback *cb, void *args);
+ya_result zdb_zone_process_all_labels_from_zone(zdb_zone_t *zone, zdb_zone_process_label_callback *cb, void *args);
 
 /**
- * 
- * All zdb_packed_ttlrdata of all labels of the zone will be passed to the callback
+ *
+ * All zdb_resource_record_data of all labels of the zone will be passed to the callback
  * through a zdb_zone_process_rrset_callback_parms
- * 
+ *
  * If the zone is NSEC3, the NSEC3 records and their signature will also be passed
- * with a virtual/fake (most likely on stack) zdb_rr_label and zdb_packed_ttlrdata
+ * with a virtual/fake (most likely on stack) zdb_rr_label and zdb_resource_record_data
  * These are meant to be read-only
- * 
+ *
  * @param zone
  * @param cb
  * @param args
- * @return 
+ * @return
  */
 
-ya_result zdb_zone_process_all_rrsets_from_all_labels_from_zone(zdb_zone *zone, zdb_zone_process_rrset_callback *cb, void *args);
-
+ya_result zdb_zone_process_all_rrsets_from_all_labels_from_zone(zdb_zone_t *zone, zdb_zone_process_rrset_callback *cb, void *args);
 
 /**
   @}

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnscoretools Generic Tools
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup dnscoretools Generic Tools
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,15 +49,16 @@
 #include <sys/socket.h>
 #include <dnscore/timems.h>
 #include <dnscore/config_settings.h>
+#include <dnscore/host_address.h>
+#include <dnscore/tsig.h>
 
 #include "dnscore/parsing.h"
 
 #if !HAVE_TIMEGM && !HAS_TIMEGM
-static inline time_t timegm(struct tm *tv)
-{
-    return timegm_internal(tv);
-}
+static inline time_t timegm(struct tm *tv) { return timegm_internal(tv); }
 #endif
+
+extern const uint8_t __DEBASE16__[256];
 
 /** \brief A string will be checked
  *
@@ -76,14 +76,13 @@ static inline time_t timegm(struct tm *tv)
  *  @retval OK
  *  @retval NOK, if no digits found, or number not in the range
  */
-ya_result
-parse_u32_check_range(const char *src, u32 *dst, u32 min, u32 max, u8 base)
+ya_result parse_u32_check_range(const char *src, uint32_t *dst, uint32_t min, uint32_t max, uint8_t base)
 {
     long long int val;
-    char *endptr;
-    int err;
+    char         *endptr;
+    int           err;
 
-    /** @note sizeof(long long int) > sizeof(u32) */
+    /** @note sizeof(long long int) > sizeof(uint32_t) */
 
     /*    ------------------------------------------------------------    */
 
@@ -103,155 +102,164 @@ parse_u32_check_range(const char *src, u32 *dst, u32 min, u32 max, u8 base)
         return PARSEINT_ERROR;
     }
 
-    *dst = (u32)val;
+    *dst = (uint32_t)val;
 
     return OK;
 }
 
-
-
-ya_result
-parse_u32_check_range_len_base10(const char *src, u32 src_len, u32 *dst, u32 min, u32 max)
+ya_result parse_u32_check_range_len_base10(const char *src, uint32_t src_len, uint32_t *dst, uint32_t min, uint32_t max)
 {
     // 0......N
     // 67612321
-    
+
     if(src_len > 10)
     {
         return PARSEINT_ERROR; // out of range
     }
-    
+
     --src_len;
-        
-    u64 output_value = ((u64)src[src_len]) - '0';
-    
-    if((u64)output_value > 9)
+
+    uint64_t output_value = ((uint64_t)src[src_len]) - '0';
+
+    if((uint64_t)output_value > 9)
     {
         return PARSEINT_ERROR;
     }
-    
-    u32 base_multiplier = 10;
-    
+
+    uint32_t base_multiplier = 10;
+
     while(src_len > 0)
     {
         --src_len;
-        
-        u64 value = ((u64)src[src_len]) - '0';
-        
+
+        uint64_t value = ((uint64_t)src[src_len]) - '0';
+
         if(value > 9)
         {
             return PARSEINT_ERROR;
         }
-        
+
         value *= base_multiplier;
-        
+
         output_value += value;
-        
+
         base_multiplier *= 10;
     }
-    
+
     if((output_value < min) || (output_value > max))
     {
         return PARSEINT_ERROR;
     }
-    
-    *dst = (u32)output_value;
+
+    *dst = (uint32_t)output_value;
 
     return SUCCESS;
 }
 
-ya_result
-parse_s32_check_range_len_base10(const char *src, u32 src_len, s32 *dst, s32 min, s32 max)
+ya_result parse_s32_check_range_len_base10(const char *src, uint32_t src_len, int32_t *dst, int32_t min, int32_t max)
 {
     // 0......N
     // 67612321
-    
+
     --src_len;
-    
+
     if(src_len > 10)
     {
         return PARSEINT_ERROR; // out of range
     }
-    
+
     bool minus;
-    
+
     if((minus = (src[0] == '-')))
     {
         src++;
         --src_len;
     }
-    
-    u32 base_multiplier = 10;
-        
-    s64 output_value = ((s64)src[src_len]) - '0';
-    
-    if((u64)output_value > 9)
+
+    uint32_t base_multiplier = 10;
+
+    int64_t  output_value = ((int64_t)src[src_len]) - '0';
+
+    if((uint64_t)output_value > 9)
     {
         return PARSEINT_ERROR;
     }
-    
+
     while(src_len > 0)
     {
         --src_len;
-        
-        s64 value = ((s64)src[src_len]) - '0';
-        
-        if((u64)value > 9)
+
+        int64_t value = ((int64_t)src[src_len]) - '0';
+
+        if((uint64_t)value > 9)
         {
             return PARSEINT_ERROR;
         }
-        
+
         value *= base_multiplier;
-        
+
         output_value += value;
-        
+
         base_multiplier *= 10;
     }
-    
+
     if(minus)
     {
         output_value = -output_value;
     }
-    
+
     if((output_value < min) || (output_value > max))
     {
         return PARSEINT_ERROR;
     }
-    
-    *dst = (s32)output_value;
+
+    *dst = (int32_t)output_value;
 
     return SUCCESS;
 }
 
-ya_result
-parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min, u64 max)
+/** \brief A string will be extracted and checked
+ *
+ *  The number will be extracted from the string if present.
+ *
+ *  @param[in]  src  string with number part in it
+ *  @param[in]  src_len string length
+ *  @param[out] dst  number found
+ *  @param[in]  min
+ *  @param[in]  max
+ *
+ *  @retval OK
+ *  @retval PARSEINT_ERROR, if no digits found, or number not in the range
+ */
+
+ya_result parse_u64_check_range_len_base10(const char *src, uint32_t src_len, uint64_t *dst, uint64_t min, uint64_t max)
 {
     // 0......N
     // 18446744073709551615
-    
+
     if(src_len > 20)
     {
         return PARSEINT_ERROR; // out of range
     }
-    
+
     --src_len; // 19
-        
-    u64 output_value = ((u64)src[src_len]) - '0';
-    
-    if((u64)output_value > 9)
+
+    uint64_t output_value = ((uint64_t)src[src_len]) - '0';
+
+    if((uint64_t)output_value > 9)
     {
         return PARSEINT_ERROR;
     }
-    
+
     if(src_len < 19) // if no risk of overflow
     {
-        u64 base_multiplier = 10;
+        uint64_t base_multiplier = 10;
 
         while(src_len > 0)
         {
             --src_len;
 
-            u64 value = ((u64)src[src_len]) - '0';
+            uint64_t value = ((uint64_t)src[src_len]) - '0';
 
             if(value > 9)
             {
@@ -265,11 +273,11 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
     }
     else // the only case with possible overflow at the last iteration of the loop
     {
-        u64 base_multiplier = 10;
-        
+        uint64_t base_multiplier = 10;
+
         while(src_len-- > 1)
         {
-            u64 value = ((u64)src[src_len]) - '0';
+            uint64_t value = ((uint64_t)src[src_len]) - '0';
 
             if(value > 9)
             {
@@ -280,17 +288,17 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
 
             base_multiplier *= 10;
         }
-        
+
         if(src_len == 0)
         {
-            u64 max_div_10 = max / 10;
-            
-            if(output_value > max_div_10)   // check before multiplication there will be no 64 bits overflow
-            {                               // this only should be tested for the last iteration of the loop
-                return PARSEINT_ERROR;      // => the last pass should happen out of this loop
+            uint64_t max_div_10 = max / 10;
+
+            if(output_value > max_div_10) // check before multiplication there will be no 64 bits overflow
+            {                             // this only should be tested for the last iteration of the loop
+                return PARSEINT_ERROR;    // => the last pass should happen out of this loop
             }
 
-            u64 value = ((u64)src[0]) - '0';
+            uint64_t value = ((uint64_t)src[0]) - '0';
 
             if(value > 9)
             {
@@ -299,7 +307,7 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
 
             value *= base_multiplier;
 
-            if(output_value > max - value)  // check before addition there will be no 64 bits overflow
+            if(output_value > max - value) // check before addition there will be no 64 bits overflow
             {
                 return PARSEINT_ERROR;
             }
@@ -307,18 +315,64 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
             output_value += value;
         }
     }
-    
+
     if((output_value < min) || (output_value > max)) // the second half of the test could probably get rid of, with a slight modification
     {
         return PARSEINT_ERROR;
     }
-    
+
     *dst = output_value;
 
     return SUCCESS;
 }
 
+/** \brief A string will be extracted and checked
+ *
+ *  The number will be extracted from the string if present.
+ *
+ *  @param[in]  src  string with number part in it
+ *  @param[in]  src_len string length
+ *  @param[out] dst  number found
+ *  @param[in]  min
+ *  @param[in]  max
+ *
+ *  @retval OK
+ *  @retval PARSEINT_ERROR, if no digits found, or number not in the range
+ */
 
+ya_result parse_u64_check_range_len_base16(const char *src, uint32_t src_len, uint64_t *dst, uint64_t min, uint64_t max)
+{
+    // 0......N
+    // 18446744073709551615
+
+    if((src_len == 0) || (src_len > 16))
+    {
+        return PARSEINT_ERROR; // out of range
+    }
+
+    uint64_t value = 0;
+    uint8_t  shift = 0;
+
+    for(const char *p = src + src_len - 1; p >= src; --p)
+    {
+        uint64_t digit = __DEBASE16__[(uint8_t)*p];
+        if(digit > 15)
+        {
+            return PARSEINT_ERROR;
+        }
+        value |= digit << shift;
+        shift += 4;
+    }
+
+    if((value < min) || (value > max)) // the second half of the test could probably get rid of, with a slight modification
+    {
+        return PARSEINT_ERROR;
+    }
+
+    *dst = value;
+
+    return SUCCESS;
+}
 
 /** \brief Converts a string to an epoch
  *
@@ -330,11 +384,10 @@ parse_u64_check_range_len_base10(const char *src, u32 src_len, u64 *dst, u64 min
  *  @retval OK
  *  @retval NOK, if no digits found, or number not in the range
  */
-ya_result
-parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, time_t *dst)
+ya_result parse_yyyymmddhhmmss_check_range_len(const char *src, uint32_t src_len, time_t *dst)
 {
     struct tm thetime;
-    
+
     if(src_len != 14)
     {
         return PARSEDATE_ERROR;
@@ -343,44 +396,44 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, time_t *dst)
 #if DEBUG
     memset(&thetime, 0xff, sizeof(thetime));
 #endif
-    
-    u32 tmp_u32;
-    
-    if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2106/*2038*/)))
+
+    uint32_t tmp_u32;
+
+    if(FAIL(parse_u32_check_range_len_base10(src, 4, &tmp_u32, 1970, 2106 /*2038*/)))
     {
         return PARSEDATE_ERROR;
     }
     thetime.tm_year = tmp_u32;
     src += 4;
-    
+
     if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 1, 12)))
     {
         return PARSEDATE_ERROR;
     }
     thetime.tm_mon = tmp_u32;
     src += 2;
-    
+
     if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 1, 31)))
     {
         return PARSEDATE_ERROR;
     }
     thetime.tm_mday = tmp_u32;
     src += 2;
-    
+
     if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 0, 23)))
     {
         return PARSEDATE_ERROR;
     }
     thetime.tm_hour = tmp_u32;
     src += 2;
-    
+
     if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 0, 59)))
     {
         return PARSEDATE_ERROR;
     }
     thetime.tm_min = tmp_u32;
     src += 2;
-    
+
     if(FAIL(parse_u32_check_range_len_base10(src, 2, &tmp_u32, 0, 61)))
     {
         return PARSEDATE_ERROR;
@@ -397,107 +450,103 @@ parse_yyyymmddhhmmss_check_range_len(const char *src, u32 src_len, time_t *dst)
         return PARSEDATE_ERROR;
     }
 
-    *dst = (u32)t;
+    *dst = (uint32_t)t;
 
     return OK;
 }
 
-ya_result
-parse_yyyymmddhhmmss_check_range(const char *src, time_t *dst)
+ya_result parse_yyyymmddhhmmss_check_range(const char *src, time_t *dst)
 {
     ya_result return_code;
-    
+
     return_code = parse_yyyymmddhhmmss_check_range_len(src, strlen(src), dst);
-    
+
     return return_code;
 }
 
-/** \brief Converts a chain of pascal strings to a string
+/**
+ *  Reads a ("-quoted) string from the source.
+ *  Makes it into a pascal string on the destination.
+ *  After the call, the source pointer is updated to after the parsed string.
  *
- *  Converts a chain of pascal strings to a string
+ *  @param src  a pointer to input text
+ *  @param src_len size of the input buffer
+ *  @param dst  output buffer
+ *  @param dst_len size of the output buffer
  *
- *  @param[in]  src  string in the form [len+chars]*
- *  @param[out] dst  string
- *
- *  @retval OK
- *  @retval NOK, if something is broken
+ *  @retval an error code
  */
-ya_result
-parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
+
+ya_result parse_pstring(char **srcp, size_t src_len, uint8_t *dst, size_t dst_len)
 {
-    char *s = *srcp;
-    const char * const limit = &s[src_len];
-    u8 *p;
-    const u8 *dst_limit;
-    bool quoted;
-    
+    char             *s = *srcp;
+    const char *const limit = &s[src_len];
+    uint8_t          *p;
+    const uint8_t    *dst_limit;
+    bool              quoted;
+
     if(src_len == 0 || dst_len < 256)
     {
         return PARSESTRING_ERROR;
     }
-    
+
     p = &dst[1];
     dst_limit = &dst[dst_len];
-    
-    quoted = FALSE;
+
+    quoted = false;
     if(s[0] == '"')
     {
-        quoted = TRUE;
+        quoted = true;
         s++;
     }
 
     for(; s < limit; s++)
     {
         char c = *s;
-        
+
         if((c < 32))
         {
             return PARSE_INVALID_CHARACTER;
         }
-        
+
         // If unescaped '\' go on otherwise set escape = 1
         if(c == '\\')
         {
             // grab next char IF there is one
-            
-            s++;
-            
-            if(s < limit)
-            {                    
-                if((c < 32))
-                {
-                    return PARSE_INVALID_CHARACTER;
-                }
 
+            s++;
+
+            if(s < limit)
+            {
                 if(p == dst_limit)
                 {
                     return PARSE_BUFFER_TOO_SMALL_ERROR;
                 }
-                
+
                 *p++ = *s;
             }
             else
             {
                 return PARSESTRING_ERROR;
             }
-            
+
             continue;
         }
 
         // only "
-        
+
         if(c == '"')
         {
             if(!quoted)
             {
                 return PARSESTRING_ERROR;
             }
-            
-            quoted = FALSE;
-                        
+
+            quoted = false;
+
             break;
         }
-        
+
         if(!quoted)
         {
             if(isspace(c))
@@ -512,8 +561,8 @@ parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
         }
 
         /* add character to temporary variable */
-        
-        *p++    = c;
+
+        *p++ = c;
     }
 
     /* if unbalanaced qoutes --> stop */
@@ -522,12 +571,12 @@ parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
         return PARSESTRING_ERROR;
     }
 
-    ya_result len    = p - dst;
+    ya_result len = p - dst;
 
     dst[0] = len - 1;
 
     /* Now it is really done the parsing */
-    
+
     *srcp = s + 1;
 
     return len;
@@ -548,8 +597,7 @@ parse_pstring(char **srcp, size_t src_len, u8 *dst, size_t dst_len)
  *  @retval ERROR, dst_len was too small
  */
 
-ya_result
-parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
+ya_result parse_copy_trim_spaces(const char *src, uint32_t src_len, char *dst, uint32_t dst_len)
 {
     yassert(src != NULL && dst != NULL && dst_len > 0);
 
@@ -557,10 +605,10 @@ parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
     const char *dst_limit = dst + dst_len - 1;
     const char *dst_org = dst;
 
-    bool has_space = FALSE;
-    
+    bool        has_space = false;
+
     *dst = '\0';
-    
+
     while(src < src_limit && isspace(*src))
     {
         src++;
@@ -572,8 +620,13 @@ parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
 
         if(isspace(c))
         {
-            has_space = TRUE;
+            has_space = true;
             continue;
+        }
+
+        if(c == '\0')
+        {
+            break;
         }
 
         if(has_space)
@@ -582,44 +635,66 @@ parse_copy_trim_spaces(const char *src, u32 src_len, char *dst, u32 dst_len)
 
             if(dst == dst_limit)
             {
-                return PARSE_BUFFER_TOO_SMALL_ERROR;       /* buffer too small */
+                return PARSE_BUFFER_TOO_SMALL_ERROR; /* buffer too small */
             }
         }
 
-        has_space = FALSE;
+        has_space = false;
 
         *dst++ = c;
 
         if(dst == dst_limit)
         {
-            return PARSE_BUFFER_TOO_SMALL_ERROR;       /* buffer too small */
+            return PARSE_BUFFER_TOO_SMALL_ERROR; /* buffer too small */
         }
     }
 
-    *dst++ = '\0';
+    *dst = '\0';
 
     return dst - dst_org;
 }
 
-ya_result
-parse_remove_spaces(char *inout_txt)
+/**
+ * Removes all space charactesr from the string.
+ *
+ * @param the string to modify.
+ *
+ * @return the length of the modified string.
+ */
+
+ya_result parse_remove_spaces(char *inout_txt)
 {
-    char *p = inout_txt;
-    char c;
-    
+    const char *base = inout_txt;
+    char       *p = inout_txt;
+    char        c;
+
     while((c = *inout_txt++) != '\0')
     {
         if(isspace(c))
         {
             continue;
         }
-        
+
         *p++ = c;
     }
-    
+
     *p = '\0';
-    
-    return p - inout_txt;
+
+    return p - base;
+}
+
+int32_t parse_trim_end(char *text, int32_t text_len)
+{
+    while(--text_len > 0)
+    {
+        char c = text[text_len];
+        if((c != '\n') && (c != '\r'))
+        {
+            return text_len + 1;
+        }
+        text[text_len] = '\0';
+    }
+    return 0;
 }
 
 /** \brief Skips a specific keyword from a string, case insensitive
@@ -636,45 +711,44 @@ parse_remove_spaces(char *inout_txt)
  *  @retval ERROR, dst_len was too small
  */
 
-ya_result
-parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 word_count, s32 *matched_word)
+ya_result parse_skip_word_specific(const char *src, uint32_t src_len, const char *const *words, uint32_t word_count, int32_t *matched_word)
 {
     const char *src_org = src;
     const char *src_limit = src + src_len;
-    
+
     // skip spaces
-    
+
     src = parse_skip_spaces(src);
-        
+
     // get the non-space
-    
+
     const char *p = src;
     while(p < src_limit && !isspace(*p))
     {
         p++;
     }
     // p == src_limit OR p is at the first blank after the word
-    
+
     src_limit = p;
-    
+
     src_len = src_limit - src;
 
-    for(u32 i = 0; i < word_count; i++)
+    for(uint_fast32_t i = 0; i < word_count; i++)
     {
         const char *ptr = src;
         const char *word = words[i];
-        
-        u32 word_len = strlen(word);
-        
+
+        uint32_t    word_len = strlen(word);
+
         if(word_len != src_len)
         {
             continue;
         }
-        
+
         const char *word_limit = word + word_len;
-        
+
         // lengths are the same
-        
+
         while(word < word_limit)
         {
             if(tolower(*ptr++) != tolower(*word++))
@@ -682,7 +756,7 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
                 break;
             }
         }
-        
+
         if(word == word_limit)
         {
             /* match */
@@ -690,7 +764,7 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
             {
                 *matched_word = i;
             }
-            
+
             return src_limit - src_org;
         }
     }
@@ -703,27 +777,35 @@ parse_skip_word_specific(const char *src, u32 src_len, const char **words, u32 w
     return PARSEWORD_NOMATCH_ERROR; /* no match */
 }
 
-const char *
-parse_skip_until_chars(const char *src, const char *chars, u32 chars_len)
+/**
+ * Skip characters from input until a char from a set is found.
+ *
+ * @param src the input
+ * @param chars an array of characters to match
+ * @param chars_len the number of characters in chars
+ *
+ * @return an pointer to the first matching character or the asciiz sentinel.
+ */
+
+const char *parse_skip_until_chars(const char *src, const char *chars, uint32_t chars_len)
 {
-    
     for(;;)
     {
         char c = *src;
-        
+
         if(c == '\0')
         {
             return src;
         }
-        
-        for(u32 i = 0; i < chars_len; i++)
+
+        for(uint_fast32_t i = 0; i < chars_len; i++)
         {
             if(c == chars[i])
             {
                 return src;
             }
         }
-        
+
         src++;
     }
 }
@@ -741,14 +823,13 @@ parse_skip_until_chars(const char *src, const char *chars, u32 chars_len)
  *  @retval ERROR, dst_len was too small or the src was not a valid ip
  */
 
-ya_result
-parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
+ya_result parse_ip_address(const char *src, uint32_t src_len_, uint8_t *dst, uint32_t dst_len)
 {
     const char *new_src = parse_skip_spaces(src);
-    s32 src_len = (s32)src_len_;
+    int32_t     src_len = (int32_t)src_len_;
     src_len -= new_src - src;
-    bool expect_v6_or_more = FALSE;
-    
+    bool expect_v6_or_more = false;
+
     if(src_len <= 0)
     {
         return PARSEIP_ERROR;
@@ -756,8 +837,8 @@ parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
 
     if(*new_src == '[') /// @note handle RFC 3986, section 3.2.2
     {
-        expect_v6_or_more = TRUE;
-        
+        expect_v6_or_more = true;
+
         new_src++;
         // IPv6+ delimiter
         char *end = strchr(new_src, ']');
@@ -767,15 +848,15 @@ parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
         }
         src_len = end - new_src;
     }
-    
+
     char tmp[64];
-    src_len = MIN((size_t)src_len, sizeof(tmp)-1);
+    src_len = MIN((size_t)src_len, sizeof(tmp) - 1);
     memcpy(tmp, src, src_len);
     tmp[src_len] = '\0';
 
     if(dst_len < 4)
     {
-        return PARSE_BUFFER_TOO_SMALL_ERROR;   /* dst too small */
+        return PARSE_BUFFER_TOO_SMALL_ERROR; /* dst too small */
     }
 
     if(inet_pton(AF_INET, tmp, dst) == 1)
@@ -784,13 +865,13 @@ parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
         {
             return PARSEIP_ERROR;
         }
-        
+
         return 4;
     }
 
     if(dst_len < 16)
     {
-        return PARSE_BUFFER_TOO_SMALL_ERROR;   /* dst too small */
+        return PARSE_BUFFER_TOO_SMALL_ERROR; /* dst too small */
     }
 
     if(inet_pton(AF_INET6, tmp, dst) == 1)
@@ -801,18 +882,27 @@ parse_ip_address(const char *src, u32 src_len_, u8 *dst, u32 dst_len)
     return PARSEIP_ERROR;
 }
 
-s32
-parse_next_token(char *dest, size_t dest_size, const char *from, const char *delim)
+/**
+ * Cuts a token from a text at the first occurence of a delimiter.
+ *
+ * @param dest the destination where the token will be copied.
+ * @param dest_size the size of the destination
+ * @param from the text
+ * @param delim a string containing all the characters that are delimiters
+ * @return the number of characters taken from the text
+ */
+
+int32_t parse_next_token(char *dest, size_t dest_size, const char *from, const char *delim)
 {
     const char *to = from;
     for(;;)
     {
         char c = *to;
-        
+
         if(c == '\0')
         {
             size_t len = to - from;
-                
+
             if(len > dest_size)
             {
                 return PARSE_BUFFER_TOO_SMALL_ERROR;
@@ -822,28 +912,138 @@ parse_next_token(char *dest, size_t dest_size, const char *from, const char *del
             dest[len] = '\0';
             return len;
         }
-        
+
         // for every delimiter, test if c if such a delimiter
         // if it is, then
-        
+
         for(const char *d = delim; *d != 0; d++)
         {
             if(*d == c)
             {
                 // end of word
                 size_t len = to - from;
-                
+
                 if(len > dest_size)
                 {
                     return PARSE_BUFFER_TOO_SMALL_ERROR;
                 }
-                
+
                 memcpy(dest, from, len);
                 dest[len] = '\0';
                 return len;
             }
         }
         ++to;
+    }
+}
+
+int64_t parse_timeus_from_smarttime(const char *text)
+{
+    int64_t ret = timeus_from_smarttime(text);
+    return ret;
+}
+
+static const char *const parse_hostaddr_keywords[4] = {
+    "port",
+    "key",
+    "notls",
+    "tls",
+};
+
+ya_result parse_hostaddr(const char *ipname_port_key, host_address_t **hap)
+{
+    ya_result ret;
+    // split spaces
+    uint8_t     tls = HOST_ADDRESS_TLS_NOT_SET;
+    char        host_name[256];
+    char        service[256] = "53";
+    char        keyname_ascii[256] = "";
+    const char *host = parse_skip_spaces(ipname_port_key);
+    const char *word = parse_next_blank(host);
+    const char *word_end;
+    const char *limit = &ipname_port_key[strlen(ipname_port_key)];
+    memcpy(host_name, host, word - host);
+    host_name[word - host] = '\0';
+
+    for(;;)
+    {
+        word = parse_skip_spaces(word);
+
+        if(word >= limit)
+        {
+            break;
+        }
+
+        // check for the work "port"
+        int32_t matched = -1;
+        int32_t word_len = parse_skip_word_specific(word, strlen(word), parse_hostaddr_keywords, 4, &matched);
+        word += word_len;
+        word = parse_skip_spaces(word);
+        char *p;
+        switch(matched)
+        {
+            case 0: // port
+            {
+                p = service;
+                break;
+            }
+            case 1: // key
+            {
+                p = keyname_ascii;
+                break;
+            }
+            case 2: // notls
+            {
+                p = NULL;
+                tls = HOST_ADDRESS_TLS_DISABLE;
+                break;
+            }
+            case 3: // tls
+            {
+                p = NULL;
+                tls = HOST_ADDRESS_TLS_ENFORCE;
+                break;
+            }
+            default:
+            {
+                // oops
+                return ERROR;
+            }
+        }
+
+        word_end = parse_next_blank(word);
+        if(p != NULL)
+        {
+            memcpy(p, word, word_end - word);
+            p[word_end - word] = '\0';
+        }
+        word = word_end;
+    }
+
+    struct addrinfo *addrinfo = NULL;
+    if(getaddrinfo(host_name, service, NULL, &addrinfo) >= 0)
+    {
+        host_address_t  *ha = host_address_new_instance();
+        socketaddressp_t sa;
+        sa.sa = addrinfo->ai_addr;
+        if(FAIL(ret = host_address_set_with_socketaddress(ha, sa.sat)))
+        {
+            host_address_delete(ha);
+            return ret;
+        }
+        if(keyname_ascii[0] != '\0')
+        {
+            ha->tsig = tsig_get_with_ascii_name(keyname_ascii);
+        }
+        ha->tls = tls;
+        *hap = ha;
+        free(addrinfo);
+
+        return SUCCESS;
+    }
+    else
+    {
+        return ERRNO_ERROR;
     }
 }
 

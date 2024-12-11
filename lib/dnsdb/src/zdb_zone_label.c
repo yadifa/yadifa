@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Internal functions for the database: zoned resource records label.
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Internal functions for the database: zoned resource records label.
  *
  *  Internal functions for the database: zoned resource records label.
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <dnscore/format.h>
 
 #include "dnsdb/zdb.h"
@@ -50,20 +49,19 @@
 #include "dnsdb/zdb_zone.h"
 #include "dnsdb/zdb_zone_label.h"
 #include "dnsdb/zdb_record.h"
-#include "dnsdb/zdb_utils.h"
+
 #include "dnsdb/zdb_error.h"
 
-extern logger_handle* g_database_logger;
+extern logger_handle_t *g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 /**
  * @brief INTERNAL callback, tests for a match between a label and a node.
  */
 
-static int
-zdb_zone_label_zlabel_match(const void *label, const dictionary_node * node)
+static int zdb_zone_label_zlabel_match(const void *label, const dictionary_node *node)
 {
-    const zdb_zone_label* zone_label = (const zdb_zone_label*)node;
+    const zdb_zone_label_t *zone_label = (const zdb_zone_label_t *)node;
     return dnslabel_equals(zone_label->name, label);
 }
 
@@ -71,12 +69,11 @@ zdb_zone_label_zlabel_match(const void *label, const dictionary_node * node)
  * @brief INTERNAL callback, creates a new node instance
  */
 
-static dictionary_node *
-zdb_zone_label_create(const void *data)
+static dictionary_node *zdb_zone_label_create(const void *data)
 {
-    zdb_zone_label* zone_label;
+    zdb_zone_label_t *zone_label;
 
-    ZALLOC_OBJECT_OR_DIE(zone_label, zdb_zone_label, ZDB_ZONELABEL_TAG);
+    ZALLOC_OBJECT_OR_DIE(zone_label, zdb_zone_label_t, ZDB_ZONELABEL_TAG);
 
     zone_label->next = NULL;
     dictionary_init(&zone_label->sub);
@@ -91,15 +88,14 @@ zdb_zone_label_create(const void *data)
  * @brief INTERNAL callback, destroys a node instance and its collections.
  */
 
-static void
-zdb_zone_label_destroy_callback(dictionary_node * zone_label_node)
+static void zdb_zone_label_destroy_callback(dictionary_node *zone_label_node)
 {
     if(zone_label_node == NULL)
     {
         return;
     }
 
-    zdb_zone_label *zone_label = (zdb_zone_label*)zone_label_node;
+    zdb_zone_label_t *zone_label = (zdb_zone_label_t *)zone_label_node;
 
     /* detach is made by destroy */
 
@@ -128,28 +124,25 @@ zdb_zone_label_destroy_callback(dictionary_node * zone_label_node)
  *
  */
 
-zdb_zone_label*
-zdb_zone_label_find(zdb * db, const dnsname_vector* origin) // mutex checked
+zdb_zone_label_t *zdb_zone_label_find(zdb_t *db, const dnsname_vector_t *origin) // mutex checked
 {
-    zdb_zone_label* zone_label;
-    
+    zdb_zone_label_t *zone_label;
+
     yassert(zdb_ismutexlocked(db));
-        
+
     zone_label = db->root; /* the "." zone */
 
-    const_dnslabel_stack_reference sections = origin->labels;
-    s32 index = origin->size;
+    const_dnslabel_stack_reference_t sections = origin->labels;
+    int32_t                          index = origin->size;
 
     /* look into the sub level */
 
     while(zone_label != NULL && index >= 0)
     {
-        const u8* label = sections[index];
-        hashcode hash = hash_dnslabel(label);
+        const uint8_t *label = sections[index];
+        hashcode       hash = hash_dnslabel(label);
 
-        zone_label =
-                (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label,
-                                                 zdb_zone_label_zlabel_match);
+        zone_label = (zdb_zone_label_t *)dictionary_find(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match);
 
         index--;
     }
@@ -169,73 +162,67 @@ zdb_zone_label_find(zdb * db, const dnsname_vector* origin) // mutex checked
  *
  */
 
-zdb_zone_label*
-zdb_zone_label_find_nolock(zdb * db, const dnsname_vector* origin)
+zdb_zone_label_t *zdb_zone_label_find_nolock(zdb_t *db, const dnsname_vector_t *origin)
 {
-    zdb_zone_label* zone_label;
-    
+    zdb_zone_label_t *zone_label;
+
     zone_label = db->root; /* the "." zone */
 
-    const_dnslabel_stack_reference sections = origin->labels;
-    s32 index = origin->size;
+    const_dnslabel_stack_reference_t sections = origin->labels;
+    int32_t                          index = origin->size;
 
     /* look into the sub level */
 
     while(zone_label != NULL && index >= 0)
     {
-        const u8* label = sections[index];
-        hashcode hash = hash_dnslabel(label);
+        const uint8_t *label = sections[index];
+        hashcode       hash = hash_dnslabel(label);
 
-        zone_label =
-                (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label,
-                                                 zdb_zone_label_zlabel_match);
+        zone_label = (zdb_zone_label_t *)dictionary_find(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match);
 
         index--;
     }
-    
+
     return zone_label;
 }
 
-zdb_zone_label*
-zdb_zone_label_find_from_name(zdb* db, const char* name) // mutex checked
+zdb_zone_label_t *zdb_zone_label_find_from_name(zdb_t *db, const char *name) // mutex checked
 {
-    dnsname_vector origin;
+    dnsname_vector_t origin;
 
-    u8 dns_name[MAX_DOMAIN_LENGTH];
+    uint8_t          dns_name[DOMAIN_LENGTH_MAX];
 
-    if(ISOK(cstr_to_dnsname(dns_name, name)))
+    if(ISOK(dnsname_init_with_cstr(dns_name, name)))
     {
         dnsname_to_dnsname_vector(dns_name, &origin);
 
-        zdb_zone_label *label = zdb_zone_label_find(db, &origin); // in zdb_zone_label_find_from_name
-        
+        zdb_zone_label_t *label = zdb_zone_label_find(db, &origin); // in zdb_zone_label_find_from_name
+
         return label;
     }
 
     return NULL;
 }
 
-zdb_zone_label*
-zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name) // mutex checked
+zdb_zone_label_t *zdb_zone_label_find_from_dnsname(zdb_t *db, const uint8_t *dns_name) // mutex checked
 {
-    dnsname_vector origin;
+    dnsname_vector_t origin;
 
     dnsname_to_dnsname_vector(dns_name, &origin);
 
-    zdb_zone_label *label = zdb_zone_label_find(db, &origin); // in zdb_zone_label_find_from_dnsname
-    
+    zdb_zone_label_t *label = zdb_zone_label_find(db, &origin); // in zdb_zone_label_find_from_dnsname
+
     return label;
 }
 
-zdb_zone_label*
-zdb_zone_label_find_from_dnsname_nolock(zdb* db, const u8* dns_name)
+zdb_zone_label_t *zdb_zone_label_find_from_dnsname_nolock(zdb_t *db, const uint8_t *dns_name)
 {
-    dnsname_vector origin;
+    dnsname_vector_t origin;
 
     dnsname_to_dnsname_vector(dns_name, &origin);
 
-    zdb_zone_label *label = zdb_zone_label_find_nolock(db, &origin); // in zdb_zone_label_find_from_dnsname_nolock
-    
+    zdb_zone_label_t *label = zdb_zone_label_find_nolock(db, &origin); // in zdb_zone_label_find_from_dnsname_nolock
+
     return label;
 }
 
@@ -248,24 +235,22 @@ zdb_zone_label_find_from_dnsname_nolock(zdb* db, const u8* dns_name)
  *
  */
 
-void
-zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
+void zdb_zone_label_destroy(zdb_zone_label_t **zone_labelp)
 {
     yassert(zone_labelp != NULL);
-    
-    zdb_zone_label* zone_label = *zone_labelp;
+
+    zdb_zone_label_t *zone_label = *zone_labelp;
 
     if(zone_label != NULL)
     {
 #if DEBUG
         log_debug5("zdb_zone_label_destroy: %{dnslabel}", zone_label->name);
 #endif
-        
+
         dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
 
-        
-        zdb_zone *zone = zone_label->zone;
-        
+        zdb_zone_t *zone = zone_label->zone;
+
         if(zone != NULL)
         {
 #if DEBUG
@@ -275,13 +260,13 @@ zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
             alarm_close(zone->alarm_handle);
             zone->alarm_handle = ALARM_HANDLE_INVALID;
             mutex_unlock(&zone->lock_mutex);
-            
+
             zdb_zone_release(zone);
             zone_label->zone = NULL;
         }
-        
-        //zdb_zone_destroy(zone_label->zone);
-        
+
+        // zdb_zone_destroy(zone_label->zone);
+
         dnslabel_zfree(zone_label->name);
         ZFREE_OBJECT(zone_label);
         *zone_labelp = NULL;
@@ -300,20 +285,19 @@ zdb_zone_label_destroy(zdb_zone_label **zone_labelp)
  * @return the top of the stack (-1 = empty)
  */
 
-s32
-zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
-                     zdb_zone_label_pointer_array zone_label_stack)
+int32_t zdb_zone_label_match(zdb_t *db, const dnsname_vector_t *origin, // mutex checked
+                             zdb_zone_label_pointer_array zone_label_stack)
 {
-    zdb_zone_label* zone_label;
-    
+    zdb_zone_label_t *zone_label;
+
     yassert(zdb_islocked_by(db, ZDB_MUTEX_READER));
-    
+
     zone_label = db->root; /* the "." zone */
 
-    const_dnslabel_stack_reference sections = origin->labels;
-    s32 index = origin->size;
+    const_dnslabel_stack_reference_t sections = origin->labels;
+    int32_t                          index = origin->size;
 
-    s32 sp = 0;
+    int32_t                          sp = 0;
 
     zone_label_stack[0] = zone_label;
 
@@ -321,10 +305,10 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
 
     while(index >= 0)
     {
-        const u8* label = sections[index];
-        hashcode hash = hash_dnslabel(label);
+        const uint8_t *label = sections[index];
+        hashcode       hash = hash_dnslabel(label);
 
-        zone_label = (zdb_zone_label*)dictionary_find(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match);
+        zone_label = (zdb_zone_label_t *)dictionary_find(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match);
 
         if(zone_label == NULL)
         {
@@ -335,29 +319,28 @@ zdb_zone_label_match(zdb * db, const dnsname_vector* origin,  // mutex checked
 
         index--;
     }
-    
+
     return sp;
 }
 
-zdb_zone_label*
-zdb_zone_label_add_nolock(zdb * db, const dnsname_vector* origin) // mutex checked
+zdb_zone_label_t *zdb_zone_label_add_nolock(zdb_t *db, const dnsname_vector_t *origin) // mutex checked
 {
-    zdb_zone_label* zone_label;
-    
+    zdb_zone_label_t *zone_label;
+
     yassert(zdb_islocked(db));
 
     zone_label = db->root; /* the "." zone */
 
-    const_dnslabel_stack_reference sections = origin->labels;
-    s32 index = origin->size;
+    const_dnslabel_stack_reference_t sections = origin->labels;
+    int32_t                          index = origin->size;
 
     /* look into the sub level */
 
     while(index >= 0)
     {
-        const u8* label = sections[index];
-        hashcode hash = hash_dnslabel(label);
-        zone_label = (zdb_zone_label*)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
+        const uint8_t *label = sections[index];
+        hashcode       hash = hash_dnslabel(label);
+        zone_label = (zdb_zone_label_t *)dictionary_add(&zone_label->sub, hash, label, zdb_zone_label_zlabel_match, zdb_zone_label_create);
 
         index--;
     }
@@ -365,25 +348,23 @@ zdb_zone_label_add_nolock(zdb * db, const dnsname_vector* origin) // mutex check
     return zone_label;
 }
 
-typedef struct zdb_zone_label_delete_process_callback_args
-zdb_zone_label_delete_process_callback_args;
+typedef struct zdb_zone_label_delete_process_callback_args zdb_zone_label_delete_process_callback_args;
 
 struct zdb_zone_label_delete_process_callback_args
 {
-    dnslabel_stack_reference sections;
-    s32 top;
+    dnslabel_stack_reference_t sections;
+    int32_t                    top;
 };
 
 /**
  * @brief INTERNAL callback
  */
 
-static ya_result
-zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
+static ya_result zdb_zone_label_delete_process_callback(void *a, dictionary_node *node)
 {
     yassert(node != NULL);
 
-    zdb_zone_label* zone_label = (zdb_zone_label*)node;
+    zdb_zone_label_t                            *zone_label = (zdb_zone_label_t *)node;
 
     zdb_zone_label_delete_process_callback_args *args = (zdb_zone_label_delete_process_callback_args *)a;
 
@@ -402,8 +383,8 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
      *
      */
 
-    s32 top = args->top;
-    const u8* label = (u8*)args->sections[top];
+    int32_t        top = args->top;
+    const uint8_t *label = (uint8_t *)args->sections[top];
 
     if(!dnslabel_equals(zone_label->name, label))
     {
@@ -417,13 +398,10 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
         /* go to the next level */
 
         label = args->sections[--args->top];
-        hashcode hash = hash_dnslabel(label);
+        hashcode  hash = hash_dnslabel(label);
 
         ya_result err;
-        if((err =
-                dictionary_process(&zone_label->sub, hash, args,
-                                   zdb_zone_label_delete_process_callback)) ==
-                COLLECTION_PROCESS_DELETENODE)
+        if((err = dictionary_process(&zone_label->sub, hash, args, zdb_zone_label_delete_process_callback)) == COLLECTION_PROCESS_DELETENODE)
         {
             /* check the node for relevance, return "delete" if irrelevant */
 
@@ -431,15 +409,14 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
             {
                 /* Irrelevant means that only the name remains */
 
-                dictionary_destroy(&zone_label->sub,
-                                   zdb_zone_label_destroy_callback);
+                dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
 
                 if(zone_label->zone != NULL)
                 {
                     zdb_zone_release(zone_label->zone);
                     zone_label->zone = NULL;
                 }
-                
+
                 dnslabel_zfree(zone_label->name);
                 ZFREE_OBJECT(zone_label);
 
@@ -463,13 +440,12 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
 
     dictionary_destroy(&zone_label->sub, zdb_zone_label_destroy_callback);
 
-    
     if(zone_label->zone != NULL)
     {
         zdb_zone_release(zone_label->zone);
         zone_label->zone = NULL;
     }
-    
+
     dnslabel_zfree(zone_label->name);
     ZFREE_OBJECT(zone_label);
 
@@ -487,13 +463,12 @@ zdb_zone_label_delete_process_callback(void *a, dictionary_node * node)
  * @return an error code
  */
 
-ya_result
-zdb_zone_label_delete(zdb * db, dnsname_vector* name) // mutex checked
+ya_result zdb_zone_label_delete(zdb_t *db, dnsname_vector_t *name) // mutex checked
 {
     yassert(db != NULL && name != NULL && name->size >= 0);
     yassert(zdb_islocked(db));
-    
-    zdb_zone_label* root_label;
+
+    zdb_zone_label_t *root_label;
     root_label = db->root; /* the "." zone */
 
     if(root_label == NULL)
@@ -507,10 +482,10 @@ zdb_zone_label_delete(zdb * db, dnsname_vector* name) // mutex checked
     args.sections = name->labels;
     args.top = name->size;
 
-    hashcode hash = hash_dnslabel(args.sections[args.top]);
+    hashcode  hash = hash_dnslabel(args.sections[args.top]);
 
     ya_result err = dictionary_process(&root_label->sub, hash, &args, zdb_zone_label_delete_process_callback);
-    
+
     if(err == COLLECTION_PROCESS_DELETENODE)
     {
         err = COLLECTION_PROCESS_STOP;
@@ -525,8 +500,7 @@ zdb_zone_label_delete(zdb * db, dnsname_vector* name) // mutex checked
  * DEBUG
  */
 
-void
-zdb_zone_label_print_indented(zdb_zone_label* zone_label, output_stream *os, int indented)
+void zdb_zone_label_print_indented(zdb_zone_label_t *zone_label, output_stream_t *os, int indented)
 {
     if(zone_label == NULL)
     {
@@ -548,24 +522,18 @@ zdb_zone_label_print_indented(zdb_zone_label* zone_label, output_stream *os, int
         osformatln(os, "%tg: WRONG", indented);
     }
 
-
-
-    dictionary_iterator iter;
+    dictionary_iterator_t iter;
     dictionary_iterator_init(&zone_label->sub, &iter);
 
     while(dictionary_iterator_hasnext(&iter))
     {
-        zdb_zone_label* *sub_labelp = (zdb_zone_label**)dictionary_iterator_next(&iter);
+        zdb_zone_label_t **sub_labelp = (zdb_zone_label_t **)dictionary_iterator_next(&iter);
 
         zdb_zone_label_print_indented(*sub_labelp, os, indented + 1);
     }
 }
 
-void
-zdb_zone_label_print(zdb_zone_label* zone_label, output_stream *os)
-{
-    zdb_zone_label_print_indented(zone_label, os, 0);
-}
+void zdb_zone_label_print(zdb_zone_label_t *zone_label, output_stream_t *os) { zdb_zone_label_print_indented(zone_label, os, 0); }
 
 #endif
 

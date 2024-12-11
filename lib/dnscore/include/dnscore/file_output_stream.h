@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,83 +28,84 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _FILE_OUTPUT_STREAM_H
-#define	_FILE_OUTPUT_STREAM_H
+#define _FILE_OUTPUT_STREAM_H
 
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-ya_result file_output_stream_open(output_stream *os, const char *filename);
+ya_result file_output_stream_open(output_stream_t *os, const char *filename);
 
 /**
  * man 2 open
  */
-ya_result file_output_stream_open_ex(output_stream *os, const char *filename,int flags, mode_t mode);
+ya_result file_output_stream_open_ex(output_stream_t *os, const char *filename, int flags, mode_t mode);
 
 /*
-* This version of open_create_ex does NOT log anything, which is very important sometimes in the logger thread
-*/
-ya_result file_output_stream_open_ex_nolog(output_stream *os, const char *filename,int flags, mode_t mode);
+ * This version of open_create_ex does NOT log anything, which is very important sometimes in the logger thread
+ */
+ya_result file_output_stream_open_ex_nolog(output_stream_t *os, const char *filename, int flags, mode_t mode);
 
-void file_output_stream_close_nolog(output_stream* os);
+void      file_output_stream_close_nolog(output_stream_t *os);
 
-ya_result file_output_stream_create(output_stream *stream, const char *filename,mode_t mode);
+ya_result file_output_stream_create(output_stream_t *stream, const char *filename, mode_t mode);
 
 /**
  * Returns MAKE_ERRNO_ERROR(EEXIST) if the file exists already.
  */
 
-ya_result file_output_stream_create_excl(output_stream* stream, const char* filename, mode_t mode);
+ya_result file_output_stream_create_excl(output_stream_t *stream, const char *filename, mode_t mode);
 
 /**
  * Enables or disables the write mode of the steam as "full"
  * In "full" mode, the stream will stay blocked on a write if a recoverable
  * error occurs. (ie: there is no space left).
- * 
+ *
  * Do NOT use this for the loggers as it would make it impossible to act on HUP
- * 
+ *
  * Main target: journal
- * 
+ *
  * @param stream
  * @param full_writes
- * @return 
+ * @return
  */
 
-ya_result file_output_stream_set_full_writes(output_stream* stream, bool full_writes);
+ya_result file_output_stream_set_full_writes(output_stream_t *stream, bool full_writes);
 
-ya_result fd_output_stream_attach(output_stream *os, int fd);
+ya_result fd_output_stream_attach(output_stream_t *os, int fd);
 
-ya_result fd_output_stream_attach_noclose(output_stream *os, int fd);
+ya_result fd_output_stream_attach_noclose(output_stream_t *os, int fd);
 
-void      fd_output_stream_detach(output_stream *os);
+void      fd_output_stream_detach(output_stream_t *os);
 
-ya_result fd_output_stream_get_filedescriptor(output_stream *os);
+ya_result fd_output_stream_get_filedescriptor(output_stream_t *os);
 
-s64       fd_output_stream_get_size(output_stream *os);
+int64_t   fd_output_stream_get_size(output_stream_t *os);
 
-bool      is_fd_output_stream(output_stream *os);
+bool      is_fd_output_stream(output_stream_t *os);
 
-void      file_output_steam_advise_sequential(output_stream* os);
+bool      fd_output_stream_is_noclose_instance(output_stream_t *os);
 
-#ifdef	__cplusplus
+void      file_output_steam_advise_sequential(output_stream_t *os);
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _FILE_OUTPUT_STREAM_H */
+#endif /* _FILE_OUTPUT_STREAM_H */
 /** @} */

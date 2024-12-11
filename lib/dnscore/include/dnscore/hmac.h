@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,35 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup hmac
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup hmac
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
 #include <dnscore/sys_types.h>
 
-#define HMAC_UNKNOWN	  0
-#define HMAC_MD5        157
-#define HMAC_SHA1       161
-#define HMAC_SHA224     162
-#define HMAC_SHA256     163
-#define HMAC_SHA384     164
-#define HMAC_SHA512     165
+#define HMAC_UNKNOWN     0
+#define HMAC_MD5         157
+#define HMAC_SHA1        161
+#define HMAC_SHA224      162
+#define HMAC_SHA256      163
+#define HMAC_SHA384      164
+#define HMAC_SHA512      165
+
+#define HMAC_BUFFER_SIZE 64 // = EVP_MAX_MD_SIZE
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
- 
+
 struct hmac_vtbl;
 
 struct tsig_hmac_t
@@ -63,46 +65,31 @@ struct tsig_hmac_t
     // ideally, implementations will append their fields on their opaque type
     // so only one allocation is used
 };
-    
-typedef struct tsig_hmac_t* tsig_hmac_t;
+
+typedef struct tsig_hmac_t *tsig_hmac_t;
 
 struct hmac_vtbl
 {
     int (*hmac_update)(tsig_hmac_t hmac, const void *data, size_t len);
     int (*hmac_final)(tsig_hmac_t hmac, void *out_data, unsigned int *out_len);
     void (*hmac_reset)(tsig_hmac_t t);
-    ya_result (*hmac_init)(tsig_hmac_t t, const void *key, int len, u8 algorithm);
+    ya_result (*hmac_init)(tsig_hmac_t t, const void *key, int len, uint8_t algorithm);
     void (*hmac_free)(tsig_hmac_t t);
 };
 
 typedef struct hmac_vtbl hmac_vtbl;
 
-tsig_hmac_t tsig_hmac_allocate();
+tsig_hmac_t              tsig_hmac_allocate();
 
-static inline void hmac_free(tsig_hmac_t t)
-{
-    t->vtbl->hmac_free(t);
-}
+static inline void       hmac_free(tsig_hmac_t t) { t->vtbl->hmac_free(t); }
 
-static inline ya_result hmac_init(tsig_hmac_t t, const void *key, int len, u8 algorithm)
-{
-    return t->vtbl->hmac_init(t, key, len, algorithm);
-}
+static inline ya_result  hmac_init(tsig_hmac_t t, const void *key, int len, uint8_t algorithm) { return t->vtbl->hmac_init(t, key, len, algorithm); }
 
-static inline int hmac_update(tsig_hmac_t t, const void *data, size_t len)
-{
-    return t->vtbl->hmac_update(t, data, len);
-}
+static inline int        hmac_update(tsig_hmac_t t, const void *data, size_t len) { return t->vtbl->hmac_update(t, data, len); }
 
-static inline int hmac_final(tsig_hmac_t t, void *out_data, unsigned int *out_len)
-{
-    return t->vtbl->hmac_final(t, out_data, out_len);
-}
+static inline int        hmac_final(tsig_hmac_t t, void *out_data, unsigned int *out_len) { return t->vtbl->hmac_final(t, out_data, out_len); }
 
-static inline void hmac_reset(tsig_hmac_t t)
-{
-    t->vtbl->hmac_reset(t);
-}
+static inline void       hmac_reset(tsig_hmac_t t) { t->vtbl->hmac_reset(t); }
 
 #ifdef __cplusplus
 }

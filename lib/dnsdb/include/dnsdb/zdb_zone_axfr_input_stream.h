@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #ifndef __ZDB_ZONE_AXFR_INPUT_STREAM__H__
@@ -49,31 +47,32 @@
 #include <dnsdb/zdb_zone.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /**
  * Opens the specified file as an AXFR image for the given zone.
  * Will fail if the file cannot be opened.
- * 
+ *
  * @param is
  * @param zone
  * @param filepath
- * @return 
+ * @return
  */
-    
-ya_result zdb_zone_axfr_input_stream_open_with_path(input_stream *is, zdb_zone *zone, const char *filepath);
-    
+
+ya_result zdb_zone_axfr_input_stream_open_with_path(input_stream_t *is, zdb_zone_t *zone, const char *filepath);
+
 /**
  * Opens the file on disk and starts to stream it until it has been marked as fully written
- * Used to send to slaves.
- * 
+ * Used to send to secondaries.
+ *
  * @param is
  * @param zone
- * @return 
+ * @return
  */
-    
-ya_result zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone);
+
+ya_result zdb_zone_axfr_input_stream_open(input_stream_t *is, zdb_zone_t *zone);
 
 #ifdef __cplusplus
 }
@@ -84,6 +83,3 @@ ya_result zdb_zone_axfr_input_stream_open(input_stream *is, zdb_zone *zone);
 /*    ------------------------------------------------------------    */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

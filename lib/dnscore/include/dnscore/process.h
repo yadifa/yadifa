@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #pragma once
@@ -49,11 +47,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-extern pid_t g_pid;
+extern pid_t        g_pid;
 
 static inline pid_t getpid_ex() { return g_pid; }
 
-pid_t fork_ex();
-int waitpid_ex(pid_t pid, int *wstatus, int options);
+pid_t               fork_ex();
+int                 waitpid_ex(pid_t pid, int *wstatus, int options);
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,45 +28,42 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "dnscore/limited_input_stream.h"
 #include "dnscore/zalloc.h"
 
-#define LIMITED_INPUT_STREAM_TAG 0x53494454494d494c    /* LIMITDIS */
+#define LIMITED_INPUT_STREAM_TAG 0x53494454494d494c /* LIMITDIS */
 
-#define MODULE_MSG_HANDLE g_database_logger
+#define MODULE_MSG_HANDLE        g_database_logger
 
 typedef struct limited_input_stream_data limited_input_stream_data;
 
 struct limited_input_stream_data
 {
-    input_stream filtered;
-    u64 remaining;
+    input_stream_t filtered;
+    uint64_t       remaining;
 };
 
-static ya_result
-limited_read(input_stream* stream, void* buffer, u32 len)
+static ya_result limited_read(input_stream_t *stream, void *buffer, uint32_t len)
 {
-    limited_input_stream_data* data = (limited_input_stream_data*)stream->data;
-    
+    limited_input_stream_data *data = (limited_input_stream_data *)stream->data;
+
     if(data->remaining > 0)
-    { 
+    {
         len = MIN(len, data->remaining);
 
         ya_result return_value = input_stream_read(&data->filtered, buffer, len);
@@ -80,29 +77,27 @@ limited_read(input_stream* stream, void* buffer, u32 len)
     }
     else
     {
-       return -1;   /* EOF */ 
+        return 0; /* EOF */
     }
 }
 
-static void
-limited_close(input_stream* stream)
+static void limited_close(input_stream_t *stream)
 {
-    limited_input_stream_data* data = (limited_input_stream_data*)stream->data;
+    limited_input_stream_data *data = (limited_input_stream_data *)stream->data;
     input_stream_close(&data->filtered);
     ZFREE_OBJECT(data);
 
     input_stream_set_void(stream);
 }
 
-static ya_result
-limited_skip(input_stream* stream, u32 len)
+static ya_result limited_skip(input_stream_t *stream, uint32_t len)
 {
-    limited_input_stream_data* data = (limited_input_stream_data*)stream->data;
- 
+    limited_input_stream_data *data = (limited_input_stream_data *)stream->data;
+
     len = MIN(len, data->remaining);
 
     ya_result return_value = input_stream_skip(&data->filtered, len);
-    
+
     if(ISOK(return_value))
     {
         data->remaining -= len;
@@ -111,22 +106,15 @@ limited_skip(input_stream* stream, u32 len)
     return return_value;
 }
 
-static const input_stream_vtbl limited_input_stream_vtbl =
-{
-    limited_read,
-    limited_skip,
-    limited_close,
-    "limited_input_stream"
-};
+static const input_stream_vtbl limited_input_stream_vtbl = {limited_read, limited_skip, limited_close, "limited_input_stream"};
 
-void
-limited_input_stream_init(input_stream* filtered, input_stream *stream, u64 stream_size)
+void                           limited_input_stream_init(input_stream_t *stream, input_stream_t *filtered, uint64_t stream_size)
 {
-    limited_input_stream_data* data;
+    limited_input_stream_data *data;
 
     yassert(filtered->vtbl != NULL);
 
-    ZALLOC_OBJECT_OR_DIE( data, limited_input_stream_data, LIMITED_INPUT_STREAM_TAG);
+    ZALLOC_OBJECT_OR_DIE(data, limited_input_stream_data, LIMITED_INPUT_STREAM_TAG);
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
@@ -141,6 +129,3 @@ limited_input_stream_init(input_stream* filtered, input_stream *stream, u64 stre
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

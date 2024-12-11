@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,110 +28,118 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
 #include <dnscore/sys_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-typedef struct input_stream input_stream;
+struct input_stream_s;
+typedef struct input_stream_s input_stream_t;
 
+struct output_stream_s;
+typedef struct output_stream_s   output_stream_t;
 
-typedef ya_result input_stream_read_method(input_stream *stream,void *in_buffer,u32 in_len);
-typedef void input_stream_close_method(input_stream *stream);
+typedef ya_result                input_stream_read_method(input_stream_t *stream, void *in_buffer, uint32_t in_len);
+typedef void                     input_stream_close_method(input_stream_t *stream);
 
-typedef ya_result input_stream_skip_method(input_stream *stream,u32 byte_count);
+typedef ya_result                input_stream_skip_method(input_stream_t *stream, uint32_t byte_count);
 
 typedef struct input_stream_vtbl input_stream_vtbl;
 
-
 struct input_stream_vtbl
 {
-    input_stream_read_method*  read;
-    input_stream_skip_method*  skip;
-    input_stream_close_method* close;
-    const char* __class__;              /* MUST BE A UNIQUE POINTER, ie: One defined in the class's .c file */
-                                        /* The name should be unique in order to avoid compiler tricks	*/
+    input_stream_read_method  *read;
+    input_stream_skip_method  *skip;
+    input_stream_close_method *close;
+    const char                *__class__; /* MUST BE A UNIQUE POINTER, ie: One defined in the class's .c file */
+                                          /* The name should be unique in order to avoid compiler tricks	*/
 
-                                        /* Add your inheritable methods here    */
+    /* Add your inheritable methods here    */
 };
 
-struct input_stream
+struct input_stream_s
 {
-    void* data;
-    const input_stream_vtbl* vtbl;
+    void                    *data;
+    const input_stream_vtbl *vtbl;
 };
 
-#define input_stream_class(is_) ((is_)->vtbl)
-#define input_stream_class_name(is_) ((is_)->vtbl->__class__)
-#define input_stream_read(is_,buffer_,len_) (is_)->vtbl->read(is_,buffer_,len_)
-#define input_stream_close(is_) (is_)->vtbl->close(is_)
-#define input_stream_skip(is_,len_) (is_)->vtbl->skip(is_,len_)
-#define input_stream_valid(is_) ((is_)->vtbl != NULL)
+#define input_stream_class(is_)               ((is_)->vtbl)
+#define input_stream_class_name(is_)          ((is_)->vtbl->__class__)
+#define input_stream_read(is_, buffer_, len_) (is_)->vtbl->read(is_, buffer_, len_)
+#define input_stream_close(is_)               (is_)->vtbl->close(is_)
+#define input_stream_skip(is_, len_)          (is_)->vtbl->skip(is_, len_)
+#define input_stream_valid(is_)               ((is_)->vtbl != NULL)
 
-ya_result input_stream_read_fully(input_stream *stream, void *buffer, u32 len);
-ya_result input_stream_skip_fully(input_stream *stream, u32 len_start);
+ya_result               input_stream_read_fully(input_stream_t *stream, void *buffer, uint32_t len);
+ya_result               input_stream_skip_fully(input_stream_t *stream, uint32_t len_start);
 
-ya_result input_stream_read_nu32(input_stream *stream, u32 *output);
-ya_result input_stream_read_nu16(input_stream *stream, u16 *output);
-ya_result input_stream_read_u32(input_stream *stream, u32 *output);
-ya_result input_stream_read_s32(input_stream *stream, s32 *output);
-ya_result input_stream_read_u16(input_stream *stream, u16 *output);
+ya_result               input_stream_read_nu32(input_stream_t *stream, uint32_t *output);
+ya_result               input_stream_read_nu16(input_stream_t *stream, uint16_t *output);
+ya_result               input_stream_read_u32(input_stream_t *stream, uint32_t *output);
+ya_result               input_stream_read_s32(input_stream_t *stream, int32_t *output);
+ya_result               input_stream_read_u16(input_stream_t *stream, uint16_t *output);
 
-static inline ya_result input_stream_read_u8(input_stream* stream, u8* output)
-{
-    return input_stream_read_fully(stream, output, 1);
-}
+static inline ya_result input_stream_read_u8(input_stream_t *stream, uint8_t *output) { return input_stream_read_fully(stream, output, 1); }
 
-static inline ya_result input_stream_read_s8(input_stream* stream, s8* output)
-{
-    return input_stream_read_fully(stream, output, 1);
-}
+static inline ya_result input_stream_read_s8(input_stream_t *stream, int8_t *output) { return input_stream_read_fully(stream, output, 1); }
 
-ya_result input_stream_read_pu32(input_stream *stream, u32 *output);
-ya_result input_stream_read_pu64(input_stream *stream, u64 *output);
+ya_result               input_stream_read_pu16(input_stream_t *is, uint16_t *output);
+ya_result               input_stream_read_pu32(input_stream_t *stream, uint32_t *output);
+ya_result               input_stream_read_pu64(input_stream_t *stream, uint64_t *output);
 
-ya_result input_stream_read_dnsname(input_stream *stream,u8 *output);
+ya_result               input_stream_read_dnsname(input_stream_t *stream, uint8_t *output);
 
-ya_result input_stream_read_rname(input_stream *stream, u8 *output_buffer);
+ya_result               input_stream_read_rname(input_stream_t *stream, uint8_t *output_buffer);
 
-ya_result input_stream_read_line(input_stream *stream, char *output, int max_len);
+ya_result               input_stream_read_line(input_stream_t *stream, char *output, int max_len);
 
 /**
  * This tools allows a safer misuse (and detection) of closed streams
  * It sets the stream to a sink that warns abouts its usage and for which every call that can fail fails.
- * 
+ *
  * @param is the stream to set as a void.  It needs to have been closed already.
  */
 
-void input_stream_set_void(input_stream *is);
+void input_stream_set_void(input_stream_t *is);
 
 /**
  * Used to temporarily initialise a stream with a sink that can be closed safely.
  * Typically used as pre-init so the stream can be closed even if the function
  * setup failed before reaching stream initialisation.
- * 
+ *
  * @param is
  */
 
-void input_stream_set_sink(input_stream* is);
+void input_stream_set_sink(input_stream_t *is);
 
-#ifdef	__cplusplus
+/**
+ * Reads a buffer from the input stream and writes it to the output stream.
+ *
+ * @param is the input stream
+ * @param os the output stream
+ * @param byte_count the amount of bytes to copy
+ *
+ * @return byte_count or an error code
+ */
+
+ya_result input_stream_to_output_stream_copy(input_stream_t *is, output_stream_t *os, int byte_count);
+
+#ifdef __cplusplus
 }
 #endif
 

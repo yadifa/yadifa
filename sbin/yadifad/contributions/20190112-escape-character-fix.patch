@@ -13,7 +13,7 @@ diff --git a/lib/dnscore/src/format.c b/lib/dnscore/src/format.c
 index a3225c5..dfad0d4 100644
 --- a/lib/dnscore/src/format.c
 +++ b/lib/dnscore/src/format.c
-@@ -1914,7 +1914,7 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
+@@ -1914,7 +1914,7 @@ osprint_rdata(output_stream* os, uint16_t type, const uint8_t* rdata_pointer, uint16_t rdata_si
                  const char *character_to_check = (char *)rdata_pointer;
                  const char * const limit = character_to_check + pstring_len;
                  output_stream_write_u8(os, '"'); /* Opening double quote for the string. */
@@ -22,7 +22,7 @@ index a3225c5..dfad0d4 100644
                  {
                      if(memchr("\"\n\\", *character_to_check, 3))
                      {
-@@ -1927,7 +1927,6 @@ osprint_rdata(output_stream* os, u16 type, const u8* rdata_pointer, u16 rdata_si
+@@ -1927,7 +1927,6 @@ osprint_rdata(output_stream* os, uint16_t type, const uint8_t* rdata_pointer, uint16_t rdata_si
                          rdata_pointer += preceding_span_len + 1;
                      }
                  }

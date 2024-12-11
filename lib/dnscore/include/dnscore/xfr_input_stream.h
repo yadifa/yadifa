@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,70 +28,54 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef XFR_INPUT_STREAM_H_
-#define	XFR_INPUT_STREAM_H_
+#define XFR_INPUT_STREAM_H_
 
 #include <dirent.h>
 
 #include <dnscore/input_stream.h>
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 typedef enum
 {
-    XFR_ALLOW_AXFR=1,
-    XFR_ALLOW_IXFR=2,
-    XFR_ALLOW_BOTH=3,
-    XFR_CURRENT_SERIAL_SET=4,   // tells the serial parameter is valid
-    XFR_LOOSE_AUTHORITY=8       // ignores missing AA flag
+    XFR_ALLOW_AXFR = 1,
+    XFR_ALLOW_IXFR = 2,
+    XFR_ALLOW_BOTH = 3,
+    XFR_CURRENT_SERIAL_SET = 4, // tells the serial parameter is valid
+    XFR_LOOSE_AUTHORITY = 8     // ignores missing AA flag
 } xfr_copy_flags;
 
-/*
-typedef struct xfr_copy_args xfr_copy_args;
-
-struct xfr_copy_args
-{
-    input_stream            *is;                        // TCP stream
-    const u8                *origin;                    // origin of the zone
-    message_data            *message;                   // message (first set to the head XFR message by the init)
-    
-    u32                     current_serial;             // the current serial for the zone (if XFR_CURRENT_SERIAL_SET in flags)
-    u32                     out_loaded_serial;          // the target serial of the stream
-     
-    xfr_copy_flags          flags;                      // what is allowed in the stream    
-};
-*/
-
 /**
- * 
+ *
  * The XFR input stream is meant to give record by record the payload of an XFR
  * transfer. It verifies the TSIGs.  It knows its type after two read records.
- * 
+ *
  * @param args                  see xfr_copy_args
  * @param filtering_stream
- * @return 
+ * @return
  */
 
-ya_result xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin, input_stream *xfr_source_stream, message_data *message, u32 current_serial, xfr_copy_flags flags);
+ya_result xfr_input_stream_init(input_stream_t *filtering_stream, const uint8_t *origin, input_stream_t *xfr_source_stream, dns_message_t *message, uint32_t current_serial, xfr_copy_flags flags);
 
 /**
- * 
- * Queries the server with origin IXFR with the given SOA.
- * 
+ *
+ * Queries the server with origin IXFR with the given SOA and timeout.
+ *
  * @param xfris
  * @param server
  * @param origin
@@ -99,33 +83,55 @@ ya_result xfr_input_stream_init(input_stream* filtering_stream, const u8 *origin
  * @param soa_rdata
  * @param soa_rdata_size
  * @param flags
- * @return 
+ * @param timeout in seconds
+ * @return
  */
 
-ya_result xfr_input_stream_init_with_query(input_stream* xfris, const host_address *server, const u8 *origin, s32 ttl, const u8 *soa_rdata, int soa_rdata_size, xfr_copy_flags flags);
+ya_result xfr_input_stream_init_with_query_and_timeout(input_stream_t *filtering_stream, const host_address_t *server, const uint8_t *origin, int32_t ttl, const uint8_t *soa_rdata, int soa_rdata_size, xfr_copy_flags flags, int32_t timeout);
 
-ya_result xfr_input_stream_get_type(input_stream* in_xfr_input_stream);
+/**
+ *
+ * Queries the server with origin IXFR with the given SOA and a timeout of 10 seconds.
+ *
+ * @param xfris
+ * @param server
+ * @param origin
+ * @param ttl
+ * @param soa_rdata
+ * @param soa_rdata_size
+ * @param flags
+ * @return
+ */
 
-const u8* xfr_input_stream_get_origin(input_stream* in_xfr_input_stream);
+ya_result      xfr_input_stream_init_with_query(input_stream_t *xfris, const host_address_t *server, const uint8_t *origin, int32_t ttl, const uint8_t *soa_rdata, int soa_rdata_size, xfr_copy_flags flags);
+
+ya_result      xfr_input_stream_get_type(input_stream_t *in_xfr_input_stream);
+
+const uint8_t *xfr_input_stream_get_origin(input_stream_t *in_xfr_input_stream);
 
 /**
  * Returns the serial of the SOA at the end of the stream.
- * 
- * @param in_xfr_input_stream
+ *
+ * @param in_xfr_input_stream_t
  * @return the last SOA serial number
  */
 
-u32 xfr_input_stream_get_serial(input_stream* in_xfr_input_stream);
+uint32_t xfr_input_stream_get_serial(input_stream_t *in_xfr_input_stream);
 
-u32 xfr_input_stream_get_refresh(input_stream *in_xfr_input_stream);
+uint32_t xfr_input_stream_get_refresh(input_stream_t *in_xfr_input_stream);
 
-void xfr_input_stream_finalize();
+uint32_t xfr_input_stream_get_message_count(input_stream_t *in_xfr_input_stream);
 
-#ifdef	__cplusplus
+uint32_t xfr_input_stream_get_record_count(input_stream_t *in_xfr_input_stream);
+
+uint64_t xfr_input_stream_get_size_total(input_stream_t *in_xfr_input_stream);
+
+void     xfr_input_stream_finalize();
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* XFR_INPUT_STREAM_H_ */
-
+#endif /* XFR_INPUT_STREAM_H_ */
 
 /** @} */

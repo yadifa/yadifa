@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,11 +28,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 
 #include <fcntl.h>
 #include <stddef.h>
@@ -53,80 +51,84 @@
 #include <dnscore/fdtools.h>
 
 #include "dnscore/zone_reader_text.h"
+#include "dnscore/mutex.h"
+#include "dnscore/dnscore_extension.h"
 
-#define ZFREADER_TAG 0x524544414552465a
-#define ZFERRMSG_TAG 0x47534d525245465a
+#define ZFREADER_TAG                       0x524544414552465a
+#define ZFERRMSG_TAG                       0x47534d525245465a
 #define ZONE_FILE_READER_INCLUDE_DEPTH_MAX 16
 
-#define DOT_SYMBOL '.'
+#define DOT_SYMBOL                         '.'
 
 #if !DNSCORE_HAS_FULL_ASCII7
-#define AT_SYMBOL '@'
+#define AT_SYMBOL  '@'
 #define VAR_SYMBOL '$'
 #else
-#define AT_SYMBOL ((char)0xff)
+#define AT_SYMBOL  ((char)0xff)
 #define VAR_SYMBOL ((char)0xfe)
-//#define DOT_SYMBOL ((char)0xfd)
+// #define DOT_SYMBOL ((char)0xfd)
 #endif
 
-logger_handle *g_zone_logger = LOGGER_HANDLE_SINK;
-#define MODULE_MSG_HANDLE g_zone_logger
+#define ZONE_READER_TTL_DEFAULT 86400
+
+logger_handle_t *g_zone_logger = LOGGER_HANDLE_SINK;
+#define MODULE_MSG_HANDLE           g_zone_logger
 
 #define DEBUG_BENCH_TEXT_ZONE_PARSE 1
 #if !DEBUG
-#undef  DEBUG_BENCH_TEXT_ZONE_PARSE
+#undef DEBUG_BENCH_TEXT_ZONE_PARSE
 #define DEBUG_BENCH_TEXT_ZONE_PARSE 0
 #endif
 
-static bool zone_reader_text_init_error_codes_done = FALSE;
+static initialiser_state_t zone_reader_text_error_codes_init_state = INITIALISE_STATE_INIT;
 
-static const char * const zfr_string_delimiters = "\"\"";
-static const char * const zfr_multiline_delimiters = "()";
-static const char * const zrf_comment_markers = ";";
-static const char * const zrf_blank_makers = "\040\t\r";
-static const char * const zfr_escape_characters = "\\";
+static const char *const   zfr_string_delimiters = "\"\"";
+static const char *const   zfr_multiline_delimiters = "()";
+static const char *const   zrf_comment_markers = ";";
+static const char *const   zrf_blank_makers = "\040\t\r";
+static const char *const   zfr_escape_characters = "\\";
 
-#define ZONE_FILE_READER_MESSAGE_STATIC     0
-#define ZONE_FILE_READER_MESSAGE_ALLOCATED  1
+#define ZONE_FILE_READER_MESSAGE_STATIC    0
+#define ZONE_FILE_READER_MESSAGE_ALLOCATED 1
 
-typedef struct zone_reader_text zone_reader_text;
-struct zone_reader_text
+struct zone_reader_text_s
 {
-    parser_s parser;
-    resource_record* unread_next;
-    s32 rttl_default;   // $TTL
-    s32 rttl_current;
-    u32 dot_origin_size; // with the CHR0 sentinel
-    s32 origin_stack_size;
-    u16 rclass_current;
-    u16 rdata_size;
-    bool soa_found;
-    bool template_source;
-    bool rttl_default_defined;
-    bool rttl_current_defined;
+    parser_t           parser;
+    resource_record_t *unread_next;
+    int32_t            rttl_default; // $TTL
+    int32_t            rttl_current;
+    uint32_t           dot_origin_size; // with the CHR0 sentinel
+    int32_t            origin_stack_size;
+    uint16_t           rclass_current;
+    uint16_t           rdata_size;
+    bool               soa_found;
+    bool               template_source;
+    bool               rttl_default_defined;
+    bool               rttl_current_defined;
 
-    u8   domain[MAX_DOMAIN_LENGTH + 1];
-    u8   origin[MAX_DOMAIN_LENGTH + 1];
-    char dot_origin[MAX_DOMAIN_LENGTH + 1];
-    u8 *origin_stack[PARSER_INCLUDE_DEPTH_MAX];
+    uint8_t            domain[DOMAIN_LENGTH_MAX + 1];
+    uint8_t            origin[DOMAIN_LENGTH_MAX + 1];
+    char               dot_origin[DOMAIN_LENGTH_MAX + 1];
+    uint8_t           *origin_stack[PARSER_INCLUDE_DEPTH_MAX];
 
-    u8 rdata[RDATA_MAX_LENGTH];
+    uint8_t            rdata[RDATA_LENGTH_MAX];
 
-    input_stream includes[ZONE_FILE_READER_INCLUDE_DEPTH_MAX];
-    char *file_name[ZONE_FILE_READER_INCLUDE_DEPTH_MAX];
+    input_stream_t     includes[ZONE_FILE_READER_INCLUDE_DEPTH_MAX];
+    char              *file_name[ZONE_FILE_READER_INCLUDE_DEPTH_MAX];
 
-    u8 includes_count;
+    int                includes_count;
     //
     ya_result error_message_code;
-    u8 error_message_allocated; // 0: static 1: malloc
-    char *error_message_buffer; // It's not aligned but this is an exception :
-                                // _ This is a rarely used structure (don't care too much about a hole)
-                                // _ This is an hopefully rarely used field (best case: "never" (besides setting it up to NULL))
-                                // _ Putting it among the more popular fields will likely increase misses
+    uint8_t   error_message_allocated; // 0: static 1: malloc
+    char     *error_message_buffer;    // It's not aligned but this is an exception :
+                                       // _ This is a rarely used structure (don't care too much about a hole)
+    // _ This is an hopefully rarely used field (best case: "never" (besides setting it up
+    // to NULL)) _ Putting it among the more popular fields will likely increase misses
 };
 
-static void
-zone_reader_text_free_error_message(zone_reader_text *zfr)
+typedef struct zone_reader_text_s zone_reader_text_t;
+
+static void                       zone_reader_text_free_error_message(zone_reader_text_t *zfr)
 {
     if(zfr->error_message_allocated == ZONE_FILE_READER_MESSAGE_ALLOCATED)
     {
@@ -142,18 +144,17 @@ zone_reader_text_clear_error_message(zone_reader_text *zfr)
 }
 */
 
-static ya_result
-zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm, const char* text, u32 text_len, const u8 *origin, parser_s *p)
+static ya_result zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(uint8_t *name_parm, const char *text, uint32_t text_len, const uint8_t *origin, parser_t *p)
 {
     ya_result ret;
-    if(FAIL(ret = cstr_to_locase_dnsname_with_check_len_with_origin(name_parm, text, text_len, origin)))
+    if(FAIL(ret = dnsname_init_check_star_with_charp_and_origin_locase(name_parm, text, text_len, origin)))
     {
-        bool retry = FALSE;
-        char retry_text[MAX_DOMAIN_LENGTH];
+        bool retry = false;
+        char retry_text[DOMAIN_LENGTH_MAX];
 
-        if(text_len <= MAX_DOMAIN_LENGTH)
+        if(text_len <= DOMAIN_LENGTH_MAX)
         {
-            for(u32 i = 0; i < text_len; ++i)
+            for(uint_fast32_t i = 0; i < text_len; ++i)
             {
                 char c = text[i];
                 switch(c)
@@ -161,13 +162,13 @@ zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm
                     case VAR_SYMBOL:
                     {
                         retry_text[i] = '$';
-                        retry = TRUE;
+                        retry = true;
                         break;
                     }
                     case AT_SYMBOL:
                     {
                         retry_text[i] = '@';
-                        retry = TRUE;
+                        retry = true;
                         break;
                     }
                     default:
@@ -181,22 +182,14 @@ zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm
 
         if(retry)
         {
-            if(ISOK(ret = cstr_to_locase_dnsname_with_check_len_with_origin(name_parm, retry_text, text_len, origin)))
+            if(ISOK(ret = dnsname_init_check_star_with_charp_and_origin_locase(name_parm, retry_text, text_len, origin)))
             {
                 // an escape is probably missing
-                /*
-                char *file_name = "?";
-                if((p->includes_count > 0) && (p->includes_count < ZONE_FILE_READER_INCLUDE_DEPTH_MAX))
-                {
-                    if(p->file_name[p->includes_count - 1] != NULL)
-                    {
-                        file_name = p->file_name[p->includes_count - 1];
-                    }
-                }
-
-                log_warn("zone parse: there is probably an escape missing in front of a '$' or a '@' in file '%s' at line %u for %{dnsname}",  file_name, p->line_number, domain);
-                */
-                log_warn("zone parse: there is probably an escape missing in front of a '$' or a '@' at line %u for %{dnsname}", p->line_number, name_parm);
+                log_warn(
+                    "zone parse: there is probably an escape missing in front of a '$' or a '@' at line %u for "
+                    "%{dnsname}",
+                    p->line_number,
+                    name_parm);
             }
         }
     }
@@ -204,14 +197,13 @@ zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(u8* name_parm
     return ret;
 }
 
-static inline ya_result
-zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin)
+static inline ya_result zone_reader_text_copy_rdata_inline(parser_t *p, uint16_t rtype, uint8_t *rdata, uint32_t rdata_size, const uint8_t *origin)
 {
-    const char *text;
-    u32 text_len;
-    ya_result return_code;
-    char text_buffer[1024];
-    type_bit_maps_context tbmctx;
+    const char             *text;
+    uint32_t                text_len;
+    ya_result               return_code;
+    char                    text_buffer[1024];
+    type_bit_maps_context_t tbmctx;
     if(FAIL(return_code = parser_copy_next_word(p, text_buffer, sizeof(text_buffer))))
     {
         return return_code;
@@ -251,10 +243,16 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             case TYPE_SOA:
             {
-                s32 total_size;
+                int32_t total_size;
 
                 if(FAIL(return_code = zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin, p)))
                 {
+                    break;
+                }
+
+                if(ISOK(return_code) && dnsname_is_wildcard(rdata))
+                {
+                    return_code = INVALID_RECORD;
                     break;
                 }
 
@@ -267,14 +265,20 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
+                if(ISOK(return_code) && dnsname_is_wildcard(rdata))
+                {
+                    return_code = INVALID_RECORD;
+                    break;
+                }
+
                 total_size += return_code + 20;
 
                 rdata += return_code;
                 return_code = total_size;
 
-                for(u8 i = 5; i > 0; i--)
+                for(uint_fast8_t i = 5; i > 0; i--)
                 {
-                    s32 tmp_int32;
+                    int32_t   tmp_int32;
                     ya_result err;
                     if(FAIL(err = parser_copy_next_ttl(p, &tmp_int32)))
                     {
@@ -292,14 +296,19 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_CNAME:
             case TYPE_PTR:
 #if !HAS_NOOBSOLETETYPES
-            case TYPE_MD:   /** @NOTE: obsolete */
-            case TYPE_MF:   /** NOTE: obsolete */
-            case TYPE_MB:   /** NOTE: obsolete */
-            case TYPE_MG:   /** NOTE: obsolete */
-            case TYPE_MR:   /** NOTE: obsolete */
+            case TYPE_MD: /** @NOTE: obsolete */
+            case TYPE_MF: /** NOTE: obsolete */
+            case TYPE_MB: /** NOTE: obsolete */
+            case TYPE_MG: /** NOTE: obsolete */
+            case TYPE_MR: /** NOTE: obsolete */
 #endif
             {
                 return_code = zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin, p);
+
+                if(ISOK(return_code) && dnsname_is_wildcard(rdata))
+                {
+                    return_code = INVALID_RECORD;
+                }
 
                 break;
             }
@@ -320,7 +329,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                rdata[0] = (u8) protocol;
+                rdata[0] = (uint8_t)protocol;
                 rdata++;
                 rdata_size -= 5;
 
@@ -329,7 +338,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 int port_limit = MIN(rdata_size_available << 3, UINT16_MAX);
                 int max_index = -1;
-                
+
                 for(;;)
                 {
                     int service_port;
@@ -344,13 +353,13 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                         }
                         break;
                     }
-                    
+
                     if(service_port > port_limit)
                     {
                         return_code = MAKE_ERRNO_ERROR(ERANGE);
                         break;
                     }
-                    
+
                     int index = service_port >> 3;
 
                     rdata[index] |= 0x80 >> (service_port & 7);
@@ -360,14 +369,15 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                         max_index = index;
                     }
                 }
-                
+
                 if(FAIL(return_code))
                 {
                     break;
                 }
-                
+
                 if(max_index < 0) // @todo 20150608 timh -- is this the right way to do it?
-                {                 // @note 20220805 edf -- this seems pointless. It seems max_index is only < 0 if there has been an error.
+                {                 // @note 20220805 edf -- this seems pointless. It seems max_index is only < 0 if there has been an
+                                  // error.
                     return_code = INVALID_RECORD;
                     break;
                 }
@@ -383,7 +393,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             case TYPE_LP:
             case TYPE_AFSDB:
             {
-                u16 preference;
+                uint16_t preference;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &preference)))
                 {
@@ -398,14 +408,20 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
+                if(ISOK(return_code) && dnsname_is_wildcard(rdata))
+                {
+                    return_code = INVALID_RECORD;
+                    break;
+                }
+
                 return_code += 2;
 
                 break;
             }
-            
+
             case TYPE_RRSIG:
             {
-                u16 rtype;
+                uint16_t rtype;
 
                 if(FAIL(return_code = dns_type_from_case_name_length(text, text_len, &rtype)))
                 {
@@ -434,7 +450,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // original TTL (32 bits integer)
 
-                s32 ttl;
+                int32_t ttl;
 
                 if(FAIL(return_code = parser_copy_next_ttl(p, &ttl)))
                 {
@@ -447,7 +463,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // signature expiration (YYYYMMDDHHMMSS epoch -> 32 bits)
 
-                u32 epoch;
+                uint32_t epoch;
 
                 if(FAIL(return_code = parser_copy_next_yyyymmddhhmmss(p, &epoch)))
                 {
@@ -471,7 +487,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // key tag (16 bits integer)
 
-                u16 tag;
+                uint16_t tag;
 
                 if(FAIL(return_code = parser_copy_next_u16(p, &tag)))
                 {
@@ -491,7 +507,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 rdata += return_code;
 
-                u32 signer_len = return_code;
+                uint32_t signer_len = return_code;
 
                 // signature (base64)
 
@@ -509,13 +525,13 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_DNSKEY:
             case TYPE_CDNSKEY:
             {
                 // flags
 
-                u16 flags;
+                uint16_t flags;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &flags)))
                 {
@@ -570,7 +586,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_OPENPGPKEY:
             {
                 if(FAIL(return_code = parser_concat_current_and_next_tokens_nospace(p)))
@@ -581,7 +597,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code = base64_decode(parser_text(p), parser_text_length(p), rdata);
                 break;
             }
-            
+
             case TYPE_NSEC3PARAM:
             {
                 // hash algorithm
@@ -604,7 +620,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // iterations
 
-                u16 iterations;
+                uint16_t iterations;
 
                 if(FAIL(return_code = parser_copy_next_u16(p, &iterations)))
                 {
@@ -621,8 +637,8 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 {
                     break;
                 }
-                
-                if(! ((parser_text_length(p) == 1) && (parser_text(p)[0] == '-')) )
+
+                if(!((parser_text_length(p) == 1) && (parser_text(p)[0] == '-')))
                 {
                     if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata + 1)))
                     {
@@ -640,16 +656,16 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     // no salt
                     return_code = 0;
                 }
-                
-                rdata[0] = (u8)return_code;
+
+                rdata[0] = (uint8_t)return_code;
                 return_code += 5;
 
                 break;
             }
-            
+
             case TYPE_NSEC3:
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
                 // hash algorithm
 
                 if(FAIL(return_code = parser_get_u8(text, text_len, rdata)))
@@ -670,7 +686,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 // iterations
 
-                u16 iterations;
+                uint16_t iterations;
 
                 if(FAIL(return_code = parser_copy_next_u16(p, &iterations)))
                 {
@@ -682,13 +698,13 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 rdata += 2;
 
                 // salt
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
-                if(! ((parser_text_length(p) == 1) && (parser_text(p)[0] == '-')) )
+
+                if(!((parser_text_length(p) == 1) && (parser_text(p)[0] == '-')))
                 {
                     if(FAIL(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata + 1)))
                     {
@@ -705,8 +721,8 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 {
                     return_code = 0;
                 }
-                
-                rdata[0] = (u8)return_code;
+
+                rdata[0] = (uint8_t)return_code;
                 rdata += return_code + 1;
 
                 // digest
@@ -721,7 +737,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                rdata[0] = (u8)return_code;
+                rdata[0] = (uint8_t)return_code;
                 rdata += return_code + 1;
 
                 // type bitmap
@@ -743,10 +759,10 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_NSEC:
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
                 if(FAIL(return_code = zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin, p)))
                 {
@@ -772,14 +788,14 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_DS:
             case TYPE_CDS:
             case TYPE_DLV:
             {
                 // keytag
 
-                u16 keytag;
+                uint16_t keytag;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &keytag)))
                 {
@@ -823,11 +839,11 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_TXT:
-            case TYPE_SPF:  // discontinued
+            case TYPE_SPF: // discontinued
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
                 for(;;)
                 {
@@ -837,7 +853,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                         break;
                     }
 
-                    *rdata++ = (u8)text_len;
+                    *rdata++ = (uint8_t)text_len;
                     memcpy(rdata, text, text_len);
                     rdata += text_len;
 
@@ -846,7 +862,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                         break;
                     }
 
-                    if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                    if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                     {
                         // stop
 
@@ -864,7 +880,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_SSHFP:
             {
                 // algorithm
@@ -946,10 +962,10 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_SRV:
             {
-                u16 tmp16;
+                uint16_t tmp16;
 
                 // ?
 
@@ -989,11 +1005,11 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 return_code += 6;
                 break;
             }
-            
+
             case TYPE_NAPTR:
             {
-                const u8 *rdata_start = rdata;
-                u16 tmp16;
+                uint8_t *rdata_start = rdata;
+                uint16_t tmp16;
 
                 // order
 
@@ -1022,7 +1038,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1037,7 +1053,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                *rdata++ = (u8)text_len;
+                *rdata++ = (uint8_t)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
 
@@ -1048,7 +1064,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1063,7 +1079,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                *rdata++ = (u8)text_len;
+                *rdata++ = (uint8_t)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
 
@@ -1074,7 +1090,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1089,7 +1105,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                *rdata++ = (u8)text_len;
+                *rdata++ = (uint8_t)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
 
@@ -1107,10 +1123,10 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             // 2. txt-dname
             case TYPE_RP:
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
                 // 1.mbox-name1
-                //s32 total_size;
+                // int32_t total_size;
 
                 // return_code = "length" or "error code"
                 if(FAIL(return_code = zone_reader_text_cstr_to_locase_dnsname_with_check_len_with_origin(rdata, text, text_len, origin, p)))
@@ -1132,7 +1148,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
             case TYPE_HINFO: // should not be supported anymore
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
                 if(text_len > 255)
                 {
@@ -1140,7 +1156,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                *rdata++ = (u8)text_len;
+                *rdata++ = (uint8_t)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
 
@@ -1149,7 +1165,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1164,7 +1180,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                *rdata++ = (u8)text_len;
+                *rdata++ = (uint8_t)text_len;
                 memcpy(rdata, text, text_len);
                 rdata += text_len;
 
@@ -1172,11 +1188,11 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
                 break;
             }
-            
+
             case TYPE_NID:
             case TYPE_L64:
             {
-                u16 preference;
+                uint16_t preference;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &preference)))
                 {
@@ -1184,42 +1200,42 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 }
                 preference = htons(preference);
                 SET_U16_AT_P(rdata, preference);
-                
+
                 if(FAIL(return_code = parser_next_token(p)))
                 {
                     break;
                 }
-                
+
                 memcpy(text_buffer, parser_text(p), parser_text_length(p));
                 text_buffer[parser_text_length(p)] = '\0';
-                
+
                 // hex:hex:hex:hex
-                
-                unsigned int a,b,c,d;
-                if(sscanf(text_buffer, "%x:%x:%x:%x", &a,&b,&c,&d) != 4)
+
+                unsigned int a, b, c, d;
+                if(sscanf(text_buffer, "%x:%x:%x:%x", &a, &b, &c, &d) != 4)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                if((a|b|c|d) > 65535)
+
+                if((a | b | c | d) > 65535)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                                
-                SET_U16_AT(rdata[2], htons((u16)a));
-                SET_U16_AT(rdata[4], htons((u16)b));
-                SET_U16_AT(rdata[6], htons((u16)c));
-                SET_U16_AT(rdata[8], htons((u16)d));
-                
+
+                SET_U16_AT(rdata[2], htons((uint16_t)a));
+                SET_U16_AT(rdata[4], htons((uint16_t)b));
+                SET_U16_AT(rdata[6], htons((uint16_t)c));
+                SET_U16_AT(rdata[8], htons((uint16_t)d));
+
                 return_code = 10;
-                
+
                 break;
             }
             case TYPE_L32:
             {
-                u16 preference;
+                uint16_t preference;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &preference)))
                 {
@@ -1231,97 +1247,97 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 {
                     break;
                 }
-                
+
                 memcpy(text_buffer, parser_text(p), parser_text_length(p));
                 text_buffer[parser_text_length(p)] = '\0';
-                
+
                 // hex:hex:hex:hex
-                
-                unsigned int a,b,c,d;
-                if(sscanf(text_buffer, "%u.%u.%u.%u", &a,&b,&c,&d) != 4)
+
+                unsigned int a, b, c, d;
+                if(sscanf(text_buffer, "%u.%u.%u.%u", &a, &b, &c, &d) != 4)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                if((a|b|c|d) > 255)
+
+                if((a | b | c | d) > 255)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                rdata[2] = (u8)a;
-                rdata[3] = (u8)b;
-                rdata[4] = (u8)c;
-                rdata[5] = (u8)d;
-                
+
+                rdata[2] = (uint8_t)a;
+                rdata[3] = (uint8_t)b;
+                rdata[4] = (uint8_t)c;
+                rdata[5] = (uint8_t)d;
+
                 return_code = 6;
-                
+
                 break;
             }
-            
+
             case TYPE_EUI48:
             {
                 text_buffer[parser_text_length(p)] = '\0';
-                
-                unsigned int a,b,c,d,e,f;
-                if(sscanf(text_buffer, "%x-%x-%x-%x-%x-%x", &a,&b,&c,&d,&e,&f) != 6)
+
+                unsigned int a, b, c, d, e, f;
+                if(sscanf(text_buffer, "%x-%x-%x-%x-%x-%x", &a, &b, &c, &d, &e, &f) != 6)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                if((a|b|c|d|e|f) > 255)
+
+                if((a | b | c | d | e | f) > 255)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                rdata[0] = (u8)a;
-                rdata[1] = (u8)b;
-                rdata[2] = (u8)c;
-                rdata[3] = (u8)d;
-                rdata[4] = (u8)e;
-                rdata[5] = (u8)f;
-                
+
+                rdata[0] = (uint8_t)a;
+                rdata[1] = (uint8_t)b;
+                rdata[2] = (uint8_t)c;
+                rdata[3] = (uint8_t)d;
+                rdata[4] = (uint8_t)e;
+                rdata[5] = (uint8_t)f;
+
                 return_code = 6;
                 break;
             }
-            
+
             case TYPE_EUI64:
             {
                 text_buffer[parser_text_length(p)] = '\0';
-                
-                unsigned int a,b,c,d,e,f,g,h;
-                if(sscanf(text_buffer, "%x-%x-%x-%x-%x-%x-%x-%x", &a,&b,&c,&d,&e,&f,&g,&h) != 8)
+
+                unsigned int a, b, c, d, e, f, g, h;
+                if(sscanf(text_buffer, "%x-%x-%x-%x-%x-%x-%x-%x", &a, &b, &c, &d, &e, &f, &g, &h) != 8)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                if((a|b|c|d|e|f|g|h) > 255)
+
+                if((a | b | c | d | e | f | g | h) > 255)
                 {
                     return_code = PARSEB16_ERROR;
                     break;
                 }
-                
-                rdata[0] = (u8)a;
-                rdata[1] = (u8)b;
-                rdata[2] = (u8)c;
-                rdata[3] = (u8)d;
-                rdata[4] = (u8)e;
-                rdata[5] = (u8)f;
-                rdata[6] = (u8)g;
-                rdata[7] = (u8)h;
-                
+
+                rdata[0] = (uint8_t)a;
+                rdata[1] = (uint8_t)b;
+                rdata[2] = (uint8_t)c;
+                rdata[3] = (uint8_t)d;
+                rdata[4] = (uint8_t)e;
+                rdata[5] = (uint8_t)f;
+                rdata[6] = (uint8_t)g;
+                rdata[7] = (uint8_t)h;
+
                 return_code = 8;
                 break;
             }
             case TYPE_CAA:
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
-                u8 flags;
+                uint8_t        flags;
 
                 if(FAIL(return_code = parser_get_u8(text, text_len, &flags)))
                 {
@@ -1336,7 +1352,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1377,7 +1393,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                         break;
                     }
 
-                    if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                    if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                     {
                         // stop
 
@@ -1397,11 +1413,11 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             case TYPE_CERT:
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
-                u16 cert_type;
+                uint16_t       cert_type;
 
-                char mnemonic[16];
+                char           mnemonic[16];
 
                 if(text_len > sizeof(mnemonic))
                 {
@@ -1428,7 +1444,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1437,7 +1453,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 text = parser_text(p);
                 text_len = parser_text_length(p);
 
-                u16 key_tag;
+                uint16_t key_tag;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &key_tag)))
                 {
@@ -1452,7 +1468,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1462,7 +1478,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 text = parser_text(p);
                 text_len = parser_text_length(p);
 
-                u8 algorithm;
+                uint8_t algorithm;
 
                 if(FAIL(return_code = parser_get_u8(text, text_len, &algorithm)))
                 {
@@ -1503,9 +1519,9 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             case TYPE_CSYNC:
             {
-                const u8 *rdata_start = rdata;
+                const uint8_t *rdata_start = rdata;
 
-                u32 serial;
+                uint32_t       serial;
 
                 if(FAIL(return_code = parser_get_u32(text, text_len, &serial)))
                 {
@@ -1520,7 +1536,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                     break;
                 }
 
-                if((return_code & (PARSER_COMMENT|PARSER_EOL|PARSER_EOF)) != 0)
+                if((return_code & (PARSER_COMMENT | PARSER_EOL | PARSER_EOF)) != 0)
                 {
                     // stop
 
@@ -1529,7 +1545,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 text = parser_text(p);
                 text_len = parser_text_length(p);
 
-                u16 flags;
+                uint16_t flags;
 
                 if(FAIL(return_code = parser_get_u16(text, text_len, &flags)))
                 {
@@ -1560,8 +1576,6 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             case TYPE_DHCID:
             {
-                const uint8_t *rdata_start = rdata;
-
                 if(FAIL(return_code = parser_concat_current_and_next_tokens_nospace(p)))
                 {
                     break;
@@ -1595,6 +1609,11 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
             }
             default:
             {
+                if((return_code = dnscore_dns_extension_zone_reader_text_copy_rdata(p, rtype, rdata, rdata_size, origin, &text, &text_len)) != UNSUPPORTED_RECORD)
+                {
+                    break;
+                }
+
                 return_code = UNSUPPORTED_RECORD;
                 log_err("zone file: %{dnsname}: %{dnstype}: %r", origin, &rtype, return_code);
                 break;
@@ -1609,7 +1628,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
 
         if((text_len == 1) && (text[0] == '#'))
         {
-            u16 unknown_rdata_len;
+            uint16_t unknown_rdata_len;
 
             if(ISOK(return_code = parser_copy_next_u16(p, &unknown_rdata_len)))
             {
@@ -1619,7 +1638,7 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
                 {
                     if(ISOK(return_code = parser_concat_next_tokens_nospace(p)))
                     {
-                        if(((u32)return_code << 1) <= rdata_size)
+                        if(((uint32_t)return_code << 1) <= rdata_size)
                         {
                             if(ISOK(return_code = base16_decode(parser_text(p), parser_text_length(p), rdata)))
                             {
@@ -1648,20 +1667,19 @@ zone_reader_text_copy_rdata_inline(parser_s *p, u16 rtype, u8 *rdata, u32 rdata_
         {
             return_code = got_eol;
 
-            log_err("zone file: %{dnsname}: %{dnstype}: expected end of line: %r", origin,  &rtype, return_code);
+            log_err("zone file: %{dnsname}: %{dnstype}: expected end of line: %r", origin, &rtype, return_code);
         }
     }
 
     return return_code;
 }
 
-static ya_result
-zone_reader_text_unread_record(zone_reader *zr, resource_record *entry)
+static ya_result zone_reader_text_unread_record(zone_reader_t *zr, resource_record_t *entry)
 {
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
-    resource_record *rr;
-    u32 required = offsetof(resource_record,rdata) + entry->rdata_size;
-    MALLOC_OR_DIE(resource_record*, rr, required, DNSRR_TAG);
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
+    resource_record_t  *rr;
+    uint32_t            required = offsetof(resource_record_t, rdata) + entry->rdata_size;
+    MALLOC_OR_DIE(resource_record_t *, rr, required, DNSRR_TAG);
     memcpy(rr, entry, required);
     rr->next = zfr->unread_next;
     zfr->unread_next = rr;
@@ -1669,9 +1687,7 @@ zone_reader_text_unread_record(zone_reader *zr, resource_record *entry)
     return SUCCESS;
 }
 
-static void
-zone_reader_text_escaped_string_format(const void *value, output_stream *os, s32 padding, char pad_char,
-                                          bool left_justified, void *reserved_for_method_parameters)
+static void zone_reader_text_escaped_string_format(const void *value, output_stream_t *os, int32_t padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
     (void)padding;
     (void)pad_char;
@@ -1679,9 +1695,9 @@ zone_reader_text_escaped_string_format(const void *value, output_stream *os, s32
     (void)reserved_for_method_parameters;
 
 #if !DNSCORE_HAS_FULL_ASCII7
-    output_stream_write(os, value, strlen((const char*)value));
+    output_stream_write(os, value, strlen((const char *)value));
 #else
-    const char *text = (const char*)value;
+    const char *text = (const char *)value;
 
     for(;;)
     {
@@ -1727,25 +1743,24 @@ zone_reader_text_escaped_string_format(const void *value, output_stream *os, s32
 #endif
 }
 
-static ya_result
-zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
+static ya_result zone_reader_text_read_record(zone_reader_t *zr, resource_record_t *entry)
 {
     yassert((zr != NULL) && (entry != NULL));
 
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
 
     if(zfr->unread_next != NULL)
     {
-        resource_record *top = zfr->unread_next;
-        u32 required = offsetof(resource_record,rdata) + top->rdata_size;
+        resource_record_t *top = zfr->unread_next;
+        uint32_t           required = offsetof(resource_record_t, rdata) + top->rdata_size;
         memcpy(entry, top, required);
         zfr->unread_next = top->next;
         free(top);
 
-        return 0;
+        return 1;
     }
 
-    parser_s *p = &zfr->parser;
+    parser_t *p = &zfr->parser;
     ya_result return_code;
 
     for(;;)
@@ -1778,12 +1793,12 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                     if(zfr->origin_stack[--zfr->origin_stack_size] != NULL)
                     {
                         dnsname_copy(zfr->origin, zfr->origin_stack[zfr->origin_stack_size]);
-                        zfr->dot_origin_size = dnsname_to_cstr(&zfr->dot_origin[1], zfr->origin) + 1;
+                        zfr->dot_origin_size = cstr_init_with_dnsname(&zfr->dot_origin[1], zfr->origin) + 1;
 
                         dnsname_zfree(zfr->origin_stack[zfr->origin_stack_size]);
                     }
 
-                    input_stream *completed_stream = parser_pop_stream(p);
+                    input_stream_t *completed_stream = parser_pop_stream(p);
 #if DEBUG
                     if(zfr->includes_count <= 0)
                     {
@@ -1808,7 +1823,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                     }
                     else
                     {
-                        break;
+                        return 0; // EOF
                     }
                 }
 
@@ -1819,7 +1834,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
 
             // keywords or new domain
 
-            u32 text_len = parser_text_length(p);
+            uint32_t    text_len = parser_text_length(p);
             const char *text = parser_text(p);
 
             if(text_len > 0)
@@ -1840,8 +1855,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zone_reader_text_free_error_message(zfr);
                             zfr->error_message_code = return_code;
 
-
-                            format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                            format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
                             if(ISOK(asformat(&zfr->error_message_buffer, "failed to parse $ORIGIN from line \"%w\"", &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -1855,7 +1869,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                         memcpy(&zfr->dot_origin[1], text, text_len);
                         zfr->dot_origin_size = text_len + 1; // +1 for the dot
 
-                        if(FAIL(return_code = cstr_to_locase_dnsname_with_check_len(zfr->origin, &zfr->dot_origin[1], zfr->dot_origin_size - 1)))
+                        if(FAIL(return_code = dnsname_init_check_nostar_with_charp_locase(zfr->origin, &zfr->dot_origin[1], zfr->dot_origin_size - 1)))
                         {
                             entry->name[0] = '\0';
                             entry->type = TYPE_NONE;
@@ -1865,7 +1879,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zone_reader_text_free_error_message(zfr);
                             zfr->error_message_code = return_code;
 
-                            format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                            format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
                             if(ISOK(asformat(&zfr->error_message_buffer, "failed to parse $ORIGIN from line \"%w\"", &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -1885,7 +1899,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zone_reader_text_free_error_message(zfr);
                             zfr->error_message_code = return_code;
 
-                            format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                            format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
                             if(ISOK(asformat(&zfr->error_message_buffer, "failed to parse $TTL from line \"%w\"", &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -1894,7 +1908,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                         }
 
                         zfr->rttl_current = zfr->rttl_default;
-                        zfr->rttl_default_defined = TRUE;
+                        zfr->rttl_default_defined = true;
                     }
                     else if(parse_word_case_match(&text[1], text_len - 1, "INCLUDE", 7))
                     {
@@ -1910,7 +1924,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zone_reader_text_free_error_message(zfr);
                             zfr->error_message_code = ZONEFILE_EXPECTED_FILE_PATH;
 
-                            format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                            format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
                             if(ISOK(asformat(&zfr->error_message_buffer, "failed to parse $INCLUDE from line \"%w\"", &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -1918,7 +1932,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             return return_code;
                         }
 
-                        if(file_name[0] != '/')
+                        if(!filepath_is_absolute(file_name))
                         {
                             // prepend the path of current file
                             // path + current = zfr->file_name[zfr->includes_count - 1];
@@ -1944,7 +1958,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                                     zone_reader_text_free_error_message(zfr);
                                     zfr->error_message_code = BUFFER_WOULD_OVERFLOW;
 
-                                    format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                                    format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
                                     if(ISOK(asformat(&zfr->error_message_buffer, "$INCLUDE absolute path of file is too big, from line \"%w\"", &escaped_text)))
                                     {
                                         zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -1955,17 +1969,18 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             }
                         }
 
-                        u8 new_origin[MAX_DOMAIN_LENGTH];
+                        zfr->origin_stack[zfr->origin_stack_size++] = dnsname_zdup(zfr->origin);
 
-                        if(ISOK(return_code = parser_copy_next_fqdn(p, new_origin)))
+                        uint8_t new_origin[DOMAIN_LENGTH_MAX];
+
+                        if(ISOK(return_code = parser_copy_next_fqdn_with_origin(p, new_origin, zfr->origin)))
                         {
-                            if((return_code & PARSER_WORD) != 0)
+                            if(return_code > 0)
                             {
                                 // push current origin and replace
 
-                                zfr->origin_stack[zfr->origin_stack_size++] = dnsname_zdup(zfr->origin);
                                 dnsname_copy(zfr->origin, new_origin);
-                                zfr->dot_origin_size = dnsname_to_cstr(&zfr->dot_origin[1], new_origin) + 1;
+                                zfr->dot_origin_size = cstr_init_with_dnsname(&zfr->dot_origin[1], new_origin) + 1;
                             }
                             else
                             {
@@ -1976,7 +1991,6 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                         {
                             zfr->origin_stack[zfr->origin_stack_size++] = NULL;
                         }
-
 
                         ya_result err;
 
@@ -2023,12 +2037,12 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                         if(zfr->origin_stack[--zfr->origin_stack_size] != NULL)
                         {
                             dnsname_copy(zfr->origin, zfr->origin_stack[zfr->origin_stack_size]);
-                            zfr->dot_origin_size = dnsname_to_cstr(&zfr->dot_origin[1], zfr->origin) + 1;
+                            zfr->dot_origin_size = cstr_init_with_dnsname(&zfr->dot_origin[1], zfr->origin) + 1;
 
                             dnsname_zfree(zfr->origin_stack[zfr->origin_stack_size]);
                         }
 
-                        input_stream *completed_stream = parser_pop_stream(p);
+                        input_stream_t *completed_stream = parser_pop_stream(p);
                         free(zfr->file_name[zfr->includes_count]);
 
                         input_stream_close(completed_stream);
@@ -2054,20 +2068,20 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                     {
                         // new domain
 
-                        u8 *domain = entry->name;
+                        uint8_t *domain = entry->name;
 
                         if(!((text_len == 1) && (text[0] == AT_SYMBOL)))
                         {
                             if(text[text_len - 1] != DOT_SYMBOL)
                             {
-                                if(FAIL(return_code = charp_to_locase_dnsname_with_check(domain, text, text_len)))
+                                if(FAIL(return_code = dnsname_init_check_with_charp_locase(domain, text, text_len)))
                                 {
-                                    bool retry = FALSE;
-                                    char retry_text[MAX_DOMAIN_LENGTH];
+                                    bool retry = false;
+                                    char retry_text[DOMAIN_LENGTH_MAX];
 
-                                    if(text_len <= MAX_DOMAIN_LENGTH)
+                                    if(text_len <= DOMAIN_LENGTH_MAX)
                                     {
-                                        for(u32 i = 0; i < text_len; ++i)
+                                        for(uint_fast32_t i = 0; i < text_len; ++i)
                                         {
                                             char c = text[i];
                                             switch(c)
@@ -2075,13 +2089,13 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                                                 case VAR_SYMBOL:
                                                 {
                                                     retry_text[i] = '$';
-                                                    retry = TRUE;
+                                                    retry = true;
                                                     break;
                                                 }
                                                 case AT_SYMBOL:
                                                 {
                                                     retry_text[i] = '@';
-                                                    retry = TRUE;
+                                                    retry = true;
                                                     break;
                                                 }
                                                 default:
@@ -2095,7 +2109,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
 
                                     if(retry)
                                     {
-                                        if(ISOK(return_code = charp_to_locase_dnsname_with_check(domain, retry_text, text_len)))
+                                        if(ISOK(return_code = dnsname_init_check_with_charp_locase(domain, retry_text, text_len)))
                                         {
                                             // an escape is probably missing
                                             char *file_name = "?";
@@ -2107,7 +2121,12 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                                                 }
                                             }
 
-                                            log_warn("zone parse: there is probably an escape missing in front of a '$' or a '@' in file '%s' at line %u for %{dnsname}",  file_name, p->line_number, domain);
+                                            log_warn(
+                                                "zone parse: there is probably an escape missing in front of a '$' or "
+                                                "a '@' in file '%s' at line %u for %{dnsname}",
+                                                file_name,
+                                                p->line_number,
+                                                domain);
                                         }
                                     }
 
@@ -2119,21 +2138,21 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                                         //
                                         zone_reader_text_free_error_message(zfr);
                                         zfr->error_message_code = return_code;
-                                        MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, ZFERRMSG_TAG);
+                                        MALLOC_OR_DIE(char *, zfr->error_message_buffer, text_len + 1, ZFERRMSG_TAG);
                                         memcpy(zfr->error_message_buffer, text, text_len);
                                         zfr->error_message_buffer[text_len] = '\0';
                                         zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
-
 
                                         return return_code;
                                     }
                                 }
 
-                                /*return_code =*/ dnsname_copy(&domain[return_code - 1], zfr->origin); /// @note: cannot fail
+                                /*return_code =*/dnsname_copy(&domain[return_code - 1],
+                                                              zfr->origin); /// @note: cannot fail
                             }
                             else
                             {
-                                if(FAIL(return_code = charp_to_locase_dnsname(domain, text, text_len)))
+                                if(FAIL(return_code = dnsname_init_with_charp_locase(domain, text, text_len)))
                                 {
                                     entry->type = TYPE_NONE;
                                     entry->class = CLASS_NONE;
@@ -2141,7 +2160,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                                     //
                                     zone_reader_text_free_error_message(zfr);
                                     zfr->error_message_code = return_code;
-                                    MALLOC_OR_DIE(char*, zfr->error_message_buffer, text_len + 1, ZFERRMSG_TAG);
+                                    MALLOC_OR_DIE(char *, zfr->error_message_buffer, text_len + 1, ZFERRMSG_TAG);
                                     memcpy(zfr->error_message_buffer, text, text_len);
                                     zfr->error_message_buffer[text_len] = '\0';
                                     zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -2152,11 +2171,11 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                         }
                         else // label is @
                         {
-                            dnsname_copy(domain, zfr->origin); /// @note: cannot fail
-                            dnsname_to_cstr(&zfr->dot_origin[1], zfr->origin); /// @note: cannot fail
+                            dnsname_copy(domain, zfr->origin);                        /// @note: cannot fail
+                            cstr_init_with_dnsname(&zfr->dot_origin[1], zfr->origin); /// @note: cannot fail
 
                             zfr->dot_origin_size = return_code + 1;
-                            zfr->template_source = TRUE;
+                            zfr->template_source = true;
                         }
                     }
                     else
@@ -2172,7 +2191,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                     if(ISOK(parser_copy_next_ttl(p, &zfr->rttl_current))) // parses as an int ?
                     {
                         entry->ttl = zfr->rttl_current;
-                        zfr->rttl_current_defined = TRUE;
+                        zfr->rttl_current_defined = true;
 
                         parser_mark(p);
 
@@ -2193,11 +2212,11 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             if(ISOK(parser_copy_next_ttl(p, &zfr->rttl_current))) // parses as an int ? // CLASS + TTL
                             {
                                 entry->ttl = zfr->rttl_current;
-                                zfr->rttl_current_defined = TRUE;
+                                zfr->rttl_current_defined = true;
                             }
                             else
                             {
-                                if(!zfr->rttl_default_defined)      // CLASS no TTL, no $TTL
+                                if(!zfr->rttl_default_defined) // CLASS no TTL, no $TTL
                                 {
                                     if(zfr->rttl_current_defined)
                                     {
@@ -2231,7 +2250,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
 
                     entry->class = zfr->rclass_current;
 
-                    u16 rtype;
+                    uint16_t rtype;
 
                     if(FAIL(return_code = parser_copy_next_type(p, &rtype)))
                     {
@@ -2242,7 +2261,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                         zone_reader_text_free_error_message(zfr);
                         zfr->error_message_code = return_code;
 
-                        format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                        format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
 
                         if(ISOK(asformat(&zfr->error_message_buffer, "could not parse type for %{dnsname} from line %i: \"%w\"", entry->name, parser_get_line_number(p), &escaped_text)))
                         {
@@ -2266,8 +2285,9 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zone_reader_text_free_error_message(zfr);
                             zfr->error_message_code = return_code;
 
-                            format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
-                            if(ISOK(asformat(&zfr->error_message_buffer, "could not parse rdata for %{dnsname} %{dnsclass} %{dnstype} from line %i: \"%w\"", entry->name, &entry->class, &entry->type, parser_get_line_number(p), &escaped_text)))
+                            format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
+                            if(ISOK(asformat(
+                                   &zfr->error_message_buffer, "could not parse rdata for %{dnsname} %{dnsclass} %{dnstype} from line %i: \"%w\"", entry->name, &entry->class, &entry->type, parser_get_line_number(p), &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
                             }
@@ -2295,7 +2315,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                             zone_reader_text_free_error_message(zfr);
                             zfr->error_message_code = return_code;
 
-                            format_writer escaped_text = {zone_reader_text_escaped_string_format, text};
+                            format_writer_t escaped_text = {zone_reader_text_escaped_string_format, text};
                             if(ISOK(asformat(&zfr->error_message_buffer, "could not parse rdata for %{dnsname} %{dnsclass} %{dnstype} from line \"%w\"", entry->name, &entry->class, &entry->type, &escaped_text)))
                             {
                                 zfr->error_message_allocated = ZONE_FILE_READER_MESSAGE_ALLOCATED;
@@ -2309,11 +2329,11 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
 
                         if(!(zfr->rttl_default_defined || zfr->rttl_current_defined))
                         {
-                            u8 *p = entry->rdata;
+                            uint8_t *p = entry->rdata;
                             p += entry->rdata_size - 4;
 
                             zfr->rttl_default = zfr->rttl_current = ntohl(GET_U32_AT_P(p));
-                            zfr->rttl_default_defined = zfr->rttl_current_defined = TRUE;
+                            zfr->rttl_default_defined = zfr->rttl_current_defined = true;
                             entry->ttl = zfr->rttl_default;
                         }
                     }
@@ -2323,7 +2343,7 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
                     parser_add_translation(&zfr->parser, '$', VAR_SYMBOL);
 #endif
 
-                    return SUCCESS;
+                    return 1;
                 }
             }
 
@@ -2336,25 +2356,27 @@ zone_reader_text_read_record(zone_reader *zr, resource_record *entry)
 #if DO_PRINT
             formatln("[ERROR %r]", return_code);
 #endif
+            if(return_code == PARSER_NO_INPUT)
+            {
+                return 0;
+            }
             break;
         }
     }
-
-    if(ISOK(return_code))
-    {
-        return_code = 1;
-    }
-
+    /*
+        if(ISOK(return_code))
+        {
+            return_code = 1;
+        }
+    */
     return return_code;
 }
 
-
-static ya_result
-zone_reader_text_free_record(zone_reader *zr, resource_record *entry)
+static ya_result zone_reader_text_free_record(zone_reader_t *zr, resource_record_t *entry)
 {
     (void)zr;
     (void)entry;
-    return OK;
+    return SUCCESS;
 }
 
 /** @brief Closes a zone file entry
@@ -2364,16 +2386,15 @@ zone_reader_text_free_record(zone_reader *zr, resource_record *entry)
  *  @param[in] zonefile a pointer to a valid (zone_file_open'ed) zone-file structure
  *
  */
-static void
-zone_reader_text_close(zone_reader *zr)
+static void zone_reader_text_close(zone_reader_t *zr)
 {
     yassert(zr != NULL);
 
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
 
     parser_finalize(&zfr->parser);
 
-    u8 n = zfr->includes_count;
+    int n = zfr->includes_count;
     while(n-- > 0)
     {
         free(zfr->file_name[n]);
@@ -2383,10 +2404,10 @@ zone_reader_text_close(zone_reader *zr)
         */
     }
 
-    resource_record *rr = zfr->unread_next;
+    resource_record_t *rr = zfr->unread_next;
     while(rr != NULL)
     {
-        resource_record *tmp = rr;
+        resource_record_t *tmp = rr;
         rr = rr->next;
         free(tmp);
     }
@@ -2399,92 +2420,78 @@ zone_reader_text_close(zone_reader *zr)
     zr->vtbl = NULL;
 }
 
-static bool
-zone_reader_text_canwriteback(zone_reader *zr)
+static bool zone_reader_text_canwriteback(zone_reader_t *zr)
 {
     yassert(zr != NULL);
 
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
     return !zfr->template_source;
 }
 
-static void
-zone_reader_text_handle_error(zone_reader *zr, ya_result error_code)
+static void zone_reader_text_handle_error(zone_reader_t *zr, ya_result error_code)
 {
     /* nop */
     (void)zr;
     (void)error_code;
 }
 
-static const char*
-zone_reader_text_get_last_error_message(zone_reader *zr)
+static const char *zone_reader_text_get_last_error_message(zone_reader_t *zr)
 {
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
     return zfr->error_message_buffer;
 }
 
-static const zone_reader_vtbl zone_reader_text_vtbl =
-{
-    zone_reader_text_read_record,
-    zone_reader_text_unread_record,
-    zone_reader_text_free_record,
-    zone_reader_text_close,
-    zone_reader_text_handle_error,
-    zone_reader_text_canwriteback,
-    zone_reader_text_get_last_error_message,
-    "zone_reader_text_v2"
-};
+static const zone_reader_vtbl zone_reader_text_vtbl = {zone_reader_text_read_record,
+                                                       zone_reader_text_unread_record,
+                                                       zone_reader_text_free_record,
+                                                       zone_reader_text_close,
+                                                       zone_reader_text_handle_error,
+                                                       zone_reader_text_canwriteback,
+                                                       zone_reader_text_get_last_error_message,
+                                                       "zone_reader_text_v2"};
 
-
-void
-zone_reader_text_init_error_codes()
+void                          zone_reader_text_init_error_codes()
 {
-    if(zone_reader_text_init_error_codes_done)
+    if(initialise_state_begin(&zone_reader_text_error_codes_init_state))
     {
-        return;
+        error_register(ZONEFILE_FEATURE_NOT_SUPPORTED, "ZONEFILE_FEATURE_NOT_SUPPORTED");
+        error_register(ZONEFILE_EXPECTED_FILE_PATH, "ZONEFILE_EXPECTED_FILE_PATH");
+        error_register(ZONEFILE_SOA_WITHOUT_CLASS, "ZONEFILE_SOA_WITHOUT_CLASS");
+        error_register(ZONEFILE_SALT_TOO_BIG, "ZONEFILE_SALT_TOO_BIG");
+        error_register(ZONEFILE_TEXT_TOO_BIG, "ZONEFILE_TEXT_TOO_BIG");
+        error_register(ZONEFILE_FLAGS_TOO_BIG, "ZONEFILE_FLAGS_TOO_BIG");
+        error_register(ZONEFILE_SERVICE_TOO_BIG, "ZONEFILE_SERVICE_TOO_BIG");
+        error_register(ZONEFILE_REGEX_TOO_BIG, "ZONEFILE_REGEX_TOO_BIG");
+        error_register(ZONEFILE_RDATA_PARSE_ERROR, "ZONEFILE_RDATA_PARSE_ERROR");
+        error_register(ZONEFILE_RDATA_BUFFER_TOO_SMALL, "ZONEFILE_RDATA_BUFFER_TOO_SMALL");
+        error_register(ZONEFILE_RDATA_SIZE_MISMATCH, "ZONEFILE_RDATA_SIZE_MISMATCH");
+
+        initialise_state_ready(&zone_reader_text_error_codes_init_state);
     }
-
-    zone_reader_text_init_error_codes_done = TRUE;
-
-    error_register(ZONEFILE_FEATURE_NOT_SUPPORTED, "ZONEFILE_FEATURE_NOT_SUPPORTED");
-    error_register(ZONEFILE_EXPECTED_FILE_PATH, "ZONEFILE_EXPECTED_FILE_PATH");
-    error_register(ZONEFILE_SOA_WITHOUT_CLASS, "ZONEFILE_SOA_WITHOUT_CLASS");
-    error_register(ZONEFILE_SALT_TOO_BIG, "ZONEFILE_SALT_TOO_BIG");
-    error_register(ZONEFILE_TEXT_TOO_BIG, "ZONEFILE_TEXT_TOO_BIG");
-    error_register(ZONEFILE_FLAGS_TOO_BIG, "ZONEFILE_FLAGS_TOO_BIG");
-    error_register(ZONEFILE_SERVICE_TOO_BIG, "ZONEFILE_SERVICE_TOO_BIG");
-    error_register(ZONEFILE_REGEX_TOO_BIG, "ZONEFILE_REGEX_TOO_BIG");
-    error_register(ZONEFILE_RDATA_PARSE_ERROR, "ZONEFILE_RDATA_PARSE_ERROR");
-    error_register(ZONEFILE_RDATA_BUFFER_TOO_SMALL, "ZONEFILE_RDATA_BUFFER_TOO_SMALL");
-    error_register(ZONEFILE_RDATA_SIZE_MISMATCH, "ZONEFILE_RDATA_SIZE_MISMATCH");
 }
 
-static ya_result
-zone_reader_text_init(zone_reader *zr)
+static ya_result zone_reader_text_init(zone_reader_t *zr)
 {
-    ya_result error_code;
-    zone_reader_text *zfr;
+    ya_result           error_code;
+    zone_reader_text_t *zfr;
 
-    /*    ------------------------------------------------------------    */
-
-    MALLOC_OBJECT_OR_DIE(zfr, zone_reader_text, ZFREADER_TAG);
-
-    ZEROMEMORY(zfr, sizeof(zone_reader_text));
+    MALLOC_OBJECT_OR_DIE(zfr, zone_reader_text_t, ZFREADER_TAG);
+    ZEROMEMORY(zfr, sizeof(zone_reader_text_t));
 
     if(ISOK(error_code = parser_init(&zfr->parser,
-        zfr_string_delimiters,      // by 2
-        zfr_multiline_delimiters,   // by 2
-        zrf_comment_markers,        // by 1
-        zrf_blank_makers,           // by 1
-        zfr_escape_characters)))    // by 1
+                                     zfr_string_delimiters,    // by 2
+                                     zfr_multiline_delimiters, // by 2
+                                     zrf_comment_markers,      // by 1
+                                     zrf_blank_makers,         // by 1
+                                     zfr_escape_characters)))  // by 1
     {
-        zfr->rttl_default = 86400;
-        zfr->rttl_current = 86400;
+        zfr->rttl_default = ZONE_READER_TTL_DEFAULT;
+        zfr->rttl_current = ZONE_READER_TTL_DEFAULT;
         zfr->dot_origin_size = 2; // with the CHR0 sentinel
         zfr->rclass_current = CLASS_IN;
         zfr->rdata_size = 0;
-        zfr->soa_found = FALSE;
-        zfr->domain[0] = (u8)'\0';
+        zfr->soa_found = false;
+        zfr->domain[0] = (uint8_t)'\0';
         zfr->dot_origin[0] = '.';
         zfr->dot_origin[1] = '\0';
     }
@@ -2492,7 +2499,7 @@ zone_reader_text_init(zone_reader *zr)
 #if DNSCORE_HAS_FULL_ASCII7
     parser_add_translation(&zfr->parser, '@', AT_SYMBOL);
     parser_add_translation(&zfr->parser, '$', VAR_SYMBOL);
-    //parser_add_translation(&zfr->parser, '.', DOT_SYMBOL);
+    // parser_add_translation(&zfr->parser, '.', DOT_SYMBOL);
 #endif
 
     zr->data = zfr;
@@ -2503,36 +2510,36 @@ zone_reader_text_init(zone_reader *zr)
 
 #if DEBUG_BENCH_TEXT_ZONE_PARSE
 
-static debug_bench_s zone_reader_text_parse;
-static bool zone_reader_text_parse_done = FALSE;
+static debug_bench_t zone_reader_text_parse;
+static bool          zone_reader_text_parse_done = false;
 
-static inline void zone_reader_text_bench_register()
+static inline void   zone_reader_text_bench_register()
 {
     if(!zone_reader_text_parse_done)
     {
-        zone_reader_text_parse_done = TRUE;
+        zone_reader_text_parse_done = true;
         debug_bench_register(&zone_reader_text_parse, "text parse");
     }
 }
 
 #endif
 
-ya_result
-zone_reader_text_parse_stream(input_stream *ins, zone_reader *zr)
+ya_result zone_reader_text_parse_stream(zone_reader_t *zr, input_stream_t *ins)
 {
 #if DEBUG_BENCH_TEXT_ZONE_PARSE
     zone_reader_text_bench_register();
-    u64 bench = debug_bench_start(&zone_reader_text_parse);
+    uint64_t bench = debug_bench_start(&zone_reader_text_parse);
 #endif
 
     ya_result ret;
 
     if(ISOK(ret = zone_reader_text_init(zr)))
     {
-        zone_reader_text *zfr = (zone_reader_text*)zr->data;
+        zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
 
         // push the stream
 
+        zfr->file_name[zfr->includes_count] = NULL;
         parser_push_stream(&zfr->parser, ins);
     }
     else
@@ -2560,31 +2567,30 @@ zone_reader_text_parse_stream(input_stream *ins, zone_reader *zr)
  *  @retval     OK   : the file has been opened successfully
  *  @retval     else : an error occurred
  */
-ya_result
-zone_reader_text_open(const char* fullpath, zone_reader *zr)
+ya_result zone_reader_text_open(zone_reader_t *zr, const char *fullpath)
 {
     ya_result return_value;
 
 #if DEBUG_BENCH_TEXT_ZONE_PARSE
     zone_reader_text_bench_register();
-    u64 bench = debug_bench_start(&zone_reader_text_parse);
+    uint64_t bench = debug_bench_start(&zone_reader_text_parse);
 #endif
 
     if(ISOK(return_value = zone_reader_text_init(zr)))
     {
         // push the stream
 
-        zone_reader_text *zfr = (zone_reader_text*)zr->data;
+        zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
 
         if(ISOK(return_value = file_input_stream_open(&zfr->includes[0], fullpath)))
         {
-/*
-#if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
-            int fd = fd_input_stream_get_filedescriptor(&zfr->includes[0]);
-            fdatasync_ex(fd);
-            posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-#endif
-*/
+            /*
+            #if (DNSDB_USE_POSIX_ADVISE != 0) && (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L)
+                        int fd = fd_input_stream_get_filedescriptor(&zfr->includes[0]);
+                        fdatasync_ex(fd);
+                        posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+            #endif
+            */
             zfr->file_name[zfr->includes_count] = strdup(fullpath);
             parser_push_stream(&zfr->parser, &zfr->includes[zfr->includes_count++]);
         }
@@ -2606,31 +2612,28 @@ zone_reader_text_open(const char* fullpath, zone_reader *zr)
     return return_value;
 }
 
-void
-zone_reader_text_ignore_missing_soa(zone_reader *zr)
+void zone_reader_text_ignore_missing_soa(zone_reader_t *zr)
 {
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
-    zfr->soa_found = TRUE;
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
+    zfr->soa_found = true;
 }
 
-ya_result
-zone_reader_text_set_origin(zone_reader *zr, const u8* origin)
+ya_result zone_reader_text_set_origin(zone_reader_t *zr, const uint8_t *origin)
 {
-    zone_reader_text *zfr = (zone_reader_text*)zr->data;
-    ya_result return_code = dnsname_copy(zfr->origin, origin);
+    zone_reader_text_t *zfr = (zone_reader_text_t *)zr->data;
+    ya_result           return_code = dnsname_copy(zfr->origin, origin);
     return return_code;
 }
 
-ya_result
-zone_reader_text_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin)
+ya_result zone_reader_text_copy_rdata(const char *text, uint16_t rtype, uint8_t *rdata, uint32_t rdata_size, const uint8_t *origin)
 {
-    parser_s parser;
+    parser_t  parser;
 
     ya_result return_code;
 
-    char buffer[4096];
+    char      buffer[4096];
 
-    int n = strlen(text);
+    int       n = strlen(text);
 
     if(n > (int)(sizeof(buffer) - 2))
     {
@@ -2647,15 +2650,15 @@ zone_reader_text_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_si
     }
 
     if(ISOK(return_code = parser_init(&parser,
-        zfr_string_delimiters,      // by 2
-        zfr_multiline_delimiters,   // by 2
-        zrf_comment_markers,        // by 1
-        zrf_blank_makers,           // by 1
-        zfr_escape_characters)))    // by 1
+                                      zfr_string_delimiters,    // by 2
+                                      zfr_multiline_delimiters, // by 2
+                                      zrf_comment_markers,      // by 1
+                                      zrf_blank_makers,         // by 1
+                                      zfr_escape_characters)))  // by 1
     {
-        input_stream text_is;
+        input_stream_t text_is;
 
-        bytearray_input_stream_init_const(&text_is, (const u8*)text, n);
+        bytearray_input_stream_init_const(&text_is, (const uint8_t *)text, n);
 
         if(ISOK(return_code = parser_push_stream(&parser, &text_is)))
         {
@@ -2671,23 +2674,22 @@ zone_reader_text_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_si
     return return_code;
 }
 
-ya_result
-zone_reader_text_len_copy_rdata(const char *text, u32 n, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin)
+ya_result zone_reader_text_len_copy_rdata(const char *text, uint32_t n, uint16_t rtype, uint8_t *rdata, uint32_t rdata_size, const uint8_t *origin)
 {
-    parser_s parser;
+    parser_t  parser;
 
     ya_result return_code;
 
     if(ISOK(return_code = parser_init(&parser,
-                                      zfr_string_delimiters,      // by 2
-                                      zfr_multiline_delimiters,   // by 2
-                                      zrf_comment_markers,        // by 1
-                                      zrf_blank_makers,           // by 1
-                                      zfr_escape_characters)))    // by 1
+                                      zfr_string_delimiters,    // by 2
+                                      zfr_multiline_delimiters, // by 2
+                                      zrf_comment_markers,      // by 1
+                                      zrf_blank_makers,         // by 1
+                                      zfr_escape_characters)))  // by 1
     {
-        input_stream text_is;
+        input_stream_t text_is;
 
-        bytearray_input_stream_init_const(&text_is, (const u8*)text, n);
+        bytearray_input_stream_init_const(&text_is, (const uint8_t *)text, n);
 
         if(ISOK(return_code = parser_push_stream(&parser, &text_is)))
         {
@@ -2702,6 +2704,5 @@ zone_reader_text_len_copy_rdata(const char *text, u32 n, u16 rtype, u8 *rdata, u
 
     return return_code;
 }
-
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef TSIG_H_
 #define TSIG_H_
@@ -50,20 +49,20 @@
 
 #if DNSCORE_HAS_TSIG_SUPPORT
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#define HMAC_UNKNOWN	  0
-#define HMAC_MD5        157
-#define HMAC_SHA1       161
-#define HMAC_SHA224     162
-#define HMAC_SHA256     163
-#define HMAC_SHA384     164
-#define HMAC_SHA512     165
+#define HMAC_UNKNOWN 0
+#define HMAC_MD5     157
+#define HMAC_SHA1    161
+#define HMAC_SHA224  162
+#define HMAC_SHA256  163
+#define HMAC_SHA384  164
+#define HMAC_SHA512  165
 
-struct packet_unpack_reader_data;
+struct dns_packet_reader_s;
 
 /*
  * A digest is stored prefixed with its length ([1;255])
@@ -73,51 +72,50 @@ struct packet_unpack_reader_data;
  * A structure to hold both children with direct access
  */
 
-typedef struct tsig_node tsig_node;
+typedef struct tsig_key_node_s tsig_key_node_t;
 
-struct tsig_children
+struct tsig_key_node_children_t
 {
-    struct tsig_node* left;
-    struct tsig_node* right;
+    struct tsig_key_node_s *left;
+    struct tsig_key_node_s *right;
 };
 
 /*
- * An union to have access to the children with direct or indexed access
+ * A union to have access to the children with direct or indexed access
  */
 
-typedef union tsig_children_union tsig_children_union;
-
-union tsig_children_union
+union tsig_children_u
 {
-    struct tsig_children lr;
-    struct tsig_node * child[2];
+    struct tsig_key_node_children_t lr;
+    struct tsig_key_node_s         *child[2];
 };
 
-typedef struct tsig_item tsig_item;
+typedef union tsig_children_u tsig_children_t;
 
-struct tsig_item
+struct tsig_key_s
 {
-    const u8 *name;
-    const u8 *mac;
-    const u8 *mac_algorithm_name;
-    u16 name_len;
-    u16 mac_algorithm_name_len;
-    u16 mac_size;
-    u8 mac_algorithm;
-    
-    u8 load_serial;
+    const uint8_t *name;
+    const uint8_t *mac;
+    const uint8_t *mac_algorithm_name;
+    uint16_t       name_len;
+    uint16_t       mac_algorithm_name_len;
+    uint16_t       mac_size;
+    uint8_t        mac_algorithm;
+    uint8_t        load_serial;
 };
+
+typedef struct tsig_key_s tsig_key_t;
 
 /*
  * The node structure CANNOT have a varying size on a given collection
  * This means that the digest size is a constant in the whole tree
  */
 
-struct tsig_node
+struct tsig_key_node_s
 {
-    union tsig_children_union children;
-    tsig_item item;
-    s8 balance;
+    union tsig_children_u children;
+    tsig_key_t            item;
+    int8_t                balance;
 };
 
 /**
@@ -133,85 +131,100 @@ void tsig_serial_next();
  *
  */
 
-ya_result tsig_register(const u8 *name, const u8 *mac, u16 mac_size, u8 mac_algorithm);
+/**
+ * Registers a TSIG key.
+ *
+ * @param name the name of the key
+ * @param mac the mac of the key
+ * @param mac_size the size of the mac
+ * @param mac_algorithm the algorithm
+ *
+ * @return an error code
+ *
+ */
 
-void tsig_finalize();
+ya_result   tsig_register(const uint8_t *name, const uint8_t *mac, uint16_t mac_size, uint8_t mac_algorithm);
 
-tsig_item *tsig_get(const u8 *name);
+ya_result   tsig_unregister(const uint8_t *name);
 
-u32 tsig_get_count();
+void        tsig_finalize();
 
-tsig_item *tsig_get_at_index(s32 index);
+tsig_key_t *tsig_get(const uint8_t *name);
 
-struct message_data;
+tsig_key_t *tsig_get_with_ascii_name(const char *ascii_name);
+
+uint32_t    tsig_get_count();
+
+tsig_key_t *tsig_get_at_index(int32_t index);
+
+struct dns_message_s;
 
 typedef enum
 {
     TSIG_NOWHERE = -1,
-    TSIG_START   =  0,
-    TSIG_MIDDLE  =  1,
-    TSIG_END     =  2,
-    TSIG_WHOLE   =  3
+    TSIG_START = 0,
+    TSIG_MIDDLE = 1,
+    TSIG_END = 2,
+    TSIG_WHOLE = 3
 } tsig_tcp_message_position;
 
 /**
  * Sign the first message_data of a tcp answer
  */
 
-ya_result tsig_sign_tcp_first_message(struct message_data *mesg);
+ya_result tsig_sign_tcp_first_message(struct dns_message_s *mesg);
 
 /**
  * Sign one of the "middle" message_data of a tcp answer
  */
 
-ya_result tsig_sign_tcp_next_message(struct message_data *mesg);
+ya_result tsig_sign_tcp_next_message(struct dns_message_s *mesg);
 
 /**
  * Sign the 100*Nth last message_data of a tcp answer
  */
 
-ya_result tsig_sign_tcp_last_message(struct message_data *mesg);
+ya_result tsig_sign_tcp_last_message(struct dns_message_s *mesg);
 
 /**
  * Calls the relevant sign tcp function
  */
 
-ya_result tsig_sign_tcp_message(struct message_data *mesg, tsig_tcp_message_position pos);
+ya_result tsig_sign_tcp_message(struct dns_message_s *mesg, tsig_tcp_message_position pos);
 
 /**
  * Sign the first message_data of a tcp answer
  */
 
-ya_result tsig_sign_tcp_first_message(struct message_data *mesg);
+ya_result tsig_sign_tcp_first_message(struct dns_message_s *mesg);
 
 /**
  * Sign one of the "middle" message_data of a tcp answer
  */
 
-ya_result tsig_sign_tcp_next_message(struct message_data *mesg);
+ya_result tsig_sign_tcp_next_message(struct dns_message_s *mesg);
 
 /**
  * Sign the 100*Nth last message_data of a tcp answer
  */
 
-ya_result tsig_sign_tcp_last_message(struct message_data *mesg);
+ya_result tsig_sign_tcp_last_message(struct dns_message_s *mesg);
 
 /**
  * Calls the relevant verify tcp function
  */
 
-ya_result tsig_verify_tcp_first_message(struct message_data *mesg, const u8 *mac, u16 mac_size);
-ya_result tsig_verify_tcp_next_message(struct message_data *mesg);
-void tsig_verify_tcp_last_message(struct message_data *mesg);
+ya_result      tsig_verify_tcp_first_message(struct dns_message_s *mesg, const uint8_t *mac, uint16_t mac_size);
+ya_result      tsig_verify_tcp_next_message(struct dns_message_s *mesg);
+void           tsig_verify_tcp_last_message(struct dns_message_s *mesg);
 
+void           tsig_register_algorithms();
 
-void tsig_register_algorithms();
+ya_result      tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname);
+const char    *tsig_get_friendly_name_from_hmac_algorithm(uint32_t algorithm);
 
-ya_result tsig_get_hmac_algorithm_from_friendly_name(const char *hmacname);
-const char* tsig_get_friendly_name_from_hmac_algorithm(u32 algorithm);
-
-u8 tsig_get_algorithm(const u8 *name);
-const u8* tsig_get_algorithm_name(u8 algorithm);
+uint8_t        tsig_get_algorithm(const uint8_t *name);
+const uint8_t *tsig_get_algorithm_name(uint8_t algorithm);
 
 /*
  * Called by tsig_extract_and_process
@@ -223,18 +236,17 @@ const u8* tsig_get_algorithm_name(u8 algorithm);
  */
 
 // no verification whatsoever, use with care
-ya_result tsig_process(struct message_data *mesg, struct packet_unpack_reader_data *purd, u32 tsig_offset, const tsig_item *tsig, struct type_class_ttl_rdlen *tctr);
+ya_result tsig_process(struct dns_message_s *mesg, struct dns_packet_reader_s *purd, uint32_t tsig_offset, const tsig_key_t *tsig, struct type_class_ttl_rdlen_s *tctr);
 
-ya_result tsig_process_query(struct message_data *mesg, struct packet_unpack_reader_data *purd, u32 tsig_offset, u8 tsigname[MAX_DOMAIN_LENGTH], struct type_class_ttl_rdlen *tctr);
+ya_result tsig_process_query(struct dns_message_s *mesg, struct dns_packet_reader_s *purd, uint32_t tsig_offset, uint8_t tsigname[DOMAIN_LENGTH_MAX], struct type_class_ttl_rdlen_s *tctr);
 
-ya_result tsig_process_answer(struct message_data *mesg, struct packet_unpack_reader_data *purd, u32 tsig_offset, struct type_class_ttl_rdlen *tctr);
+ya_result tsig_process_answer(struct dns_message_s *mesg, struct dns_packet_reader_s *purd, uint32_t tsig_offset, struct type_class_ttl_rdlen_s *tctr);
 
 /*
- * Search for the last
- *
+ * Search for the last one
  */
 
-ya_result tsig_extract_and_process(struct message_data *mesg);
+ya_result tsig_extract_and_process(struct dns_message_s *mesg);
 
 /**
  * signs the message
@@ -243,7 +255,7 @@ ya_result tsig_extract_and_process(struct message_data *mesg);
  *
  */
 
-ya_result tsig_sign_answer(struct message_data *mesg);
+ya_result tsig_sign_answer(struct dns_message_s *mesg);
 
 /**
  * signs the message
@@ -252,23 +264,23 @@ ya_result tsig_sign_answer(struct message_data *mesg);
  *
  */
 
-ya_result tsig_sign_query(struct message_data *mesg);
+ya_result tsig_sign_query(struct dns_message_s *mesg);
 
-ya_result tsig_verify_answer(struct message_data *mesg, const u8 *mac, u16 mac_size);
+ya_result tsig_verify_answer(struct dns_message_s *mesg, const uint8_t *mac, uint16_t mac_size);
 
-ya_result tsig_append_unsigned_error(struct message_data *mesg);
-ya_result tsig_append_error(struct message_data *mesg);
+ya_result tsig_append_unsigned_error(struct dns_message_s *mesg);
+ya_result tsig_append_error(struct dns_message_s *mesg);
 
 /**
  * Removes the TSIG if any, setups the tsig fields of the message.
- * 
+ *
  * Returns 1 if a TSIG has been processed.
  * Returns 0 if none were found.
  */
 
-ya_result tsig_message_extract(struct message_data *mesg);
+ya_result tsig_message_extract(struct dns_message_s *mesg);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

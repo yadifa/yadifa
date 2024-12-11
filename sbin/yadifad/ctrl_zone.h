@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,46 +28,45 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #ifndef __CTRL_ZONE__H__
 #define __CTRL_ZONE__H__
 
-#include "server-config.h"
+#include "server_config.h"
 
 #if !HAS_CTRL
 #error "CTRL has not been enabled : do not include this"
 #endif
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 
 /**
  * CTRL handling
  */
 
-ya_result ctrl_zone_freeze(zone_desc_s *zone_desc, bool dolock);
-ya_result ctrl_zone_unfreeze(zone_desc_s *zone_desc, bool dolock);
+ya_result ctrl_zone_freeze(zone_desc_t *zone_desc, bool dolock);
+ya_result ctrl_zone_unfreeze(zone_desc_t *zone_desc, bool dolock);
 
-ya_result ctrl_zone_sync_doclean(zone_desc_s *zone_desc, bool dolock);
-ya_result ctrl_zone_sync_noclean(zone_desc_s *zone_desc, bool dolock);
-ya_result ctrl_zone_sync(zone_desc_s *zone_desc, bool dolock, bool clear_journal);
-ya_result ctrl_zone_notify(zone_desc_s *zone_desc, bool dolock);
-ya_result ctrl_zone_reload(zone_desc_s *zone_desc, bool dolock);
+ya_result ctrl_zone_sync_doclean(zone_desc_t *zone_desc, bool dolock);
+ya_result ctrl_zone_sync_noclean(zone_desc_t *zone_desc, bool dolock);
+ya_result ctrl_zone_sync(zone_desc_t *zone_desc, bool dolock, bool clear_journal);
+ya_result ctrl_zone_notify(zone_desc_t *zone_desc, bool dolock);
+ya_result ctrl_zone_refresh(zone_desc_t *zone_desc, bool dolock);
+ya_result ctrl_zone_reload(zone_desc_t *zone_desc, bool dolock);
 
 #if HAS_DYNAMIC_PROVISIONING
-ya_result ctrl_zone_generate_from_message(message_data *mesg);  /* generate but let on the unactivated side */
+ya_result ctrl_zone_generate_from_message(dns_message_t *mesg); /* generate but let on the unactivated side */
 ya_result ctrl_zone_config_merge(zone_desc_s *zone_desc, bool dolock);
 ya_result ctrl_zone_config_merge_all();
 ya_result ctrl_zone_config_delete(zone_desc_s *zone_desc, bool dolock);

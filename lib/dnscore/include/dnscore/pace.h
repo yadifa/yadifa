@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,9 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef PACE_H
 #define PACE_H
@@ -39,36 +37,35 @@
 
 struct pace_s
 {
-    u64 min_us;
-    u64 max_us;
-    u64 current_us;
-    u64 counter;
-    u64 wait_start;
-    u64 wait_end;
+    uint64_t    min_us;
+    uint64_t    max_us;
+    uint64_t    current_us;
+    uint64_t    counter;
+    uint64_t    wait_start;
+    uint64_t    wait_end;
     const char *name;
 };
 
-typedef struct pace_s pace_s;
+typedef struct pace_s pace_t;
 
 /**
  * initialises the pace
- * 
+ *
  * @param pace
  */
 
-void pace_init(pace_s *pace, u64 min_us, u64 max_us, const char* name);
+void pace_init(pace_t *pace, uint64_t min_us, uint64_t max_us, const char *name);
 
 /**
  * Will pause for a while
  */
 
-void pace_wait(pace_s *pace);
+void pace_wait(pace_t *pace);
 
 /**
  * Will update the pace taking the fact that now we have work to do
  */
 
-void pace_work(pace_s *pace);
+void pace_work(pace_t *pace);
 
 #endif
-

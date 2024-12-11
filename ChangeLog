@@ -1,56 +1,59 @@
 ################################################################################
-# 
-#  Copyright (c) 2011-2023, EURid vzw. All rights reserved.
-#  The YADIFA TM software product is provided under the BSD 3-clause license:
-# 
-#  Redistribution and use in source and binary forms, with or without 
-#  modification, are permitted provided that the following conditions
-#  are met:
-# 
-#         * Redistributions of source code must retain the above copyright 
-#           notice, this list of conditions and the following disclaimer.
-#         * Redistributions in binary form must reproduce the above copyright 
-#           notice, this list of conditions and the following disclaimer in the 
-#           documentation and/or other materials provided with the distribution.
-#         * Neither the name of EURid nor the names of its contributors may be 
-#           used to endorse or promote products derived from this software 
-#           without specific prior written permission.
-# 
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
-#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
-#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-# 
+#
+# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# The YADIFA TM software product is provided under the BSD 3-clause license:
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+#        * Redistributions of source code must retain the above copyright
+#          notice, this list of conditions and the following disclaimer.
+#        * Redistributions in binary form must reproduce the above copyright
+#          notice, this list of conditions and the following disclaimer in the
+#          documentation and/or other materials provided with the distribution.
+#        * Neither the name of EURid nor the names of its contributors may be
+#          used to endorse or promote products derived from this software
+#          without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
 ################################################################################
+
+20241211:
+    YADIFA 3.0.0
+
+
+    Adds support for the OpenSSL 3.x API
+
+    Adds the DNS-extension interface that allows an developer to create its own DNS types/class with some limitations
+
+    This version comes with the CMake build that we've been using internally along with unit tests.
+
+    Adds purely experimental support for post-quantum safe signatures. This feature requires libocs >= 0.11.0 and is an option for CMake builds.
+	On a CMake build, add -DOQS:BOOL=ON during configuration.
+	More details incoming about this.
+
 
 20240626:
     YADIFA 2.6.7
 
     Adds -fno-strict-aliasing to the build options, fixes -flto
 
-
 20240507:
     YADIFA 2.6.6
 
     Fixes an issue in the resource rate limiter that could crash the server on some condition.
-
-20230906:
-    YADIFA 2.6.5-public
-
-    Secondaries will nolonger enforce the TTL value of the NSEC3PARAM record.
-
-    Fixes an issue caused by a limitation of the select system call.
-
-20230301:
-    YADIFA 2.6.4-public
-
-    Fixes an issue building for 32 bits targets.
 
 20230213:
     YADIFA 2.6.3-public

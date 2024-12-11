@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,43 +28,44 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup format C-string formatting
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup format C-string formatting
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _DNSFORMAT_H
-#define	_DNSFORMAT_H
+#define _DNSFORMAT_H
+
+#include <dnscore/dnscore_config_features.h>
 
 /*
  * Format extensions related to dns
  *
- * dnsname  : u8* dns name
- * dnslabel : u8* dns label (pascal string)
+ * dnsname  : uint8_t* dns name
+ * dnslabel : uint8_t* dns label (pascal string)
  * class    : u16* zone class
  * type     : u16* record type
  */
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 void netformat_class_init();
 void dnsformat_class_init();
 
-void dnsname_format_handler_method(const void *val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void *reserved_for_method_parameters);
+void dnsname_format_handler_method(const void *val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *reserved_for_method_parameters);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _DNSFORMAT_H */
+#endif /* _DNSFORMAT_H */
 /** @} */

@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YAKEYROLLD" "8" "2024\-07\-19" "YAKEYROLLD " "YADIFA "
+.TH "YAKEYROLLD" "8" "2024\-12\-11" "YAKEYROLLD " "YADIFA "
 .SH NAME
 
 .PP
@@ -266,7 +266,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 2.6.7 of 2024\-07\-19. 
+Version: 3.0.0 of 2024\-12\-11. 
 .PP
 .SH MAILINGLIST
 
@@ -299,7 +299,7 @@ If you would like to stay informed about new versions and official patches send 
 .PP
 .TP
 Copyright 
-(C)2011\-2023, EURid
+(C)2011\-2024, EURid
 .br
 B\-1831 Diegem, Belgium
 .br

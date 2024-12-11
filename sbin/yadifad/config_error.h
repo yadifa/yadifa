@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,52 +28,46 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup config Configuration handling
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup config Configuration handling
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
-#ifndef _CONFIG_ERROR_H
-#define	_CONFIG_ERROR_H
+ *----------------------------------------------------------------------------*/
 
-#ifdef	__cplusplus
+#ifndef _CONFIG_ERROR_H
+#define _CONFIG_ERROR_H
+
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#define     CFG_ERROR_BASE            0x80070000
-#define     CFG_ERROR_CODE(code_)     ((s32)(CFG_ERROR_BASE+(code_)))
+#define CFG_ERROR_BASE                0x80070000
+#define CFG_ERROR_CODE(code_)         ((int32_t)(CFG_ERROR_BASE + (code_)))
 
-    /* Config errorcodes */
-#define     CONFIG_ZONE_ERR             CFG_ERROR_CODE(50)	/* Error in config file */
+/* Config errorcodes */
+#define CONFIG_ZONE_ERR               CFG_ERROR_CODE(50) /* Error in config file */
 
-    /* Zone errorcondes */
+/* Zone errorcondes */
 
+#define CONFIG_WRONG_SIG_TYPE         CFG_ERROR_CODE(201)
+#define CONFIG_WRONG_SIG_VALIDITY     CFG_ERROR_CODE(202)
+#define CONFIG_WRONG_SIG_REGEN        CFG_ERROR_CODE(203)
 
-#define     CONFIG_WRONG_SIG_TYPE       CFG_ERROR_CODE(201)
-#define     CONFIG_WRONG_SIG_VALIDITY   CFG_ERROR_CODE(202)
-#define     CONFIG_WRONG_SIG_REGEN      CFG_ERROR_CODE(203)
+#define DATABASE_ZONE_MISSING_DOMAIN  CFG_ERROR_CODE(301)
+#define DATABASE_ZONE_MISSING_PRIMARY CFG_ERROR_CODE(302)
+#define DATABASE_ZONE_MISSING_TYPE    CFG_ERROR_CODE(303)
+#define DATABASE_ZONE_CONFIG_DUP      CFG_ERROR_CODE(304)
+#define DATABASE_ZONE_CONFIG_CLONE    CFG_ERROR_CODE(306)
 
-#define     DATABASE_ZONE_MISSING_DOMAIN CFG_ERROR_CODE(301)
-#define     DATABASE_ZONE_MISSING_MASTER CFG_ERROR_CODE(302)
-#define     DATABASE_ZONE_MISSING_TYPE   CFG_ERROR_CODE(303)
-#define     DATABASE_ZONE_CONFIG_DUP     CFG_ERROR_CODE(304)
-#define     DATABASE_ZONE_CONFIG_CLONE   CFG_ERROR_CODE(306)
-
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _CONFIG_ERROR_H */
-
-/*    ------------------------------------------------------------    */
+#endif /* _CONFIG_ERROR_H */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

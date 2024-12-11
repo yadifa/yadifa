@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,22 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup nsec NSEC functions
- *  @ingroup dnsdbdnssec
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup nsec NSEC functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
  *
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
-#include "dnsdb/dnsdb-config.h"
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <dnscore/sys_types.h>
 #include <dnscore/rfc.h>
 #include "dnsdb/btree.h"
@@ -62,37 +64,37 @@
  *
  */
 
-u32
-nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_label *label, bool force_nsec,
-                                         bool force_rrsig)
+uint32_t nsec_type_bit_maps_initialise_from_label(type_bit_maps_context_t *context, zdb_rr_label_t *label, bool force_nsec, bool force_rrsig)
 {
-    u8 *type_bitmap_field = context->type_bitmap_field;
-    u8 *window_size = context->window_size;
+    uint8_t *type_bitmap_field = context->type_bitmap_field;
+    uint8_t *window_size = context->window_size;
 
     ZEROMEMORY(window_size, sizeof(context->window_size));
 
     context->last_type_window = -1;
 
-    bool has_records = !zdb_record_isempty(&label->resource_record_set);
+    bool has_records = !zdb_resource_record_sets_isempty(&label->resource_record_set);
 
     /* If there are no records, nor forced ones ... */
-    if(!(force_nsec||force_rrsig||has_records))
+    if(!(force_nsec || force_rrsig || has_records))
     {
         return 0;
     }
 
     ZEROMEMORY(type_bitmap_field, sizeof(context->type_bitmap_field));
 
-    btree_iterator types_iter;
-    btree_iterator_init(label->resource_record_set, &types_iter);
-    while(btree_iterator_hasnext(&types_iter))
+    zdb_resource_record_sets_set_iterator_t iter;
+    zdb_resource_record_sets_set_iterator_init(&label->resource_record_set, &iter);
+    while(zdb_resource_record_sets_set_iterator_hasnext(&iter))
     {
-        btree_node *node = btree_iterator_next_node(&types_iter);
+        zdb_resource_record_sets_node_t *node = zdb_resource_record_sets_set_iterator_next_node(&iter);
+        uint16_t                         type = zdb_resource_record_set_type(&node->value);
 
-        u16 type = node->hash; /** @note : NATIVETYPE */
-        
 #if ZDB_HAS_NSEC3_SUPPORT && defined(TYPE_NSEC3PARAMADD)
-        if(type == TYPE_NSEC3PARAMADD) type = TYPE_NSEC3PARAM; // we are generating an NSEC3 chain : let's get the real types right
+        if(type == TYPE_NSEC3PARAMADD)
+        {
+            type = TYPE_NSEC3PARAM; // we are generating an NSEC3 chain : let's get the real types right
+        }
 #endif
         /**
          * domain.tld. NS domain.tld.
@@ -103,7 +105,7 @@ nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_
          * Because this is possible, I have to filter out (I should maybe filter in instead)
          */
 
-        if(zdb_rr_label_flag_isset(label, (ZDB_RR_LABEL_DELEGATION|ZDB_RR_LABEL_UNDERDELEGATION)))
+        if(zdb_rr_label_flag_isset(label, (ZDB_RR_LABEL_DELEGATION | ZDB_RR_LABEL_UNDERDELEGATION)))
         {
             if(type == TYPE_A || type == TYPE_AAAA)
             {
@@ -111,7 +113,7 @@ nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_
             }
         }
 
-        type = (u16)ntohs(type);
+        type = (uint16_t)ntohs(type);
 
         /* Network bit order */
 
@@ -142,11 +144,10 @@ nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_
      *
      */
 
-
     if(force_rrsig)
     {
         type_bitmap_field[(NU16(TYPE_RRSIG) >> 3)] |= 1 << (7 - (NU16(TYPE_RRSIG) & 7)); /** @note : NATIVETYPE */
-        window_size[0] = MAX(((NU16(TYPE_RRSIG) & 0xf8) >> 3) + 1, window_size[0]); /** @note : NATIVETYPE */
+        window_size[0] = MAX(((NU16(TYPE_RRSIG) & 0xf8) >> 3) + 1, window_size[0]);      /** @note : NATIVETYPE */
 
         context->last_type_window = MAX(0, context->last_type_window);
     }
@@ -154,16 +155,16 @@ nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_
     if(force_nsec)
     {
         type_bitmap_field[(NU16(TYPE_NSEC) >> 3)] |= 1 << (7 - (NU16(TYPE_NSEC) & 7)); /** @note : NATIVETYPE */
-        window_size[0] = MAX(((NU16(TYPE_NSEC) & 0xf8) >> 3) + 1, window_size[0]); /** @note : NATIVETYPE */
+        window_size[0] = MAX(((NU16(TYPE_NSEC) & 0xf8) >> 3) + 1, window_size[0]);     /** @note : NATIVETYPE */
 
         context->last_type_window = MAX(0, context->last_type_window);
     }
 
-    u32 type_bit_maps_size = 0;
+    uint32_t type_bit_maps_size = 0;
 
-    for(s32 i = 0; i <= context->last_type_window; i++)
+    for(int_fast32_t i = 0; i <= context->last_type_window; i++)
     {
-        u8 ws = window_size[i];
+        uint8_t ws = window_size[i];
 
         if(ws > 0)
         {

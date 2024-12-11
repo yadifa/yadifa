@@ -1,6 +1,6 @@
 <zone>
 	domain		somedomain.eu
-	file		slaves/somedomain.eu.zone
+	file		secondaries/somedomain.eu.zone
 	type		secondary
 	primary		192.0.2.1
 </zone>

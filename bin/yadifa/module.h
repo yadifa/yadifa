@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
-
-
 
 /** @defgroup yadifa
  *  @ingroup ###
  *  @brief
  */
-
 
 #include <dnscore/sys_types.h>
 #include <dnscore/output_stream.h>
@@ -48,22 +43,22 @@
 
 struct module_s
 {
-    ya_result (*init)();        //
-    ya_result (*finalise)();    //
+    ya_result (*init)();     //
+    ya_result (*finalise)(); //
     int (*config_register)(int priority);
     int (*setup)();
     ya_result (*run)();
-    ya_result (*help_print)(const struct module_s*,output_stream* os);
+    ya_result (*help_print)(const struct module_s *, output_stream_t *os);
 
-    const cmdline_desc_s *cmdline_table;
+    const cmdline_desc_t    *cmdline_table;
     cmdline_filter_callback *filter;
-    void *filter_arg;
-    
-    const char *name;           // public name
-    const char *commandname;    // name as an executable
-    const char *parametername;  // name as a parameter (yadifa command name)
-    const char *help_text;      // a text to be printed upon help request
-    const char *rcname;         // ie: ".modulerc"
+    void                    *filter_arg;
+
+    const char              *name;          // public name
+    const char              *commandname;   // name as an executable
+    const char              *parametername; // name as a parameter (yadifa command name)
+    const char              *help_text;     // a text to be printed upon help request
+    const char              *rcname;        // ie: ".modulerc"
 };
 
 typedef struct module_s module_s;
@@ -78,23 +73,23 @@ const module_s *module_get_from_args(int *argcp, char **argv, int *is_executable
  * Finds the module from the command line.
  * Prints help.
  * Runs the module.
- * 
+ *
  * @param argcp
  * @param argv
- * @return 
+ * @return
  */
 
 ya_result module_run_from_args(int *argcp, char **argv);
 
-int module_verbosity_level();
+int       module_verbosity_level();
 
 /*----------------------------------------------------------------------------*/
 #pragma mark MODULES DEFAULT FUNCTIONS
 
-ya_result module_default_init(const struct module_s*);
+ya_result module_default_init(const struct module_s *);
 ya_result module_default_finalize();
-int module_default_config_register(int argc, char **argv);
-int module_default_setup();
+int       module_default_config_register(int argc, char **argv);
+int       module_default_setup();
 ya_result module_default_run();
-ya_result  module_default_help_print(const struct module_s*, output_stream *os);
-ya_result module_default_cmdline_help_print(const struct module_s* m, output_stream *os);
+ya_result module_default_help_print(const struct module_s *, output_stream_t *os);
+ya_result module_default_cmdline_help_print(const struct module_s *m, output_stream_t *os);

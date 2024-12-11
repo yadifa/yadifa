@@ -1,6 +1,6 @@
-dnl ############################################################################
+dnl ----------------------------------------------------------------------------
 dnl
-dnl Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2024, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -10,9 +10,8 @@ dnl
 dnl        * Redistributions of source code must retain the above copyright
 dnl          notice, this list of conditions and the following disclaimer.
 dnl        * Redistributions in binary form must reproduce the above copyright
-dnl          notice, this list of conditions and the following disclaimer in
-dnl          the documentation and/or other materials provided with the
-dnl          distribution.
+dnl          notice, this list of conditions and the following disclaimer in the
+dnl          documentation and/or other materials provided with the distribution.
 dnl        * Neither the name of EURid nor the names of its contributors may be
 dnl          used to endorse or promote products derived from this software
 dnl          without specific prior written permission.
@@ -25,22 +24,22 @@ dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
 dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 dnl SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+dnl CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl
-dnl ############################################################################        
-        
+dnl ----------------------------------------------------------------------------
+
 configure_base_path="$0/"
 
 dnl Do NOT change this block of comments
 dnl ====================================
-dnl YADIFA VERSION 2.6.7 DATE 2024-07-19
+dnl YADIFA VERSION 2.7.0 DATE 2024-05-14
 dnl ====================================
 
-AC_PREREQ([2.71])
+AC_PREREQ([2.69])
 AC_REVISION([$Revision$])
-define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(/usr/bin/cat "${configure_base_path}VERSION") $(/usr/bin/expr 58 + 11201))])
+define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(cat "${configure_base_path}VERSION") $(expr $(git rev-list release-2.6.5-public..HEAD --count) + 11201))])
 
 AC_INIT([yadifa],YADIFA_VERSION,[info@yadifa.eu])
 
@@ -70,7 +69,7 @@ AM_PROG_AR
 LT_INIT([disable-shared])
 
 AC_DARWIN_LIBTOOL
-dnl obsolete: LT_INIT
+dnl obsolete: AC_PROG_LIBTOOL
 
 AC_DEFUN([SYSCONF], [/$prefix/PACKAGE/PACKAGE.conf])
 
@@ -84,12 +83,7 @@ AC_SEARCH_LIBS([clock_gettime],[rt],,[exit 1])
 
 dnl Checks for header files.
 
-# Autoupdate added the next two lines to ensure that your configure
-# script's behavior did not change.  They are probably safe to remove.
-dnl AC_CHECK_INCLUDES_DEFAULT
-dnl AC_PROG_EGREP
-#
-# 
+dnl obsolete: AC_HEADER_STDC
 
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h stdio.h string.h sys/time.h syslog.h unistd.h stdatomic.h])
 
@@ -123,16 +117,6 @@ AC_CHECK_TYPES(int64_t)
 AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(u_char)
 
-AC_CHECK_TYPES(uint8_t)
-AC_CHECK_TYPES(int8_t)
-AC_CHECK_TYPES(uint16_t)
-AC_CHECK_TYPES(int16_t)
-AC_CHECK_TYPES(uint32_t)
-AC_CHECK_TYPES(int32_t)
-AC_CHECK_TYPES(uint64_t)
-AC_CHECK_TYPES(int64_t)
-AC_CHECK_TYPES(long long)
-AC_CHECK_TYPES(u_char)
 
 AC_CHECK_FUNCS([bzero memset select socket atexit clock_gettime dup2 fdatasync ftruncate getcwd gethostname getpagesize gettimeofday inet_ntoa localtime_r memchr memmove memset mkdir mkfifo munmap select socket strcasecmp strchr strdup strerror strncasecmp strrchr strtol timegm])
 AC_CHECK_HEADERS([sys/ioctl.h])
@@ -162,6 +146,7 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
 AC_FUNC_SELECT_ARGTYPES
+dnl obsolete: AC_TYPE_SIGNAL
 AC_FUNC_STAT
 
 AC_SYS_LARGEFILE
@@ -226,47 +211,42 @@ sbin/yadifad/Makefile
 AC_HAS_WITHOUT(tests, TESTS, [various internal test programs],,
 [
 AC_CONFIG_FILES([
-test/circular-file-test/Makefile
-test/cjf-scan/Makefile
-test/cmdline-test/Makefile
-test/collection-test/Makefile
-test/daemonised-logger-test/Makefile
-test/dnskey-test/Makefile
-test/dnsname-test/Makefile
-test/dnssec-test/Makefile
-test/dnsserver-test/Makefile
-test/dsfromkey-test/Makefile
-test/filepool-test/Makefile
-test/file-test/Makefile
-test/freebsd12-test/Makefile
-test/ipc-test/Makefile
-test/journal-fusion/Makefile
-test/journal-from-ixfr/Makefile
-test/journal-speed-test/Makefile
-test/keygen-test/Makefile
-test/limiter-test/Makefile
-test/logger-test/Makefile
-test/message-test/Makefile
-test/mutex-test/Makefile
-test/notify-test/Makefile
-test/network-interfaces-forall-test/Makefile
-test/nsec3-answer/Makefile
-test/nsec3-hash/Makefile
-test/openssl111a-ecdsa-test/Makefile
-test/openssl111a-eddsa-test/Makefile
-test/parser-test/Makefile
-test/protocol-test/Makefile
-test/query-hammer-test/Makefile
-test/rrsig-test/Makefile
-test/shared-circular-buffer-test/Makefile
-test/shared-heap-test/Makefile
-test/simple-http-server-test/Makefile
-test/skeleton/Makefile
-test/stream-test/Makefile
-test/threaded-queue/Makefile
-test/update-test/Makefile
-test/xfr/Makefile
-test/zone-save-test/Makefile
+tests/circular-file-test/Makefile
+tests/cjf-scan/Makefile
+tests/cmdline-test/Makefile
+tests/collection-test/Makefile
+tests/daemonised-logger-test/Makefile
+tests/dns-message-test/Makefile
+tests/dnssec-test/Makefile
+tests/dsfromkey-test/Makefile
+tests/ethbenchprobe/Makefile
+tests/file-test/Makefile
+tests/freebsd12-test/Makefile
+tests/hmac-test/Makefile
+tests/ipc-test/Makefile
+tests/journal-fusion/Makefile
+tests/journal-from-ixfr/Makefile
+tests/journal-speed-test/Makefile
+tests/keygen-test/Makefile
+tests/limiter-test/Makefile
+tests/message-test/Makefile
+tests/network-interfaces-forall-test/Makefile
+tests/notify-test/Makefile
+tests/nsec3-answer/Makefile
+tests/nsec3-hash/Makefile
+tests/pid-file-test/Makefile
+tests/protocol-test/Makefile
+tests/query-hammer-test/Makefile
+tests/rndc-test/Makefile
+tests/rrsig-test/Makefile
+tests/shared-circular-buffer-test/Makefile
+tests/shared-heap-test/Makefile
+tests/simple-http-server-test/Makefile
+tests/stream-test/Makefile
+tests/threaded-queue/Makefile
+tests/udp-echo-test/Makefile
+tests/update-test/Makefile
+tests/zone-save-test/Makefile
 ])
 ],[])
 

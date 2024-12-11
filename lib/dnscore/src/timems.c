@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnscoretools Generic Tools
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup dnscoretools Generic Tools
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -51,47 +49,47 @@
 
 #include "dnscore/timems.h"
 
-static int DAYS_IN_MONTH_NORM[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
-static int DAYS_IN_MONTH_LEAP[12] = {31,29,31,30,31,30,31,31,30,31,30,31};
+static int DAYS_IN_MONTH_NORM[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static int DAYS_IN_MONTH_LEAP[12] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 /// @note 20150326 edf -- timegm is not portable (Solaris) in the end, implementing one seemed the only choice
 
 /**
  * This implementation is based on the formula found in:
- * 
+ *
  * http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_15
  * 4.15 Seconds Since the Epoch
- * 
- * It only cares on the Year, Month, Day, Hour, Minute and Second fields of struct tm (the one we are really caring about)
- * It's a constant-time implementation.
- * 
+ *
+ * It only cares on the Year, Month, Day, Hour, Minute and Second fields of struct tm (the one we are really caring
+ * about) It's a constant-time implementation.
+ *
  * I don't see an obvious way to make it faster expect having the year values pre-calculated for the next 30+ years
  * (This would spare a few divs and a mult.)
- * 
+ *
  * If I improve it further, it may be a replacement on the timegm() dependency.
- * 
+ *
  */
 
-    // J   F   M    A    M    J    J    A    S    O    N    D
-    // 31  28  31   30   31   30   31   31   30   31   30   31
+// J   F   M    A    M    J    J    A    S    O    N    D
+// 31  28  31   30   31   30   31   31   30   31   30   31
 
-#define MDAY_FIX(d_) ((d_)-1)
+#define MDAY_FIX(d_) ((d_) - 1)
 
-static int timegm_mdays_norm[12] = {MDAY_FIX(0),MDAY_FIX( 31),MDAY_FIX( 59),MDAY_FIX( 90),MDAY_FIX( 120),MDAY_FIX( 151),MDAY_FIX( 181),MDAY_FIX( 212),MDAY_FIX( 243),MDAY_FIX( 273),MDAY_FIX( 304),MDAY_FIX( 334)}; // MDAY_FIX(365)
+static int  timegm_mdays_norm[12] = {MDAY_FIX(0), MDAY_FIX(31), MDAY_FIX(59), MDAY_FIX(90), MDAY_FIX(120), MDAY_FIX(151), MDAY_FIX(181), MDAY_FIX(212), MDAY_FIX(243), MDAY_FIX(273), MDAY_FIX(304), MDAY_FIX(334)}; // MDAY_FIX(365)
 
-static int timegm_mdays_leap[12] = {MDAY_FIX(0),MDAY_FIX( 31),MDAY_FIX( 60),MDAY_FIX( 91),MDAY_FIX( 121),MDAY_FIX( 152),MDAY_FIX( 182),MDAY_FIX( 213),MDAY_FIX( 244),MDAY_FIX( 274),MDAY_FIX( 305),MDAY_FIX( 335)}; // MDAY_FIX(366)
+static int  timegm_mdays_leap[12] = {MDAY_FIX(0), MDAY_FIX(31), MDAY_FIX(60), MDAY_FIX(91), MDAY_FIX(121), MDAY_FIX(152), MDAY_FIX(182), MDAY_FIX(213), MDAY_FIX(244), MDAY_FIX(274), MDAY_FIX(305), MDAY_FIX(335)}; // MDAY_FIX(366)
 
-static char time_day_of_week[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri","Sat"};
+static char time_day_of_week[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 static char time_month_of_year[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 /**
  * Sun to Sat
- * 
+ *
  * @param day
  * @return A 3 letters name followed by a zero
  */
 
-const char * time_get_day_of_week_name(int day)
+const char *time_get_day_of_week_name(int day)
 {
     if(day >= 0 && day < 7)
     {
@@ -105,12 +103,12 @@ const char * time_get_day_of_week_name(int day)
 
 /**
  * Jan to Dec
- * 
+ *
  * @param month
  * @return A 3 letters name followed by a zero
  */
 
-const char * time_get_month_of_year_name(int month)
+const char *time_get_month_of_year_name(int month)
 {
     if(month >= 0 && month < 12)
     {
@@ -122,55 +120,40 @@ const char * time_get_month_of_year_name(int month)
     }
 }
 
-static char*
-time_write_day_time_number(char *buffer, int value)
+static char *time_write_day_time_number(char *buffer, int value)
 {
     yassert(value >= 0 && value <= 99);
-    
+
     if(value >= 10)
     {
         *buffer++ = '0' + (value / 10);
         value %= 10;
     }
-    
+
     *buffer++ = '0' + value;
-    
+
     return buffer;
 }
 
-static char*
-time_write_year_time_number(char *buffer, int value)
+static char *time_write_year_time_number(char *buffer, int value)
 {
     yassert(value >= 0 && value <= 9999);
-    
-    if(value >= 1000)
-    {
-        *buffer++ = '0' + (value / 1000);
-        value %= 1000;
-    }
-    
-    if(value >= 100)
-    {
-        *buffer++ = '0' + (value / 100);
-        value %= 100;
-    }
-    
-    if(value >= 10)
-    {
-        *buffer++ = '0' + (value / 10);
-        value %= 10;
-    }
-    
+
+    *buffer++ = '0' + (value / 1000);
+    value %= 1000;
+    *buffer++ = '0' + (value / 100);
+    value %= 100;
+    *buffer++ = '0' + (value / 10);
+    value %= 10;
     *buffer++ = '0' + value;
-    
+
     return buffer;
 }
 
-static char*
-time_write_zero_padded_time_number(char *buffer, int value)
+static char *time_write_zero_padded_time_number(char *buffer, int value)
 {
     yassert(value >= 0 && value <= 99);
-    
+
     if(value >= 10)
     {
         *buffer++ = '0' + (value / 10);
@@ -180,9 +163,9 @@ time_write_zero_padded_time_number(char *buffer, int value)
     {
         *buffer++ = '0';
     }
-    
+
     *buffer++ = '0' + value;
-    
+
     return buffer;
 }
 
@@ -190,27 +173,26 @@ time_write_zero_padded_time_number(char *buffer, int value)
  * Convert time structure into the text format defined by RFC5322 (GMT)
  * Does put a '\0' at the end of the buffer.
  * Requires a buffer of at least 29 bytes.
- * 
+ *
  * @param epoch
  * @param buffer
  * @param buffer_size
- * 
+ *
  * @return the number of chars written or an error
  */
 
-ya_result
-time_tm_as_rfc5322(const struct tm *t, char *buffer, size_t buffer_size)
+ya_result time_tm_as_rfc5322(const struct tm *t, char *buffer, size_t buffer_size)
 {
     if(buffer_size >= 29)
     {
-        const char * const day = time_get_day_of_week_name(t->tm_wday);
+        const char *const day = time_get_day_of_week_name(t->tm_wday);
 
         if(day == NULL)
         {
             return INVALID_ARGUMENT_ERROR;
         }
 
-        const char * const month = time_get_month_of_year_name(t->tm_mon);
+        const char *const month = time_get_month_of_year_name(t->tm_mon);
 
         if(month == NULL)
         {
@@ -222,7 +204,6 @@ time_tm_as_rfc5322(const struct tm *t, char *buffer, size_t buffer_size)
         char *p = time_write_day_time_number(&buffer[5], t->tm_mday);
         *p++ = ' ';
         memcpy(buffer, month, 3);
-        *p++ = ' ';
         p = time_write_year_time_number(p, t->tm_year + 1900);
         *p++ = ' ';
         p = time_write_zero_padded_time_number(p, t->tm_hour);
@@ -230,7 +211,7 @@ time_tm_as_rfc5322(const struct tm *t, char *buffer, size_t buffer_size)
         p = time_write_zero_padded_time_number(p, t->tm_min);
         *p++ = ':';
         p = time_write_zero_padded_time_number(p, t->tm_sec);
-        memcpy(p, " GMT" , 4);
+        memcpy(p, " GMT", 4);
 
         p += 4;
 
@@ -246,16 +227,15 @@ time_tm_as_rfc5322(const struct tm *t, char *buffer, size_t buffer_size)
  * Convert epoch into the text format defined by RFC5322 (GMT)
  * Does put a '\0' at the end of the buffer.
  * Requires a buffer of at least 29 bytes.
- * 
+ *
  * @param epoch
  * @param buffer
  * @param buffer_size
- * 
+ *
  * @return the number of chars written or an error
  */
 
-ya_result
-time_epoch_as_rfc5322(time_t epoch, char *buffer, size_t buffer_size)
+ya_result time_epoch_as_rfc5322(time_t epoch, char *buffer, size_t buffer_size)
 {
     struct tm t;
     gmtime_r(&epoch, &t);
@@ -266,13 +246,8 @@ time_epoch_as_rfc5322(time_t epoch, char *buffer, size_t buffer_size)
 time_t timegm_internal(struct tm *tv)
 {
     time_t ret;
-    
-    if( (tv->tm_year < 0)                   ||
-        (((u32)tv->tm_mon) > 11)            ||
-        (((u32)tv->tm_mday - 1) > 31 - 1)   ||
-        (((u32)tv->tm_hour) > 60)           ||
-        (((u32)tv->tm_min) > 59)            ||
-        (((u32)tv->tm_sec) > 60) )
+
+    if((tv->tm_year < 0) || (((uint32_t)tv->tm_mon) > 11) || (((uint32_t)tv->tm_mday - 1) > 31 - 1) || (((uint32_t)tv->tm_hour) > 60) || (((uint32_t)tv->tm_min) > 59) || (((uint32_t)tv->tm_sec) > 60))
     {
         return -1;
     }
@@ -291,16 +266,7 @@ time_t timegm_internal(struct tm *tv)
 
     yday += tv->tm_mday;
 
-    ret =   tv->tm_sec                       +
-            tv->tm_min               *    60 +
-            tv->tm_hour              *  3600 +
-            (
-                yday                     +
-                ((tv->tm_year-69)/4)     -
-                ((tv->tm_year-1)/100)    +
-                ((tv->tm_year+299)/400)
-            ) * 86400                        +
-            (tv->tm_year-70)         * 31536000;
+    ret = tv->tm_sec + tv->tm_min * 60 + tv->tm_hour * 3600 + (yday + ((tv->tm_year - 69) / 4) - ((tv->tm_year - 1) / 100) + ((tv->tm_year + 299) / 400)) * 86400 + (tv->tm_year - 70) * 31536000;
 
     return ret;
 }
@@ -309,43 +275,61 @@ time_t timegm_internal(struct tm *tv)
  * Return the time in ms
  */
 
-s64
-timeus()
+int64_t timeus()
 {
+#if __unix__
     struct timeval tv;
     gettimeofday(&tv, NULL);
 
-    s64 r = tv.tv_sec;
+    int64_t r = tv.tv_sec;
     r *= 1000000LL;
     r += tv.tv_usec;
-
+#else
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+#if WORDS_BIGENDIAN
+    int64_t r = ft.dwHighDateTime;
+    r <<= 32;
+    r |= ft.dwLowDateTime;
+#else
+    int64_t r = *((int64_t *)&ft);
+#endif
+    r -= 116444736000000000ULL;
+    r /= 10;
+#endif
     return r;
 }
 
-s64
-timeus_and_s(s32 *seconds_ptr)
+int64_t timeus_and_s(int32_t *seconds_ptr)
 {
+#if __unix__
     struct timeval tv;
     gettimeofday(&tv, NULL);
 
     *seconds_ptr = tv.tv_sec;
 
-    s64 r = tv.tv_sec;
+    int64_t r = tv.tv_sec;
     r *= 1000000LL;
     r += tv.tv_usec;
-
+#else
+    int64_t r = timeus();
+    *seconds_ptr = (int32_t)(r / ONE_SECOND_US);
+#endif
     return r;
 }
-s64
-timems()
+int64_t timems()
 {
+#if __unix__
     struct timeval tv;
     gettimeofday(&tv, NULL);
 
-    s64 r = tv.tv_sec;
+    int64_t r = tv.tv_sec;
     r *= 1000;
     r += tv.tv_usec / 1000;
-
+#else
+    int64_t r = timeus();
+    r /= 1000;
+#endif
     return r;
 }
 
@@ -353,13 +337,12 @@ timems()
  * Wait until the ms is incremented, then return the time in ms
  */
 
-s64
-timems_new()
+int64_t timems_new()
 {
-    s64 t;
-    s64 tms;
-    s64 ttr;
-    
+    int64_t t;
+    int64_t tms;
+    int64_t ttr;
+
     t = timeus();
     tms = t / 1000;
 
@@ -367,42 +350,39 @@ timems_new()
     {
         usleep(MIN(1000 - (tms % 1000), 1));
         ttr = timeus() / 1000;
-    }
-    while(ttr == tms);
+    } while(ttr == tms);
 
     return ttr;
 }
 
 #define USLEEP_LIMIT 0xffffffff
-//#define USLEEP_LIMIT 1000000
+// #define USLEEP_LIMIT 1000000
 
 /**
  * usleep only support a limited range of time (sometimes 2^32 us, sometimes < 1 s)
  * This wrapper ensures time supported is up to 4294967295.000000 seconds
- * 
+ *
  * @param us the number of microseconds to wait for, can range from 0 to 4294967295000000 micro seconds
  */
 
-void
-usleep_ex(u64 us_)
+void usleep_ex(uint64_t us_)
 {
-    s64 us = (s64)us_;
-    s64 now = timeus();
-    s64 limit = now + us;
-    
+    int64_t us = (int64_t)us_;
+    int64_t now = timeus();
+    int64_t limit = now + us;
+
     if(us >= USLEEP_LIMIT)
-    {   
+    {
         do
         {
             sleep(us / 1000000);
             now = timeus();
             us = limit - now;
-        }
-        while(us >= USLEEP_LIMIT);
+        } while(us >= USLEEP_LIMIT);
     }
-    
+
     // us is the remaining us to wait for
-    
+
     while(us > 0)
     {
         usleep(us);
@@ -411,10 +391,9 @@ usleep_ex(u64 us_)
     }
 }
 
-void
-usleep_until(s64 epoch_us)
+void usleep_until(int64_t epoch_us)
 {
-    s64 now = timeus();
+    int64_t now = timeus();
     while(now < epoch_us)
     {
         usleep_ex(epoch_us - now);
@@ -423,12 +402,11 @@ usleep_until(s64 epoch_us)
 }
 
 #if __unix__
-time_t
-mkgmtime(const struct tm *tm_)
+time_t mkgmtime(struct tm *const tm_)
 {
 #if defined __FreeBSD__ || defined __OpenBSD__ || _BSD_SOURCE || _SVID_SOURCE
     struct tm tm_copy = *tm_;
-    time_t ret = timegm(&tm_copy);
+    time_t    ret = timegm(&tm_copy);
 #else
     struct tm tm;
     memcpy(&tm, tm_, sizeof(struct tm));
@@ -443,25 +421,19 @@ mkgmtime(const struct tm *tm_)
     return ret;
 }
 #else
-time_t
-mkgmtime(const struct tm* tm_)
-{
-    return _mkgmtime(tm_);
-}
+
+time_t timegm(struct tm *tm) { return timegm_internal(tm); }
+
+time_t mkgmtime(struct tm *const tm_) { return _mkgmtime(tm_); }
 
 #endif
 
-bool
-time_is_leap_year(int y)
-{
-    return (((y & 3) == 0) && (((y % 100) != 0) || ((y % 400) == 0)));
-}
+bool time_is_leap_year(int y) { return (((y & 3) == 0) && (((y % 100) != 0) || ((y % 400) == 0))); }
 
-int
-time_days_in_month(int y, int m)
+int  time_days_in_month(int y, int m)
 {
-    yassert((m >= 0) &&( m < 12) && (y > 1900));
-    
+    yassert((m >= 0) && (m < 12) && (y > 1900));
+
     if(!time_is_leap_year(y))
     {
         return DAYS_IN_MONTH_NORM[m];
@@ -474,19 +446,18 @@ time_days_in_month(int y, int m)
 
 /**
  * Retrieves the first day of the month.
- * 
+ *
  * 0 is Sunday
- * 
+ *
  * @param year 0-based
  * @param month 0-based
  * @return the number of the day of the month or an error code
  */
 
-int
-time_first_day_of_month(int year, int month)
+int time_first_day_of_month(int year, int month)
 {
-    yassert((month >= 0) &&( month < 12) && (year > 1900));
-    
+    yassert((month >= 0) && (month < 12) && (year > 1900));
+
     struct tm tm;
     ZEROMEMORY(&tm, sizeof(struct tm));
     tm.tm_mday = 1;
@@ -497,26 +468,20 @@ time_first_day_of_month(int year, int month)
     return tm.tm_wday;
 }
 
-static s64 timeus_offset = 0;
+static int64_t timeus_offset = 0;
 
 /**
  * Returns timeus() - offset
  * Used to fake the current time.
  */
 
-s64 timeus_with_offset()
-{
-    return timeus() + timeus_offset;
-}
+int64_t timeus_with_offset() { return timeus() + timeus_offset; }
 
 /**
  * Sets the offset of the time returned by timeus_with_offset()
  */
 
-void timeus_set_offset(s64 us)
-{
-    timeus_offset = us;
-}
+void timeus_set_offset(int64_t us) { timeus_offset = us; }
 
 /**
  * Internal tool function for timeus_from_smarttime
@@ -532,11 +497,10 @@ void timeus_set_offset(s64 us)
  * e.g.: "seconds", "msec", ... => PARSEDATE_ERROR
  */
 
-static ya_result
-timeus_tools_unit_name_check(const char* singular, const char* name, const char* name_limit)
+static ya_result timeus_tools_unit_name_check(const char *singular, const char *name, const char *name_limit)
 {
     int n = name_limit - name;
-    for(int i = 1; i < n; ++i)
+    for(int_fast32_t i = 1; i < n; ++i)
     {
         if(singular[i] != name[i])
         {
@@ -569,11 +533,10 @@ timeus_tools_unit_name_check(const char* singular, const char* name, const char*
  *
  */
 
-s64
-timeus_from_smarttime_ex(const char *text, s64 now)
+int64_t timeus_from_smarttime_ex(const char *text, int64_t now)
 {
-    s64 epoch = 0;
-    s64 relative = 0;
+    int64_t   epoch = 0;
+    int64_t   relative = 0;
     ya_result ret;
 
     text = parse_skip_spaces(text);
@@ -593,19 +556,19 @@ timeus_from_smarttime_ex(const char *text, s64 now)
         // keyword
         if(memcmp(text, "now", 3) == 0)
         {
-            //relative = 0;
+            // relative = 0;
             epoch = now;
             return epoch;
         }
         else if(memcmp(text, "tomorrow", 8) == 0)
         {
-            //relative = 0;
+            // relative = 0;
             epoch = now + ONE_SECOND_US * 86400;
             return epoch;
         }
         else if(memcmp(text, "yesterday", 9) == 0)
         {
-            //relative = 0;
+            // relative = 0;
             epoch = now - ONE_SECOND_US * 86400;
             return epoch;
         }
@@ -621,9 +584,9 @@ timeus_from_smarttime_ex(const char *text, s64 now)
         {
             // integer
             const char *limit = parse_skip_digits(text);
-            size_t size = limit - text;
-            s64 value;
-            if(FAIL(ret = parse_u64_check_range_len_base10(text, size, (u64*)&value, 0, 504921600)))    // 0 to 16 years expressed in seconds
+            size_t      size = limit - text;
+            int64_t     value;
+            if(FAIL(ret = parse_u64_check_range_len_base10(text, size, (uint64_t *)&value, 0, 504921600))) // 0 to 16 years expressed in seconds
             {
                 return ret;
             }
@@ -653,7 +616,7 @@ timeus_from_smarttime_ex(const char *text, s64 now)
                         {
                             return ret;
                         }
-                        epoch *= ONE_SECOND_US;
+                        epoch *= 3600LL * ONE_SECOND_US;
                         break;
                     }
                     case 'd': // days
@@ -728,13 +691,13 @@ timeus_from_smarttime_ex(const char *text, s64 now)
             // read 2 digits, skip non digits
             // this is an acceptable value, but if there is more
             // read up to 6 digits
-            u32 year = 0, month = 0, day = 0;
-            u32 hours = 0, minutes = 0, seconds = 0;
-            u32 microseconds = 0;
+            uint32_t year = 0, month = 0, day = 0;
+            uint32_t hours = 0, minutes = 0, seconds = 0;
+            uint32_t microseconds = 0;
 
             // parse year, month and day
 
-            if(FAIL(ret = parse_u32_check_range_len_base10(text, 4, &year, 1970, 2034)))
+            if(FAIL(ret = parse_u32_check_range_len_base10(text, 4, &year, 1970, 2038)))
             {
                 return ret;
             }
@@ -854,10 +817,9 @@ timeus_from_smarttime_ex(const char *text, s64 now)
  *
  */
 
-s64
-timeus_from_smarttime(const char *text)
+int64_t timeus_from_smarttime(const char *text)
 {
-    s64 ret;
+    int64_t ret;
     ret = timeus_from_smarttime_ex(text, timeus());
     return ret;
 }

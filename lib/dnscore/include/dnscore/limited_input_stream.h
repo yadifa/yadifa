@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,46 +28,42 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _LIMITED_INPUT_STREAM_H
-#define	_LIMITED_INPUT_STREAM_H
+#define _LIMITED_INPUT_STREAM_H
 
 #include <dnscore/input_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 /**
- * 
+ *
  * Puts a filter around a stream in order to limit the number of bytes that can be read from it.
- * 
- * @param filtered the input stream that will be filtered (and it's content unusable after filtering)
+ *
  * @param stream   the input stream that'll contain the filter
+ * @param filtered the input stream that will be filtered (and it's content unusable after filtering)
  * @param buffer_size the maximum number of bytes that can be read from the filtered input stream
- * 
+ *
  */
-    
-void limited_input_stream_init(input_stream* filtered,input_stream *stream, u64 stream_size);
 
-#ifdef	__cplusplus
+void limited_input_stream_init(input_stream_t *stream, input_stream_t *filtered, uint64_t stream_size);
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _LIMITED_INPUT_STREAM_H */
+#endif /* _LIMITED_INPUT_STREAM_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

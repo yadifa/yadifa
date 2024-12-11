@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,25 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/checked_output_stream.h"
 
-static void checked_data_update_from_error(checked_output_stream_data_t* data, ya_result ret)
+#ifndef EDQUOT
+#define EDQUOT 255
+#endif
+
+static void checked_data_update_from_error(checked_output_stream_data_t *data, ya_result ret)
 {
     switch(ret)
     {
@@ -69,11 +71,10 @@ static void checked_data_update_from_error(checked_output_stream_data_t* data, y
     }
 }
 
-static ya_result
-checked_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result checked_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
-    checked_output_stream_data_t* data = (checked_output_stream_data_t*)stream->data;
-    ya_result ret = output_stream_write(data->filtered, buffer, len);
+    checked_output_stream_data_t *data = (checked_output_stream_data_t *)stream->data;
+    ya_result                     ret = output_stream_write(data->filtered, buffer, len);
     if(FAIL(ret))
     {
         checked_data_update_from_error(data, ret);
@@ -82,11 +83,10 @@ checked_write(output_stream* stream, const u8* buffer, u32 len)
     return ret;
 }
 
-static ya_result
-checked_flush(output_stream* stream)
+static ya_result checked_flush(output_stream_t *stream)
 {
-    checked_output_stream_data_t* data = (checked_output_stream_data_t*)stream->data;
-    ya_result ret = output_stream_flush(data->filtered);
+    checked_output_stream_data_t *data = (checked_output_stream_data_t *)stream->data;
+    ya_result                     ret = output_stream_flush(data->filtered);
     if(FAIL(ret))
     {
         checked_data_update_from_error(data, ret);
@@ -94,48 +94,38 @@ checked_flush(output_stream* stream)
     return ret;
 }
 
-static void
-checked_close(output_stream* stream)
+static void checked_close(output_stream_t *stream)
 {
     // checked_output_stream_data_t* data = (checked_output_stream_data_t*)stream->data;
-    
+
     output_stream_set_void(stream);
 }
 
-static const output_stream_vtbl checked_output_stream_vtbl ={
+static const output_stream_vtbl checked_output_stream_vtbl = {
     checked_write,
     checked_flush,
     checked_close,
     "checked_output_stream",
 };
 
-static int checked_output_stream_errnos[CHECKED_OUTPUT_STREAM_STATES_COUNT] =
-{
-    MAKE_ERRNO_ERROR(ENOSPC),
-    MAKE_ERRNO_ERROR(EPERM),
-    MAKE_ERRNO_ERROR(EIO),
-    MAKE_ERRNO_ERROR(EFBIG),
-    MAKE_ERRNO_ERROR(EDQUOT),
-    MAKE_ERRNO_ERROR(EBADF)
-};
+static int checked_output_stream_errnos[CHECKED_OUTPUT_STREAM_STATES_COUNT] = {MAKE_ERRNO_ERROR(ENOSPC), MAKE_ERRNO_ERROR(EPERM), MAKE_ERRNO_ERROR(EIO), MAKE_ERRNO_ERROR(EFBIG), MAKE_ERRNO_ERROR(EDQUOT), MAKE_ERRNO_ERROR(EBADF)};
 
-ya_result
-checked_output_stream_error(output_stream* os)
+ya_result  checked_output_stream_error(output_stream_t *os)
 {
     assert(checked_output_stream_instance(os));
 
     output_stream_flush(os); // else a buffering will make all this checking pointless
 
-    checked_output_stream_data_t* data = (checked_output_stream_data_t*)os->data;
+    checked_output_stream_data_t *data = (checked_output_stream_data_t *)os->data;
 
-    u32 state = data->state;
+    uint32_t                      state = data->state;
     if(state == 0)
     {
         return SUCCESS;
     }
     else
     {
-        s32 index = 0;
+        int32_t index = 0;
         while((state & 1) == 0)
         {
             ++index;
@@ -153,12 +143,11 @@ checked_output_stream_error(output_stream* os)
     }
 }
 
-void
-checked_output_stream_init(output_stream* stream, output_stream* filtered, checked_output_stream_data_t* checked_data)
+void checked_output_stream_init(output_stream_t *stream, output_stream_t *filtered, checked_output_stream_data_t *checked_data)
 {
     yassert(filtered != stream);
-    
-    checked_output_stream_data_t* data = checked_data;
+
+    checked_output_stream_data_t *data = checked_data;
 
     data->filtered = filtered;
     data->state = 0;
@@ -167,11 +156,6 @@ checked_output_stream_init(output_stream* stream, output_stream* filtered, check
     stream->vtbl = &checked_output_stream_vtbl;
 }
 
-bool
-checked_output_stream_instance(output_stream *stream)
-{
-    return (stream != NULL) && (stream->vtbl == &checked_output_stream_vtbl);
-}
+bool checked_output_stream_instance(output_stream_t *stream) { return (stream != NULL) && (stream->vtbl == &checked_output_stream_vtbl); }
 
 /** @} */
-

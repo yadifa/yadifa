@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup nsec NSEC functions
- *  @ingroup dnsdbdnssec
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup nsec NSEC functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
- *  
+ *
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _NSEC_COLLECTION_H
-#define	_NSEC_COLLECTION_H
+#define _NSEC_COLLECTION_H
 
 #include <dnsdb/zdb_types.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -59,17 +58,17 @@ extern "C"
  * A structure to hold both children with direct access
  */
 
-typedef struct nsec_node nsec_node;
-
+struct nsec_node_s;
+typedef struct nsec_node_s nsec_node_t;
 
 struct nsec_children
 {
-    struct nsec_node* left;
-    struct nsec_node* right;
+    nsec_node_t *left;
+    nsec_node_t *right;
 };
 
 /*
- * An union to have access to the children with direct or indexed access
+ * A union to have access to the children with direct or indexed access
  */
 
 typedef union nsec_children_union nsec_children_union;
@@ -77,15 +76,15 @@ typedef union nsec_children_union nsec_children_union;
 union nsec_children_union
 {
     struct nsec_children lr;
-    struct nsec_node * child[2];
+    nsec_node_t         *child[2];
 };
 
 typedef union nsec_label_pointer_array nsec_label_pointer_array;
 
 union nsec_label_pointer_array
 {
-    zdb_rr_label* owner;
-    zdb_rr_label** owners;
+    zdb_rr_label_t  *owner;
+    zdb_rr_label_t **owners;
 };
 
 /*
@@ -95,14 +94,14 @@ union nsec_label_pointer_array
 
 #define NSECNODE_TAG 0x45444f4e4345534e
 
-struct nsec_node
+struct nsec_node_s
 {
     union nsec_children_union children;
     /**/
-    struct nsec_node *parent;
+    struct nsec_node_s *parent;
     /**/
-    s8 balance;
-  
+    int8_t balance;
+
     /*
      * The order is defined by the canonisation : I need the full dname (minus the origin)
      *
@@ -112,9 +111,9 @@ struct nsec_node
      * Allocating a constant size for every nsec would cost too much (memory, cache miss & cpu)
      */
 
-    zdb_rr_label *label;
-    
-    u8 *inverse_relative_name;
+    zdb_rr_label_t *label;
+
+    uint8_t        *inverse_relative_name;
 
     /*
      * I'm tempted to add a pointer to the NSEC record here, but it would only help for
@@ -122,7 +121,7 @@ struct nsec_node
      */
 };
 
-typedef struct nsec_node nsec_zone_item;
+typedef struct nsec_node_s nsec_zone_t;
 
 /*
  * AVL definition part begins here
@@ -137,39 +136,39 @@ typedef struct nsec_node nsec_zone_item;
  * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)64
+#define AVL_DEPTH_MAX            52 // 139*10^9 items max (worst case)64
 
 /*
  * The previx that will be put in front of each function name
  */
-#define AVL_PREFIX	nsec_
+#define AVL_PREFIX               nsec_
 
 /*
  * The type that hold the node
  */
-#define AVL_NODE_TYPE   nsec_node
+#define AVL_NODE_TYPE            nsec_node_t
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_TREE_TYPE   AVL_NODE_TYPE*
+#define AVL_TREE_TYPE            AVL_NODE_TYPE *
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_CONST_TREE_TYPE AVL_NODE_TYPE* const
+#define AVL_CONST_TREE_TYPE      AVL_NODE_TYPE *const
 
 /*
  * How to find the root in the tree
  */
-#define AVL_TREE_ROOT(__tree__) (*(__tree__))
+#define AVL_TREE_ROOT(__tree__)  (*(__tree__))
 
 /*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE u8*
-#define AVL_REFERENCE_IS_CONST FALSE
-#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_TYPE       uint8_t *
+#define AVL_REFERENCE_IS_CONST   false
+#define AVL_REFERENCE_IS_POINTER true
 
 /*
  * The node has got a pointer to its parent
@@ -177,22 +176,22 @@ typedef struct nsec_node nsec_zone_item;
  * 0   : disable
  * !=0 : enable
  */
-#define AVL_HAS_PARENT_POINTER 1
+#define AVL_HAS_PARENT_POINTER   1
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
 #include <dnscore/avl.h.inc>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-AVL_NODE_TYPE* AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash);
+AVL_NODE_TYPE *AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE *tree, AVL_REFERENCE_TYPE obj_hash);
 
-AVL_NODE_TYPE* AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash);
+AVL_NODE_TYPE *AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE *root, const AVL_REFERENCE_TYPE obj_hash);
 
 /*
  * I recommend setting a define to identify the C part of the template
@@ -203,7 +202,7 @@ AVL_NODE_TYPE* AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, c
 
 #ifndef _NSEC_COLLECTION_C
 
-#undef AVL_MAX_DEPTH
+#undef AVL_DEPTH_MAX
 #undef AVL_PREFIX
 #undef AVL_NODE_TYPE
 #undef AVL_TREE_TYPE
@@ -216,9 +215,9 @@ AVL_NODE_TYPE* AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, c
 
 #undef _AVL_H_INC
 
-#endif	/* _NSEC_COLLECTION_C */
+#endif /* _NSEC_COLLECTION_C */
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
@@ -226,9 +225,6 @@ AVL_NODE_TYPE* AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, c
  * AVL definition part ends here
  */
 
-#endif	/* _NSEC_COLLECTION_H */
+#endif /* _NSEC_COLLECTION_H */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

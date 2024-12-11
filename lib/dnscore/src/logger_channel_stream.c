@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <dnscore/thread.h>
@@ -59,21 +57,20 @@ typedef struct stream_data stream_data;
 
 struct stream_data
 {
-    output_stream os;
-    bool force_flush;
+    output_stream_t os;
+    bool            force_flush;
 };
 
-static ya_result
-logger_channel_stream_constmsg(logger_channel* chan, int level, char* text, u32 text_len, u32 date_offset)
+static ya_result logger_channel_stream_constmsg(logger_channel_t *chan, int level, char *text, uint32_t text_len, uint32_t date_offset)
 {
     (void)level;
     (void)date_offset;
 
-    stream_data* sd = (stream_data*)chan->data;
+    stream_data *sd = (stream_data *)chan->data;
 
-    output_stream_write(&sd->os, (const u8*)text, text_len);
+    output_stream_write(&sd->os, (const uint8_t *)text, text_len);
 
-    ya_result ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
+    ya_result ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
 
     if(sd->force_flush)
     {
@@ -83,16 +80,16 @@ logger_channel_stream_constmsg(logger_channel* chan, int level, char* text, u32 
     return ret;
 }
 
-static ya_result
-logger_channel_stream_vmsg(logger_channel* chan, int level, char* text, va_list args)
+#if DNSCORE_LOGGER_CHANNEL_HAS_VMSG
+static ya_result logger_channel_stream_vmsg(logger_channel_t *chan, int level, char *text, va_list args)
 {
     (void)level;
 
-    stream_data* sd = (stream_data*)chan->data;
+    stream_data *sd = (stream_data *)chan->data;
 
     vosformat(&sd->os, text, args);
 
-    ya_result ret = output_stream_write(&sd->os, (const u8*)"\n", 1);
+    ya_result ret = output_stream_write(&sd->os, (const uint8_t *)"\n", 1);
 
     if(sd->force_flush)
     {
@@ -101,9 +98,10 @@ logger_channel_stream_vmsg(logger_channel* chan, int level, char* text, va_list 
 
     return ret;
 }
+#endif
 
-static ya_result
-logger_channel_stream_msg(logger_channel* chan, int level, char* text, ...)
+#if DNSCORE_LOGGER_CHANNEL_HAS_MSG
+static ya_result logger_channel_stream_msg(logger_channel_t *chan, int level, char *text, ...)
 {
     va_list args;
     va_start(args, text);
@@ -114,19 +112,18 @@ logger_channel_stream_msg(logger_channel* chan, int level, char* text, ...)
 
     return ret;
 }
+#endif
 
-static void
-logger_channel_stream_flush(logger_channel* chan)
+static void logger_channel_stream_flush(logger_channel_t *chan)
 {
-    stream_data* sd = (stream_data*)chan->data;
+    stream_data *sd = (stream_data *)chan->data;
 
     output_stream_flush(&sd->os);
 }
 
-static void
-logger_channel_stream_close(logger_channel* chan)
+static void logger_channel_stream_close(logger_channel_t *chan)
 {
-    stream_data* sd = (stream_data*)chan->data;
+    stream_data *sd = (stream_data *)chan->data;
 
     output_stream_flush(&sd->os);
     output_stream_close(&sd->os);
@@ -139,11 +136,10 @@ logger_channel_stream_close(logger_channel* chan)
     chan->data = NULL;
 }
 
-static ya_result
-logger_channel_stream_reopen(logger_channel* chan)
+static ya_result logger_channel_stream_reopen(logger_channel_t *chan)
 {
-    stream_data* sd = (stream_data*)chan->data;
-    
+    stream_data *sd = (stream_data *)chan->data;
+
     // there is no way to reopen a steam, simply flush its current contents
 
     output_stream_flush(&sd->os);
@@ -151,39 +147,35 @@ logger_channel_stream_reopen(logger_channel* chan)
     return SUCCESS;
 }
 
-static void
-logger_channel_steam_sync(logger_channel* chan)
-{
-    (void)chan;
-}
+static void                      logger_channel_steam_sync(logger_channel_t *chan) { (void)chan; }
 
-static const logger_channel_vtbl stream_vtbl =
-{
-    logger_channel_stream_constmsg,
-    logger_channel_stream_msg,    
-    logger_channel_stream_vmsg,
-    logger_channel_stream_flush,
-    logger_channel_stream_close,
-    logger_channel_stream_reopen,
-    logger_channel_steam_sync,
-    "stream_channel"
-};
+static const logger_channel_vtbl stream_vtbl = {logger_channel_stream_constmsg,
+#if DNSCORE_LOGGER_CHANNEL_HAS_MSG
+                                                logger_channel_stream_msg,
+#endif
+#if DNSCORE_LOGGER_CHANNEL_HAS_VMSG
+                                                logger_channel_stream_vmsg,
+#endif
+                                                logger_channel_stream_flush,
+                                                logger_channel_stream_close,
+                                                logger_channel_stream_reopen,
+                                                logger_channel_steam_sync,
+                                                "stream_channel"};
 
 /*
  * Takes ownership of the stream.
  * The stream will be unusable by the caller at the return of this function
  */
 
-void
-logger_channel_stream_open(output_stream* os, bool forceflush, logger_channel* chan)
+void logger_channel_stream_open(output_stream_t *os, bool forceflush, logger_channel_t *chan)
 {
     if(chan == NULL)
     {
         osformatln(termerr, "tried to open stream on uninitialised channel");
         return;
     }
-    
-    stream_data* sd;
+
+    stream_data *sd;
     MALLOC_OBJECT_OR_DIE(sd, stream_data, 0x4d5254534e414843); /* CHANSTRM */
 
     sd->os.data = os->data;

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,26 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #if _FILE_OFFSET_BITS != 64
 #define _LARGEFILE64_SOURCE
 #endif
 
-
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -58,18 +55,18 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/timems.h"
 
-#define FILE_INPUT_STREAM_FD_GET(stream___) ((int)(intptr_t)((stream___)->data))
-#define FILE_INPUT_STREAM_FD_SET(stream___,fd___) (stream___)->data = (void*)(intptr_t)fd___;
+#define FILE_INPUT_STREAM_FD_GET(stream___)        ((int)(intptr_t)((stream___)->data))
+#define FILE_INPUT_STREAM_FD_SET(stream___, fd___) (stream___)->data = (void *)(intptr_t)fd___;
 
 #if DEBUG_BENCH_FD
-static debug_bench_s debug_read;
-static bool file_input_stream_debug_bench_register_done = FALSE;
+static debug_bench_t debug_read;
+static bool          file_input_stream_debug_bench_register_done = false;
 
-static inline void file_input_stream_debug_bench_register()
+static inline void   file_input_stream_debug_bench_register()
 {
     if(!file_input_stream_debug_bench_register_done)
     {
-        file_input_stream_debug_bench_register_done = TRUE;
+        file_input_stream_debug_bench_register_done = true;
         debug_bench_register(&debug_read, "read");
     }
 }
@@ -79,19 +76,18 @@ static inline void file_input_stream_debug_bench_register()
  * Maybe I should not do a "read-fully" here ...
  */
 
-static ya_result
-file_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
+static ya_result file_input_stream_read(input_stream_t *stream_, void *buffer_, uint32_t len)
 {
 #if DEBUG_BENCH_FD
     file_input_stream_debug_bench_register();
-    u64 bench = debug_bench_start(&debug_read);
+    uint64_t bench = debug_bench_start(&debug_read);
 #endif
-    
-    u8 *buffer = (u8*)buffer_;
-    
-    int fd = FILE_INPUT_STREAM_FD_GET(stream_);
 
-    u8* start = buffer;
+    uint8_t *buffer = (uint8_t *)buffer_;
+
+    int      fd = FILE_INPUT_STREAM_FD_GET(stream_);
+
+    uint8_t *start = buffer;
 
     while(len > 0)
     {
@@ -108,14 +104,14 @@ file_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
             {
                 continue;
             }
-            
+
 #if DEBUG
             if(err == EBADF)
             {
                 fprintf(stderr, "bad file descriptor %i", fd);
             }
 #endif
-            
+
             if(buffer - start > 0)
             {
                 return buffer - start;
@@ -133,7 +129,7 @@ file_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
         buffer += ret;
         len -= ret;
     }
-    
+
 #if DEBUG_BENCH_FD
     debug_bench_stop(&debug_read, bench);
 #endif
@@ -141,29 +137,23 @@ file_input_stream_read(input_stream* stream_, void* buffer_, u32 len)
     return buffer - start;
 }
 
-static void
-file_input_stream_close(input_stream* stream_)
+static void file_input_stream_close(input_stream_t *stream_)
 {
     int fd = FILE_INPUT_STREAM_FD_GET(stream_);
-    
-    assert((fd < 0)||(fd >2));
-    
+
+    assert((fd < 0) || (fd > 2));
+
     if(fd != -1)
     {
         close_ex(fd);
     }
-    
+
     input_stream_set_void(stream_);
 }
 
-static void
-file_input_stream_noclose(input_stream* stream_)
-{
-    input_stream_set_void(stream_);
-}
+static void      file_input_stream_noclose(input_stream_t *stream_) { input_stream_set_void(stream_); }
 
-static ya_result
-file_input_stream_skip(input_stream* stream_, u32 len)
+static ya_result file_input_stream_skip(input_stream_t *stream_, uint32_t len)
 {
     int fd = FILE_INPUT_STREAM_FD_GET(stream_);
     if(lseek(fd, len, SEEK_CUR) >= 0)
@@ -174,24 +164,11 @@ file_input_stream_skip(input_stream* stream_, u32 len)
     return ERRNO_ERROR;
 }
 
-static const input_stream_vtbl file_input_stream_vtbl =
-{
-    file_input_stream_read,
-    file_input_stream_skip,
-    file_input_stream_close,
-    "file_input_stream"
-};
+static const input_stream_vtbl file_input_stream_vtbl = {file_input_stream_read, file_input_stream_skip, file_input_stream_close, "file_input_stream"};
 
-static const input_stream_vtbl file_input_stream_noclose_vtbl =
-{
-    file_input_stream_read,
-    file_input_stream_skip,
-    file_input_stream_noclose,
-    "file_input_stream-noclose"
-};
+static const input_stream_vtbl file_input_stream_noclose_vtbl = {file_input_stream_read, file_input_stream_skip, file_input_stream_noclose, "file_input_stream-noclose"};
 
-ya_result
-fd_input_stream_attach(input_stream *stream_, int fd)
+ya_result                      fd_input_stream_attach(input_stream_t *stream_, int fd)
 {
     if(fd < 0)
     {
@@ -204,8 +181,7 @@ fd_input_stream_attach(input_stream *stream_, int fd)
     return SUCCESS;
 }
 
-ya_result
-fd_input_stream_attach_noclose(input_stream *stream_, int fd)
+ya_result fd_input_stream_attach_noclose(input_stream_t *stream_, int fd)
 {
     if(fd < 0)
     {
@@ -218,18 +194,13 @@ fd_input_stream_attach_noclose(input_stream *stream_, int fd)
     return SUCCESS;
 }
 
-void
-fd_input_stream_detach(input_stream *stream_)
-{
-    FILE_INPUT_STREAM_FD_SET(stream_, -1);
-}
+void      fd_input_stream_detach(input_stream_t *stream_) { FILE_INPUT_STREAM_FD_SET(stream_, -1); }
 
-ya_result
-file_input_stream_open(input_stream *stream_, const char *filename)
+ya_result file_input_stream_open(input_stream_t *stream_, const char *filename)
 {
-    int fd = open_ex(filename, O_RDONLY|O_CLOEXEC);
-    
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+    int fd = open_ex(filename, O_RDONLY | O_CLOEXEC);
+
+#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     if(fd >= 0)
     {
         posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
@@ -239,12 +210,11 @@ file_input_stream_open(input_stream *stream_, const char *filename)
     return fd_input_stream_attach(stream_, fd);
 }
 
-ya_result
-file_input_stream_open_ex(input_stream *stream_, const char *filename, int flags)
+ya_result file_input_stream_open_ex(input_stream_t *stream_, const char *filename, int flags)
 {
-    int fd = open_ex(filename, O_RDONLY|O_CLOEXEC| flags);
-    
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+    int fd = open_ex(filename, O_RDONLY | O_CLOEXEC | flags);
+
+#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     if(fd >= 0)
     {
         posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
@@ -254,14 +224,9 @@ file_input_stream_open_ex(input_stream *stream_, const char *filename, int flags
     return fd_input_stream_attach(stream_, fd);
 }
 
-ya_result
-fd_input_stream_get_filedescriptor(input_stream* stream_)
-{
-    return FILE_INPUT_STREAM_FD_GET(stream_);
-}
+ya_result fd_input_stream_get_filedescriptor(input_stream_t *stream_) { return FILE_INPUT_STREAM_FD_GET(stream_); }
 
-ya_result
-fd_input_stream_seek(input_stream* stream_, u64 offset)
+ya_result fd_input_stream_seek(input_stream_t *stream_, uint64_t offset)
 {
     if(is_fd_input_stream(stream_))
     {
@@ -289,16 +254,11 @@ fd_input_stream_seek(input_stream* stream_, u64 offset)
     }
 }
 
-bool
-is_fd_input_stream(input_stream* stream_)
-{
-    return (stream_ != NULL) && (stream_->vtbl->read == file_input_stream_read);
-}
+bool is_fd_input_stream(input_stream_t *stream_) { return (stream_ != NULL) && (stream_->vtbl->read == file_input_stream_read); }
 
-void
-file_input_steam_advise_sequential(input_stream* stream_)
+void file_input_steam_advise_sequential(input_stream_t *stream_)
 {
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu_hurd__)
+#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu_hurd__)
     int fd = FILE_INPUT_STREAM_FD_GET(stream_);
     if(fd >= 0)
     {

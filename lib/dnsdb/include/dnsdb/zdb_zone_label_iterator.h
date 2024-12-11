@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to iterate through the labels of a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to iterate through the labels of a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _ZDB_ZONE_LABEL_ITERATOR_H
-#define	_ZDB_ZONE_LABEL_ITERATOR_H
+#define _ZDB_ZONE_LABEL_ITERATOR_H
 
 #include <dnsdb/zdb_types.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -59,7 +58,7 @@ extern "C"
  *
  */
 
-void zdb_zone_label_iterator_init(zdb_zone_label_iterator* iter, const zdb_zone* zone);
+void zdb_zone_label_iterator_init(const zdb_zone_t *zone, zdb_zone_label_iterator_t *iter);
 
 /**
  * @brief Initializes a zone label iterator from a given starting name
@@ -72,7 +71,7 @@ void zdb_zone_label_iterator_init(zdb_zone_label_iterator* iter, const zdb_zone*
  *
  */
 
-void zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_zone* zone, const u8 *from_name);
+void zdb_zone_label_iterator_init_from(zdb_zone_label_iterator_t *iter, const zdb_zone_t *zone, const uint8_t *from_name);
 /**
  * @brief Checks if there is still data available from an iterator
  *
@@ -80,11 +79,11 @@ void zdb_zone_label_iterator_init_from(zdb_zone_label_iterator* iter, const zdb_
  *
  * @param[in] iter a pointer to the iterator
  *
- * @return TRUE if data is available, FALSE otherwise.
+ * @return true if data is available, false otherwise.
  *
  */
 
-bool zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator* iter);
+bool zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator_t *iter);
 
 /**
  * @brief Copies the full name of the next label returned by the "next" call.
@@ -100,8 +99,8 @@ bool zdb_zone_label_iterator_hasnext(zdb_zone_label_iterator* iter);
  *
  */
 
-u32 zdb_zone_label_iterator_nextname_to_cstr(zdb_zone_label_iterator* iter, char* buffer256);
-u32 zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer256);
+uint32_t zdb_zone_label_iterator_nextname_to_cstr(zdb_zone_label_iterator_t *iter, char *buffer256);
+uint32_t zdb_zone_label_iterator_nextname(zdb_zone_label_iterator_t *iter, uint8_t *buffer256);
 
 /**
  * @brief Returns the next data available from an iterator
@@ -114,7 +113,7 @@ u32 zdb_zone_label_iterator_nextname(zdb_zone_label_iterator* iter, u8* buffer25
  *
  */
 
-zdb_rr_label* zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter);
+zdb_rr_label_t *zdb_zone_label_iterator_next(zdb_zone_label_iterator_t *iter);
 
 #if ZDB_ZONE_LABEL_ITERATOR_CAN_SKIP_CHILDREN
 
@@ -127,14 +126,14 @@ zdb_rr_label* zdb_zone_label_iterator_next(zdb_zone_label_iterator* iter);
  *
  */
 
-void zdb_zone_label_skip_children(zdb_zone_label_iterator* iter);
+void zdb_zone_label_skip_children(zdb_zone_label_iterator *iter);
 
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _ZDB_ITERATOR_H */
+#endif /* _ZDB_ITERATOR_H */
 
 /** @} */

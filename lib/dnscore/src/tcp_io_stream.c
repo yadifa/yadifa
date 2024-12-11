@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -58,8 +57,8 @@
 
 #define DNSCORE_TCP_FLAGS "DNSCORE_TCP_FLAGS"
 // nodelay,delay,cork,nocork
-static bool tcp_nodelay = TRUE;
-static bool tcp_cork = FALSE;
+static bool tcp_nodelay = true;
+static bool tcp_cork = false;
 
 /*
  * AF_INET
@@ -68,18 +67,17 @@ static bool tcp_cork = FALSE;
  */
 
 /**
- * 
+ *
  * Resolves the host address
- * 
+ *
  * @param host
  * @param port
  * @param sa
  * @param familly
- * @return 
+ * @return
  */
 
-ya_result
-gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
+ya_result gethostaddr(const char *host, uint16_t port, struct sockaddr *sa, int familly)
 {
     /*    ------------------------------------------------------------    */
 
@@ -89,10 +87,10 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
 
     /* If not forced in ipv6 then ... */
 
-    struct addrinfo hints;
+    struct addrinfo  hints;
     struct addrinfo *info;
     struct addrinfo *next;
-    int eai_err;
+    int              eai_err;
 
     ZEROMEMORY(&hints, sizeof(struct addrinfo));
 
@@ -146,15 +144,14 @@ gethostaddr(const char* host, u16 port, struct sockaddr *sa, int familly)
     return SUCCESS;
 }
 
-ya_result
-tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec)
+ya_result tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream_t *istream_, output_stream_t *ostream_, struct sockaddr *bind_from, uint8_t to_sec)
 {
     int fd;
 
-    while((fd = socket(sa->sa_family, SOCK_STREAM, 0)) < 0)
+    while((fd = socket(sa->sa_family, SOCK_STREAM, SOCKET_PROTOCOL_FROM_TYPE(SOCK_STREAM))) < 0)
     {
         int err = errno;
-        
+
         if(err != EINTR)
         {
             return MAKE_ERRNO_ERROR(err); // scan-build does not understand this make the value signed
@@ -162,16 +159,16 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
     }
 
     fd_setcloseonexec(fd);
-    
+
     /*
      * Bind the socket if required.
      */
 
     if(bind_from != NULL)
     {
-        s64 try_until = (to_sec > 0)?timeus() + (ONE_SECOND_US * to_sec):MAX_S64;
+        int64_t try_until = (to_sec > 0) ? timeus() + (ONE_SECOND_US * to_sec) : S64_MAX;
 
-        while((bind(fd, bind_from, sizeof(socketaddress))) < 0)
+        while((bind(fd, bind_from, sizeof(socketaddress_t))) < 0)
         {
             int err = errno;
 
@@ -184,7 +181,7 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
             {
                 if(try_until >= timeus())
                 {
-                    close_ex(fd);
+                    socketclose_ex(fd);
 
                     return MAKE_ERRNO_ERROR(err);
                 }
@@ -194,7 +191,7 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
                 }
             }
 
-            close_ex(fd);
+            socketclose_ex(fd);
 
             return MAKE_ERRNO_ERROR(err);
         }
@@ -207,37 +204,39 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
 
     tcp_set_sendtimeout(fd, to_sec, 0);
     tcp_set_recvtimeout(fd, to_sec, 0);
-    
+
     tcp_set_nodelay(fd, tcp_nodelay);
     tcp_set_cork(fd, tcp_cork);
 
 #if HAS_SOCKADDR_SA_LEN
     while(connect(fd, sa, sa->sa_len) < 0)
+#elif __FreeBSD__
+    while(connect(fd, sa, sockaddr_len(sa)) < 0)
 #else
-    while(connect(fd, sa, sizeof(socketaddress)) < 0)
+    while(connect(fd, sa, sizeof(socketaddress_t)) < 0)
 #endif
     {
         int err = errno;
-        
+
         if(err != EINTR)
         {
-            close_ex(fd);
+            socketclose_ex(fd);
 
             // note: EADDRNOTAVAIL here basically means the network is overloaded
-            
+
             // Linux quirk
-            
+
             if(err == EINPROGRESS)
             {
                 err = ETIMEDOUT;
             }
-            
+
             return MAKE_ERRNO_ERROR(err);
         }
     }
-    
+
     /* can only fail if fd < 0, which is never the case here */
-    
+
     fd_input_stream_attach(istream_, fd);
     fd_output_stream_attach_noclose(ostream_, fd);
 
@@ -247,11 +246,10 @@ tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream
     return fd;
 }
 
-ya_result
-tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec)
+ya_result tcp_input_output_stream_connect_ex(const char *server, uint16_t port, input_stream_t *istream_, output_stream_t *ostream_, struct sockaddr *bind_from, uint8_t to_sec)
 {
-    ya_result return_code;
-    socketaddress sa;
+    ya_result       return_code;
+    socketaddress_t sa;
 
     /*
      * If the client interface is specified, then use its family.
@@ -268,19 +266,14 @@ tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *i
     return return_code;
 }
 
-ya_result
-tcp_input_output_stream_connect(const char *server, u16 port, input_stream *istream, output_stream *ostream)
-{
-    return tcp_input_output_stream_connect_ex(server, port, istream, ostream, NULL, 0);
-}
+ya_result tcp_input_output_stream_connect(const char *server, uint16_t port, input_stream_t *istream, output_stream_t *ostream) { return tcp_input_output_stream_connect_ex(server, port, istream, ostream, NULL, 0); }
 
-ya_result
-tcp_input_output_stream_connect_host_address(const host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec)
+ya_result tcp_input_output_stream_connect_host_address(const host_address_t *ha, input_stream_t *istream_, output_stream_t *ostream_, uint8_t to_sec)
 {
-    socketaddress sa;
-    
-    ya_result return_code;
-    
+    socketaddress_t sa;
+
+    ya_result       return_code;
+
     if(ISOK(return_code = host_address2sockaddr(ha, &sa)))
     {
         return_code = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, NULL, to_sec);
@@ -289,37 +282,40 @@ tcp_input_output_stream_connect_host_address(const host_address *ha, input_strea
     return return_code;
 }
 
-ya_result
-tcp_input_output_stream_connect_host_address_ex(const host_address *ha, input_stream *istream_, output_stream *ostream_, const host_address *bind_to, u8 to_sec)
+ya_result tcp_input_output_stream_connect_host_address_ex(const host_address_t *ha, input_stream_t *istream_, output_stream_t *ostream_, const host_address_t *bind_to, uint8_t to_sec)
 {
-    socketaddress sa;
-    socketaddress bind_sa;
+    socketaddress_t sa;
+    socketaddress_t bind_sa;
 
-    ya_result return_code;
+    ya_result       ret;
 
-    if(ISOK(return_code = host_address2sockaddr(ha, &sa)))
+    if(ISOK(ret = host_address2sockaddr(ha, &sa)))
     {
-        if(ISOK(return_code = host_address2sockaddr(bind_to, &bind_sa)))
+        struct sockaddr *bind_to_sa = NULL;
+        if(bind_to != NULL)
         {
-            return_code = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, &bind_sa.sa, to_sec);
+            if(FAIL(ret = host_address2sockaddr(bind_to, &bind_sa)))
+            {
+                return ret;
+            }
+            bind_to_sa = &bind_sa.sa;
         }
+        ret = tcp_input_output_stream_connect_sockaddr(&sa.sa, istream_, ostream_, bind_to_sa, to_sec);
     }
 
-    return return_code;
+    return ret;
 }
 
-
-ya_result
-tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct sockaddr *bind_from)
+ya_result tcp_io_stream_connect_ex(const char *server, uint16_t port, io_stream_t *ios, struct sockaddr *bind_from)
 {
-    input_stream istream;
-    output_stream ostream;
-    
+    input_stream_t  istream;
+    output_stream_t ostream;
+
 #if DEBUG
-    input_stream_set_void(&istream);    // this should shut-up a false-positive from scan-build
+    input_stream_set_void(&istream); // this should shut-up a false-positive from scan-build
     output_stream_set_void(&ostream);
 #endif
-    
+
     ya_result return_code;
 
     if(ISOK(return_code = tcp_input_output_stream_connect_ex(server, port, &istream, &ostream, bind_from, 0)))
@@ -330,18 +326,12 @@ tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct so
     return return_code;
 }
 
-ya_result
-tcp_io_stream_connect(const char *server, u16 port, io_stream *ios)
-{
-    return tcp_io_stream_connect_ex(server, port, ios, NULL);
-}
+ya_result tcp_io_stream_connect(const char *server, uint16_t port, io_stream_t *ios) { return tcp_io_stream_connect_ex(server, port, ios, NULL); }
 
-
-void
-tcp_set_linger(int fd, bool enable, int seconds)
+void      tcp_set_linger(int fd, bool enable, int seconds)
 {
     struct linger l;
-    l.l_onoff = (enable)?1:0;
+    l.l_onoff = (enable) ? 1 : 0;
     l.l_linger = seconds;
 
     setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
@@ -349,15 +339,15 @@ tcp_set_linger(int fd, bool enable, int seconds)
 
 /**
  * Nagle
- * 
+ *
  * @param fd
  * @param enable
  */
 void tcp_set_nodelay(int fd, bool enable)
 {
-    int flag = (enable)?1:0;
+    int flag = (enable) ? 1 : 0;
 
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag) );
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 }
 
 #if defined(__linux__)
@@ -368,9 +358,9 @@ void tcp_set_nodelay(int fd, bool enable)
  */
 void tcp_set_cork(int fd, bool enable)
 {
-    int flag = (enable)?1:0;
+    int flag = (enable) ? 1 : 0;
 
-    setsockopt(fd, IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag) );
+    setsockopt(fd, IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag));
 }
 
 #elif defined(__FreeBSD__)
@@ -380,13 +370,13 @@ void tcp_set_cork(int fd, bool enable)
  * @param enable
  */
 
-//#error THIS NEEDS TO BE TESTED ON BSD (This error message is to remind you that)
+// #error THIS NEEDS TO BE TESTED ON BSD (This error message is to remind you that)
 
 void tcp_set_cork(int fd, bool enable)
 {
-    int flag = (enable)?1:0;
+    int flag = (enable) ? 1 : 0;
 
-    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag) );
+    setsockopt(fd, IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag));
 }
 
 #else
@@ -400,8 +390,9 @@ void tcp_set_cork(int fd, bool enable)
 
 #endif
 
-void
-tcp_set_sendtimeout(int fd, int seconds, int useconds)
+#if __unix__
+
+void tcp_set_sendtimeout(int fd, int seconds, int useconds)
 {
     struct timeval tv;
     tv.tv_sec = seconds;
@@ -409,8 +400,7 @@ tcp_set_sendtimeout(int fd, int seconds, int useconds)
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 }
 
-void
-tcp_set_recvtimeout(int fd, int seconds, int useconds)
+void tcp_set_recvtimeout(int fd, int seconds, int useconds)
 {
     struct timeval tv;
     tv.tv_sec = seconds;
@@ -418,44 +408,67 @@ tcp_set_recvtimeout(int fd, int seconds, int useconds)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 }
 
-void
-tcp_get_sendtimeout(int fd, int *seconds, int *useconds)
+void tcp_get_sendtimeout(int fd, int *seconds, int *useconds)
 {
     struct timeval tv;
-    socklen_t tv_len = sizeof(tv);
+    socklen_t      tv_len = sizeof(tv);
     getsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, &tv_len);
     *seconds = tv.tv_sec;
     *useconds = tv.tv_usec;
 }
 
-void
-tcp_get_recvtimeout(int fd, int *seconds, int *useconds)
+void tcp_get_recvtimeout(int fd, int *seconds, int *useconds)
 {
     struct timeval tv;
-    socklen_t tv_len = sizeof(tv);
+    socklen_t      tv_len = sizeof(tv);
     getsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, &tv_len);
     *seconds = tv.tv_sec;
     *useconds = tv.tv_usec;
 }
+#else
 
-static const char* tcp_env_keywords[4] =
+void tcp_set_sendtimeout(int fd, int seconds, int useconds)
 {
-    "nodelay",
-    "delay",
-    "cork",
-    "nocork"
-};
+    LONG tv = seconds * 1000 + useconds / 1000; // milliseconds
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+}
 
-void
-tcp_init_with_env()
+void tcp_set_recvtimeout(int fd, int seconds, int useconds)
 {
-    char tmp[256];
-    
-    const char* tcp_flags_cfg = getenv(DNSCORE_TCP_FLAGS);
-    
+    LONG tv = seconds * 1000 + useconds / 1000; // milliseconds
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+}
+
+void tcp_get_sendtimeout(int fd, int *seconds, int *useconds)
+{
+    LONG      tv;
+    socklen_t tv_len = sizeof(tv);
+    getsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, &tv_len);
+    *seconds = tv / 1000;
+    *useconds = (tv % 1000) * 1000;
+}
+
+void tcp_get_recvtimeout(int fd, int *seconds, int *useconds)
+{
+    LONG      tv;
+    socklen_t tv_len = sizeof(tv);
+    getsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, &tv_len);
+    *seconds = tv / 1000;
+    *useconds = (tv % 1000) * 1000;
+}
+#endif
+
+static const char *tcp_env_keywords[4] = {"nodelay", "delay", "cork", "nocork"};
+
+void               tcp_init_with_env()
+{
+    char        tmp[256];
+
+    const char *tcp_flags_cfg = getenv(DNSCORE_TCP_FLAGS);
+
     if(tcp_flags_cfg != NULL)
     {
-        strcpy_ex(tmp, tcp_flags_cfg, sizeof(tmp)-1);
+        strcpy_ex(tmp, tcp_flags_cfg, sizeof(tmp) - 1);
         tmp[sizeof(tmp) - 1] = '\0';
         size_t tmp_len = strlen(tmp);
         for(size_t i = 0; i < tmp_len; i++)
@@ -465,45 +478,44 @@ tcp_init_with_env()
                 tmp[i] = ' ';
             }
         }
-        
+
         const char *p = parse_skip_spaces(tmp);
-       
+
         while(*p != '\0')
         {
-            s32 keyword = -1;
-            
-            s32 word_len = parse_skip_word_specific(p, strlen(p), tcp_env_keywords, 4, &keyword);
-            
+            int32_t keyword = -1;
+
+            int32_t word_len = parse_skip_word_specific(p, strlen(p), tcp_env_keywords, 4, &keyword);
+
             if(FAIL(word_len))
             {
                 break;
             }
-            
-            switch(keyword)       
+
+            switch(keyword)
             {
                 case 0: // nodelay
-                    tcp_nodelay = TRUE;
+                    tcp_nodelay = true;
                     break;
                 case 1: // delay
-                    tcp_nodelay = FALSE;
+                    tcp_nodelay = false;
                     break;
                 case 2: // cork
-                    tcp_cork = TRUE;
+                    tcp_cork = true;
                     break;
                 case 3: // nocork
-                    tcp_cork = FALSE;
+                    tcp_cork = false;
                     break;
                 default:
                     osformatln(termerr, "syntax error in env %s", DNSCORE_TCP_FLAGS);
                     flusherr();
                     break;
             }
-            
+
             p += word_len;
             p = parse_skip_spaces(p);
         }
     }
 }
-
 
 /** @} */

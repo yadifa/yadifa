@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD\-CONF" "5" "2024\-07\-19" "YADIFA " "YADIFA "
+.TH "YADIFAD\-CONF" "5" "2024\-12\-11" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -747,7 +747,7 @@ records
 \fBprimaries; primary; masters; master \fP\fIHOSTS \fP
  default: \- 
 
-Mandatory for a slave. Sets the primary server(s). Multiple primaries are supported. 
+Mandatory for a secondary. Sets the primary server(s). Multiple primaries are supported.
 .TP
 \fBmultiprimary\-retries; multimaster\-retries \fP\fIINT \fP
  default: 0 
@@ -1247,7 +1247,7 @@ Main section example
     serverid                "yadifad\-01"
 
     # The version returned by a query to version.yadifa. CH TXT (alias: version\-chaos)
-    version                 2.5.0
+    version                 {3.0.0}
 
     # Set the maximum UDP packet size.  
     # note: the packetsize cannot be less than 512 or more than 65535.
@@ -1308,7 +1308,7 @@ Main section example
     # allow\-update none
     allow\-update            admins
 
-    # dynamic update of a slave (forwarded to the primary)
+    # dynamic update of a secondary (forwarded to the primary)
     #
     # allow\-update\-forwarding   none
     allow\-update\-forwarding admins,key abroad\-admin\-key
@@ -1542,7 +1542,7 @@ Slave domain zone config
     # The domain name (mandatory)
     domain          myotherdomain.eu
 
-    # The address of the primary (mandatory for a slave, forbidden for a primary) (alias: primary)
+    # The address of the primary (mandatory for a secondary, forbidden for a primary) (alias: primary)
     primaries       191.0.2.53 port 4053 key primary\-secondary
 
     # The zone file, relative to 'datapath'.
@@ -1831,7 +1831,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 2.6.7 of 2024\-07\-19. 
+Version: 3.0.0 of 2024\-12\-11. 
 .PP
 .SH MAILING LISTS
 
@@ -1863,7 +1863,7 @@ via:
 .PP
 .TP
 Copyright 
-(C)2011\-2023, EURid
+(C)2011\-2023", EURid
 .br
 B\-1831 Diegem, Belgium
 .br

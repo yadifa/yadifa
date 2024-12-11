@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup collections Generic collections functions
- *  @ingroup dnscore
- *  @brief A dictionary C-string => u16 based on the AVL code.
+/**-----------------------------------------------------------------------------
+ * @defgroup collections Generic collections functions
+ * @ingroup dnscore
+ * @brief A dictionary C-string => uint16_t based on the AVL code.
  *
- * A dictionary C-string => u16 based on the AVL code.
+ * A dictionary C-string => uint16_t based on the AVL code.
  * Mostly used for name => dns type or name => dns class
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #ifndef _STRING_SET_H
-#define	_STRING_SET_H
+#define _STRING_SET_H
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -59,40 +57,38 @@ extern "C"
  * A structure to hold both children with direct access
  */
 
-typedef struct string_node string_node;
+struct string_treemap_node_s;
 
+typedef struct string_treemap_node_s string_treemap_node_t;
 
-struct string_children
+struct string_treemap_children_s
 {
-    struct string_node* left;
-    struct string_node* right;
+    string_treemap_node_t *left;
+    string_treemap_node_t *right;
 };
 
 /*
- * An union to have access to the children with direct or indexed access
+ * A union to have access to the children with direct or indexed access
  */
 
-typedef union string_children_union string_children_union;
-
-union string_children_union
+union string_treemap_children_u
 {
-    struct string_children lr;
-    struct string_node * child[2];
+    struct string_treemap_children_s lr;
+    string_treemap_node_t           *child[2];
 };
-
 
 /*
  * The node structure CANNOT have a varying size on a given collection
  * This means that the digest size is a constant in the whole tree
  */
 
-struct string_node
+struct string_treemap_node_s
 {
-    union string_children_union children;   /* 2 ptrs */
-    const char* key;                        /* 1 ptr  */
-    u16 value;                              /* 2 b */
-    s8 balance;                             /* 1 b */
-};                                          /* 27 OR 15 bytes (64/32) */
+    union string_treemap_children_u children; /* 2 ptrs */
+    const char                     *key;      /* 1 ptr  */
+    uint16_t                        value;    /* 2 b */
+    int8_t                          balance;  /* 1 b */
+}; /* 27 OR 15 bytes (64/32) */
 
 /*
  * AVL definition part begins here
@@ -107,42 +103,42 @@ struct string_node
  * Worst case : N is enough for sum[n = 0,N](Fn) where Fn is Fibonacci(n+1)
  * Best case : N is enough for (2^(N+1))-1
  */
-#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)64
+#define AVL_DEPTH_MAX 52 // 139*10^9 items max (worst case)64
 
 /*
  * The previx that will be put in front of each function name
  */
-#define AVL_PREFIX	    string_set_
-
-typedef string_node* string_set;
+#define AVL_PREFIX    string_treemap_
 
 /*
  * The type that hold the node
  */
-#define AVL_NODE_TYPE   string_node
+#define AVL_NODE_TYPE string_treemap_node_t
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_TREE_TYPE   AVL_NODE_TYPE*
+#define AVL_TREE_TYPE AVL_NODE_TYPE *
+
+typedef AVL_TREE_TYPE string_treemap_t;
 
 /*
  * The type that hold the tree (should be AVL_NODE_TYPE*)
  */
-#define AVL_CONST_TREE_TYPE AVL_NODE_TYPE * const
+#define AVL_CONST_TREE_TYPE      AVL_NODE_TYPE *const
 
 /*
  * How to find the root in the tree
  */
-#define AVL_TREE_ROOT(__tree__) (*(__tree__))
+#define AVL_TREE_ROOT(__tree__)  (*(__tree__))
 
 /*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE const char*
 
-#define AVL_REFERENCE_IS_CONST TRUE
-#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_TYPE       const char *
+#define AVL_REFERENCE_IS_CONST   true
+#define AVL_REFERENCE_IS_POINTER true
 
 /*
  * The node has got a pointer to its parent
@@ -150,19 +146,19 @@ typedef string_node* string_set;
  * 0   : disable
  * !=0 : enable
  */
-#define AVL_HAS_PARENT_POINTER 0
+#define AVL_HAS_PARENT_POINTER   0
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
 #include <dnscore/avl.h.inc>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
-    
+
 /*
  * I recommend setting a define to identify the C part of the template
  * So it can be used to undefine what is not required anymore for every
@@ -171,10 +167,10 @@ extern "C"
  */
 
 #define STRING_SET_EMPTY NULL
-    
+
 #ifndef _STRING_SET_C
 
-#undef AVL_MAX_DEPTH
+#undef AVL_DEPTH_MAX
 #undef AVL_PREFIX
 #undef AVL_NODE_TYPE
 #undef AVL_TREE_TYPE
@@ -182,16 +178,16 @@ extern "C"
 #undef AVL_TREE_ROOT
 #undef AVL_REFERENCE_TYPE
 #undef AVL_HAS_PARENT_POINTER
-#undef AVL_REFERENCE_IS_CONST
 #undef AVL_REFERENCE_IS_POINTER
+#undef AVL_REFERENCE_IS_CONST
 
 #undef _AVL_H_INC
 
-#endif	/* _STRING_SET_C */
+#endif /* _STRING_SET_C */
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _STRING_SET_H */
+#endif /* _STRING_SET_H */
 /** @} */

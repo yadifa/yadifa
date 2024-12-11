@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,50 +28,49 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _FILE_INPUT_STREAM_H
-#define	_FILE_INPUT_STREAM_H
+#define _FILE_INPUT_STREAM_H
 
 #include <dnscore/input_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-    ya_result file_input_stream_open(input_stream *stream, const char *filename);
-    
-    ya_result file_input_stream_open_ex(input_stream *stream, const char *filename, int flags);
-    
-    /* Create an input stream and assigns the fd to it. */
-    ya_result fd_input_stream_attach(input_stream *stream, int fd);
-        
-    ya_result fd_input_stream_attach_noclose(input_stream *stream, int fd);
-    
-    void fd_input_stream_detach(input_stream *stream);
+ya_result file_input_stream_open(input_stream_t *stream, const char *filename);
 
-    ya_result fd_input_stream_get_filedescriptor(input_stream* stream);
-    
-    ya_result fd_input_stream_seek(input_stream* stream, u64 offset);
+ya_result file_input_stream_open_ex(input_stream_t *stream, const char *filename, int flags);
 
-    bool is_fd_input_stream(input_stream* stream);
-    
-    void file_input_steam_advise_sequential(input_stream* stream);
-    
-#ifdef	__cplusplus
+/* Create an input stream and assigns the fd to it. */
+ya_result fd_input_stream_attach(input_stream_t *stream, int fd);
+
+ya_result fd_input_stream_attach_noclose(input_stream_t *stream, int fd);
+
+void      fd_input_stream_detach(input_stream_t *stream);
+
+ya_result fd_input_stream_get_filedescriptor(input_stream_t *stream);
+
+ya_result fd_input_stream_seek(input_stream_t *stream, uint64_t offset);
+
+bool      is_fd_input_stream(input_stream_t *stream);
+
+void      file_input_steam_advise_sequential(input_stream_t *stream);
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _FILE_INPUT_STREAM_H */
+#endif /* _FILE_INPUT_STREAM_H */
 /** @} */

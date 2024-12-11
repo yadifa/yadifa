@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,25 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *  Implementation of routines for the resource_record struct
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
@@ -62,14 +64,13 @@
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-#define OSTREAM_TAG 0x4d41455254534f
+#define OSTREAM_TAG       0x4d41455254534f
 
-static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';'};
+static const char ESCAPE_CHARS[] = {'@', '$', '\\', ';', '.'};
 
-ya_result
-output_stream_write_nu32(output_stream* os, u32 value)
+ya_result         output_stream_write_nu32(output_stream_t *os, uint32_t value)
 {
-    u8 buffer[4];
+    uint8_t buffer[4];
 
     /*    ------------------------------------------------------------    */
 
@@ -81,10 +82,9 @@ output_stream_write_nu32(output_stream* os, u32 value)
     return output_stream_write(os, buffer, 4);
 }
 
-ya_result
-output_stream_write_nu16(output_stream* os, u16 value)
+ya_result output_stream_write_nu16(output_stream_t *os, uint16_t value)
 {
-    u8 buffer[2];
+    uint8_t buffer[2];
 
     /*    ------------------------------------------------------------    */
 
@@ -94,15 +94,15 @@ output_stream_write_nu16(output_stream* os, u16 value)
     return output_stream_write(os, buffer, 2);
 }
 
-ya_result
-output_stream_decode_base64(output_stream* os, const char * string, u32 length)
+ya_result output_stream_decode_base64(output_stream_t *os, const char *string, uint32_t length)
 {
-    char buffer[64];
-    u8 buffer_bin[48];
+    const char *string_start = string;
+    char        buffer[64];
+    uint8_t     buffer_bin[48];
 
-    u32 needle = 0;
+    uint32_t    needle = 0;
 
-    ya_result return_code = OK;
+    ya_result   return_code = OK;
 
     /*    ------------------------------------------------------------    */
 
@@ -150,18 +150,24 @@ output_stream_decode_base64(output_stream* os, const char * string, u32 length)
         }
     }
 
-    return return_code;
+    /* return the number of bytes read, instead of the last write size
+     * this way something can be done about the input.
+     *
+     * alternatively we could just return "success"
+     */
+
+    return (ya_result)(string - string_start);
 }
 
-ya_result
-output_stream_decode_base32(output_stream* os, const char * string, u32 length)
+ya_result output_stream_decode_base32(output_stream_t *os, const char *string, uint32_t length)
 {
-    char buffer[64];
-    u8 buffer_bin[40];
+    const char *string_start = string;
+    char        buffer[64];
+    uint8_t     buffer_bin[40];
 
-    u32 needle = 0;
+    uint32_t    needle = 0;
 
-    ya_result return_code = OK;
+    ya_result   return_code = OK;
 
     /*    ------------------------------------------------------------    */
 
@@ -209,18 +215,24 @@ output_stream_decode_base32(output_stream* os, const char * string, u32 length)
         }
     }
 
-    return return_code;
+    /* return the number of bytes read, instead of the last write size
+     * this way something can be done about the input.
+     *
+     * alternatively we could just return "success"
+     */
+
+    return (ya_result)(string - string_start);
 }
 
-ya_result
-output_stream_decode_base32hex(output_stream* os, const char * string, u32 length)
+ya_result output_stream_decode_base32hex(output_stream_t *os, const char *string, uint32_t length)
 {
-    char buffer[64];
-    u8 buffer_bin[40];
+    const char *string_start = string;
+    char        buffer[64];
+    uint8_t     buffer_bin[40];
 
-    u32 needle = 0;
+    uint32_t    needle = 0;
 
-    ya_result return_code = OK;
+    ya_result   return_code = OK;
 
     /*    ------------------------------------------------------------    */
 
@@ -269,17 +281,22 @@ output_stream_decode_base32hex(output_stream* os, const char * string, u32 lengt
         }
     }
 
-    return return_code;
+    /* return the number of bytes read, instead of the last write size
+     * this way something can be done about the input.
+     *
+     * alternatively we could just return "success"
+     */
+
+    return (ya_result)(string - string_start);
 }
 
-ya_result
-output_stream_decode_base16(output_stream* os, const char * string, u32 length)
+ya_result output_stream_decode_base16(output_stream_t *os, const char *string, uint32_t length)
 {
     const char *string_start = string;
-    u32 needle = 0;
-    ya_result return_code = OK;
-    char buffer[64];
-    u8 buffer_bin[32];
+    uint32_t    needle = 0;
+    ya_result   return_code = OK;
+    char        buffer[64];
+    uint8_t     buffer_bin[32];
 
     /*    ------------------------------------------------------------    */
 
@@ -335,14 +352,13 @@ output_stream_decode_base16(output_stream* os, const char * string, u32 length)
     return (ya_result)(string - string_start);
 }
 
-ya_result
-output_stream_write_pu16(output_stream* os, u16 value)
+ya_result output_stream_write_pu16(output_stream_t *os, uint16_t value)
 {
-    u8 v;
+    uint8_t v;
 
     if(value > 127)
     {
-        v = (u8)value;
+        v = (uint8_t)value;
         value >>= 7;
         v |= 0x80;
 
@@ -351,19 +367,18 @@ output_stream_write_pu16(output_stream* os, u16 value)
         output_stream_write(os, &v, 1);
     }
 
-    v = (u8)value;
+    v = (uint8_t)value;
 
     return output_stream_write(os, &v, 1);
 }
 
-ya_result
-output_stream_write_pu32(output_stream* os, u32 value)
+ya_result output_stream_write_pu32(output_stream_t *os, uint32_t value)
 {
-    u8 v;
+    uint8_t v;
 
     while(value > 127)
     {
-        v = (u8)value;
+        v = (uint8_t)value;
         value >>= 7;
         v |= 0x80;
 
@@ -372,19 +387,18 @@ output_stream_write_pu32(output_stream* os, u32 value)
         output_stream_write(os, &v, 1);
     }
 
-    v = (u8)value;
+    v = (uint8_t)value;
 
     return output_stream_write(os, &v, 1);
 }
 
-ya_result
-output_stream_write_pu64(output_stream* os, u64 value)
+ya_result output_stream_write_pu64(output_stream_t *os, uint64_t value)
 {
-    u8 v;
+    uint8_t v;
 
     while(value > 127)
     {
-        v = (u8)value;
+        v = (uint8_t)value;
         value >>= 7;
         v |= 0x80;
 
@@ -393,28 +407,37 @@ output_stream_write_pu64(output_stream* os, u64 value)
         output_stream_write(os, &v, 1);
     }
 
-    v = (u8)value;
+    v = (uint8_t)value;
 
     return output_stream_write(os, &v, 1);
 }
 
-ya_result
-output_stream_write_dnsname(output_stream* os, const u8 *name)
+/**
+ * Writes a C-string to a stream
+ *
+ * @param os    the stream
+ * @param text  the text
+ *
+ * return an error code
+ */
+
+ya_result output_stream_write_text(output_stream_t *os, const char *text) { return output_stream_write(os, text, strlen(text)); }
+
+ya_result output_stream_write_dnsname(output_stream_t *os, const uint8_t *name)
 {
-    u32 len = dnsname_len(name);
+    uint32_t len = dnsname_len(name);
     return output_stream_write(os, name, len);
 }
 
-ya_result
-output_stream_write_dnsname_text(output_stream* os, const u8 *name)
+ya_result output_stream_write_dnsname_text(output_stream_t *os, const uint8_t *name)
 {
-    static char dot[1] = {'.'};
-    
-    const u8 *base = name;
-    
-    u8 label_len;
+    static char    dot[1] = {'.'};
+
+    const uint8_t *base = name;
+
+    uint8_t        label_len;
     label_len = *name;
-    
+
     if(label_len > 0)
     {
         do
@@ -423,26 +446,24 @@ output_stream_write_dnsname_text(output_stream* os, const u8 *name)
             output_stream_write(os, &dot, 1);
             name += label_len;
             label_len = *name;
-        }
-        while(label_len > 0);
+        } while(label_len > 0);
     }
     else
     {
         output_stream_write(os, &dot, 1);
     }
-    
+
     return (ya_result)(name - base + 1);
 }
 
-ya_result
-output_stream_write_dnslabel_text_escaped(output_stream* os, const u8 *label)
+ya_result output_stream_write_dnslabel_text_escaped(output_stream_t *os, const uint8_t *label)
 {
     static const char escape[1] = {'\\'};
 
-    int len = *label++;
+    int               len = *label++;
 
-    u32 additional_len = 0;
-    for(int i = 0; i < len; ++i)
+    uint32_t          additional_len = 0;
+    for(int_fast32_t i = 0; i < len; ++i)
     {
         switch(label[i])
         {
@@ -450,91 +471,80 @@ output_stream_write_dnslabel_text_escaped(output_stream* os, const u8 *label)
             case '$':
             case ';':
             case '\\':
+            case '.':
                 ++additional_len;
                 output_stream_write(os, escape, 1);
                 FALLTHROUGH // fall through
-            default:
-                output_stream_write(os, &label[i], 1);
+                    default : output_stream_write(os, &label[i], 1);
         }
     }
 
     return len + additional_len;
 }
 
-static bool
-output_stream_write_should_escape(const u8* name, size_t name_len)
+static bool output_stream_write_should_escape(const uint8_t *name, size_t name_len)
 {
     for(size_t i = 0; i < name_len; ++i)
     {
         const char c = name[i];
 
-        for(u32 j = 0; j < sizeof(ESCAPE_CHARS); ++j)
+        for(uint_fast32_t j = 0; j < sizeof(ESCAPE_CHARS); ++j)
         {
             if(c == ESCAPE_CHARS[j])
             {
-                return TRUE;
+                return true;
             }
         }
     }
 
-    return FALSE;
+    return false;
 }
 
-ya_result
-output_stream_write_dnsname_text_escaped(output_stream* os, const u8 *name)
+ya_result output_stream_write_dnsname_text_escaped(output_stream_t *os, const uint8_t *name)
 {
     static const char dot[1] = {'.'};
 
-    u8 label_len;
+    uint8_t           label_len;
     label_len = *name;
-    ya_result ret;
 
     if(label_len > 0)
     {
-        ret = 0;
-
+        const uint8_t *name_base = name++;
         do
         {
-            ++name;
-
             if(!output_stream_write_should_escape(name, label_len))
             {
                 output_stream_write(os, name, label_len);
-                ret += label_len;
             }
             else
             {
                 // write escaped
-                ret += output_stream_write_dnslabel_text_escaped(os, name - 1);
+                output_stream_write_dnslabel_text_escaped(os, name - 1);
             }
 
             output_stream_write(os, dot, 1);
-            ++ret;
 
             name += label_len;
-            label_len = *name;
-        }
-        while(label_len > 0);
+            label_len = *name++;
+        } while(label_len > 0);
+        return name - name_base;
     }
     else
     {
         output_stream_write(os, dot, 1);
-        ret = 1;
+        return 1;
     }
-
-    return ret;
 }
 
-ya_result
-output_stream_write_dnslabel_vector(output_stream* os, dnslabel_vector_reference labels, s32 top)
+ya_result output_stream_write_dnslabel_vector(output_stream_t *os, dnslabel_vector_reference_t labels, int32_t top)
 {
     ya_result n = 0;
-    s32 i;
+    int32_t   i;
 
     for(i = 0; i <= top; i++)
     {
         ya_result err;
-        u8 len = labels[i][0] + 1;
+        uint8_t   len = labels[i][0] + 1;
 
         if(FAIL(err = output_stream_write(os, labels[i], len)))
         {
@@ -549,16 +559,15 @@ output_stream_write_dnslabel_vector(output_stream* os, dnslabel_vector_reference
     return n;
 }
 
-ya_result
-output_stream_write_dnslabel_stack(output_stream* os, dnslabel_stack_reference labels, s32 top)
+ya_result output_stream_write_dnslabel_stack(output_stream_t *os, dnslabel_stack_reference_t labels, int32_t top)
 {
     ya_result n = 0;
-    s32 i;
+    int32_t   i;
 
     for(i = top; i >= 0; i--)
     {
         ya_result err;
-        u8 len = labels[i][0] + 1;
+        uint8_t   len = labels[i][0] + 1;
 
         if(FAIL(err = output_stream_write(os, labels[i], len)))
         {
@@ -573,18 +582,16 @@ output_stream_write_dnslabel_stack(output_stream* os, dnslabel_stack_reference l
     return n;
 }
 
-output_stream*
-output_stream_alloc()
+output_stream_t *output_stream_new_instance()
 {
-    output_stream* os;
-    ZALLOC_OBJECT_OR_DIE(os, output_stream, OSTREAM_TAG); /* OSTREAM */
+    output_stream_t *os;
+    ZALLOC_OBJECT_OR_DIE(os, output_stream_t, OSTREAM_TAG); /* OSTREAM */
     os->data = NULL;
     os->vtbl = NULL;
     return os;
 }
 
-static ya_result
-void_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result void_output_stream_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
     (void)stream;
     (void)buffer;
@@ -593,29 +600,23 @@ void_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
     return INVALID_STATE_ERROR;
 }
 
-static ya_result
-void_output_stream_flush(output_stream* stream)
+static ya_result void_output_stream_flush(output_stream_t *stream)
 {
     (void)stream;
     log_err("tried to flush a closed stream");
     return INVALID_STATE_ERROR;
 }
 
-static void
-void_output_stream_close(output_stream* stream)
+static void void_output_stream_close(output_stream_t *stream)
 {
     (void)stream;
     /*
      * WARNING
      */
     log_err("tried to close a closed stream");
-    
-#if DEBUG
-    abort();
-#endif
 }
 
-static const output_stream_vtbl void_output_stream_vtbl ={
+static const output_stream_vtbl void_output_stream_vtbl = {
     void_output_stream_write,
     void_output_stream_flush,
     void_output_stream_close,
@@ -627,34 +628,28 @@ static const output_stream_vtbl void_output_stream_vtbl ={
  * It sets the stream to a sink that warns abouts its usage and for which every call that can fail fails.
  */
 
-void output_stream_set_void(output_stream* stream)
+void output_stream_set_void(output_stream_t *stream)
 {
     stream->data = NULL;
     stream->vtbl = &void_output_stream_vtbl;
 }
 
-static ya_result
-sink_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result sink_output_stream_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
     (void)stream;
     (void)buffer;
     return len;
 }
 
-static ya_result
-sink_output_stream_flush(output_stream* stream)
+static ya_result sink_output_stream_flush(output_stream_t *stream)
 {
     (void)stream;
     return SUCCESS;
 }
 
-static void
-sink_output_stream_close(output_stream* stream)
-{
-    (void)stream;
-}
+static void                     sink_output_stream_close(output_stream_t *stream) { (void)stream; }
 
-static const output_stream_vtbl sink_output_stream_vtbl ={
+static const output_stream_vtbl sink_output_stream_vtbl = {
     sink_output_stream_write,
     sink_output_stream_flush,
     sink_output_stream_close,
@@ -665,24 +660,23 @@ static const output_stream_vtbl sink_output_stream_vtbl ={
  * Used to temporarily initialise a stream with a sink that can be closed safely.
  * Typically used as pre-init so the stream can be closed even if the function
  * setup failed before reaching stream initialisation.
- * 
+ *
  * @param os
  */
 
-void output_stream_set_sink(output_stream* os)
+void output_stream_set_sink(output_stream_t *os)
 {
     os->data = NULL;
     os->vtbl = &sink_output_stream_vtbl;
 }
 
-ya_result
-output_stream_write_fully(output_stream* stream, const void* buffer_start, u32 len_start)
+ya_result output_stream_write_fully(output_stream_t *stream, const void *buffer_start, uint32_t len_start)
 {
-    output_stream_write_method* writefunc = stream->vtbl->write;
-    u32 len = len_start;
-    u8* buffer = (u8*)buffer_start;
-    ya_result ret;
-    
+    output_stream_write_method *writefunc = stream->vtbl->write;
+    uint32_t                    len = len_start;
+    uint8_t                    *buffer = (uint8_t *)buffer_start;
+    ya_result                   ret;
+
     while(len > 0)
     {
         if(FAIL(ret = writefunc(stream, buffer, len)))
@@ -709,7 +703,7 @@ output_stream_write_fully(output_stream* stream, const void* buffer_start, u32 l
         return UNABLE_TO_COMPLETE_FULL_WRITE;
     }
 
-    return (ya_result)(buffer - (u8*)buffer_start);
+    return (ya_result)(buffer - (uint8_t *)buffer_start);
 }
 
 /** @} */

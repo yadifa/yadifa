@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Functions used to iterate through the labels of a zone
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Functions used to iterate through the labels of a zone
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <dnsdb/avl.h>
@@ -51,7 +50,7 @@
 #include "dnsdb/zdb_zone_label_iterator_ex.h"
 #include "dnsdb/zdb_zone_label_iterator.h"
 
-extern logger_handle* g_database_logger;
+extern logger_handle_t *g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
 /**
@@ -64,30 +63,34 @@ extern logger_handle* g_database_logger;
  *
  */
 
+#define ZLI_DEBUG         0
 
-#define ZLI_DEBUG 0
-
-void
-zdb_zone_label_iterator_ex_init(zdb_zone_label_iterator_ex* iter, const zdb_zone* zone)
+void zdb_zone_label_iterator_ex_init(zdb_zone_label_iterator_ex *iter, const zdb_zone_t *zone)
 {
     memset(iter, 0, sizeof(zdb_zone_label_iterator_ex));
 
-    //iter->mode = ZDB_ZONE_LABEL_ITERATOR_ZONE_RECORDS; // set by the memset
-    iter->min_ttl = zone->min_ttl;
+    // iter->mode = ZDB_ZONE_LABEL_ITERATOR_ZONE_RECORDS; // set by the memset
+    iter->min_ttl = zone->min_ttl_soa;
     iter->zone = zone;
     iter->n3 = zone->nsec.nsec3;
     iter->pool = &iter->pool_buffer[0];
-    //iter->nsec3_owner = NULL;
+    // iter->nsec3_owner = NULL;
 
-    //iter->nsec3_label.next = NULL;
-    //iter->nsec3_label.sub.count = 0;
+    // iter->nsec3_label.next = NULL;
+    // iter->nsec3_label.sub.count = 0;
 
-    iter->nsec3_label.resource_record_set = &iter->nsec3_label_nsec3;
+    // create dummy resource record set
 
-    iter->nsec3_label_nsec3.hash = TYPE_NSEC3;
-    iter->nsec3_label_rrsig.hash = TYPE_RRSIG;
+    iter->nsec3_label.resource_record_set.root = &iter->nsec3_label_nsec3;
 
-    zdb_zone_label_iterator_init(&iter->iter.label_iter, zone);
+    iter->nsec3_label_nsec3.children.lr.left = &iter->nsec3_label_rrsig;
+    // iter->nsec3_label_nsec3.children.lr.right = NULL;
+    iter->nsec3_label_nsec3.value._type = TYPE_NSEC3;
+    iter->nsec3_label_nsec3.balance = -1;
+
+    iter->nsec3_label_rrsig.value._type = TYPE_RRSIG;
+
+    zdb_zone_label_iterator_init(zone, &iter->iter.label_iter);
 }
 
 /**
@@ -97,12 +100,11 @@ zdb_zone_label_iterator_ex_init(zdb_zone_label_iterator_ex* iter, const zdb_zone
  *
  * @param[in] iter a pointer to the iterator
  *
- * @return TRUE if data is available, FALSE otherwise.
+ * @return true if data is available, false otherwise.
  *
  */
 
-bool
-zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
+bool zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex *iter)
 {
     bool ret;
     switch(iter->mode)
@@ -119,7 +121,7 @@ zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
 
             if(iter->n3 == NULL)
             {
-                return FALSE;
+                return false;
             }
 
             nsec3_iterator_init(&iter->n3->items, &iter->iter.nsec3_iter);
@@ -137,26 +139,19 @@ zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
                 iter->pool = &iter->pool_buffer[0];
                 // get the record and convert it to an zdb_rr_label
 
-                nsec3_node *nsec3_node = nsec3_iterator_next_node(&iter->iter.nsec3_iter);
+                nsec3_zone_item_t                                   *nsec3_node = nsec3_iterator_next_node(&iter->iter.nsec3_iter);
 
-                nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_parms =
-                    {
-                        iter->n3,
-                        nsec3_node,         /// note:  in an iterator, if used properly, the returned node cannot be NULL
-                        iter->zone->origin,
-                        &iter->pool,
-                        iter->min_ttl
-                    };
+                nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {iter->n3,
+                                                                                    nsec3_node, /// note:  in an iterator, if used properly, the returned node cannot be NULL
+                                                                                    iter->zone->origin,
+                                                                                    &iter->pool,
+                                                                                    iter->min_ttl};
 
-                nsec3_zone_item_to_new_zdb_packed_ttlrdata(
-                    &nsec3_parms,
-                    &iter->nsec3_owner,
-                    (zdb_packed_ttlrdata**)&iter->nsec3_label_nsec3.data,
-                    (const zdb_packed_ttlrdata**)&iter->nsec3_label_rrsig.data);
+                nsec3_zone_item_to_new_zdb_resource_record_data(&nsec3_parms, &iter->nsec3_owner, &iter->nsec3_label_nsec3.value, &iter->nsec3_label_rrsig.value);
 
                 // craft an zdb_rr_label that suits our needs
 
-                if(iter->nsec3_label_rrsig.data != NULL)
+                if(!zdb_resource_record_set_isempty(&iter->nsec3_label_rrsig.value))
                 {
                     iter->nsec3_label_nsec3.balance = -1;
                     iter->nsec3_label_nsec3.children.lr.left = &iter->nsec3_label_rrsig;
@@ -167,7 +162,7 @@ zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
                     iter->nsec3_label_nsec3.children.lr.left = NULL;
                 }
 
-                return TRUE;
+                return true;
             }
             else
             {
@@ -179,7 +174,7 @@ zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
         }
     }
 
-    return FALSE;
+    return false;
 }
 
 /**
@@ -194,10 +189,9 @@ zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex* iter)
  *
  */
 
-u32
-zdb_zone_label_iterator_ex_nextname_to_cstr(zdb_zone_label_iterator_ex* iter, char* buffer256)
+uint32_t zdb_zone_label_iterator_ex_nextname_to_cstr(zdb_zone_label_iterator_ex *iter, char *buffer256)
 {
-    u32 ret;
+    uint32_t ret;
 
     switch(iter->mode)
     {
@@ -208,18 +202,17 @@ zdb_zone_label_iterator_ex_nextname_to_cstr(zdb_zone_label_iterator_ex* iter, ch
         }
         case ZDB_ZONE_LABEL_ITERATOR_NSEC3_CHAIN:
         {
-            ret = dnsname_to_cstr(buffer256, iter->nsec3_owner);
+            ret = cstr_init_with_dnsname(buffer256, iter->nsec3_owner);
             return ret;
         }
     }
-    
+
     return 0;
 }
 
-u32
-zdb_zone_label_iterator_ex_nextname(zdb_zone_label_iterator_ex* iter, u8* buffer256)
+uint32_t zdb_zone_label_iterator_ex_nextname(zdb_zone_label_iterator_ex *iter, uint8_t *buffer256)
 { /* TOP-DOWN stack */
-    u32 ret;
+    uint32_t ret;
 
     switch(iter->mode)
     {
@@ -249,10 +242,9 @@ zdb_zone_label_iterator_ex_nextname(zdb_zone_label_iterator_ex* iter, u8* buffer
  *
  */
 
-zdb_rr_label*
-zdb_zone_label_iterator_ex_next(zdb_zone_label_iterator_ex* iter)
+zdb_rr_label_t *zdb_zone_label_iterator_ex_next(zdb_zone_label_iterator_ex *iter)
 {
-    zdb_rr_label *ret;
+    zdb_rr_label_t *ret;
 
     switch(iter->mode)
     {

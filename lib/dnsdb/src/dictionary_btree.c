@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,80 +28,70 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Dictionary module based on a btree
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Dictionary module based on a btree
  *
  *  Dictionary module based on a btree
  *
  * @{
- */
-#include "dnsdb/dnsdb-config.h"
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <dnscore/sys_types.h>
 #include "dnsdb/zdb_error.h"
 #include "dnsdb/dictionary.h"
-#include "dnsdb/dictionary-node.h"
+#include "dnsdb/dictionary_node.h"
 
 /*
  *
  */
 
-void dictionary_btree_init(dictionary* dico);
-void dictionary_btree_destroy(dictionary* dico, dictionary_destroy_record_function destroy);
-void dictionary_btree_destroy_ex(dictionary* dico, dictionary_destroy_ex_record_function destroyex, void* arg);
-dictionary_node* dictionary_btree_add(dictionary* dico, hashcode key, const void* record_match_data, dictionary_data_record_compare_function compare, dictionary_data_record_create_function create);
-dictionary_node* dictionary_btree_find(const dictionary* dico, hashcode key, const void* record_match_data, dictionary_data_record_compare_function compare);
-dictionary_node** dictionary_btree_findp(const dictionary* dico, hashcode key, const void* record_match_data, dictionary_data_record_compare_function compare);
-dictionary_node* dictionary_btree_remove(dictionary* dico, hashcode key, void* record_match_data, dictionary_data_record_compare_function compare);
-ya_result dictionary_btree_process(dictionary* dico, hashcode key, void* record_match_data, dictionary_process_record_function compare);
-void dictionary_btree_iterator_init(const dictionary* dico, dictionary_iterator* iter);
-bool dictionary_btree_iterator_hasnext(dictionary_iterator* dico);
-void** dictionary_btree_iterator_next(dictionary_iterator* dico);
-void dictionary_btree_iterator_init_from(const dictionary* dico, dictionary_iterator* iter, const u8 *name);
+void                                         dictionary_btree_init(dictionary_t *dico);
+void                                         dictionary_btree_finalise(dictionary_t *dico, dictionary_destroy_record_function destroy);
+void                                         dictionary_btree_finalise_ex(dictionary_t *dico, dictionary_destroy_ex_record_function destroyex, void *arg);
+dictionary_node                             *dictionary_btree_add(dictionary_t *dico, hashcode key, const void *record_match_data, dictionary_data_record_compare_function compare, dictionary_data_record_create_function create);
+dictionary_node                             *dictionary_btree_find(const dictionary_t *dico, hashcode key, const void *record_match_data, dictionary_data_record_compare_function compare);
+dictionary_node                            **dictionary_btree_findp(const dictionary_t *dico, hashcode key, const void *record_match_data, dictionary_data_record_compare_function compare);
+dictionary_node                             *dictionary_btree_remove(dictionary_t *dico, hashcode key, void *record_match_data, dictionary_data_record_compare_function compare);
+ya_result                                    dictionary_btree_process(dictionary_t *dico, hashcode key, void *record_match_data, dictionary_process_record_function compare);
+void                                         dictionary_btree_iterator_init(const dictionary_t *dico, dictionary_iterator_t *iter);
+bool                                         dictionary_btree_iterator_hasnext(dictionary_iterator_t *dico);
+void                                       **dictionary_btree_iterator_next(dictionary_iterator_t *dico);
+void                                         dictionary_btree_iterator_init_from(const dictionary_t *dico, dictionary_iterator_t *iter, const uint8_t *name);
 
-void dictionary_btree_empties(dictionary* dico, void* bucket, dictionary_bucket_record_function destroy);
-void
-dictionary_btree_fills(dictionary* dico, hashcode key, dictionary_node* node);
+void                                         dictionary_btree_empties(dictionary_t *dico, void *bucket, dictionary_bucket_record_function finalise);
+void                                         dictionary_btree_fills(dictionary_t *dico, hashcode key, dictionary_node *node);
 
+static const struct dictionary_vtbl          dictionary_btree_vtbl = {dictionary_btree_finalise,
+                                                                      dictionary_btree_add,
+                                                                      dictionary_btree_find,
+                                                                      dictionary_btree_findp,
+                                                                      dictionary_btree_remove,
+                                                                      dictionary_btree_process,
+                                                                      dictionary_btree_finalise_ex,
+                                                                      dictionary_btree_iterator_init,
+                                                                      dictionary_btree_iterator_init_from,
+                                                                      dictionary_btree_empties,
+                                                                      dictionary_btree_fills,
+                                                                      "BTREE"};
 
-static const struct dictionary_vtbl dictionary_btree_vtbl = {
-    dictionary_btree_destroy,
-    dictionary_btree_add,
-    dictionary_btree_find,
-    dictionary_btree_findp,
-    dictionary_btree_remove,
-    dictionary_btree_process,
-    dictionary_btree_destroy_ex,
-    dictionary_btree_iterator_init,
-    dictionary_btree_iterator_init_from,
-    dictionary_btree_empties,
-    dictionary_btree_fills,
-    "BTREE"
-};
+static const struct dictionary_iterator_vtbl dictionary_iterator_btree_vtbl = {dictionary_btree_iterator_hasnext, dictionary_btree_iterator_next};
 
-static const struct dictionary_iterator_vtbl dictionary_iterator_btree_vtbl = {
-    dictionary_btree_iterator_hasnext,
-    dictionary_btree_iterator_next
-};
-
-void
-dictionary_btree_init(dictionary* dico)
+void                                         dictionary_btree_init(dictionary_t *dico)
 {
     btree_init(&dico->ct.btree_collection);
     dico->vtbl = &dictionary_btree_vtbl;
     dico->count = 0;
-    dico->threshold = MAX_U32;
+    dico->threshold = U32_MAX;
 }
 
-void
-dictionary_btree_destroy(dictionary* dico, dictionary_destroy_record_function destroy)
+void dictionary_btree_finalise(dictionary_t *dico, dictionary_destroy_record_function destroy)
 {
     yassert(dico != NULL);
 
@@ -113,13 +103,13 @@ dictionary_btree_destroy(dictionary* dico, dictionary_destroy_record_function de
 
         while(btree_iterator_hasnext(&iter))
         {
-            dictionary_node** node_sll_p = (dictionary_node**)btree_iterator_next(&iter);
-            dictionary_node* node = *node_sll_p;
+            dictionary_node **node_sll_p = (dictionary_node **)btree_iterator_next(&iter);
+            dictionary_node  *node = *node_sll_p;
             *node_sll_p = NULL;
 
             while(node != NULL)
             {
-                dictionary_node* tmp = node;
+                dictionary_node *tmp = node;
                 node = node->next;
                 tmp->next = NULL;
 
@@ -127,13 +117,12 @@ dictionary_btree_destroy(dictionary* dico, dictionary_destroy_record_function de
             }
         }
 
-        btree_destroy(&dico->ct.btree_collection);
+        btree_finalise(&dico->ct.btree_collection);
         dico->count = 0;
     }
 }
 
-void
-dictionary_btree_destroy_ex(dictionary* dico, dictionary_destroy_ex_record_function destroyex, void* arg)
+void dictionary_btree_finalise_ex(dictionary_t *dico, dictionary_destroy_ex_record_function destroyex, void *arg)
 {
     yassert(dico != NULL);
 
@@ -145,13 +134,13 @@ dictionary_btree_destroy_ex(dictionary* dico, dictionary_destroy_ex_record_funct
 
         while(btree_iterator_hasnext(&iter))
         {
-            dictionary_node** node_sll_p = (dictionary_node**)btree_iterator_next(&iter);
-            dictionary_node* node = *node_sll_p;
+            dictionary_node **node_sll_p = (dictionary_node **)btree_iterator_next(&iter);
+            dictionary_node  *node = *node_sll_p;
             *node_sll_p = NULL;
 
             while(node != NULL)
             {
-                dictionary_node* tmp = node;
+                dictionary_node *tmp = node;
                 node = node->next;
                 tmp->next = NULL;
 
@@ -159,17 +148,15 @@ dictionary_btree_destroy_ex(dictionary* dico, dictionary_destroy_ex_record_funct
             }
         }
 
-        btree_destroy(&dico->ct.btree_collection);
+        btree_finalise(&dico->ct.btree_collection);
         dico->count = 0;
     }
 }
 
-dictionary_node*
-dictionary_btree_add(dictionary* dico, hashcode key, const void* record_match_data, dictionary_data_record_compare_function compare,
-                     dictionary_data_record_create_function create)
+dictionary_node *dictionary_btree_add(dictionary_t *dico, hashcode key, const void *record_match_data, dictionary_data_record_compare_function compare, dictionary_data_record_create_function create)
 {
-    dictionary_node** node_sll_p = (dictionary_node**)btree_insert(&dico->ct.btree_collection, key);
-    dictionary_node* node = *node_sll_p;
+    dictionary_node **node_sll_p = (dictionary_node **)btree_insert(&dico->ct.btree_collection, key);
+    dictionary_node  *node = *node_sll_p;
 
     while(node != NULL)
     {
@@ -195,10 +182,9 @@ dictionary_btree_add(dictionary* dico, hashcode key, const void* record_match_da
     return node;
 }
 
-dictionary_node*
-dictionary_btree_find(const dictionary* dico, hashcode key, const void* record_match_data, dictionary_data_record_compare_function compare)
+dictionary_node *dictionary_btree_find(const dictionary_t *dico, hashcode key, const void *record_match_data, dictionary_data_record_compare_function compare)
 {
-    dictionary_node* node = (dictionary_node*)btree_find(&dico->ct.btree_collection, key);
+    dictionary_node *node = (dictionary_node *)btree_find(&dico->ct.btree_collection, key);
 
     while(node != NULL)
     {
@@ -213,10 +199,9 @@ dictionary_btree_find(const dictionary* dico, hashcode key, const void* record_m
     return NULL;
 }
 
-dictionary_node**
-dictionary_btree_findp(const dictionary* dico, hashcode key, const void* record_match_data, dictionary_data_record_compare_function compare)
+dictionary_node **dictionary_btree_findp(const dictionary_t *dico, hashcode key, const void *record_match_data, dictionary_data_record_compare_function compare)
 {
-    dictionary_node** node_sll_p = (dictionary_node**)btree_findp(&dico->ct.btree_collection, key);
+    dictionary_node **node_sll_p = (dictionary_node **)btree_findp(&dico->ct.btree_collection, key);
 
     if(node_sll_p != NULL)
     {
@@ -234,11 +219,10 @@ dictionary_btree_findp(const dictionary* dico, hashcode key, const void* record_
     return NULL;
 }
 
-dictionary_node*
-dictionary_btree_remove(dictionary* dico, hashcode key, void* record_match_data, dictionary_data_record_compare_function compare)
+dictionary_node *dictionary_btree_remove(dictionary_t *dico, hashcode key, void *record_match_data, dictionary_data_record_compare_function compare)
 {
-    dictionary_node** node_sll_p = (dictionary_node**)btree_findp(&dico->ct.btree_collection, key);
-    dictionary_node* node = *node_sll_p;
+    dictionary_node **node_sll_p = (dictionary_node **)btree_findp(&dico->ct.btree_collection, key);
+    dictionary_node  *node = *node_sll_p;
 
     while(node != NULL)
     {
@@ -273,24 +257,23 @@ dictionary_btree_remove(dictionary* dico, hashcode key, void* record_match_data,
     return NULL;
 }
 
-ya_result
-dictionary_btree_process(dictionary* dico, hashcode key, void* record_match_data, dictionary_process_record_function process)
+ya_result dictionary_btree_process(dictionary_t *dico, hashcode key, void *record_match_data, dictionary_process_record_function process)
 {
-    dictionary_node** node_sll_p = (dictionary_node**)btree_findp(&dico->ct.btree_collection, key);
+    dictionary_node **node_sll_p = (dictionary_node **)btree_findp(&dico->ct.btree_collection, key);
 
     if(node_sll_p == NULL)
     {
         return ZDB_ERROR_KEY_NOTFOUND; /* NOT FOUND */
     }
 
-    const dictionary_node** node_sll_head_p = (const dictionary_node**)node_sll_p;
+    const dictionary_node **node_sll_head_p = (const dictionary_node **)node_sll_p;
 
-    dictionary_node* node = *node_sll_p;
+    dictionary_node        *node = *node_sll_p;
 
     while(node != NULL)
     {
-        dictionary_node* node_next = node->next;
-        int op = process(record_match_data, node);
+        dictionary_node *node_next = node->next;
+        int              op = process(record_match_data, node);
 
         switch(op)
         {
@@ -322,42 +305,40 @@ dictionary_btree_process(dictionary* dico, hashcode key, void* record_match_data
 
                 /* fall trough ... return op */
             }
-            FALLTHROUGH //fallthrough
+                FALLTHROUGH // fallthrough
 
-            default:
-            {
-                return op;
-            }
+                    default:
+                {
+                    return op;
+                }
         }
     }
 
     return COLLECTION_PROCESS_NEXT;
 }
 
-void
-dictionary_btree_iterator_init(const dictionary *dico, dictionary_iterator *iter)
+void dictionary_btree_iterator_init(const dictionary_t *dico, dictionary_iterator_t *iter)
 {
     iter->vtbl = &dictionary_iterator_btree_vtbl;
     iter->sll = NULL;
     btree_iterator_init(dico->ct.btree_collection, &iter->ct.as_btree);
 }
 
-void
-dictionary_btree_iterator_init_from(const dictionary *dico, dictionary_iterator *iter, const u8 *name)
+void dictionary_btree_iterator_init_from(const dictionary_t *dico, dictionary_iterator_t *iter, const uint8_t *name)
 {
     iter->vtbl = &dictionary_iterator_btree_vtbl;
     iter->sll = NULL;
-    
-    hashcode key = hash_dnslabel(name);
-    btree_node *node = btree_iterator_init_from(dico->ct.btree_collection, &iter->ct.as_btree, key);
-    
-    zdb_rr_label *label = (zdb_rr_label*)node->data;
-    
+
+    hashcode        key = hash_dnslabel(name);
+    btree_node     *node = btree_iterator_init_from(dico->ct.btree_collection, &iter->ct.as_btree, key);
+
+    zdb_rr_label_t *label = (zdb_rr_label_t *)node->data;
+
     while(label != NULL)
     {
         if(dnslabel_equals(label->name, name))
         {
-            iter->sll = (dictionary_node*)label;
+            iter->sll = (dictionary_node *)label;
             break;
         }
 
@@ -365,23 +346,17 @@ dictionary_btree_iterator_init_from(const dictionary *dico, dictionary_iterator 
     }
 }
 
-bool
-dictionary_btree_iterator_hasnext(dictionary_iterator *iter)
+bool dictionary_btree_iterator_hasnext(dictionary_iterator_t *iter)
 {
     /* If the Single Linked List is empty, fallback on the balanced tree,
      * else there is something next ...
      */
-    return (iter->sll != NULL && iter->sll->next != NULL) ?
-            TRUE
-            :
-            btree_iterator_hasnext(&iter->ct.as_btree)
-            ;
+    return (iter->sll != NULL && iter->sll->next != NULL) ? true : btree_iterator_hasnext(&iter->ct.as_btree);
 }
 
-void**
-dictionary_btree_iterator_next(dictionary_iterator *iter)
+void **dictionary_btree_iterator_next(dictionary_iterator_t *iter)
 {
-    void* vpp;
+    void *vpp;
 
     if(iter->sll != NULL && iter->sll->next != NULL)
     {
@@ -395,12 +370,11 @@ dictionary_btree_iterator_next(dictionary_iterator *iter)
 
     /* pointer is into a tree node */
     vpp = btree_iterator_next(&iter->ct.as_btree);
-    iter->sll = ((dictionary_node*)vpp)->next;
+    iter->sll = ((dictionary_node *)vpp)->next;
     return vpp;
 }
 
-void
-dictionary_btree_empties(dictionary* dico, void* bucket_data, dictionary_bucket_record_function bucket)
+void dictionary_btree_empties(dictionary_t *dico, void *bucket_data, dictionary_bucket_record_function bucket)
 {
     yassert(dico != NULL);
 
@@ -412,15 +386,15 @@ dictionary_btree_empties(dictionary* dico, void* bucket_data, dictionary_bucket_
 
         while(btree_iterator_hasnext(&iter))
         {
-            btree_node* bnode = (btree_node*)btree_iterator_next_node(&iter);
+            btree_node      *bnode = (btree_node *)btree_iterator_next_node(&iter);
 
-            hashcode key = bnode->hash;
+            hashcode         key = bnode->hash;
 
-            dictionary_node* node = (dictionary_node*)bnode->data;
+            dictionary_node *node = (dictionary_node *)bnode->data;
 
             while(node != NULL)
             {
-                dictionary_node* tmp = node;
+                dictionary_node *tmp = node;
                 node = node->next;
                 tmp->next = NULL;
 
@@ -428,15 +402,14 @@ dictionary_btree_empties(dictionary* dico, void* bucket_data, dictionary_bucket_
             }
         }
 
-        btree_destroy(&dico->ct.btree_collection);
+        btree_finalise(&dico->ct.btree_collection);
         dico->count = 0;
     }
 }
 
-void
-dictionary_btree_fills(dictionary* dico, hashcode key, dictionary_node* node)
+void dictionary_btree_fills(dictionary_t *dico, hashcode key, dictionary_node *node)
 {
-    dictionary_node** node_sll_p = (dictionary_node**)btree_insert(&dico->ct.btree_collection, key);
+    dictionary_node **node_sll_p = (dictionary_node **)btree_insert(&dico->ct.btree_collection, key);
     node->next = (*node_sll_p);
     *node_sll_p = node;
 

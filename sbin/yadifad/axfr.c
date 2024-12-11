@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,65 +28,119 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "server-config.h"
+#include "server_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <dnscore/rfc.h>
 #include <dnscore/logger.h>
-#include <dnscore/packet_reader.h>
 #include <dnscore/tcp_io_stream.h>
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/random.h>
 #include <dnscore/host_address.h>
 #include <dnscore/fdtools.h>
-#include <dnscore/message.h>
-#include <dnscore/chroot.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/xfr_input_stream.h>
+#include <dnscore/tcp_manager2.h>
 
 #include <dnsdb/zdb_zone.h>
-#include <dnsdb/zdb-zone-answer-axfr.h>
+#include <dnsdb/zdb_zone_answer_axfr.h>
 #include <dnsdb/xfr_copy.h>
-#include <dnsdb/zdb-zone-path-provider.h>
+#include <dnsdb/zdb_zone_path_provider.h>
 
 #define ZDB_JOURNAL_CODE 1
 #include <dnsdb/journal.h>
 
-extern logger_handle *g_server_logger;
+extern logger_handle_t *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
 #include "axfr.h"
 #include "confs.h"
 #include "server.h"
 
-extern struct thread_pool_s *server_disk_thread_pool;
+static struct thread_pool_s *server_disk_thread_pool = NULL;
+static struct thread_pool_s *server_network_thread_pool = NULL;
+
+ya_result                    axfr_process_init()
+{
+    if(server_disk_thread_pool == NULL)
+    {
+        server_disk_thread_pool = thread_pool_init_ex(4, 64, "diskio");
+
+        if(server_disk_thread_pool == NULL)
+        {
+            log_warn("disk thread pool init failed");
+
+            return THREAD_CREATION_ERROR;
+        }
+    }
+
+    if(server_network_thread_pool == NULL)
+    {
+        server_network_thread_pool = thread_pool_init_ex(4, 64, "netio");
+
+        if(server_network_thread_pool == NULL)
+        {
+            log_warn("network thread pool init failed");
+
+            return THREAD_CREATION_ERROR;
+        }
+    }
+
+    return SUCCESS;
+}
+
+ya_result axfr_process_finalise()
+{
+    ya_result ret0 = SUCCESS;
+    ya_result ret1 = SUCCESS;
+    if(server_disk_thread_pool != NULL)
+    {
+        struct thread_pool_s *old_server_disk_thread_pool = server_disk_thread_pool;
+        server_disk_thread_pool = NULL;
+        thread_pool_stop(old_server_disk_thread_pool);
+        ret0 = thread_pool_destroy(old_server_disk_thread_pool);
+    }
+
+    if(server_network_thread_pool != NULL)
+    {
+        struct thread_pool_s *old_server_network_thread_pool = server_network_thread_pool;
+        server_network_thread_pool = NULL;
+        thread_pool_stop(old_server_network_thread_pool);
+        ret1 = thread_pool_destroy(old_server_network_thread_pool);
+    }
+
+    if(FAIL(ret0))
+    {
+        return ret0;
+    }
+    else
+    {
+        return ret1;
+    }
+}
 
 /**
- * 
- * Handle an AXFR query from a slave.
  *
- * If we don't do this many slaves could call with a small interval asking a just-dynupdated snapshot.
- * If we do it the slaves will be only a few steps behind and the next notification/ixfr will bring them up to date.
-*/
-#if DNSCORE_HAS_TCP_MANAGER
-ya_result
-axfr_process(message_data *mesg, tcp_manager_socket_context_t *sctx)
-#else
-ya_result
-axfr_process(message_data *mesg, int sockfd)
-#endif
+ * Handle an AXFR query from a secondary.
+ *
+ * If we don't do this many secondaries could call with a small interval asking a just-dynupdated snapshot.
+ * If we do it the secondaries will be only a few steps behind and the next notification/ixfr will bring them up to
+ * date.
+ */
+
+ya_result axfr_process(dns_message_t *mesg, tcp_manager_channel_t *tmc)
 {
     /*
      * Start an AXFR "writer" thread
@@ -96,48 +150,43 @@ axfr_process(message_data *mesg, int sockfd)
      * ACL/TSIG is not taken in account yet.
      */
 
-    zdb_zone *zone;
+    zdb_zone_t    *zone;
 
-    const u8 *fqdn = message_get_canonised_fqdn(mesg);
-    u32 fqdn_len = dnsname_len(fqdn);
+    const uint8_t *fqdn = dns_message_get_canonised_fqdn(mesg);
+    uint32_t       fqdn_len = dnsname_len(fqdn);
 
-    if(fqdn_len > MAX_DOMAIN_LENGTH)
+    if(fqdn_len > DOMAIN_LENGTH_MAX)
     {
-#if DNSCORE_HAS_TCP_MANAGER
-        tcp_manager_context_release(sctx);
-        tcp_manager_close(sctx);
-#endif
         return DOMAIN_TOO_LONG;
     }
 
-    u16 rcode;
+    uint16_t rcode;
 
     if((zone = zdb_acquire_zone_read_from_fqdn(g_config->database, fqdn)) != NULL)
     {
         if(zdb_zone_valid(zone))
         {
 #if ZDB_HAS_ACL_SUPPORT
-            access_control *ac = zone->acl;
+            access_control_t *ac = zone->acl;
 
             if(!ACL_REJECTED(acl_check_access_filter(mesg, &ac->allow_transfer)))
             {
 #endif
-                log_info("axfr: %{dnsname}: scheduling axfr answer to %{sockaddr}", message_get_canonised_fqdn(mesg), message_get_sender(mesg));
+                log_info("axfr: %{dnsname}: scheduling axfr answer to %{sockaddr}", dns_message_get_canonised_fqdn(mesg), dns_message_get_sender(mesg));
 
                 /*
                  * This is an asynchronous call
-                 * 
+                 *
                  * Get the zone AXFR
                  *   If not exist create it and start sending back while writing (implies two threads)
                  *   else simply send back
                  */
 
-#if DNSCORE_HAS_TCP_MANAGER
-                zdb_zone_answer_axfr(zone, mesg, sctx, NULL, server_disk_thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
-                tcp_manager_context_release(sctx); // sctx has been acquired by the xfr call
-#else
-                zdb_zone_answer_axfr(zone, mesg, sockfd, NULL, server_disk_thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
-#endif
+                // zdb_zone_answer_axfr(zone, mesg, tmc, server_network_thread_pool, server_disk_thread_pool,
+                // g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet,
+                // g_config->axfr_compress_packets);
+                zdb_zone_answer_axfr(zone, mesg, tmc, NULL, server_disk_thread_pool, g_config->axfr_max_packet_size, g_config->axfr_max_record_by_packet, g_config->axfr_compress_packets);
+
                 zdb_zone_release(zone);
 
                 return SUCCESS;
@@ -147,13 +196,13 @@ axfr_process(message_data *mesg, int sockfd)
             {
                 /* notauth */
 
-                if(message_has_tsig(mesg))
+                if(dns_message_has_tsig(mesg))
                 {
-                    log_notice("axfr: %{dnsname}: not authorised (%{sockaddr} key %{dnsname})", message_get_canonised_fqdn(mesg), message_get_sender(mesg), message_tsig_get_name(mesg));
+                    log_notice("axfr: %{dnsname}: not authorised (%{sockaddr} key %{dnsname})", dns_message_get_canonised_fqdn(mesg), dns_message_get_sender(mesg), dns_message_tsig_get_name(mesg));
                 }
                 else
                 {
-                    log_notice("axfr: %{dnsname}: not authorised (%{sockaddr})", message_get_canonised_fqdn(mesg), message_get_sender(mesg));
+                    log_notice("axfr: %{dnsname}: not authorised (%{sockaddr})", dns_message_get_canonised_fqdn(mesg), dns_message_get_sender(mesg));
                 }
 
                 rcode = FP_XFR_REFUSED;
@@ -164,108 +213,84 @@ axfr_process(message_data *mesg, int sockfd)
         {
             rcode = FP_INVALID_ZONE;
         }
-        
+
         zdb_zone_release(zone);
     }
     else
     {
         /* zone not found */
 
-        zone_desc_s *zone_desc;
-        if((zone_desc = zone_acquirebydnsname(message_get_canonised_fqdn(mesg))) != NULL)
+        zone_desc_t *zone_desc;
+        if((zone_desc = zone_acquirebydnsname(dns_message_get_canonised_fqdn(mesg))) != NULL)
         {
             zone_release(zone_desc);
-            log_warn("axfr: %{dnsname}: zone not loaded (%{sockaddr})", message_get_canonised_fqdn(mesg), message_get_sender(mesg));
+            log_warn("axfr: %{dnsname}: zone not loaded (%{sockaddr})", dns_message_get_canonised_fqdn(mesg), dns_message_get_sender(mesg));
 
             rcode = FP_RCODE_SERVFAIL;
         }
         else
         {
-            log_notice("axfr: %{dnsname}: no such zone (%{sockaddr})", message_get_canonised_fqdn(mesg), message_get_sender(mesg));
+            log_notice("axfr: %{dnsname}: no such zone (%{sockaddr})", dns_message_get_canonised_fqdn(mesg), dns_message_get_sender(mesg));
 
             rcode = FP_NOZONE_FOUND;
         }
     }
 
-    message_make_error(mesg, rcode);
-
-#if DNSCORE_HAS_TCP_MANAGER
-    int sockfd = tcp_manager_socket(sctx);
-#endif
+    dns_message_make_error(mesg, rcode);
 
     ya_result send_ret;
 
-#if DNSCORE_HAS_TCP_MANAGER
-    send_ret = message_send_tcp(mesg, sockfd);
-#else
-    send_ret = message_update_length_send_tcp_with_default_minimum_throughput(mesg, sockfd);
-#endif
+    send_ret = tcp_manager_channel_send(tmc, mesg);
 
-    if(ISOK(send_ret))
+    if(FAIL(send_ret))
     {
-#if DNSCORE_HAS_TCP_MANAGER
-        tcp_manager_write_update(sctx, send_ret);
-#endif
+        log_err("axfr: %{dnsname}: could not send error message: %r (%{sockaddr})", dns_message_get_canonised_fqdn(mesg), send_ret, dns_message_get_sender(mesg));
     }
-    else
-    {
-        log_err("axfr: %{dnsname}: could not send error message: %r (%{sockaddr})", message_get_canonised_fqdn(mesg), send_ret, message_get_sender(mesg));
-    }
-
-    yassert((sockfd < 0)||(sockfd >2));
-
-#if DNSCORE_HAS_TCP_MANAGER
-    tcp_manager_context_release(sctx);
-#else
-    shutdown(sockfd, SHUT_RDWR);
-    close_ex(sockfd);
-#endif
 
     return SUCCESS;
 }
 
 /**
- *
- * Send an AXFR query to a master and handle the answer (downloads the zone).
+ * Sends an AXFR query to a primary and handle the answer (downloads the zone).
  */
-ya_result
-axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_serial, u32* out_loaded_refresh)
+
+ya_result axfr_query_ex(const host_address_t *servers, const uint8_t *origin, uint32_t *out_loaded_serial, uint32_t *out_loaded_refresh)
 {
     /*
      * AXFR query
      */
 
-    ya_result return_value;
-    char data_path[PATH_MAX];
+    ya_result ret;
+    char      data_path[PATH_MAX];
 
     if(host_address_is_any(servers))
     {
         return INVALID_ARGUMENT_ERROR;
     }
-    
+
     log_info("axfr: %{dnsname}: querying servers", origin);
-    
-    if(FAIL(return_value = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_AXFR_PATH|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
+
+    if(FAIL(ret = zdb_zone_path_get_provider()(origin, data_path, sizeof(data_path), ZDB_ZONE_PATH_PROVIDER_AXFR_PATH | ZDB_ZONE_PATH_PROVIDER_MKDIR)))
     {
-        log_err("axfr: %{dnsname}: unable to create directory '%s' : %r", origin, data_path, return_value);
-        return return_value;
+        log_err("axfr: %{dnsname}: unable to create directory '%s' : %r", origin, data_path, ret);
+        return ret;
     }
 
-    random_ctx rndctx = thread_pool_get_random_ctx();
+    random_ctx_t rndctx = thread_pool_get_random_ctx();
 
     /**
      * Create the AXFR query packet
      */
 
-    message_data_with_buffer axfr_query_buff;
-    message_data_with_buffer_init(&axfr_query_buff);
-    message_data *axfr_query = message_data_with_buffer_init(&axfr_query_buff);
-    message_make_query(axfr_query, (u16)random_next(rndctx), origin, TYPE_AXFR, CLASS_IN);
+    dns_message_with_buffer_t axfr_query_buff;
+    dns_message_data_with_buffer_init(&axfr_query_buff);
+    dns_message_t *axfr_query = dns_message_data_with_buffer_init(&axfr_query_buff);
+    dns_message_make_query(axfr_query, (uint16_t)random_next(rndctx), origin, TYPE_AXFR, CLASS_IN);
 #if DNSCORE_HAS_TSIG_SUPPORT
     if(servers->tsig != NULL)
     {
         log_info("axfr: %{dnsname}: transfer will be signed with key '%{dnsname}'", origin, servers->tsig->name);
-        message_sign_query(axfr_query, servers->tsig);
+        dns_message_sign_query(axfr_query, servers->tsig);
     }
 #endif
 
@@ -273,29 +298,34 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
      * connect & send
      */
 
-    input_stream is;
-    output_stream os;
+    input_stream_t  is;
+    output_stream_t os;
 
     // connect
 
-    host_address *transfer_source = zone_transfer_source_copy(origin);
-    host_address *current_transfer_source;
+    host_address_t *transfer_source = zone_transfer_source_copy(origin);
+    host_address_t *current_transfer_source;
     current_transfer_source = transfer_source;
 
-    return_value = zone_transfer_source_tcp_connect(servers, &current_transfer_source, &is, &os, g_config->xfr_connect_timeout);
+    /// @note 20230612 edf -- TLS should be set here
+    /// @note 20230612 edf -- we need a pool for outgoing connections
 
-    if(ISOK(return_value))
+    ret = zone_transfer_source_tcp_connect(servers, &current_transfer_source, &is, &os, g_config->xfr_connect_timeout);
+
+    if(ISOK(ret))
     {
         // send
 
-        if(ISOK(return_value = message_write_tcp(axfr_query, &os)))
+        if(ISOK(ret = dns_message_write_tcp(axfr_query, &os)))
         {
             output_stream_flush(&os);
 
-            int fd = fd_input_stream_get_filedescriptor(&is);
-
-            tcp_set_sendtimeout(fd, 30, 0);
-            tcp_set_recvtimeout(fd, 30, 0);
+            if(is_fd_input_stream(&is))
+            {
+                int fd = fd_input_stream_get_filedescriptor(&is);
+                tcp_set_sendtimeout(fd, 30, 0);
+                tcp_set_recvtimeout(fd, 30, 0);
+            }
 
             log_info("axfr: %{dnsname}: truncating journal", origin);
 
@@ -303,7 +333,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
 
             journal_truncate(origin);
 
-            zdb_zone *zone = zdb_acquire_zone_write_lock_from_fqdn(g_config->database, origin, ZDB_ZONE_MUTEX_XFR);
+            zdb_zone_t *zone = zdb_acquire_zone_write_lock_from_fqdn(g_config->database, origin, ZDB_ZONE_MUTEX_XFR);
             if(zone != NULL)
             {
                 if(!zdb_zone_isinvalid(zone))
@@ -326,19 +356,14 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
                 zdb_zone_release_unlock(zone, ZDB_ZONE_MUTEX_XFR);
             }
 
-            xfr_copy_flags xfr_flags = XFR_ALLOW_AXFR | ((g_config->axfr_strict_authority)? 0: XFR_LOOSE_AUTHORITY);
+            xfr_copy_flags xfr_flags = XFR_ALLOW_AXFR | ((g_config->axfr_strict_authority) ? 0 : XFR_LOOSE_AUTHORITY);
 
-            input_stream xfris;
-            if(ISOK(return_value = xfr_input_stream_init(&xfris,
-                                                         origin,
-                                                         &is,
-                                                         axfr_query,
-                                                         0,
-                                                         xfr_flags)))
+            input_stream_t xfris;
+            if(ISOK(ret = xfr_input_stream_init(&xfris, origin, &is, axfr_query, 0, xfr_flags)))
             {
-                if(ISOK(return_value = xfr_copy(&xfris, g_config->xfr_path, FALSE)))
+                if(ISOK(ret = xfr_copy(&xfris, g_config->xfr_path, false)))
                 {
-                    return_value = xfr_input_stream_get_type(&xfris);
+                    ret = xfr_input_stream_get_type(&xfris);
 
                     if(out_loaded_serial != NULL)
                     {
@@ -351,14 +376,14 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
                 }
                 else
                 {
-                    log_warn("axfr: %{dnsname}: AXFR stream copy in '%s' failed: %r", origin, data_path, return_value);
+                    log_warn("axfr: %{dnsname}: AXFR stream copy in '%s' failed: %r", origin, data_path, ret);
                 }
 
                 input_stream_close(&xfris);
             }
             else
             {
-                log_warn("axfr: %{dnsname}: AXFR stream copy init failed: %r", origin, return_value);
+                log_warn("axfr: %{dnsname}: AXFR stream copy init failed: %r", origin, ret);
             }
 
             output_stream_close(&os);
@@ -377,7 +402,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
         }
         else
         {
-            log_warn("axfr: %{dnsname}: AXFR query to %{hostaddr} failed: %r", origin, servers, return_value);
+            log_warn("axfr: %{dnsname}: AXFR query to %{hostaddr} failed: %r", origin, servers, ret);
         }
     }
     else
@@ -388,7 +413,7 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
         }
         else
         {
-            log_info("axfr: %{dnsname}: %{hostaddr}: stream connection failed: %r", origin, servers, return_value);
+            log_info("axfr: %{dnsname}: %{hostaddr}: stream connection failed: %r", origin, servers, ret);
         }
     }
 
@@ -397,15 +422,14 @@ axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_ser
         host_address_delete_list(transfer_source);
     }
 
-    return return_value;
+    return ret;
 }
 
 /**
  *
- * Send an AXFR query to a master and handle the answer (downloads the zone).
+ * Send an AXFR query to a primary and handle the answer (downloads the zone).
  */
-ya_result
-axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial)
+ya_result axfr_query(const host_address_t *servers, const uint8_t *origin, uint32_t *out_loaded_serial)
 {
     ya_result ret = axfr_query_ex(servers, origin, out_loaded_serial, NULL);
     return ret;

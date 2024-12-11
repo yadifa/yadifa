@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,22 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup nsec3 NSEC3 functions
- *  @ingroup dnsdbdnssec
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup nsec3 NSEC3 functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
  *
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
-#include "dnsdb/dnsdb-config.h"
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -52,12 +54,12 @@
 #define _NSEC3_COLLECTION_C
 
 #define MODULE_MSG_HANDLE g_dnssec_logger
-extern logger_handle *g_dnssec_logger;
+extern logger_handle_t *g_dnssec_logger;
 
-#define DUMPER_FUNCTION(...) logger_handle_msg(MODULE_MSG_HANDLE,MSG_DEBUG,__VA_ARGS__)
+#define DUMPER_FUNCTION(...) logger_handle_msg(MODULE_MSG_HANDLE, MSG_DEBUG, __VA_ARGS__)
 
-//#define DEBUG_LEVEL 9
-//#define DEBUG_DUMP
+// #define DEBUG_LEVEL 9
+// #define DEBUG_DUMP
 
 #include <dnscore/dnscore.h>
 #include "dnsdb/nsec3_collection.h"
@@ -70,93 +72,80 @@ extern logger_handle *g_dnssec_logger;
  * Access to the field that points to the left child
  *
  */
-#define AVL_LEFT_CHILD(node) ((node)->children.lr.left)
+#define AVL_LEFT_CHILD(node)            ((node)->children.lr.left)
 /*
  * Access to the field that points to the right child
  */
-#define AVL_RIGHT_CHILD(node) ((node)->children.lr.right)
+#define AVL_RIGHT_CHILD(node)           ((node)->children.lr.right)
 /*
  * Access to the field that points to one of the children (0: left, 1: right)
  */
-#define AVL_CHILD(node,id) ((node)->children.child[(id)])
+#define AVL_CHILD(node, id)             ((node)->children.child[(id)])
 /*
  * OPTIONAL : Access to the field that points the parent of the node.
  *
  * This field is optional but is mandatory if AVL_HAS_PARENT_POINTER is not 0
  */
-#define AVL_PARENT(node) ((node)->parent)
+#define AVL_PARENT(node)                ((node)->parent)
 /*
  * Access to the field that keeps the balance (a signed byte)
  */
-#define AVL_BALANCE(node) ((node)->balance)
+#define AVL_BALANCE(node)               ((node)->balance)
 /*
  * The type used for comparing the nodes.
  */
-#define AVL_REFERENCE_TYPE u8*
+#define AVL_REFERENCE_TYPE              uint8_t *
 /*
  *
  */
 
-#define AVL_REFERENCE_FORMAT_STRING "%{digest32h}"
+#define AVL_REFERENCE_FORMAT_STRING     "%{digest32h}"
 #define AVL_REFERENCE_FORMAT(reference) reference
 
 /*
  * Two helpers macro, nothing to do with AVL
  */
-#define NODE_SIZE(node) (sizeof(AVL_NODE_TYPE) + (node)->digest[0])
-#define NODE_PAYLOAD_SIZE(node) (NODE_SIZE(node)-sizeof(nsec3_children_union)-1)
+#define NODE_SIZE(node)                 (sizeof(AVL_NODE_TYPE) + (node)->digest[0])
+#define NODE_PAYLOAD_SIZE(node)         (NODE_SIZE(node) - sizeof(nsec3_children_union) - 1)
 /*
  * A macro to initialize a node and setting the reference
  */
-#define AVL_INIT_NODE(node,reference) MEMCOPY((node)->digest,&(reference)[0],(reference)[0]+1)
+#define AVL_INIT_NODE(node, reference)  MEMCOPY((node)->digest, &(reference)[0], (reference)[0] + 1)
 /*
  * A macro to allocate a new node
  */
-#define AVL_ALLOC_NODE(node,reference)				\
-	yassert((reference)[0]!=0);					    \
-	ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE*, node, (sizeof(AVL_NODE_TYPE)+(reference)[0]), N3NODE_TAG); \
-	ZEROMEMORY(node,sizeof(AVL_NODE_TYPE)+(reference)[0])
+#define AVL_ALLOC_NODE(node, reference)                                                                                                                                                                                                        \
+    yassert((reference)[0] != 0);                                                                                                                                                                                                              \
+    ZALLOC_ARRAY_OR_DIE(AVL_NODE_TYPE *, node, (sizeof(AVL_NODE_TYPE) + (reference)[0]), N3NODE_TAG);                                                                                                                                          \
+    ZEROMEMORY(node, sizeof(AVL_NODE_TYPE) + (reference)[0])
 
 /*
  * A macro to free a node allocated by ALLOC_NODE
  */
 
-static void
-nsec3_free_node(nsec3_zone_item* node)
+static void nsec3_free_node(nsec3_zone_item_t *node)
 {
     /*
      * This assert is wrong because this is actually the payload that has just overwritten our node
-     * assert(node->rc == 0 && node->sc == 0 && node->label.owners == NULL && node->star_label.owners == NULL & node->type_bit_maps == NULL);
+     * assert(node->rc == 0 && node->sc == 0 && node->label.owners == NULL && node->star_label.owners == NULL &
+     * node->type_bit_maps == NULL);
      */
     if((node->rc | node->sc) != 0)
     {
         log_err("NSEC3 node %{digest32h} being deleted has RC,SC={%i,%i}, should be {0, 0}", node->digest, node->rc, node->sc);
     }
 
-    if(node->rrsig != NULL)
+    if(node->rrsig_rrset != NULL)
     {
-        log_warn("NSEC3 node %{digest32h} being deleted is still signed", node->digest);
-
-        zdb_packed_ttlrdata *rrsig = node->rrsig;
-
-        do
-        {
-            rdata_desc rrsig_record = {TYPE_RRSIG, ZDB_PACKEDRECORD_PTR_RDATASIZE(rrsig), ZDB_PACKEDRECORD_PTR_RDATAPTR(rrsig)};
-            log_debug("NSEC3 node %{digest32h} has %{typerdatadesc}", node->digest, &rrsig_record);
-
-            zdb_packed_ttlrdata *tmp = rrsig;
-            rrsig = rrsig->next;
-            ZDB_RECORD_ZFREE(tmp);
-        }
-        while(rrsig != NULL);
+        zdb_resource_record_set_delete(node->rrsig_rrset);
+        // node->rrsig_rrset = NULL;
     }
 
-    ZFREE_ARRAY(node->type_bit_maps, node->type_bit_maps_size);
-
+    nsec3_item_type_bitmap_free(node);
     node->type_bit_maps = NULL;
     node->type_bit_maps_size = 0;
 
-    u32 node_size = NSEC3_NODE_SIZE(node);
+    uint32_t node_size = NSEC3_NODE_SIZE(node);
     ZFREE_ARRAY(node, node_size);
 }
 
@@ -164,34 +153,34 @@ nsec3_free_node(nsec3_zone_item* node)
 /*
  * A macro to print the node
  */
-#define AVL_DUMP_NODE(node) format("node@%p",(node));
+#define AVL_DUMP_NODE(node) format("node@%p", (node));
 /*
  * A macro that returns the reference field of the node.
  * It must be of type REFERENCE_TYPE
  */
 #define AVL_REFERENCE(node) (node)->digest
 
-#define AVL_TERNARYCMP 1
+#define AVL_TERNARYCMP      1
 
 #if !AVL_TERNARYCMP
 /*
  * A macro to compare two references
- * Returns TRUE if and only if the references are equal.
+ * Returns true if and only if the references are equal.
  */
-#define AVL_ISEQUAL(reference_a,reference_b) (memcmp(&(reference_a)[1],&(reference_b)[1],(reference_a)[0])==0)
+#define AVL_ISEQUAL(reference_a, reference_b)  (memcmp(&(reference_a)[1], &(reference_b)[1], (reference_a)[0]) == 0)
 /*
  * A macro to compare two references
- * Returns TRUE if and only if the first one is bigger than the second one.
+ * Returns true if and only if the first one is bigger than the second one.
  */
-#define AVL_ISBIGGER(reference_a,reference_b) (memcmp(&(reference_a)[1],&(reference_b)[1],(reference_a)[0])>0)
+#define AVL_ISBIGGER(reference_a, reference_b) (memcmp(&(reference_a)[1], &(reference_b)[1], (reference_a)[0]) > 0)
 #else
-#define AVL_COMPARE(reference_a,reference_b) (memcmp(&(reference_a)[1],&(reference_b)[1],(reference_a)[0]))
+#define AVL_COMPARE(reference_a, reference_b) (memcmp(&(reference_a)[1], &(reference_b)[1], (reference_a)[0]))
 #endif
 /*
  * Copies the payload of a node
  * It MUST NOT copy the "proprietary" node fields : children, parent, balance
  */
-#define AVL_COPY_PAYLOAD(node_trg,node_src) MEMCOPY(&(node_trg)->flags,&(node_src)->flags,NODE_PAYLOAD_SIZE(node))
+#define AVL_COPY_PAYLOAD(node_trg, node_src) MEMCOPY(&(node_trg)->flags, &(node_src)->flags, NODE_PAYLOAD_SIZE(node))
 /*
  * A macro to preprocess a node before it is preprocessed for a delete (detach)
  * If there was anything to do BEFORE deleting a node, we would do it here
@@ -204,14 +193,13 @@ nsec3_free_node(nsec3_zone_item* node)
 
 #include <dnscore/avl.c.inc>
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE *root, const AVL_REFERENCE_TYPE obj_hash)
 {
-    AVL_NODE_TYPE* node = *root;
-    AVL_NODE_TYPE* lower_bound = NULL;
+    AVL_NODE_TYPE     *node = *root;
+    AVL_NODE_TYPE     *lower_bound = NULL;
     AVL_REFERENCE_TYPE h;
-    
-    //yassert(node != NULL);
+
+    // yassert(node != NULL);
 
     /* This is one of the parts I could try to optimize
      * I've checked the assembly, and it sucks ...
@@ -220,9 +208,9 @@ AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE
     /* Both the double-test while/ternary and the current one
      * are producing the same assembly code.
      */
-    
+
     /**
-     * Get a key that 
+     * Get a key that
      */
 
     while(node != NULL)
@@ -239,7 +227,9 @@ AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE
 #if DEBUG
         if(h[0] != obj_hash[0])
         {
-            DIE_MSG("NSEC3 corrupted NSEC3 node");
+            puts("NSEC3 corrupted NSEC3 node");
+            fflush(NULL);
+            abort();
         }
 #endif
 
@@ -255,14 +245,14 @@ AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE
         if(cmp > 0)
         {
             lower_bound = node;
-            node = AVL_CHILD(node, DIR_RIGHT);            
+            node = AVL_CHILD(node, DIR_RIGHT);
         }
         else
         {
             node = AVL_CHILD(node, DIR_LEFT);
         }
     }
-    
+
     if(lower_bound == NULL)
     {
         lower_bound = *root;
@@ -275,25 +265,24 @@ AVL_PREFIXED(find_interval_start)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE
             }
         }
     }
-    
+
     return lower_bound;
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE *root, const AVL_REFERENCE_TYPE obj_hash)
 {
-    AVL_NODE_TYPE* node = *root;
-    AVL_NODE_TYPE* lower_bound = NULL;
+    AVL_NODE_TYPE     *node = *root;
+    AVL_NODE_TYPE     *lower_bound = NULL;
     AVL_REFERENCE_TYPE h;
-    
+
     yassert(node != NULL);
 
     /* Both the double-test while/ternary and the current one
      * are producing the same assembly code.
      */
-    
+
     /**
-     * Get a key that 
+     * Get a key that
      */
 
     while(node != NULL)
@@ -310,7 +299,9 @@ AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERE
 #if DEBUG
         if(h[0] != obj_hash[0])
         {
-            DIE_MSG("NSEC3 corrupted NSEC3 node");
+            puts("NSEC3 corrupted NSEC3 node");
+            fflush(NULL);
+            abort();
         }
 #endif
 
@@ -326,36 +317,35 @@ AVL_PREFIXED(find_interval_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERE
         if(cmp > 0)
         {
             lower_bound = node;
-            node = AVL_CHILD(node, DIR_RIGHT);            
+            node = AVL_CHILD(node, DIR_RIGHT);
         }
         else
         {
             node = AVL_CHILD(node, DIR_LEFT);
         }
     }
-    
+
     if(lower_bound == NULL)
     {
         lower_bound = *root;
-        
+
         yassert(lower_bound != NULL);
-        
+
         while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL) // VS false positive: an assert says this can't happen
         {
             lower_bound = node;
         }
     }
-    
+
     return lower_bound;
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE *root, const AVL_REFERENCE_TYPE obj_hash)
 {
-    AVL_NODE_TYPE* node = *root;
-    AVL_NODE_TYPE* lower_bound = NULL;
+    AVL_NODE_TYPE     *node = *root;
+    AVL_NODE_TYPE     *lower_bound = NULL;
     AVL_REFERENCE_TYPE h;
-    
+
     yassert(node != NULL);
 
     /* This is one of the parts I could try to optimize
@@ -365,9 +355,9 @@ AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE 
     /* Both the double-test while/ternary and the current one
      * are producing the same assembly code.
      */
-    
+
     /**
-     * Get a key that 
+     * Get a key that
      */
 
     while(node != NULL)
@@ -384,7 +374,9 @@ AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE 
 #if DEBUG
         if(h[0] != obj_hash[0])
         {
-            DIE_MSG("NSEC3 corrupted NSEC3 node");
+            puts("NSEC3 corrupted NSEC3 node");
+            fflush(NULL);
+            abort();
         }
 #endif
 
@@ -394,7 +386,7 @@ AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE 
         if(cmp == 0)
         {
             // want the prev mod
-            
+
             return nsec3_node_mod_prev(node);
         }
 
@@ -402,26 +394,26 @@ AVL_PREFIXED(find_prev_mod)(AVL_CONST_TREE_TYPE* root, const AVL_REFERENCE_TYPE 
         if(cmp > 0)
         {
             lower_bound = node;
-            node = AVL_CHILD(node, DIR_RIGHT);            
+            node = AVL_CHILD(node, DIR_RIGHT);
         }
         else
         {
             node = AVL_CHILD(node, DIR_LEFT);
         }
     }
-    
+
     if(lower_bound == NULL)
     {
         lower_bound = *root;
-        
+
         yassert(lower_bound != NULL);
-        
+
         while((node = AVL_CHILD(lower_bound, DIR_RIGHT)) != NULL) // VS false positive: an assert says this can't happen
         {
             lower_bound = node;
         }
     }
-    
+
     return lower_bound;
 }
 

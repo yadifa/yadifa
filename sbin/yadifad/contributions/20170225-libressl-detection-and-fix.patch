@@ -27,7 +27,7 @@ index 43fe450..54b93f0 100644
  
  /*
   * Backward-compatible interface for 0.9.x
-@@ -226,7 +226,7 @@ dnskey_dsa_genkey(u32 size)
+@@ -226,7 +226,7 @@ dnskey_dsa_genkey(uint32_t size)
      int err;
      DSA* dsa;
  

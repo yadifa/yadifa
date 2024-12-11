@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _TCP_INPUT_STREAM_H
-#define	_TCP_INPUT_STREAM_H
+#define _TCP_INPUT_STREAM_H
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -52,66 +51,70 @@
 
 #include <dnscore/host_address.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
-    
-ya_result gethostaddr(const char* host, u16 port, struct sockaddr *sa, int family);
 
-ya_result tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
+ya_result gethostaddr(const char *host, uint16_t port, struct sockaddr *sa, int family);
 
-ya_result tcp_input_output_stream_connect_ex(const char *server, u16 port, input_stream *istream_, output_stream *ostream_, struct sockaddr *bind_from, u8 to_sec);
+ya_result tcp_input_output_stream_connect_sockaddr(const struct sockaddr *sa, input_stream_t *istream_, output_stream_t *ostream_, struct sockaddr *bind_from, uint8_t to_sec);
 
-ya_result tcp_input_output_stream_connect(const char *server, u16 port, input_stream *istream, output_stream *ostream);
+ya_result tcp_input_output_stream_connect_ex(const char *server, uint16_t port, input_stream_t *istream_, output_stream_t *ostream_, struct sockaddr *bind_from, uint8_t to_sec);
 
-ya_result tcp_input_output_stream_connect_host_address(const host_address *ha, input_stream *istream_, output_stream *ostream_, u8 to_sec);
+/**
+ * Note: port is native endian
+ */
 
-ya_result tcp_input_output_stream_connect_host_address_ex(const host_address *ha, input_stream *istream_, output_stream *ostream_, const host_address *bind_to, u8 to_sec);
+ya_result tcp_input_output_stream_connect(const char *server, uint16_t port, input_stream_t *istream, output_stream_t *ostream);
 
-ya_result tcp_io_stream_connect_ex(const char *server, u16 port, io_stream *ios, struct sockaddr *bind_from);
+ya_result tcp_input_output_stream_connect_host_address(const host_address_t *ha, input_stream_t *istream_, output_stream_t *ostream_, uint8_t to_sec);
 
-ya_result tcp_io_stream_connect(const char *server, u16 port, io_stream *ios);
+ya_result tcp_input_output_stream_connect_host_address_ex(const host_address_t *ha, input_stream_t *istream_, output_stream_t *ostream_, const host_address_t *bind_to, uint8_t to_sec);
 
-void tcp_set_sendtimeout(int fd, int seconds, int useconds);
-void tcp_get_sendtimeout(int fd, int *seconds, int *useconds);
+ya_result tcp_io_stream_connect_ex(const char *server, uint16_t port, io_stream_t *ios, struct sockaddr *bind_from);
 
-void tcp_set_recvtimeout(int fd, int seconds, int useconds);
-void tcp_get_recvtimeout(int fd, int *seconds, int *useconds);
+ya_result tcp_io_stream_connect(const char *server, uint16_t port, io_stream_t *ios);
 
-void tcp_set_linger(int fd, bool enable, int seconds);
+void      tcp_set_sendtimeout(int fd, int seconds, int useconds);
+void      tcp_get_sendtimeout(int fd, int *seconds, int *useconds);
+
+void      tcp_set_recvtimeout(int fd, int seconds, int useconds);
+void      tcp_get_recvtimeout(int fd, int *seconds, int *useconds);
+
+void      tcp_set_linger(int fd, bool enable, int seconds);
 
 /**
  * Nagle
- * 
+ *
  * @param fd
  * @param enable
  */
-void tcp_set_nodelay(int fd, bool enable);
+void               tcp_set_nodelay(int fd, bool enable);
 
-void tcp_set_cork(int fd, bool enable);
+void               tcp_set_cork(int fd, bool enable);
 
 static inline void tcp_set_graceful_close(int fd) // no-wait possible
 {
-    tcp_set_linger(fd, FALSE, 0);
+    tcp_set_linger(fd, false, 0);
 }
 
 static inline void tcp_set_abortive_close(int fd) // closes now
 {
-    tcp_set_linger(fd, TRUE, 0);
+    tcp_set_linger(fd, true, 0);
 }
 
 static inline void tcp_set_agressive_close(int fd, int seconds) // closes up to seconds after the close ...
 {
-    tcp_set_linger(fd, TRUE, seconds);
+    tcp_set_linger(fd, true, seconds);
 }
 
 void tcp_init_with_env();
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _TCP_INTPUT_STREAM_H */
+#endif /* _TCP_INTPUT_STREAM_H */
 
 /** @} */

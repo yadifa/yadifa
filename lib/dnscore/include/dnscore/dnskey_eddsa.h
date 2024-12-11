@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnskey DNSSEC keys functions
- *  @ingroup dnsdbdnssec
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup dnskey DNSSEC keys functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
@@ -49,16 +48,25 @@
 #include <dnscore/dnskey.h>
 #include <dnscore/parser.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
+#if DNSCORE_HAS_LIBRESSL_MODE
+#ifndef HAS_EDDSA_SUPPORT
+#define HAS_EDDSA_SUPPORT 0
+#endif
+#ifndef DNSCORE_HAS_EDDSA_SUPPORT
+#define DNSCORE_HAS_EDDSA_SUPPORT 0
+#endif
+#else
 #ifndef HAS_EDDSA_SUPPORT
 #define HAS_EDDSA_SUPPORT 1
 #endif
-
 #ifndef DNSCORE_HAS_EDDSA_SUPPORT
 #define DNSCORE_HAS_EDDSA_SUPPORT 1
+#endif
 #endif
 
 #if /**/ HAS_EDDSA_SUPPORT != DNSCORE_HAS_EDDSA_SUPPORT // the comment is to avoid breaking with a search & replace
@@ -68,13 +76,13 @@ extern "C" {
 #if !DNSCORE_HAS_EDDSA_SUPPORT
 #endif
 
-ya_result dnskey_eddsa_loadpublic(const u8 *rdata, u16 rdata_size, const char *origin, dnssec_key** out_key);
+ya_result dnskey_eddsa_loadpublic(const uint8_t *rdata, uint16_t rdata_size, const char *origin, dnskey_t **out_key);
 
-ya_result dnskey_eddsa_newinstance(u32 size, u8 algorithm,u16 flags, const char *origin, dnssec_key** out_key);
+ya_result dnskey_eddsa_newinstance(uint32_t size, uint8_t algorithm, uint16_t flags, const char *origin, dnskey_t **out_key);
 
-void dnskey_eddsa_parse_init(dnskey_field_parser *fp);
+void      dnskey_eddsa_parse_init(dnskey_field_parser *fp);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

@@ -8,9 +8,9 @@
 	# This MUST point into yadifa's keys directory.
 	# Only one key path is supported, one path per zone handling can be implemented if needed
 
-	keys-path "/usr/local/var/zones/keys"
-	plan-path "/usr/local/var/plans"
-	log-path "/usr/local/var/log/yakeyrolld"
+	keys-path "/var/zones/keys"
+	plan-path "/var/plans"
+	log-path "/var/log/yakeyrolld"
 
 	uid yadifad
 	gid yadifad

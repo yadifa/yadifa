@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,50 +28,47 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _AXFR_H
-#define	_AXFR_H
+#define _AXFR_H
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/host_address.h>
-#if DNSCORE_HAS_TCP_MANAGER
-#include <dnscore/tcp_manager.h>
-#endif
-/**
- * 
- * Handle an AXFR query from a slave.
- *
- * If we don't do this many slaves could call with a small interval asking a just-dynupdated snapshot.
- * If we do it the slaves will be only a few steps behind and the next notification/ixfr will bring them up to date.
- *
- */
+#include <dnscore/tcp_manager2.h>
 
-#if DNSCORE_HAS_TCP_MANAGER
-ya_result axfr_process(message_data *mesg, tcp_manager_socket_context_t *sctx);
-#else
-ya_result axfr_process(message_data *mesg, int sockfd);
-#endif
+ya_result axfr_process_init();
+ya_result axfr_process_finalise();
 
 /**
  *
- * Send an AXFR query to a master and handle the answer (loads the zone)
- * 
+ * Handle an AXFR query from a secondary.
+ *
+ * If we don't do this many secondaries could call with a small interval asking a just-dynupdated snapshot.
+ * If we do it the secondaries will be only a few steps behind and the next notification/ixfr will bring them up to
+ * date.
+ *
  */
 
-ya_result axfr_query(const host_address *servers, const u8 *origin, u32* out_loaded_serial);
-ya_result axfr_query_ex(const host_address *servers, const u8 *origin, u32* out_loaded_serial, u32* out_loaded_refresh);
+ya_result axfr_process(dns_message_t *mesg, tcp_manager_channel_t *tmc);
 
+/**
+ *
+ * Send an AXFR query to a primary and handle the answer (loads the zone)
+ *
+ */
 
-#endif	/* _AXFR_H */
+ya_result axfr_query(const host_address_t *servers, const uint8_t *origin, uint32_t *out_loaded_serial);
+ya_result axfr_query_ex(const host_address_t *servers, const uint8_t *origin, uint32_t *out_loaded_serial, uint32_t *out_loaded_refresh);
+
+#endif /* _AXFR_H */
 
 /** @} */

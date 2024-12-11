@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,35 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup nsec NSEC functions
- *  @ingroup dnsdbdnssec
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup nsec NSEC functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _NSEC_COMMON_H
-#define	_NSEC_COMMON_H
+#define _NSEC_COMMON_H
 
 #include <dnscore/sys_types.h>
 #include <dnsdb/zdb_types.h>
 #include <dnscore/typebitmap.h>
 #include <dnsdb/dnssec_config.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-u32 nsec_type_bit_maps_initialise_from_label(type_bit_maps_context *context, zdb_rr_label *label, bool force_nsec,
-                                             bool force_rrsig);
+uint32_t nsec_type_bit_maps_initialise_from_label(type_bit_maps_context_t *context, zdb_rr_label_t *label, bool force_nsec, bool force_rrsig);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _NSEC_COMMON_H */
+#endif /* _NSEC_COMMON_H */
 /** @} */

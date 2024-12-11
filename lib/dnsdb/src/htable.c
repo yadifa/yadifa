@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Hash-Table structure and functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Hash-Table structure and functions.
  *
  *  Implementation of the Hash-Table structure and functions.
  *  It can be configured to be thread-safe. (4 modes)
@@ -42,11 +41,14 @@
  *  It is used in the hash-table of balanced trees structure. (htbt)
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
-#include "dnsdb/dnsdb-config.h"
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
+#include "dnsdb/dnsdb_config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <dnscore/sys_types.h>
@@ -59,14 +61,13 @@
  *  @return A pointer to the htable or NULL if an error occurred
  */
 
-htable_entry*
-htable_alloc()
+htable_entry *htable_alloc()
 {
     htable_entry *table;
 
-    MALLOC_OR_DIE(htable_entry*, table, sizeof(htable_entry) * DEFAULT_HTABLE_SIZE, HTABLE_TAG);
+    MALLOC_OR_DIE(htable_entry *, table, sizeof(htable_entry) * DEFAULT_HTABLE_SIZE, HTABLE_TAG);
 
-    u32 i;
+    uint32_t i;
 
     for(i = 0; i < DEFAULT_HTABLE_SIZE; i++)
     {
@@ -84,8 +85,7 @@ htable_alloc()
  *
  */
 
-void
-htable_free(htable_entry* table)
+void htable_free(htable_entry *table)
 {
     yassert(table != NULL);
 
@@ -93,5 +93,3 @@ htable_free(htable_entry* table)
 }
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

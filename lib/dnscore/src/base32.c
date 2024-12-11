@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
-
-/**
- *  @defgroup base Base conversion functions
- *  @ingroup dnscore
- *  @brief Base 32 codec
- *
- * Base 32 codec functions
- * 
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+/**-----------------------------------------------------------------------------
+ * @defgroup base Base conversion functions
+ * @ingroup dnscore
+ * @brief Base 32 codec
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
+ *
+ * Base 32 codec functions
+ *
+ *----------------------------------------------------------------------------*/
+
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 
 #include "dnscore/base32.h"
@@ -53,78 +54,54 @@
 #define BASE32_PADDING '='
 
 static const char __BASE32__[256] = {
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', '2', '3', '4', '5', '6', '7',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7',
 };
 
 /**
  * Encodes bytes into base32
  * The output size must be at least size_in * 8/5
- * 
+ *
  * @param buffer_in     bytes to convert
  * @param size_in       number of bytes
  * @param buffer_out    output buffer of a size >= size_in * 8/5
- * 
+ *
  * @return output size
  */
-u32
-base32_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
+uint32_t base32_encode(const void *buffer_in_, uint32_t size_in, char *buffer_out)
 {
-    char* ptr = buffer_out;
+    const uint8_t *buffer_in = (const uint8_t *)buffer_in_;
+    char          *ptr = buffer_out;
 
     while(size_in >= 5)
     {
-        u8 b0 = *buffer_in++;
-        u8 b1 = *buffer_in++;
-        u8 b2 = *buffer_in++;
-        u8 b3 = *buffer_in++;
-        u8 b4 = *buffer_in++;
+        uint8_t b0 = *buffer_in++;
+        uint8_t b1 = *buffer_in++;
+        uint8_t b2 = *buffer_in++;
+        uint8_t b3 = *buffer_in++;
+        uint8_t b4 = *buffer_in++;
 
-        *ptr++ = __BASE32__[ b0 >> 3 ];
-        *ptr++ = __BASE32__[(u8)((b0 << 2) | (b1 >> 6))];
-        *ptr++ = __BASE32__[ b1 >> 1 ];
-        *ptr++ = __BASE32__[(u8)((b1 << 4) | (b2 >> 4))];
-        *ptr++ = __BASE32__[(u8)((b2 << 1) | (b3 >> 7))];
-        *ptr++ = __BASE32__[ b3 >> 2 ];
-        *ptr++ = __BASE32__[(u8)((b3 << 3) | (b4 >> 5))];
-        *ptr++ = __BASE32__[ b4 ];
+        *ptr++ = __BASE32__[b0 >> 3];
+        *ptr++ = __BASE32__[(uint8_t)((b0 << 2) | (b1 >> 6))];
+        *ptr++ = __BASE32__[b1 >> 1];
+        *ptr++ = __BASE32__[(uint8_t)((b1 << 4) | (b2 >> 4))];
+        *ptr++ = __BASE32__[(uint8_t)((b2 << 1) | (b3 >> 7))];
+        *ptr++ = __BASE32__[b3 >> 2];
+        *ptr++ = __BASE32__[(uint8_t)((b3 << 3) | (b4 >> 5))];
+        *ptr++ = __BASE32__[b4];
 
         size_in -= 5;
     }
@@ -133,34 +110,34 @@ base32_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
     {
         case 4:
         {
-            u8 b0 = *buffer_in++;
-            u8 b1 = *buffer_in++;
-            u8 b2 = *buffer_in++;
-            u8 b3 = *buffer_in++;
+            uint8_t b0 = *buffer_in++;
+            uint8_t b1 = *buffer_in++;
+            uint8_t b2 = *buffer_in++;
+            uint8_t b3 = *buffer_in++;
 
-            *ptr++ = __BASE32__[ b0 >> 3 ];
-            *ptr++ = __BASE32__[(u8)((b0 << 2) | (b1 >> 6))];
-            *ptr++ = __BASE32__[ b1 >> 1 ];
-            *ptr++ = __BASE32__[(u8)((b1 << 4) | (b2 >> 4))];
-            *ptr++ = __BASE32__[(u8)((b2 << 1) | (b3 >> 7))];
-            *ptr++ = __BASE32__[ b3 >> 2 ];
+            *ptr++ = __BASE32__[b0 >> 3];
+            *ptr++ = __BASE32__[(uint8_t)((b0 << 2) | (b1 >> 6))];
+            *ptr++ = __BASE32__[b1 >> 1];
+            *ptr++ = __BASE32__[(uint8_t)((b1 << 4) | (b2 >> 4))];
+            *ptr++ = __BASE32__[(uint8_t)((b2 << 1) | (b3 >> 7))];
+            *ptr++ = __BASE32__[b3 >> 2];
 
-            *ptr++ = __BASE32__[(u8)(b3 << 3)];
+            *ptr++ = __BASE32__[(uint8_t)(b3 << 3)];
             *ptr++ = BASE32_PADDING;
             break;
         }
         case 3:
         {
-            u8 b0 = *buffer_in++;
-            u8 b1 = *buffer_in++;
-            u8 b2 = *buffer_in++;
+            uint8_t b0 = *buffer_in++;
+            uint8_t b1 = *buffer_in++;
+            uint8_t b2 = *buffer_in++;
 
-            *ptr++ = __BASE32__[ b0 >> 3 ];
-            *ptr++ = __BASE32__[(u8)((b0 << 2) | (b1 >> 6))];
-            *ptr++ = __BASE32__[ b1 >> 1 ];
-            *ptr++ = __BASE32__[(u8)((b1 << 4) | (b2 >> 4))];
+            *ptr++ = __BASE32__[b0 >> 3];
+            *ptr++ = __BASE32__[(uint8_t)((b0 << 2) | (b1 >> 6))];
+            *ptr++ = __BASE32__[b1 >> 1];
+            *ptr++ = __BASE32__[(uint8_t)((b1 << 4) | (b2 >> 4))];
 
-            *ptr++ = __BASE32__[(u8)(b2 << 1)];
+            *ptr++ = __BASE32__[(uint8_t)(b2 << 1)];
             *ptr++ = BASE32_PADDING;
             *ptr++ = BASE32_PADDING;
             *ptr++ = BASE32_PADDING;
@@ -168,14 +145,14 @@ base32_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
         }
         case 2:
         {
-            u8 b0 = *buffer_in++;
-            u8 b1 = *buffer_in++;
+            uint8_t b0 = *buffer_in++;
+            uint8_t b1 = *buffer_in++;
 
-            *ptr++ = __BASE32__[ b0 >> 3 ];
-            *ptr++ = __BASE32__[(u8)((b0 << 2) | (b1 >> 6))];
-            *ptr++ = __BASE32__[ b1 >> 1 ];
+            *ptr++ = __BASE32__[b0 >> 3];
+            *ptr++ = __BASE32__[(uint8_t)((b0 << 2) | (b1 >> 6))];
+            *ptr++ = __BASE32__[b1 >> 1];
 
-            *ptr++ = __BASE32__[(u8)(b1 << 4)];
+            *ptr++ = __BASE32__[(uint8_t)(b1 << 4)];
             *ptr++ = BASE32_PADDING;
             *ptr++ = BASE32_PADDING;
             *ptr++ = BASE32_PADDING;
@@ -184,10 +161,10 @@ base32_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
         }
         case 1:
         {
-            u8 b0 = *buffer_in++;
+            uint8_t b0 = *buffer_in++;
 
-            *ptr++ = __BASE32__[ b0 >> 3 ];
-            *ptr++ = __BASE32__[(u8)(b0 << 2) ];
+            *ptr++ = __BASE32__[b0 >> 3];
+            *ptr++ = __BASE32__[(uint8_t)(b0 << 2)];
 
             *ptr++ = BASE32_PADDING;
             *ptr++ = BASE32_PADDING;
@@ -199,82 +176,67 @@ base32_encode(const u8* buffer_in, u32 size_in, char* buffer_out)
         }
     }
 
-    return (u32)(ptr - buffer_out);
+    return (uint32_t)(ptr - buffer_out);
 }
 
 #define __DEBASE32__STOP__ 0x80
 
-static const u8 __DEBASE32__[256] = {
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /*  0 -  7 */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /*  8 - 15 */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 16 - 23 */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 24 - 31 */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 32 - 39 */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 40 - 47 ...+.../ */
-    0xff, 0xff, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, /* 01234567 */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0x80, 0xff, 0xff, /* 89...=.. */
+static const uint8_t __DEBASE32__[256] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /*  0 -  7 */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /*  8 - 15 */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 16 - 23 */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 24 - 31 */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 32 - 39 */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* 40 - 47 ...+.../ */
+                                          0xff, 0xff, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, /* 01234567 */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0x80, 0xff, 0xff, /* 89...=.. */
 
-    0xff, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, /* .ABCDEFG */
-    0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, /* HIJKLMNO */
-    0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, /* PQRSTUVW */
-    0x17, 0x18, 0x19, 0xff, 0xff, 0xff, 0xff, 0xff, /* XYZ..... */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* .abcdefg */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* hijklmno */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* pqrstuvw */
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* xyz..... */
+                                          0xff, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, /* .ABCDEFG */
+                                          0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, /* HIJKLMNO */
+                                          0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, /* PQRSTUVW */
+                                          0x17, 0x18, 0x19, 0xff, 0xff, 0xff, 0xff, 0xff, /* XYZ..... */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* .abcdefg */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* hijklmno */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* pqrstuvw */
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, /* xyz..... */
 
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /**
  * Decodes base32 into bytes
  * The output size must be at least size_in * 5/8
- * 
+ *
  * @param buffer_in     base32 text
  * @param size_in       number of chars
  * @param buffer_out    output buffer of a size >= size_in * 5/8
- * 
+ *
  * @return output size
  */
-ya_result
-base32_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
+ya_result base32_decode(const char *buffer_in, uint32_t size_in, uint8_t *buffer_out)
 {
     if((size_in & 7) != 0)
     {
         return PARSEB32_ERROR; // wrong number of bytes
     }
 
-    u8* in = (u8*)buffer_in;
-    u8* out = buffer_out;
+    uint8_t *in = (uint8_t *)buffer_in;
+    uint8_t *out = buffer_out;
 
     while(size_in > 8)
     {
-        u8 a = __DEBASE32__[*in++];
-        u8 b = __DEBASE32__[*in++];
-        u8 c = __DEBASE32__[*in++];
-        u8 d = __DEBASE32__[*in++];
-        u8 e = __DEBASE32__[*in++];
-        u8 f = __DEBASE32__[*in++];
-        u8 g = __DEBASE32__[*in++];
-        u8 h = __DEBASE32__[*in++];
+        uint8_t a = __DEBASE32__[*in++];
+        uint8_t b = __DEBASE32__[*in++];
+        uint8_t c = __DEBASE32__[*in++];
+        uint8_t d = __DEBASE32__[*in++];
+        uint8_t e = __DEBASE32__[*in++];
+        uint8_t f = __DEBASE32__[*in++];
+        uint8_t g = __DEBASE32__[*in++];
+        uint8_t h = __DEBASE32__[*in++];
 
-        if(((a | b | c | d | e | f | g | h)&0x40) != 0x00)
+        if(((a | b | c | d | e | f | g | h) & 0x40) != 0x00)
         {
             /* PARSE ERROR */
 
@@ -292,10 +254,10 @@ base32_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 
     if(size_in != 0) /* It's either 0 or 4 */
     {
-        u8 a = __DEBASE32__[*in++];
-        u8 b = __DEBASE32__[*in++];
+        uint8_t a = __DEBASE32__[*in++];
+        uint8_t b = __DEBASE32__[*in++];
 
-        if(((a | b)&0xc0) != 0x00)
+        if(((a | b) & 0xc0) != 0x00)
         {
             /* PARSE ERROR */
 
@@ -304,19 +266,19 @@ base32_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 
         *out++ = (a << 3) | (b >> 2);
 
-        u8 c = __DEBASE32__[*in++];
-        u8 d = __DEBASE32__[*in++];
+        uint8_t c = __DEBASE32__[*in++];
+        uint8_t d = __DEBASE32__[*in++];
 
         if((c != __DEBASE32__STOP__) && (d != __DEBASE32__STOP__))
         {
-            if(((c | d)&0x40) != 0)
+            if(((c | d) & 0x40) != 0)
             {
                 return PARSEB32_ERROR;
             }
 
             *out++ = (b << 6) | (c << 1) | (d >> 4);
 
-            u8 e = __DEBASE32__[*in++];
+            uint8_t e = __DEBASE32__[*in++];
 
             if(e != __DEBASE32__STOP__)
             {
@@ -327,19 +289,19 @@ base32_decode(const char* buffer_in, u32 size_in, u8* buffer_out)
 
                 *out++ = (d << 4) | (e >> 1);
 
-                u8 f = __DEBASE32__[*in++];
-                u8 g = __DEBASE32__[*in++];
+                uint8_t f = __DEBASE32__[*in++];
+                uint8_t g = __DEBASE32__[*in++];
 
                 if((f != __DEBASE32__STOP__) && (g != __DEBASE32__STOP__))
                 {
-                    if(((f | g)&0x40) != 0)
+                    if(((f | g) & 0x40) != 0)
                     {
                         return PARSEB32_ERROR;
                     }
 
                     *out++ = (e << 7) | (f << 2) | (g >> 3);
 
-                    u8 h = __DEBASE32__[*in++];
+                    uint8_t h = __DEBASE32__[*in++];
 
                     if(h != __DEBASE32__STOP__)
                     {

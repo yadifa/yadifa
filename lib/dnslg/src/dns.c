@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,33 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #include <dnscore/sys_types.h>
 #include <dnscore/random.h>
 
-static random_ctx id_random_ctx = NULL;
+static random_ctx_t id_random_ctx = NULL;
 
-u16
-dns_new_id(void)
+uint16_t            dns_new_id(void)
 {
     if(id_random_ctx == NULL)
     {
         id_random_ctx = random_init_auto();
     }
-    
-    u16 id = (u16)random_next(id_random_ctx);
-    
+
+    uint16_t id = (uint16_t)random_next(id_random_ctx);
+
     return id;
 }
 
-void
-dnslg_init()
+void dnslg_init()
 {
     // created because the detection functions for dnslg are looking specifically for this
     // initialise structures
     // start service(s)
 }
 
-void
-dnslg_finalize()
+void dnslg_finalize()
 {
     // stop service(s)
     // clear memory

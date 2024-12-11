@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,19 +28,26 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup debug Debug functions
- *  @ingroup dnscore
- *  @brief Debug functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup debug Debug functions
+ * @ingroup dnscore
+ * @brief Debug functions.
  *
  *  Definitions of debug functions/hooks, mainly memory related.
  *
  * @{
- */
-#include "dnscore/dnscore-config.h"
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
+ *
+// CentOS 5.9 requires this to have PTHREAD_MUTEX_RECURSIVE
+ *
+ *----------------------------------------------------------------------------*/
+#define _GNU_SOURCE 1
+
+#include "dnscore/dnscore_config.h"
 #include "dnscore/debug_config.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,13 +73,12 @@
 #if DEBUG
 
 static pthread_mutex_t debug_bench_mtx = PTHREAD_MUTEX_INITIALIZER;
-static debug_bench_s *debug_bench_first = NULL;
-static bool debug_bench_init_done = FALSE;
+static debug_bench_t  *debug_bench_first = NULL;
+static bool            debug_bench_init_done = false;
 
-void debug_bench_malloc_init();
+void                   debug_bench_malloc_init();
 
-void
-debug_bench_init()
+void                   debug_bench_init()
 {
     if(debug_bench_init_done)
     {
@@ -82,21 +88,21 @@ debug_bench_init()
     debug_bench_malloc_init();
 
     pthread_mutexattr_t mta;
-    int err;
-    
+    int                 err;
+
     err = pthread_mutexattr_init(&mta);
-    
+
     if(err == 0)
     {
         err = pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
-    
+
         if(err == 0)
         {
             err = pthread_mutex_init(&debug_bench_mtx, &mta);
 
             if(err == 0)
             {
-                debug_bench_init_done = TRUE;
+                debug_bench_init_done = true;
             }
             else
             {
@@ -107,7 +113,7 @@ debug_bench_init()
         {
             formatln("debug_bench_init: pthread_mutexattr_settype: %r", MAKE_ERRNO_ERROR(err));
         }
-        
+
         pthread_mutexattr_destroy(&mta);
     }
     else
@@ -116,8 +122,7 @@ debug_bench_init()
     }
 }
 
-void
-debug_bench_register(debug_bench_s *bench, const char *name)
+void debug_bench_register(debug_bench_t *bench, const char *name)
 {
     if((bench == NULL) || (name == NULL))
     {
@@ -125,18 +130,18 @@ debug_bench_register(debug_bench_s *bench, const char *name)
     }
 
     pthread_mutex_lock(&debug_bench_mtx);
-    
-    debug_bench_s *b = debug_bench_first;
+
+    debug_bench_t *b = debug_bench_first;
     while((b != bench) && (b != NULL))
     {
         b = b->next;
     }
-    
+
     if(b == NULL)
     {
         bench->next = debug_bench_first;
         bench->name = strdup(name);
-        bench->time_min = MAX_U64;
+        bench->time_min = U64_MAX;
         bench->time_max = 0;
         bench->time_total = 0;
         bench->time_count = 0;
@@ -149,8 +154,7 @@ debug_bench_register(debug_bench_s *bench, const char *name)
     pthread_mutex_unlock(&debug_bench_mtx);
 }
 
-void
-debug_bench_commit(debug_bench_s *bench, u64 delta)
+void debug_bench_commit(debug_bench_t *bench, uint64_t delta)
 {
     pthread_mutex_lock(&debug_bench_mtx);
     bench->time_min = MIN(bench->time_min, delta);
@@ -163,7 +167,7 @@ debug_bench_commit(debug_bench_s *bench, u64 delta)
 void debug_bench_logdump_all()
 {
     pthread_mutex_lock(&debug_bench_mtx);
-    debug_bench_s *p = debug_bench_first;
+    debug_bench_t *p = debug_bench_first;
     while(p != NULL)
     {
         double min = p->time_min;
@@ -172,9 +176,9 @@ void debug_bench_logdump_all()
         max /= ONE_SECOND_US_F;
         double total = p->time_total;
         total /= ONE_SECOND_US_F;
-        u32 count = p->time_count;
-        double total_mean = (count != 0)?total/count:0;
-        double total_rate = (total != 0)?count/total:0;
+        uint32_t count = p->time_count;
+        double   total_mean = (count != 0) ? total / count : 0;
+        double   total_rate = (total != 0) ? count / total : 0;
         if(logger_is_running())
         {
             log_info("bench: %16s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%12.3f/s calls=%9u", p->name, min, max, total, total_mean, total_rate, count);
@@ -188,10 +192,10 @@ void debug_bench_logdump_all()
     pthread_mutex_unlock(&debug_bench_mtx);
 }
 
-void debug_bench_print_all(output_stream *os)
+void debug_bench_print_all(struct output_stream_s *os)
 {
     pthread_mutex_lock(&debug_bench_mtx);
-    debug_bench_s *p = debug_bench_first;
+    debug_bench_t *p = debug_bench_first;
     while(p != NULL)
     {
         double min = p->time_min;
@@ -200,9 +204,9 @@ void debug_bench_print_all(output_stream *os)
         max /= ONE_SECOND_US_F;
         double total = p->time_total;
         total /= ONE_SECOND_US_F;
-        u32 count = p->time_count;
-        double total_mean = (count != 0)?total/count:0;
-        double total_rate = (total != 0)?count/total:0;
+        uint32_t count = p->time_count;
+        double   total_mean = (count != 0) ? total / count : 0;
+        double   total_rate = (total != 0) ? count / total : 0;
         osformatln(os, "bench: %16s: [%9.6fs:%9.6fs] total=%9.6fs mean=%9.6fs rate=%12.3f/s calls=%9u", p->name, min, max, total, total_mean, total_rate, count);
         p = p->next;
     }
@@ -212,15 +216,15 @@ void debug_bench_print_all(output_stream *os)
 void debug_bench_unregister_all()
 {
     pthread_mutex_lock(&debug_bench_mtx);
-    debug_bench_s *p = debug_bench_first;
+    debug_bench_t *p = debug_bench_first;
     while(p != NULL)
     {
-        debug_bench_s *tmp = p;
+        debug_bench_t *tmp = p;
         p = p->next;
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-        debug_free((void*)tmp->name,__FILE__,__LINE__);
+        debug_free((void *)tmp->name, __FILE__, __LINE__);
 #else
-        free((void*)tmp->name);
+        free((void *)tmp->name);
 #endif
     }
     debug_bench_first = NULL;
@@ -228,33 +232,23 @@ void debug_bench_unregister_all()
 }
 #else
 
-void
-debug_bench_init()
-{
-}
+void debug_bench_init() {}
 
-void
-debug_bench_register(debug_bench_s *bench, const char *name)
+void debug_bench_register(debug_bench_t *bench, const char *name)
 {
     (void)bench;
     (void)name;
 }
 
-void
-debug_bench_commit(debug_bench_s *bench, u64 delta)
+void debug_bench_commit(debug_bench_t *bench, uint64_t delta)
 {
     (void)bench;
     (void)delta;
 }
 
-void debug_bench_logdump_all()
-{
-}
+void debug_bench_logdump_all() {}
 
-void
-debug_bench_unregister_all()
-{
-}
+void debug_bench_unregister_all() {}
 
 #endif
 

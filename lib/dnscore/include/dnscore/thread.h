@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
@@ -47,6 +45,8 @@
 #include <signal.h>
 #if HAVE_STDNORETURN_H
 #include <stdnoreturn.h>
+#elif __windows__
+#define _Noreturn __declspec(noreturn)
 #else
 #define noreturn
 #endif
@@ -55,52 +55,52 @@
 #if !DNSCORE_HAVE_GETTID
 #include <sys/types.h>
 #include <unistd.h>
-
-static inline pid_t gettid()
-{
-    return getpid();
-}
+#include <stdatomic.h>
+static inline pid_t gettid() { return getpid(); }
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-typedef pthread_t thread_t;
-typedef pthread_key_t thread_key_t;
+#ifndef __THREAD_C__
+extern atomic_int g_thread_starting;
+extern atomic_int g_thread_running;
+#endif
+
+typedef pthread_t      thread_t;
+typedef pthread_key_t  thread_key_t;
 typedef pthread_once_t thread_once_t;
 
 #if DNSCORE_HAS_LOG_THREAD_TAG
 
 /**
- * @note edf 20180118 -- tags are only read by the logger.  Given the current direction setting a tag will likely be sent trough the logger.
- * 
+ * @note edf 20180118 -- tags are only read by the logger.  Given the current direction setting a tag will likely be
+ * sent trough the logger.
+ *
  */
 
 #define THREAD_TAG_SIZE 8 /** @note edf 20180118 -- please do not change this value */
 
 const char *thread_get_tag_with_pid_and_tid(pid_t pid, thread_t tid);
-char *thread_copy_tag_with_pid_and_tid(pid_t pid, thread_t tid, char *out_9_bytes);
-void thread_set_tag_with_pid_and_tid(pid_t pid, thread_t tid, const char *tag8chars);
-void thread_clear_tag_with_pid_and_tid(pid_t pid, thread_t tid);
+char       *thread_copy_tag_with_pid_and_tid(pid_t pid, thread_t tid, char *out_9_bytes);
+void        thread_set_tag_with_pid_and_tid(pid_t pid, thread_t tid, const char *tag8chars);
+void        thread_clear_tag_with_pid_and_tid(pid_t pid, thread_t tid);
 
-void thread_make_tag(const char *prefix, u32 index, u32 count, char *service_tag);
+void        thread_make_tag(const char *prefix, uint32_t index, uint32_t count, char *service_tag);
 
 #endif
 
 // system name (visible in top with threads enabled)
 
-void thread_set_name(const char *name, int index, int count);
+void                    thread_set_name(const char *name, int index, int count);
 
-static inline thread_t thread_self()
-{
-    return pthread_self();
-}
+static inline thread_t  thread_self() { return pthread_self(); }
 
-ya_result thread_create(thread_t *t, void* (*function_thread)(void*), void *function_args);
+ya_result               thread_create(thread_t *t, void *(*function_thread)(void *), void *function_args);
 
-ya_result thread_kill(thread_t t, int signo);
+ya_result               thread_kill(thread_t t, int signo);
 
 static inline ya_result thread_join(thread_t t, void **thread_returnp)
 {
@@ -112,12 +112,13 @@ static inline ya_result thread_join(thread_t t, void **thread_returnp)
     return ret;
 }
 
-static noreturn inline void thread_exit(void *parm)
+static _Noreturn inline void thread_exit(void *parm)
 {
+    --g_thread_running;
     pthread_exit(parm);
 }
 
-static inline ya_result thread_key_create(thread_key_t *k, void (*destructor) (void *))
+static inline ya_result thread_key_create(thread_key_t *k, void (*destructor)(void *))
 {
     int ret = pthread_key_create(k, destructor);
 
@@ -150,11 +151,11 @@ static inline ya_result thread_key_set(thread_key_t k, const void *ptr)
 
 static inline void *thread_key_get(thread_key_t k)
 {
-    void* ret = pthread_getspecific(k);
+    void *ret = pthread_getspecific(k);
     return ret;
 }
 
-static inline int thread_once(thread_once_t *once, void (*function) (void))
+static inline int thread_once(thread_once_t *once, void (*function)(void))
 {
     int ret = pthread_once(once, function);
     if(ret != 0)
@@ -164,7 +165,7 @@ static inline int thread_once(thread_once_t *once, void (*function) (void))
     return ret;
 }
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 

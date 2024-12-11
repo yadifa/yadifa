@@ -1,0 +1,98 @@
+/*------------------------------------------------------------------------------
+*
+* Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+* The YADIFA TM software product is provided under the BSD 3-clause license:
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met:
+*
+*        * Redistributions of source code must retain the above copyright
+*          notice, this list of conditions and the following disclaimer.
+*        * Redistributions in binary form must reproduce the above copyright
+*          notice, this list of conditions and the following disclaimer in the
+*          documentation and/or other materials provided with the distribution.
+*        * Neither the name of EURid nor the names of its contributors may be
+*          used to endorse or promote products derived from this software
+*          without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*------------------------------------------------------------------------------
+*
+*/
+
+#cmakedefine PACKAGE "@PACKAGE@"
+#cmakedefine PACKAGE_STRING "@PACKAGE_STRING@"
+#cmakedefine PACKAGE_VERSION "@PACKAGE_VERSION@"
+#cmakedefine VERSION "@VERSION@"
+#cmakedefine PACKAGE_BUGREPORT "@PACKAGE_BUGREPORT@"
+
+#cmakedefine01 HAS_ACL_SUPPORT
+#cmakedefine01 HAS_BFD_DEBUG_SUPPORT
+#cmakedefine01 HAS_CPU_AMDINTEL
+#cmakedefine01 HAS_CPU_NIAGARA
+#cmakedefine01 HAS_CTRL
+#cmakedefine01 HAS_CTRL_DYNAMIC_PROVISIONING
+#cmakedefine01 HAS_DNSQ
+#cmakedefine01 HAS_DNSSEC_SUPPORT
+#cmakedefine01 HAS_DROPALL_SUPPORT
+#cmakedefine01 HAS_DYNCONF_SUPPORT
+#cmakedefine01 HAS_DYNUPDATE_SUPPORT
+#cmakedefine01 HAS_ECDSA_SUPPORT
+#cmakedefine01 HAS_EXPERIMENTAL
+#cmakedefine01 HAS_FULL_ASCII7
+#cmakedefine01 HAS_LOGDIR
+#cmakedefine01 HAS_LOG_PID
+#cmakedefine01 HAS_LOG_THREAD_ID
+#cmakedefine01 HAS_LOG_THREAD_TAG
+#cmakedefine01 HAS_MALLOC_DEBUG_SUPPORT
+#cmakedefine01 HAS_PRIMARY_SUPPORT
+#cmakedefine01 HAS_MEMALIGN_ISSUES
+#cmakedefine01 HAS_MIRROR_SUPPORT
+#cmakedefine01 HAS_MUTEX_DEBUG_SUPPORT
+#cmakedefine01 HAS_NON_AA_AXFR_SUPPORT
+#cmakedefine01 HAS_NSEC3_SUPPORT
+#cmakedefine01 HAS_NSEC_SUPPORT
+#cmakedefine01 HAS_NSID_SUPPORT
+#cmakedefine01 HAS_PTHREAD_SETAFFINITY_NP
+#cmakedefine01 HAS_PTHREAD_SETNAME_NP
+#cmakedefine01 HAS_PTHREAD_SPINLOCK
+#cmakedefine01 HAS_RDTSC
+#cmakedefine01 HAS_RRCACHE_ENABLED
+#cmakedefine01 HAS_RRL_SUPPORT
+#cmakedefine01 HAS_RRSIG_MANAGEMENT_SUPPORT
+#cmakedefine01 HAS_SOCKADDR_IN6_SIN6_LEN
+#cmakedefine01 HAS_SOCKADDR_IN_SIN_LEN
+#cmakedefine01 HAS_SOCKADDR_SA_LEN
+#cmakedefine01 HAS_EVENT_DYNAMIC_MODULE
+
+#cmakedefine01 HAS_TCL
+#cmakedefine01 HAS_TCLDIR
+#cmakedefine01 HAS_TCL_INCLUDEDIR
+#cmakedefine01 HAS_TCL_LIBDIR
+#cmakedefine01 HAS_WITH_TCL
+#cmakedefine01 HAS_WITH_TCLDIR
+#cmakedefine01 HAS_WITH_TCL_INCLUDEDIR
+#cmakedefine01 HAS_WITH_TCL_LIBDIR
+
+#cmakedefine01 HAS_TRACK_ZONES_DEBUG_SUPPORT
+#cmakedefine01 HAS_TSIG_SUPPORT
+#cmakedefine01 HAS_WITH_LOGDIR
+
+#cmakedefine01 HAS_ZALLOC_DEBUG_SUPPORT
+#cmakedefine01 HAS_ZALLOC_STATISTICS_SUPPORT
+#cmakedefine01 HAS_ZALLOC_SUPPORT
+#cmakedefine01 HAS_TIMEGM
+#cmakedefine01 HAS_LITTLE_ENDIAN
+#cmakedefine01 HAS_BIG_ENDIAN

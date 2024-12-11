@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,81 +28,89 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup test
- *  @ingroup test
- *  @brief skeleton file
- *
+/**-----------------------------------------------------------------------------
+ * @defgroup test
+ * @ingroup test
+ * @brief skeleton file
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
  *
  * Query for all DNSKEYs
  *
- * Generate KSK (Publish: none, Active: now, Inactive: never, Delete: never) + ZSK (Publish none: Active +60s, Inactive +180s, Delete: never)
- * Remove all DNSKEYs and add KSK and ZSK
+ * Generate KSK (Publish: none, Active: now, Inactive: never, Delete: never) + ZSK (Publish none: Active +60s, Inactive
+ *+180s, Delete: never) Remove all DNSKEYs and add KSK and ZSK
  *
  * loop:
  *   Generate ZSK (Publish none: Active +60s, Inactive +180s, Delete: never)
  *   Wait for update time + 60 seconds.
  *   Remove previous ZSK and add new ZSK
  *
- */
+ *----------------------------------------------------------------------------*/
 
 #include <dnscore/dnscore.h>
 #include <dnscore/dnskey.h>
 #include <dnscore/format.h>
-#include <dnscore/config-cmdline.h>
-#include <dnscore/packet_writer.h>
+#include <dnscore/config_cmdline.h>
 #include <dnscore/signals.h>
 
 #include <dnscore/timems.h>
 #include <dnscore/thread_pool.h>
 
-#include <dnscore/dnskey-signature.h>
-#include <dnscore/packet_reader.h>
-#include <dnscore/dnskey-keyring.h>
+#include <dnscore/dns_packet_reader.h>
 #include <dnscore/parsing.h>
 #include <dnscore/zone_reader_text.h>
-#include <dnscore/server-setup.h>
+#include <dnscore/server_setup.h>
 #include <dnscore/logger_channel_stream.h>
 #include <dnscore/buffer_output_stream.h>
 #include <dnscore/logger.h>
 #include <dnscore/file_output_stream.h>
 #include <dnscore/pid.h>
-#include <dnscore/dnscore-release-date.h>
+#include <dnscore/dnscore_release_date.h>
+#include <dnscore/config_settings.h>
 
 #include <sys/stat.h>
+#include <termios.h>
 
 #include "keyroll.h"
-#include "keyroll-config.h"
+#include "keyroll_config.h"
 
-#include "config-dnssec-policy.h"
-#include "dnssec-policy.h"
+#include "config_dnssec_policy.h"
+#include "config_settings.h"
+
+#include "rest_server.h"
+
 #include "buildinfo.h"
+#include "dnscore/base16.h"
 
 #define PURGE_QUESTION "YES"
 
-extern logger_handle *g_dnssec_logger;
-extern logger_handle *g_keyroll_logger;
+extern logger_handle_t *g_dnssec_logger;
+extern logger_handle_t *g_keyroll_logger;
 
-#define MODULE_MSG_HANDLE g_keyroll_logger
+#define MODULE_MSG_HANDLE                 g_keyroll_logger
 
-#define FIRST_JANUARY_2019_00_00_00 1546300800
-#define FIRST_JANUARY_2021_00_00_00 1609459200
+#define FIRST_JANUARY_2019_00_00_00       1546300800
+#define FIRST_JANUARY_2021_00_00_00       1609459200
 
-#define SERVER_FAILURE_RETRY_DELAY 30
+#define SERVER_FAILURE_RETRY_DELAY        30
 #define CONSECUTIVE_ERRORS_BEFORE_RESTART 60
 
-#define WAIT_MARGIN (ONE_SECOND_US * 10)
+#define WAIT_MARGIN                       (ONE_SECOND_US * 10)
 
-#define PROGRAM_NAME "yakeyrolld"
-#define KEYROLL_CONFIG_SECTION "yakeyrolld"
-#define RELEASEDATE YADIFA_DNSCORE_RELEASE_DATE
+#define PROGRAM_NAME                      "yakeyrolld"
+#define KEYROLL_CONFIG_SECTION            "yakeyrolld"
+#define RELEASEDATE                       YADIFA_DNSCORE_RELEASE_DATE
 
 // mount -t tmpfs -o size=16384 tmpfs /registry/yadifa/var/log/yakeyrolld
 
-static random_ctx rnd;
+static random_ctx_t rnd;
+int64_t             g_start_epoch;
+const char         *g_mode = "undefined";
+mutex_t             g_keyroll_state_mtx = MUTEX_INITIALIZER;
+ptr_treemap_t       g_keyroll_state = {NULL, ptr_treemap_asciizp_node_compare};
 
 enum PROGRAM_MODE
 {
@@ -112,71 +120,20 @@ enum PROGRAM_MODE
     PLAYLOOP,
     PRINT,
     PRINT_JSON,
-    TEST
+    TEST,
+    GENAUTHTOKEN
 };
 
-static value_name_table program_mode_enum_table[]=
-{
-    {NONE, "none"},
-    {PLAY, "play"},
-    {PLAYLOOP, "playloop"},
-    {GENERATE, "generate"},
-    {PRINT, "print"},
-    {PRINT_JSON, "print-json"},
-    {TEST, "test"},
-    {0, NULL}
-};
-
-struct main_args
-{
-    ptr_vector domains;
-    ptr_vector fqdns;
-    char *configuration_file_path;
-    char *log_path;
-    char *keys_path;
-    char *plan_path;
-    char *pid_path;
-    char *pid_file;
-    char *generate_from;
-    char *generate_until;
-    char *policy_name;
-    host_address *server;
-
-    uid_t uid;
-    gid_t gid;
-    u32 timeout;
-    u32 ttl;
-
-    u32 update_apply_verify_retries;        // if an update wasn't applied successfully, retry CHECKING this amount of times
-    u32 update_apply_verify_retries_delay;  // time between the above retries
-
-    u32 match_verify_retries;        // if there is not match, retry checking this amount of times
-    u32 match_verify_retries_delay;  // time between the above retries
-
-    int program_mode;
-    bool reset;
-    bool purge;
-    bool dryrun;
-    bool wait_for_yadifad;
-    bool daemonise;
-    bool print_plan;
-    bool user_confirmation;
-#if DEBUG
-    bool with_secret_keys;
-#endif
-};
-
-typedef struct main_args main_args;
+static value_name_table_t program_mode_enum_table[] = {{NONE, "none"}, {PLAY, "play"}, {PLAYLOOP, "playloop"}, {GENERATE, "generate"}, {PRINT, "print"}, {PRINT_JSON, "print-json"}, {TEST, "test"}, {GENAUTHTOKEN, "genauthtoken"}, {0, NULL}};
 
 struct testing_args
 {
-    s64 timeus_offset;
+    int64_t timeus_offset;
 };
 
 typedef struct testing_args testing_args;
 
-static ya_result
-directory_writable(const char *path)
+static ya_result            directory_writable(const char *path)
 {
     if(path == NULL)
     {
@@ -203,13 +160,17 @@ directory_writable(const char *path)
     }
 
     ya_result ret;
-
     if(FAIL(ret = access_check(path, ACCESS_CHECK_READWRITE)))
     {
+#if __unix__
         formatln("error: '%s' is not writable as (%d:%d): %r", path, getuid(), getgid(), ret);
+#else
+        log_err("error: '%s' is not writable: %r", path, ret);
+        formatln("error: '%s' is not writable: %r", path, ret);
+#endif
+        return ret;
     }
-
-    return ret;
+    return SUCCESS;
 }
 
 #ifndef PREFIX
@@ -226,134 +187,142 @@ directory_writable(const char *path)
 
 #define CONFIGURATION_FILE_PATH_DEFAULT SYSCONFDIR "/yakeyrolld.conf"
 
-#define CONFIG_TYPE main_args
+#define CONFIG_TYPE                     config_t
 
 CONFIG_BEGIN(main_args_desc)
-        CONFIG_STRING_ARRAY(domains,NULL, 200)      // I'm using a thread-pool for this, it cannot go beyond THREAD_POOL_SIZE_LIMIT_MAX threads.
-        CONFIG_PATH(log_path, LOCALSTATEDIR "/log/yakeyrolld")      // doc
-        CONFIG_FILE(configuration_file_path, CONFIGURATION_FILE_PATH_DEFAULT)  // cmdline
-        CONFIG_PATH(keys_path, LOCALSTATEDIR "/zones/keys")         // doc
-        CONFIG_PATH(plan_path, LOCALSTATEDIR "/plans")              // doc
-        CONFIG_PATH(pid_path, LOCALSTATEDIR "/run")                 // doc
-        CONFIG_STRING(pid_file, "yakeyrolld.pid")                   // doc
-        CONFIG_HOST_LIST(server, "127.0.0.1")                       // doc
-        CONFIG_U32(timeout, "3")                                    // doc
-        CONFIG_U32(ttl, "600")                                      // doc
+CONFIG_STRING_ARRAY(domains, NULL,
+                    200)                                              // I'm using a thread-pool for this, it cannot go beyond THREAD_POOL_SIZE_LIMIT_MAX threads.
+CONFIG_PATH(log_path, LOCALSTATEDIR "/log/yakeyrolld")                // doc
+CONFIG_FILE(configuration_file_path, CONFIGURATION_FILE_PATH_DEFAULT) // cmdline
+CONFIG_PATH(keys_path, LOCALSTATEDIR "/zones/keys")                   // doc
+CONFIG_PATH(plan_path, LOCALSTATEDIR "/plans")                        // doc
+CONFIG_PATH(pid_path, LOCALSTATEDIR "/run")                           // doc
+CONFIG_STRING(pid_file, "yakeyrolld.pid")                             // doc
+CONFIG_HOST_LIST(server, "127.0.0.1")                                 // doc
+CONFIG_U32(timeout, "3")                                              // doc
+CONFIG_U32(ttl, "600")                                                // doc
 
-        CONFIG_U32_RANGE(update_apply_verify_retries, "60", 0, 3600)    // doc     // if an update wasn't applied successfully, retry CHECKING this amount of times
-        CONFIG_U32_RANGE(update_apply_verify_retries_delay, "1", 1, 60) // doc    // time between the above retries
+CONFIG_U32_RANGE(update_apply_verify_retries, "60", 0,
+                 3600)                                          // doc     // if an update wasn't applied successfully, retry CHECKING this amount of times
+CONFIG_U32_RANGE(update_apply_verify_retries_delay, "1", 1, 60) // doc    // time between the above retries
 
-        CONFIG_U32_RANGE(match_verify_retries, "60", 0, 3600)     // doc // if there is not match, retry checking this amount of times
-        CONFIG_U32_RANGE(match_verify_retries_delay, "1", 1, 60)  // doc // time between the above retries
+CONFIG_U32_RANGE(match_verify_retries, "60", 0,
+                 3600)                                   // doc // if there is not match, retry checking this amount of times
+CONFIG_U32_RANGE(match_verify_retries_delay, "1", 1, 60) // doc // time between the above retries
 
-        CONFIG_STRING(generate_from, "now")                         // doc
-        CONFIG_STRING(generate_until, "+1y")                        // doc
-        CONFIG_STRING(policy_name, "")                              // doc
-        CONFIG_UID(uid, "0")                                        // doc
-        CONFIG_GID(gid, "0")                                        // doc
-        CONFIG_BOOL(reset, "0")                                     // cmdline
-        CONFIG_BOOL(dryrun, "0")                                    // cmdline
-        CONFIG_BOOL(wait_for_yadifad, "1")                          //
-        CONFIG_BOOL(daemonise, "0")                                 //
-        CONFIG_BOOL(print_plan, "0")                                // cmdline (!doc)
-        CONFIG_BOOL(user_confirmation, "1")                         // cmdline (!doc)
+CONFIG_U32_RANGE(roll_step_limit_override, TOSTRING(KEYROLL_STEPS_MAX), 1, 1000000)
+
+CONFIG_STRING(generate_from, "now")  // doc
+CONFIG_STRING(generate_until, "+1y") // doc
+CONFIG_STRING(policy_name, "")       // doc
+CONFIG_UID(uid, "0")                 // doc
+CONFIG_GID(gid, "0")                 // doc
+CONFIG_BOOL(reset, "0")              // cmdline
+CONFIG_BOOL(dryrun, "0")             // cmdline
+CONFIG_BOOL(wait_for_yadifad, "1")   //
+CONFIG_BOOL(daemonise, "0")          //
+CONFIG_BOOL(print_plan, "0")         // cmdline (!doc)
+CONFIG_BOOL(user_confirmation, "1")  // cmdline (!doc)
 #if DEBUG
-        CONFIG_BOOL(with_secret_keys, "0")                          // debug
+CONFIG_BOOL(with_secret_keys, "0") // debug
 #endif
-        CONFIG_ENUM(program_mode, "none", program_mode_enum_table)  // cmdline
-        CONFIG_ALIAS(policy, policy_name)
-        CONFIG_ALIAS(domain, domains)
-        CONFIG_ALIAS(daemon, daemonise)
-        CONFIG_ALIAS(plans_path, plan_path)
+CONFIG_ENUM(program_mode, "none", program_mode_enum_table) // cmdline
+CONFIG_ALIAS(policy, policy_name)
+CONFIG_ALIAS(domain, domains)
+CONFIG_ALIAS(daemon, daemonise)
+CONFIG_ALIAS(plans_path, plan_path)
 CONFIG_END(main_args_desc)
 #undef CONFIG_TYPE
 
 #define CONFIG_TYPE testing_args
 
 CONFIG_BEGIN(testing_args_desc)
-        CONFIG_U64(timeus_offset, "0")
+CONFIG_U64(timeus_offset, "0")
 CONFIG_END(testing_args_desc)
 
 CMDLINE_BEGIN(keyroll_cmdline)
-        CMDLINE_VERSION_HELP(keyroll_cmdline)
-        CMDLINE_SECTION(KEYROLL_CONFIG_SECTION)
-        CMDLINE_OPT("config", 'c', "configuration_file_path")
-        CMDLINE_HELP("", "sets the configuration file to use (default: " CONFIGURATION_FILE_PATH_DEFAULT ")")
-        CMDLINE_OPT("mode", 'm', "program_mode")
-        CMDLINE_HELP("", "sets the program mode (generate,play,playloop,print,json)")
-        CMDLINE_OPT("domain",0,"domain")
-        CMDLINE_HELP("fqdn", "the domain name, overrides the domains from the configuration file")
-        CMDLINE_OPT("path",'p',"keys_path")
-        CMDLINE_HELP("directory", "the directory where to store the keys")
-        CMDLINE_OPT("server",'s',"server")
-        CMDLINE_HELP("address", "the address of the server")
-        CMDLINE_OPT("ttl",'t',"ttl")
-        CMDLINE_HELP("seconds", "the TTL to use for both DNSKEY and RRSIG records")
-        CMDLINE_BOOL("reset",0,"reset")
-        CMDLINE_HELP("", "start by removing all the keys, create a new KSK and a new ZSK")
-        CMDLINE_OPT("policy",0,"policy_name")
-        CMDLINE_HELP("", "name of the policy to use")
-        CMDLINE_OPT("from",0,"generate_from")
-        CMDLINE_HELP("time", "at what time the plan starts (e.g. : now, -1y, YYYYMMDDHHSS in UTC).")
-        CMDLINE_OPT("until",0,"generate_until")
-        CMDLINE_HELP("time", "the upper time limit covered by the plan (+1y, YYYYMMDDHHSS in UTC).")
-        CMDLINE_BLANK()
-        CMDLINE_INDENT(4)
-        CMDLINE_IMSG("", "time values can be:")
-        CMDLINE_BLANK()
-        CMDLINE_INDENT(4)
-        CMDLINE_IMSG("", "now")
-        CMDLINE_IMSG("", "tomorrow")
-        CMDLINE_IMSG("", "yesterday")
-        CMDLINE_IMSG("", "[+-]#{years|months|weeks|days|seconds} where # is an integer")
-        CMDLINE_IMSG("", "YYYY-MM-DD")
-        CMDLINE_IMSG("", "YYYYMMDD")
-        CMDLINE_IMSG("", "YYYYMMDDHHMMSSUUUUUU")
-        CMDLINE_BLANK()
-        CMDLINE_INDENT(-8)
-        CMDLINE_BOOL("dryrun",0,"dryrun")
-        CMDLINE_HELP("", "do not send the update to the server")
-        CMDLINE_BOOL("wait", 0, "wait_for_yadifad")
-        CMDLINE_HELP("", "wait for yadifad to answer before starting to work (default)")
-        CMDLINE_BOOL_NOT("nowait", 0, "wait_for_yadifad")
-        CMDLINE_HELP("", "do not wait for yadifad to answer before starting to work")
-        CMDLINE_BOOL("daemon", 0, "daemonise")
-        CMDLINE_HELP("", "daemonise the program for supported modes (default)")
-        CMDLINE_BOOL_NOT("nodaemon", 0, "daemonise")
-        CMDLINE_HELP("", "do not daemonise the program (needed for systemd)")
-        CMDLINE_BOOL_NOT("noconfirm",'Y', "user_confirmation")
-        CMDLINE_HELP("", "do not ask for confirmation before destroying steps and .key and .private files")
-        CMDLINE_BOOL("print-plan", 0, "print_plan")
-        CMDLINE_HELP("", "prints the complete plan after generation or after loading")
+CMDLINE_SECTION(KEYROLL_CONFIG_SECTION)
+CMDLINE_OPT("config", 'c', "configuration_file_path")
+CMDLINE_HELP("", "sets the configuration file to use (default: " CONFIGURATION_FILE_PATH_DEFAULT ")")
+CMDLINE_OPT("mode", 'm', "program_mode")
+CMDLINE_HELP("", "sets the program mode (generate,play,playloop,print,print-json,genauthtoken)")
+CMDLINE_OPT("domain", 0, "domain")
+CMDLINE_HELP("fqdn", "the domain name, overrides the domains from the configuration file")
+CMDLINE_OPT("path", 'p', "keys_path")
+CMDLINE_HELP("directory", "the directory where to store the keys")
+CMDLINE_OPT("server", 's', "server")
+CMDLINE_HELP("address", "the address of the server")
+CMDLINE_OPT("ttl", 't', "ttl")
+CMDLINE_HELP("seconds", "the TTL to use for both DNSKEY and RRSIG records")
+CMDLINE_BOOL("reset", 0, "reset")
+CMDLINE_HELP("", "start by removing all the keys, create a new KSK and a new ZSK")
+CMDLINE_OPT("policy", 0, "policy_name")
+CMDLINE_HELP("", "name of the policy to use")
+CMDLINE_OPT("from", 0, "generate_from")
+CMDLINE_HELP("time", "at what time the plan starts (e.g. : now, -1y, YYYYMMDDHHSS in UTC).")
+CMDLINE_OPT("until", 0, "generate_until")
+CMDLINE_HELP("time", "the upper time limit covered by the plan (+1y, YYYYMMDDHHSS in UTC).")
+CMDLINE_BLANK()
+CMDLINE_INDENT(4)
+CMDLINE_IMSG("", "time values can be:")
+CMDLINE_BLANK()
+CMDLINE_INDENT(4)
+CMDLINE_IMSG("", "now")
+CMDLINE_IMSG("", "tomorrow")
+CMDLINE_IMSG("", "yesterday")
+CMDLINE_IMSG("", "[+-]#{years|months|weeks|days|seconds} where # is an integer")
+CMDLINE_IMSG("", "YYYY-MM-DD")
+CMDLINE_IMSG("", "YYYYMMDD")
+CMDLINE_IMSG("", "YYYYMMDDHHMMSSUUUUUU")
+CMDLINE_BLANK()
+CMDLINE_INDENT(-8)
+CMDLINE_OPT("roll-step-limit-override", 0, "roll_step_limit_override")
+CMDLINE_HELP("integer", "overrides the limit of steps allowed per zone ([1;1000000])")
+CMDLINE_BOOL("dryrun", 0, "dryrun")
+CMDLINE_HELP("", "do not send the update to the server")
+CMDLINE_BOOL("wait", 0, "wait_for_yadifad")
+CMDLINE_HELP("", "wait for yadifad to answer before starting to work (default)")
+CMDLINE_BOOL_NOT("nowait", 0, "wait_for_yadifad")
+CMDLINE_HELP("", "do not wait for yadifad to answer before starting to work")
+CMDLINE_BOOL("daemon", 0, "daemonise")
+CMDLINE_HELP("", "daemonise the program for supported modes (default)")
+CMDLINE_BOOL_NOT("nodaemon", 0, "daemonise")
+CMDLINE_HELP("", "do not daemonise the program (needed for systemd)")
+CMDLINE_BOOL_NOT("noconfirm", 'Y', "user_confirmation")
+CMDLINE_HELP("", "do not ask for confirmation before destroying steps and .key and .private files")
+CMDLINE_BOOL("print-plan", 0, "print_plan")
+CMDLINE_HELP("", "prints the complete plan after generation or after loading")
 #if DEBUG
-        CMDLINE_BOOL("with-secret-keys", 0, "with_secret_keys")
+CMDLINE_BOOL("with-secret-keys", 0, "with_secret_keys")
 #endif
 #if DEBUG
-        CMDLINE_SECTION("testing")
-        CMDLINE_OPT("timeus-offset", 0, "timeus_offset")
-        CMDLINE_HELP("", "fakes the current time changing the time by that many seconds (testing)")
+CMDLINE_SECTION("testing")
+CMDLINE_OPT("timeus-offset", 0, "timeus_offset")
+CMDLINE_HELP("", "fakes the current time changing the time by that many seconds (testing)")
 #endif
-        CMDLINE_BLANK()
+CMDLINE_VERSION_HELP(keyroll_cmdline)
+CMDLINE_BLANK()
 CMDLINE_END(keyroll_cmdline)
 
-static main_args g_config; // initilised in main_config(argc, argv)
+config_t            g_config; // initilised in main_config(argc, argv)
+
 static testing_args g_testing = {0};
 
-static void
-help_print(const char *name)
+static void         help_print(const char *name)
 {
     formatln("%s [-c configurationfile] [...]\n\n", name);
-    cmdline_print_help(keyroll_cmdline, 16, 28, " :  ", 48, termout);
+    cmdline_print_help(keyroll_cmdline, termout);
 }
 
 /**
  * To abstract key generation or reading from storage
  */
 
-static ya_result
-main_config_main_postprocess(struct config_section_descriptor_s *csd)
+static ya_result main_config_main_postprocess(struct config_section_descriptor_s *csd, config_error_t *cfgerr)
 {
     (void)csd;
+    (void)cfgerr;
+
     // no logger if help is requested
 
     if(cmdline_help_get() || cmdline_version_get())
@@ -371,28 +340,28 @@ main_config_main_postprocess(struct config_section_descriptor_s *csd)
 
     timeus_set_offset(g_testing.timeus_offset);
 
+    keyroll_set_roll_step_limit_override(g_config.roll_step_limit_override);
+
     logger_flush();
 
     return SUCCESS;
 }
 
-static void
-yakeyrolld_print_authors()
+static void yakeyrolld_print_authors()
 {
-    print("\n"
-          "\t\tYADIFAD authors:\n"
-          "\t\t---------------\n"
-          "\t\t\n"
-          "\t\tGery Van Emelen\n"
-          "\t\tEric Diaz Fernandez\n"
-          "\n"
-          "\t\tContact: " PACKAGE_BUGREPORT "\n"
-    );
+    print(
+        "\n"
+        "\t\tYADIFAD authors:\n"
+        "\t\t---------------\n"
+        "\t\t\n"
+        "\t\tGery Van Emelen\n"
+        "\t\tEric Diaz Fernandez\n"
+        "\n"
+        "\t\tContact: " PACKAGE_BUGREPORT "\n");
     flushout();
 }
 
-static void
-yakeyrolld_show_version(u8 level)
+static void yakeyrolld_show_version(uint8_t level)
 {
     switch(level)
     {
@@ -425,11 +394,10 @@ yakeyrolld_show_version(u8 level)
  * It's only a command line but extending to a file is relatively trivial.
  */
 
-static ya_result
-main_config(int argc, char *argv[])
+static ya_result main_config(int argc, char *argv[])
 {
-    config_error_s cfg_error;
-    ya_result ret;
+    config_error_t cfgerr;
+    ya_result      ret;
 
     config_init();
 
@@ -446,6 +414,11 @@ main_config(int argc, char *argv[])
     }
 
     if(FAIL(ret = config_register_struct(KEYROLL_CONFIG_SECTION, main_args_desc, &g_config, priority++)))
+    {
+        return ret;
+    }
+
+    if(FAIL(ret = config_register_rest_server(priority++)))
     {
         return ret;
     }
@@ -485,7 +458,9 @@ main_config(int argc, char *argv[])
         return ret;
     }
 
-    if(FAIL(ret = config_read_from_sources(sources, 1, &cfg_error)))
+    config_error_init(&cfgerr);
+
+    if(FAIL(ret = config_read_from_sources(sources, 1, &cfgerr)))
     {
         if(cmdline_help_get())
         {
@@ -499,46 +474,58 @@ main_config(int argc, char *argv[])
         }
         else
         {
-            formatln("settings: (%s:%i) %s: %s: %r", cfg_error.file, cfg_error.line_number, cfg_error.line, cfg_error.variable_name, ret);
+            formatln("settings: (%s:%i) %s: %s: %r", cfgerr.file, cfgerr.line_number, cfgerr.line, config_error_get_variable_name(&cfgerr), ret);
         }
         flushout();
+
+        config_error_finalise(&cfgerr);
+
         return ret;
     }
 
     if(cmdline_help_get())
     {
+        config_error_finalise(&cfgerr);
+
         help_print(argv[0]);
         return SUCCESS;
     }
 
     if(cmdline_version_get())
     {
+        config_error_finalise(&cfgerr);
+
         yakeyrolld_show_version(cmdline_version_get());
         return SUCCESS;
     }
 
     config_source_set_file(&sources[0], g_config.configuration_file_path, CONFIG_SOURCE_FILE);
 
-    config_section_descriptor_s *main_desc = config_section_get_descriptor(KEYROLL_CONFIG_SECTION);
-    config_section_descriptor_vtbl_s *vtbl = (config_section_descriptor_vtbl_s*)main_desc->vtbl;
+    config_section_descriptor_t      *main_desc = config_section_get_descriptor(KEYROLL_CONFIG_SECTION);
+    config_section_descriptor_vtbl_s *vtbl = (config_section_descriptor_vtbl_s *)main_desc->vtbl;
     vtbl->postprocess = main_config_main_postprocess;
 
-    if(FAIL(ret = config_read_from_sources(sources, 1, &cfg_error)))
+    if(FAIL(ret = config_read_from_sources(sources, 1, &cfgerr)))
     {
-        formatln("settings: (%s:%i) %s %s: %r", cfg_error.file, cfg_error.line_number, cfg_error.line, cfg_error.variable_name, ret);
+        formatln("settings: (%s:%i) %s %s: %r", cfgerr.file, cfgerr.line_number, cfgerr.line, config_error_get_variable_name(&cfgerr), ret);
         flushout();
+
+        config_error_finalise(&cfgerr);
+
         return ret;
     }
+
+    config_error_finalise(&cfgerr);
 
     if(g_config.server->port == 0)
     {
         g_config.server->port = NU16(DNS_DEFAULT_PORT);
     }
 
-    for(int i = 0; i <= ptr_vector_last_index(&g_config.domains); ++i)
+    for(int_fast32_t i = 0; i <= ptr_vector_last_index(&g_config.domains); ++i)
     {
-        const char *name = (const char*)ptr_vector_get(&g_config.domains, i);
-        u8 *fqdn = dnsname_zdup_from_name(name);
+        const char *name = (const char *)ptr_vector_get(&g_config.domains, i);
+        uint8_t    *fqdn = dnsname_zdup_from_name(name);
         if(fqdn == NULL)
         {
             formatln("cannot parse domain name: %s", name);
@@ -554,8 +541,8 @@ main_config(int argc, char *argv[])
     {
         if(!config_logger_isconfigured())
         {
-            output_stream stdout_os;
-            logger_channel *stdout_channel;
+            output_stream_t   stdout_os;
+            logger_channel_t *stdout_channel;
 
             fd_output_stream_attach(&stdout_os, dup_ex(1));
             buffer_output_stream_init(&stdout_os, &stdout_os, 65536);
@@ -564,7 +551,7 @@ main_config(int argc, char *argv[])
             {
                 return INVALID_STATE_ERROR;
             }
-            logger_channel_stream_open(&stdout_os, FALSE, stdout_channel);
+            logger_channel_stream_open(&stdout_os, false, stdout_channel);
 
             logger_channel_register("stdout", stdout_channel);
 
@@ -585,8 +572,67 @@ main_config(int argc, char *argv[])
     return ret;
 }
 
-static ya_result
-get_user_confirmation()
+#if __windows__
+static ssize_t getline(char **line_bufferp, size_t *line_buffer_size, FILE *stream)
+{
+    if((line_bufferp == NULL) || (line_buffer_size == NULL) || (stream == NULL))
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    char *line_buffer = *line_bufferp;
+
+    if(line_buffer == NULL)
+    {
+        *line_buffer_size = 1024;
+        line_buffer = malloc(*line_buffer_size);
+        if(line_buffer == NULL)
+        {
+            return -1;
+        }
+    }
+
+    char *p = line_buffer;
+
+    for(size_t i = 0;; ++i)
+    {
+        size_t remaining = *line_buffer_size - i;
+        if(remaining < 1)
+        {
+            *line_buffer_size += 1024;
+            void *prev = line_buffer;
+            line_buffer = realloc(line_buffer, *line_buffer_size);
+
+            if(line_buffer == NULL)
+            {
+                *line_bufferp = prev;
+                return -1;
+            }
+
+            p = &line_buffer[i];
+        }
+
+        size_t n = fread(p, 1, 1, stream);
+
+        if(n == 0)
+        {
+            *line_bufferp = line_buffer;
+            *p = '\0';
+            return i;
+        }
+
+        if(*p == '\n')
+        {
+            *line_bufferp = line_buffer;
+            return i + 1;
+        }
+    }
+}
+
+#endif
+
+static ya_result get_user_confirmation()
 {
     ya_result ret = SUCCESS;
 
@@ -594,8 +640,8 @@ get_user_confirmation()
     print("Please confirm by typing '" PURGE_QUESTION "' (without the '') followed by the ENTER key: ");
     flushout();
 
-    char *line_buffer = NULL;
-    size_t line_buffer_size = 0;
+    char   *line_buffer = NULL;
+    size_t  line_buffer_size = 0;
     ssize_t n = getline(&line_buffer, &line_buffer_size, stdin);
 
     if(n < 0)
@@ -628,8 +674,7 @@ get_user_confirmation()
     return ret;
 }
 
-static ya_result
-program_mode_generate(const u8 *domain)
+static ya_result program_mode_generate(const uint8_t *domain)
 {
     ya_result ret;
 
@@ -643,7 +688,7 @@ program_mode_generate(const u8 *domain)
 
     keyroll_t keyroll;
 
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, TRUE)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, true)))
     {
         return ret;
     }
@@ -702,7 +747,7 @@ program_mode_generate(const u8 *domain)
         }
     }
 
-    s64 generate_from = timeus_from_smarttime(g_config.generate_from);
+    int64_t generate_from = timeus_from_smarttime(g_config.generate_from);
 
     if(generate_from < 0)
     {
@@ -715,7 +760,7 @@ program_mode_generate(const u8 *domain)
     generate_from /= ONE_SECOND_US;
     generate_from *= ONE_SECOND_US;
 
-    s64 generate_until = timeus_from_smarttime_ex(g_config.generate_until, generate_from);
+    int64_t generate_until = timeus_from_smarttime_ex(g_config.generate_until, generate_from);
 
     if(generate_until < 0)
     {
@@ -768,13 +813,12 @@ program_mode_generate(const u8 *domain)
     return ret;
 }
 
-static ya_result
-program_mode_generate_all()
+static ya_result program_mode_generate_all()
 {
-    pid_t pid;
+    pid_t     pid;
     ya_result ret;
-    char pid_file_path_buffer[PATH_MAX];
-    char *pid_file_path = &pid_file_path_buffer[0];
+    char      pid_file_path_buffer[PATH_MAX];
+    char     *pid_file_path = &pid_file_path_buffer[0];
 
     snformat(pid_file_path_buffer, sizeof(pid_file_path_buffer), "%s/%s", g_config.pid_path, g_config.pid_file);
 
@@ -789,27 +833,29 @@ program_mode_generate_all()
         return ret;
     }
 
-    if(ISOK(ret = server_setup_env(&pid, &pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE|SETUP_ID_CHANGE|SETUP_CORE_LIMITS)))
+    if(ISOK(ret = server_setup_env(&pid, &pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE | SETUP_ID_CHANGE | SETUP_CORE_LIMITS)))
     {
         if(g_config.reset && g_config.user_confirmation)
         {
             println("WARNING: A full data reset has been required for the following domains:");
             // delete the content of the plan folder
-            for(int i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
+            for(int_fast32_t i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
             {
-                const u8 *domain = (const u8*)ptr_vector_get(&g_config.fqdns, i);
+                const uint8_t *domain = (const uint8_t *)ptr_vector_get(&g_config.fqdns, i);
                 formatln("    %{dnsname}", domain);
             }
-            println("All currently stored steps and private keys for the above domains will be erased.\nThis operation cannot be undone.");
+            println(
+                "All currently stored steps and private keys for the above domains will be erased.\nThis operation "
+                "cannot be undone.");
             if(FAIL(ret = get_user_confirmation()))
             {
                 return ret;
             }
         }
 
-        for(int i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
+        for(int_fast32_t i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
         {
-            const u8 *domain = (const u8*)ptr_vector_get(&g_config.fqdns, i);
+            const uint8_t *domain = (const uint8_t *)ptr_vector_get(&g_config.fqdns, i);
             log_info("zone generate: %{dnsname}", domain);
             if(FAIL(ret = program_mode_generate(domain)))
             {
@@ -824,8 +870,7 @@ program_mode_generate_all()
     return ret;
 }
 
-static void
-signal_int(u8 signum)
+static void signal_int(uint8_t signum)
 {
     (void)signum;
 
@@ -837,19 +882,17 @@ signal_int(u8 signum)
     signal_handler_stop();
 }
 
-static void
-signal_hup(u8 signum)
+static void signal_hup(uint8_t signum)
 {
     (void)signum;
 
     logger_reopen();
 }
 
-static ya_result
-program_mode_play(const u8 *domain, bool does_loop)
+static ya_result program_mode_play(const uint8_t *domain, bool does_loop)
 {
     ya_result ret;
-    int consecutive_errors = 0;
+    int       consecutive_errors = 0;
 
     rnd = random_init(0);
 
@@ -859,10 +902,22 @@ program_mode_play(const u8 *domain, bool does_loop)
         return INVALID_PATH;
     }
 
+    {
+        mutex_lock(&g_keyroll_state_mtx);
+        ptr_treemap_node_t *node = ptr_treemap_insert(&g_keyroll_state, (uint8_t *)domain);
+        keyroll_state_t    *keyroll_state;
+        MALLOC_OBJECT_OR_DIE(keyroll_state, keyroll_state_t, GENERIC_TAG);
+        ZEROMEMORY(keyroll_state, sizeof(keyroll_state_t));
+        keyroll_state->domain = (uint8_t *)domain;
+        keyroll_state->next_operation = ONE_SECOND_US * U32_MAX;
+        node->value = keyroll_state;
+        mutex_unlock(&g_keyroll_state_mtx);
+    }
+
     keyroll_t keyroll;
 
     // start from an empty state
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, FALSE)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, false)))
     {
         return ret;
     }
@@ -895,7 +950,7 @@ program_mode_play(const u8 *domain, bool does_loop)
         return ret;
     }
 
-    s64 step_time;
+    int64_t step_time;
 
     do
     {
@@ -918,7 +973,7 @@ program_mode_play(const u8 *domain, bool does_loop)
 
         keyroll_step_t *next_step = keyroll_get_next_step_from(&keyroll, step_time + 1);
 
-        s64 next_step_time;
+        int64_t         next_step_time;
 
         if(next_step != NULL)
         {
@@ -927,14 +982,25 @@ program_mode_play(const u8 *domain, bool does_loop)
         }
         else
         {
-            next_step_time = ONE_SECOND_US * MAX_U32;
+            next_step_time = ONE_SECOND_US * U32_MAX;
+        }
+
+        {
+            mutex_lock(&g_keyroll_state_mtx);
+            ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+            if(node != NULL)
+            {
+                keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                keyroll_state->next_operation = next_step_time;
+            }
+            mutex_unlock(&g_keyroll_state_mtx);
         }
 
         /*
         // check the expected set with the server
         // do a query for all DNSKEY + RRSIG and compare with the step
 
-        ptr_vector current_dnskey_rrsig_rr;
+        ptr_vector_t current_dnskey_rrsig_rr;
         ptr_vector_init_ex(&current_dnskey_rrsig_rr, 32);
         */
         const keyroll_step_t *matched_step = NULL;
@@ -943,6 +1009,17 @@ program_mode_play(const u8 *domain, bool does_loop)
 
         if(ISOK(ret))
         {
+            {
+                mutex_lock(&g_keyroll_state_mtx);
+                ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                if(node != NULL)
+                {
+                    keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                    keyroll_state->status = KEYROLL_STATUS_OK;
+                }
+                mutex_unlock(&g_keyroll_state_mtx);
+            }
+
             log_info("play: %{dnsname}: first loop ended (%u)", domain, ret);
             break;
         }
@@ -951,13 +1028,42 @@ program_mode_play(const u8 *domain, bool does_loop)
         {
             log_info("play: %{dnsname}: keyroll_get_state_find_match returned %r (retrying in " TOSTRING(SERVER_FAILURE_RETRY_DELAY) " seconds)", domain, ret);
 
-            s64 now = timeus();
+            int64_t now = timeus();
 
             if(now + ONE_SECOND_US * SERVER_FAILURE_RETRY_DELAY < next_step_time)
             {
-                for(int i = 0; (i < SERVER_FAILURE_RETRY_DELAY) && !dnscore_shuttingdown(); ++i)
+                {
+                    mutex_lock(&g_keyroll_state_mtx);
+                    ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                    if(node != NULL)
+                    {
+                        keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                        keyroll_state->errors++;
+                        keyroll_state->retry_countdown = SERVER_FAILURE_RETRY_DELAY;
+                        keyroll_state->status = KEYROLL_STATUS_ERROR;
+                    }
+                    mutex_unlock(&g_keyroll_state_mtx);
+                }
+
+                for(int_fast32_t i = 0; (i < SERVER_FAILURE_RETRY_DELAY) && !dnscore_shuttingdown(); ++i)
                 {
                     sleep(1);
+
+                    {
+                        mutex_lock(&g_keyroll_state_mtx);
+                        ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                        if(node != NULL)
+                        {
+                            keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                            int              countdown = SERVER_FAILURE_RETRY_DELAY - i - 1;
+                            keyroll_state->retry_countdown = countdown;
+                            if(countdown == 0)
+                            {
+                                keyroll_state->last_error_epoch = timeus();
+                            }
+                        }
+                        mutex_unlock(&g_keyroll_state_mtx);
+                    }
                 }
             }
             else
@@ -967,11 +1073,23 @@ program_mode_play(const u8 *domain, bool does_loop)
 
                 keyroll_finalize(&keyroll);
 
+                {
+                    mutex_lock(&g_keyroll_state_mtx);
+                    ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                    if(node != NULL)
+                    {
+                        keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                        keyroll_state->reinitialisations++;
+                        keyroll_state->last_reinitialisation_epoch = timeus();
+                        keyroll_state->status = KEYROLL_STATUS_RESET;
+                    }
+                    mutex_unlock(&g_keyroll_state_mtx);
+                }
+
                 return ret;
             }
         }
-    }
-    while(g_config.wait_for_yadifad && !dnscore_shuttingdown());
+    } while(g_config.wait_for_yadifad && !dnscore_shuttingdown());
 
     if(FAIL(ret))
     {
@@ -990,7 +1108,7 @@ program_mode_play(const u8 *domain, bool does_loop)
 
         // find the interval for now
 
-        s64 last_warning_us = 0;
+        int64_t last_warning_us = 0;
 
         // wait until the next event
 
@@ -1000,7 +1118,7 @@ program_mode_play(const u8 *domain, bool does_loop)
 
             do
             {
-                s64 now = timeus_with_offset();
+                int64_t now = timeus_with_offset();
 
                 if(now - WAIT_MARGIN >= next_step->epochus)
                 {
@@ -1010,8 +1128,7 @@ program_mode_play(const u8 *domain, bool does_loop)
                 {
                     usleep(MAX(MIN(next_step->epochus - (now - WAIT_MARGIN), WAIT_MARGIN), 1000));
                 }
-            }
-            while(!dnscore_shuttingdown());
+            } while(!dnscore_shuttingdown());
 
             if(dnscore_shuttingdown())
             {
@@ -1036,6 +1153,17 @@ program_mode_play(const u8 *domain, bool does_loop)
 
             if(ISOK(ret))
             {
+                {
+                    mutex_lock(&g_keyroll_state_mtx);
+                    ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                    if(node != NULL)
+                    {
+                        keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                        keyroll_state->status = KEYROLL_STATUS_OK;
+                    }
+                    mutex_unlock(&g_keyroll_state_mtx);
+                }
+
                 consecutive_errors = 0;
             }
             else
@@ -1054,12 +1182,30 @@ program_mode_play(const u8 *domain, bool does_loop)
                     {
                         ++consecutive_errors;
 
+                        {
+                            mutex_lock(&g_keyroll_state_mtx);
+                            ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                            if(node != NULL)
+                            {
+                                keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                                keyroll_state->errors++;
+                                keyroll_state->retry_countdown = CONSECUTIVE_ERRORS_BEFORE_RESTART - consecutive_errors;
+                                keyroll_state->last_error_epoch = timeus();
+                                keyroll_state->status = KEYROLL_STATUS_ERROR;
+                            }
+                            mutex_unlock(&g_keyroll_state_mtx);
+                        }
+
                         if(consecutive_errors < CONSECUTIVE_ERRORS_BEFORE_RESTART)
                         {
                             step_time = timeus_with_offset();
                             if(step_time - last_warning_us >= ONE_SECOND_US * 60)
                             {
-                                log_warn("play: %{dnsname}: step play failure: %r: trying again (this message will only be printed every minute)", domain, ret);
+                                log_warn(
+                                    "play: %{dnsname}: step play failure: %r: trying again (this message will only be "
+                                    "printed every minute)",
+                                    domain,
+                                    ret);
                                 last_warning_us = step_time;
                             }
 
@@ -1070,13 +1216,32 @@ program_mode_play(const u8 *domain, bool does_loop)
                         {
                             log_warn("play: %{dnsname}: step play failure: %r: restarting", domain, ret);
                             ret = KEYROLL_MUST_REINITIALIZE;
+
+                            {
+                                mutex_lock(&g_keyroll_state_mtx);
+                                ptr_treemap_node_t *node = ptr_treemap_find(&g_keyroll_state, domain);
+                                if(node != NULL)
+                                {
+                                    keyroll_state_t *keyroll_state = (keyroll_state_t *)node->value;
+                                    keyroll_state->reinitialisations++;
+                                    keyroll_state->last_reinitialisation_epoch = timeus();
+                                    keyroll_state->status = KEYROLL_STATUS_RESET;
+                                }
+                                mutex_unlock(&g_keyroll_state_mtx);
+                            }
+
                             break;
                         }
                     }
                     default:
                     {
                         // unrecoverable error
-                        log_err("play: %{dnsname}: step play failure: %r (%x): shutting down.  Please restart after fixing the issue.", domain, ret, ret);
+                        log_err(
+                            "play: %{dnsname}: step play failure: %r (%x): shutting down.  Please restart after fixing "
+                            "the issue.",
+                            domain,
+                            ret,
+                            ret);
                         break;
                     }
                 }
@@ -1103,19 +1268,18 @@ program_mode_play(const u8 *domain, bool does_loop)
 
 struct program_mode_play_thread_args
 {
-    const u8 *fqdn;
-    bool does_loop;
+    const uint8_t *fqdn;
+    bool           does_loop;
 };
 
 typedef struct program_mode_play_thread_args program_mode_play_thread_args;
 
-static void*
-program_mode_play_thread(void *args_)
+static void                                  program_mode_play_thread(void *args_)
 {
-    program_mode_play_thread_args *args = (program_mode_play_thread_args*)args_;
+    program_mode_play_thread_args *args = (program_mode_play_thread_args *)args_;
     while(!dnscore_shuttingdown())
     {
-        ya_result  ret = program_mode_play(args->fqdn, args->does_loop);
+        ya_result ret = program_mode_play(args->fqdn, args->does_loop);
 
         if(ISOK(ret))
         {
@@ -1142,17 +1306,15 @@ program_mode_play_thread(void *args_)
             }
         }
     }
-    return NULL;
 }
 
-static ya_result
-program_mode_play_all(bool does_loop, bool daemonise)
+static ya_result program_mode_play_all(bool does_loop, bool daemonise)
 {
     ya_result ret;
 
-    pid_t pid;
-    char pid_file_path_buffer[PATH_MAX];
-    char *pid_file_path = &pid_file_path_buffer[0];
+    pid_t     pid;
+    char      pid_file_path_buffer[PATH_MAX];
+    char     *pid_file_path = &pid_file_path_buffer[0];
     snformat(pid_file_path_buffer, sizeof(pid_file_path_buffer), "%s/%s", g_config.pid_path, g_config.pid_file);
 
     if(FAIL(ret = pid_check_running_program(pid_file_path, &pid)))
@@ -1166,21 +1328,21 @@ program_mode_play_all(bool does_loop, bool daemonise)
         return ret;
     }
 
-    if(ISOK(ret = server_setup_env(&pid, &pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE|SETUP_ID_CHANGE|SETUP_CORE_LIMITS)))
+    if(ISOK(ret = server_setup_env(&pid, &pid_file_path, g_config.uid, g_config.gid, SETUP_CREATE_PID_FILE | SETUP_ID_CHANGE | SETUP_CORE_LIMITS)))
     {
         if(daemonise)
         {
             if(!does_loop)
             {
                 log_warn("daemonise requires to enable loops");
-                does_loop = true;
+                does_loop = true; // ignore CLion's unreachable code warning
             }
 
             signal_handler_finalize();
 
             server_setup_daemon_go();
 
-            u32 setup_flags = SETUP_CORE_LIMITS | SETUP_ID_CHANGE | SETUP_CREATE_PID_FILE;
+            uint32_t setup_flags = SETUP_CORE_LIMITS | SETUP_ID_CHANGE | SETUP_CREATE_PID_FILE;
 
             if(FAIL(ret = server_setup_env(NULL, &pid_file_path, g_config.uid, g_config.gid, setup_flags)))
             {
@@ -1218,13 +1380,13 @@ program_mode_play_all(bool does_loop, bool daemonise)
         program_mode_play_thread_args *args;
         MALLOC_OBJECT_ARRAY_OR_DIE(args, program_mode_play_thread_args, ptr_vector_size(&g_config.fqdns), GENERIC_TAG);
 
-        thread_pool_task_counter counter;
+        thread_pool_task_counter_t counter;
         thread_pool_counter_init(&counter, 0);
 
-        for(int i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
+        for(int_fast32_t i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
         {
-            char *domain = (char*)ptr_vector_get(&g_config.domains, i);
-            u8 *fqdn = (u8*)ptr_vector_get(&g_config.fqdns, i);
+            char    *domain = (char *)ptr_vector_get(&g_config.domains, i);
+            uint8_t *fqdn = (uint8_t *)ptr_vector_get(&g_config.fqdns, i);
             log_info("zone play: %{dnsname}", fqdn);
 
             args[i].fqdn = fqdn; // VS false positive (nonsense)
@@ -1251,20 +1413,20 @@ program_mode_play_all(bool does_loop, bool daemonise)
             }
         }
 
-        s64 wait_stop_begin = timeus();
-        bool wait_stop_error_message = FALSE;
-        for(u32 wait_count = 0; thread_pool_counter_get_value(&counter) > 0; ++wait_count)
+        int64_t wait_stop_begin = timeus();
+        bool    wait_stop_error_message = false;
+        while(thread_pool_counter_get_value(&counter) > 0)
         {
             sleep(1);
-            s64 wait_stop_now = timeus();
-            s64 wait_stop_duration = wait_stop_now - wait_stop_begin;
-            if(dnscore_shuttingdown() && (wait_stop_duration > (ONE_SECOND_US * 30)) )
+            int64_t wait_stop_now = timeus();
+            int64_t wait_stop_duration = wait_stop_now - wait_stop_begin;
+            if(dnscore_shuttingdown() && (wait_stop_duration > (ONE_SECOND_US * 30)))
             {
                 if(!wait_stop_error_message)
                 {
                     log_err("keyroll workers aren't stopping");
                     logger_flush();
-                    wait_stop_error_message = TRUE;
+                    wait_stop_error_message = true;
                 }
                 if(wait_stop_duration > (ONE_SECOND_US * 60))
                 {
@@ -1278,10 +1440,14 @@ program_mode_play_all(bool does_loop, bool daemonise)
         tp = NULL;
 
         free(args);
+
+        ret = SUCCESS;
     }
     else
     {
-        log_err("failed to create the thread pool: %r", THREAD_CREATION_ERROR);
+        log_err("thread pool creation error");
+
+        ret = THREAD_CREATION_ERROR;
     }
 
     if(does_loop)
@@ -1291,11 +1457,10 @@ program_mode_play_all(bool does_loop, bool daemonise)
 
     unlink(pid_file_path);
 
-    return SUCCESS;
+    return ret;
 }
 
-static ya_result
-program_mode_print(const u8 *domain)
+static ya_result program_mode_print(const uint8_t *domain)
 {
     ya_result ret;
     if(dirent_get_file_type(g_config.plan_path, ".") == DT_UNKNOWN)
@@ -1307,7 +1472,7 @@ program_mode_print(const u8 *domain)
     keyroll_t keyroll;
 
     // start from an empty state
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, FALSE)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, false)))
     {
         return ret;
     }
@@ -1337,8 +1502,7 @@ program_mode_print(const u8 *domain)
     return ret;
 }
 
-static ya_result
-program_mode_print_json(const u8 *domain)
+static ya_result program_mode_print_json(const uint8_t *domain)
 {
     ya_result ret;
     if(dirent_get_file_type(g_config.plan_path, ".") == DT_UNKNOWN)
@@ -1350,7 +1514,7 @@ program_mode_print_json(const u8 *domain)
     keyroll_t keyroll;
 
     // start from an empty state
-    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, FALSE)))
+    if(FAIL(ret = keyroll_init(&keyroll, domain, g_config.plan_path, g_config.keys_path, g_config.server, false)))
     {
         return ret;
     }
@@ -1380,18 +1544,55 @@ program_mode_print_json(const u8 *domain)
     return ret;
 }
 
-static ya_result
-program_mode_test()
+static ya_result program_mode_test() { return SUCCESS; }
+
+static ya_result program_mode_gen_auth_token()
 {
+    char   *user_realm_passwd;
+    char    username[64];
+    char    password[64];
+    uint8_t digest[MD5_DIGEST_LENGTH];
+    char    digest_text[MD5_DIGEST_LENGTH * 2];
+    print("user: ");
+    flushout();
+    fgets(username, sizeof(username), stdin);
+    print("password (will not echo): ");
+    flushout();
+    struct termios t;
+    tcgetattr(0, &t);
+    t.c_lflag &= ~ECHO;
+    tcsetattr(0, 0, &t);
+    fgets(password, sizeof(password), stdin);
+    t.c_lflag |= ECHO;
+    tcsetattr(0, 0, &t);
+    parse_trim_end(username, strlen(username));
+    parse_trim_end(password, strlen(password));
+    digest_t ctx;
+    digest_md5_init(&ctx);
+    asformat(&user_realm_passwd, "%s:%s:%s", username, g_rest_server_config.realm, password);
+    memset(password, 0, sizeof(password));
+    digest_update(&ctx, user_realm_passwd, strlen(user_realm_passwd));
+    memset(user_realm_passwd, 0, strlen(user_realm_passwd));
+    digest_final_copy_bytes(&ctx, digest, sizeof(digest));
+    base16_encode_lc(digest, sizeof(digest), digest_text);
+    println(""); // because of the no-echo
+    println("Auth entry in <rest-server>:");
+    print("user ");
+    print(username);
+    print(":");
+    output_stream_write(termout, digest_text, sizeof(digest_text));
+    println("");
+    flushout();
     return SUCCESS;
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     /* initializes the core library */
     dnscore_init();
     keyroll_errors_register();
+
+    g_start_epoch = timeus();
 
     ya_result ret = main_config(argc, argv);
 
@@ -1428,57 +1629,87 @@ main(int argc, char *argv[])
     flusherr();
     logger_flush();
 
+    if(g_rest_server_config.enabled)
+    {
+        if(FAIL(ret = rest_server_init()))
+        {
+            log_err("Can't initialise REST server: %r", ret);
+            formatln("Can't initialise REST server: %r", ret);
+            flushout();
+            return EXIT_FAILURE;
+        }
+        if(FAIL(ret = rest_server_start()))
+        {
+            log_err("Can't initialise REST server: %r", ret);
+            formatln("Can't initialise REST server: %r", ret);
+            flushout();
+            return EXIT_FAILURE;
+        }
+    }
+
     switch(g_config.program_mode)
     {
         case NONE:
         {
+            g_mode = "none";
             println("\nno -m option given\n");
             help_print(argv[0]);
             break;
         }
         case GENERATE:
         {
+            g_mode = "generate";
             ret = program_mode_generate_all();
             break;
         }
         case PLAY:
         {
-            ret = program_mode_play_all(FALSE, FALSE);
+            g_mode = "play";
+            ret = program_mode_play_all(false, false);
             break;
         }
         case PLAYLOOP:
         {
-            ret = program_mode_play_all(TRUE, g_config.daemonise);
+            g_mode = "playloop";
+            ret = program_mode_play_all(true, g_config.daemonise);
             break;
         }
         case PRINT:
         {
-            for(int i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
+            g_mode = "print";
+            for(int_fast32_t i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
             {
-                u8 *fqdn = (u8*)ptr_vector_get(&g_config.fqdns, i);
+                uint8_t *fqdn = (uint8_t *)ptr_vector_get(&g_config.fqdns, i);
                 program_mode_print(fqdn);
             }
             break;
         }
         case PRINT_JSON:
         {
+            g_mode = "print-json";
             formatln("{\"version\": \"" YKEYROLL_VERSION "\", \"plans\": [");
-            for(int i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
+            for(int_fast32_t i = 0; i <= ptr_vector_last_index(&g_config.fqdns); ++i)
             {
                 if(i > 0)
                 {
                     println(",");
                 }
-                u8 *fqdn = (u8*)ptr_vector_get(&g_config.fqdns, i);
+                uint8_t *fqdn = (uint8_t *)ptr_vector_get(&g_config.fqdns, i);
                 program_mode_print_json(fqdn);
             }
             println("]}");
             break;
         }
-
         case TEST:
         {
+            g_mode = "test";
             ret = program_mode_test();
+            break;
+        }
+        case GENAUTHTOKEN:
+        {
+            g_mode = "genauthtoken";
+            ret = program_mode_gen_auth_token();
             break;
         }
         default:
@@ -1490,8 +1721,16 @@ main(int argc, char *argv[])
 
     if(FAIL(ret))
     {
+        g_mode = "failure";
+
         log_err("failed with: %r", ret);
         osformatln(termerr, "failed with: %r", ret);
+    }
+
+    if(g_rest_server_config.enabled)
+    {
+        rest_server_stop();
+        rest_server_finalise();
     }
 
     flushout();
@@ -1501,5 +1740,5 @@ main(int argc, char *argv[])
     signal_handler_finalize();
     dnscore_finalize();
 
-    return ISOK(ret)?EXIT_SUCCESS:EXIT_FAILURE;
+    return ISOK(ret) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

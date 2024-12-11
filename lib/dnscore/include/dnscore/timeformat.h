@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,106 +28,104 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup format C-string formatting
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup format C-string formatting
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _TIMEFORMAT_H
-#define	_TIMEFORMAT_H
+#define _TIMEFORMAT_H
 
 /*
  * Format extensions related to dns
  *
- * dnsname  : u8* dns name
- * dnslabel : u8* dns label (pascal string)
+ * dnsname  : uint8_t* dns name
+ * dnslabel : uint8_t* dns label (pascal string)
  * class    : u16* zone class
  * type     : u16* record type
  */
 
 #include <dnscore/output_stream.h>
-#ifdef	__cplusplus
-extern "C" {
+#include <dnscore/format.h>
+
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 /**
  * writers of formats
- * 
- * 
+ *
+ *
  */
 
 // dtus 0000-00-00 00:00:00.000000U
-void datetimeus_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
-// 0000-00-00 00:00:00.000000 
-void localdatetimeus_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void datetimeus_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
+// 0000-00-00 00:00:00.000000
+void localdatetimeus_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // dtms 0000-00-00 00:00:00.000
-void datetimems_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void datetimems_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // dts 0000-00-00 00:00:00
-void datetime_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void datetime_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // ldts 0000-00-00 00:00:00
-void localdatetime_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void localdatetime_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // date 0000-00-00
-void date_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void date_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // time 00:00:00
-void time_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void time_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // epoch 0000-00-00 00:00:00U
-void epoch_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void epoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // epoch 0000-00-00 00:00:00
-void localepoch_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void localepoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // epoch 0000-00-00 00:00:00 or ""
-void epochz_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void epochz_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 // epoch 00000000000000
-void packedepoch_format_handler_method(const void *restrict val, output_stream *stream, s32 padding, char pad_char, bool left_justified, void * restrict reserved_for_method_parameters);
+void packedepoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters);
 
 /**
  * Macros for use with the %w format
- * 
+ *
  */
 
-#define DATETIMEUS_DEF2(variable,realvariable) format_writer variable##_format_writer = {datetimeus_format_handler_method, (void*)(intptr)realvariable}
-#define DATETIMEUS_DEF(variable) format_writer variable##_format_writer = {datetimeus_format_handler_method, (void*)(intptr)variable}
-#define DATETIMEUS_REF(variable) &variable##_format_writer
+#define DATETIMEUS_DEF2(variable, realvariable) format_writer_t variable##_format_writer = {datetimeus_format_handler_method, (void *)(intptr_t)realvariable}
+#define DATETIMEUS_DEF(variable)                format_writer_t variable##_format_writer = {datetimeus_format_handler_method, (void *)(intptr_t)variable}
+#define DATETIMEUS_REF(variable)                &variable##_format_writer
 
-#define DATETIMEMS_DEF2(variable,realvariable) format_writer variable##_format_writer = {datetimems_format_handler_method, (void*)(intptr)realvariable}
-#define DATETIMEMS_DEF(variable) format_writer variable##_format_writer = {datetimems_format_handler_method, (void*)(intptr)variable}
-#define DATETIMEMS_REF(variable) &variable##_format_writer
+#define DATETIMEMS_DEF2(variable, realvariable) format_writer_t variable##_format_writer = {datetimems_format_handler_method, (void *)(intptr_t)realvariable}
+#define DATETIMEMS_DEF(variable)                format_writer_t variable##_format_writer = {datetimems_format_handler_method, (void *)(intptr_t)variable}
+#define DATETIMEMS_REF(variable)                &variable##_format_writer
 
-#define DATETIME_DEF2(variable,realvariable) format_writer variable##_format_writer = {datetime_format_handler_method, (void*)(intptr)realvariable}
-#define DATETIME_DEF(variable) format_writer variable##_format_writer = {datetime_format_handler_method, (void*)(intptr)variable}
-#define DATETIME_REF(variable) &variable##_format_writer
+#define DATETIME_DEF2(variable, realvariable)   format_writer_t variable##_format_writer = {datetime_format_handler_method, (void *)(intptr_t)realvariable}
+#define DATETIME_DEF(variable)                  format_writer_t variable##_format_writer = {datetime_format_handler_method, (void *)(intptr_t)variable}
+#define DATETIME_REF(variable)                  &variable##_format_writer
 
-#define DATE_DEF2(variable,realvariable) format_writer variable##_format_writer = {date_format_handler_method, (void*)(intptr)realvariable}
-#define DATE_DEF(variable) format_writer variable##_format_writer = {date_format_handler_method, (void*)(intptr)variable}
-#define DATE_REF(variable) &variable##_format_writer
+#define DATE_DEF2(variable, realvariable)       format_writer_t variable##_format_writer = {date_format_handler_method, (void *)(intptr_t)realvariable}
+#define DATE_DEF(variable)                      format_writer_t variable##_format_writer = {date_format_handler_method, (void *)(intptr_t)variable}
+#define DATE_REF(variable)                      &variable##_format_writer
 
-#define TIME_DEF2(variable,realvariable) format_writer variable##_format_writer = {time_format_handler_method, (void*)(intptr)realvariable}
-#define TIME_DEF(variable) format_writer variable##_format_writer = {time_format_handler_method, (void*)(intptr)variable}
-#define TIME_REF(variable) &variable##_format_writer
+#define TIME_DEF2(variable, realvariable)       format_writer_t variable##_format_writer = {time_format_handler_method, (void *)(intptr_t)realvariable}
+#define TIME_DEF(variable)                      format_writer_t variable##_format_writer = {time_format_handler_method, (void *)(intptr_t)variable}
+#define TIME_REF(variable)                      &variable##_format_writer
 
-#define EPOCH_DEF2(variable,realvariable) format_writer variable##_format_writer = {epoch_format_handler_method, (void*)(intptr)realvariable}
-#define EPOCH_DEF(variable) format_writer variable##_format_writer = {epoch_format_handler_method, (void*)(intptr)variable}
-#define EPOCH_REF(variable) &variable##_format_writer
+#define EPOCH_DEF2(variable, realvariable)      format_writer_t variable##_format_writer = {epoch_format_handler_method, (void *)(intptr_t)realvariable}
+#define EPOCH_DEF(variable)                     format_writer_t variable##_format_writer = {epoch_format_handler_method, (void *)(intptr_t)variable}
+#define EPOCH_REF(variable)                     &variable##_format_writer
 
-#define EPOCHZ_DEF2(variable,realvariable) format_writer variable##_format_writer = {epochz_format_handler_method, (void*)(intptr)realvariable}
-#define EPOCHZ_DEF(variable) format_writer variable##_format_writer = {epochz_format_handler_method, (void*)(intptr)variable}
-#define EPOCHZ_REF(variable) &variable##_format_writer
+#define EPOCHZ_DEF2(variable, realvariable)     format_writer_t variable##_format_writer = {epochz_format_handler_method, (void *)(intptr_t)realvariable}
+#define EPOCHZ_DEF(variable)                    format_writer_t variable##_format_writer = {epochz_format_handler_method, (void *)(intptr_t)variable}
+#define EPOCHZ_REF(variable)                    &variable##_format_writer
 
 void timeformat_class_init();
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _DNSFORMAT_H */
+#endif /* _DNSFORMAT_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

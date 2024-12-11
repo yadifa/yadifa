@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,80 +28,122 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-    /*
-     * The buffer will be freed (free) on close.
-     */
+/*
+ * The buffer will be freed (free) on close.
+ */
 
-    #define BYTEARRAY_OWNED             1
+#define BYTEARRAY_OWNED          1
 
-    /*
-     * The buffer's size can be changed.
-     */
+/*
+ * The buffer's size can be changed.
+ */
 
-    #define BYTEARRAY_DYNAMIC           2
+#define BYTEARRAY_DYNAMIC        2
 
-    /*
-     * The internal context has been allocated by a malloc (the default except if the _static variant is used)
-     * YOU MOSTLY WILL NOT USE THAT FLAG
-     */
-    
-    #define BYTEARRAY_ZALLOC_CONTEXT    4
+/*
+ * The internal context has been allocated by a malloc (the default except if the _static variant is used)
+ * YOU MOSTLY WILL NOT USE THAT FLAG
+ */
 
-    typedef char bytearray_output_stream_context[sizeof(void*) + 9];
+#define BYTEARRAY_ZALLOC_CONTEXT 4
 
-    void bytearray_output_stream_init(output_stream* out_stream, u8* array,u32 size);
-    void bytearray_output_stream_init_ex(output_stream* out_stream, u8* array,u32 size, u8 flags);
-    
-    /*
-     * most of bytearray_output_stream usages function-enclosed : init, work on, close
-     * this variant of initialisation avoids an malloc
-     */
-    
-    void bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 size, u8 flags, bytearray_output_stream_context *ctx);
+typedef char bytearray_output_stream_context[sizeof(void *) + 9];
 
-    void bytearray_output_stream_reset(output_stream* out_stream);
-    // can only work if the buffer is owned
-    ya_result bytearray_output_stream_ensure(output_stream* out_stream, u32 size);
-    u32 bytearray_output_stream_size(output_stream* out_stream);
-    u8* bytearray_output_stream_buffer(output_stream* out_stream);
-    u8* bytearray_output_stream_detach(output_stream* out_stream);
-    
-    void bytearray_output_stream_set(output_stream* out_stream, u8 *buffer, u32 buffer_size, bool owned);
+void         bytearray_output_stream_init(output_stream_t *out_stream, void *array, uint32_t size);
+void         bytearray_output_stream_init_ex(output_stream_t *out_stream, void *array, uint32_t size, uint8_t flags);
 
-    /**
-     
-     * @param out_stream
-     * @param by
-     * @return the actual rewind_count
-     */
-    
-    u32 bytearray_output_stream_rewind(output_stream* out_stream, u32 rewind_count);
-    
-    u8* bytearray_output_stream_zdup(output_stream* out_stream);
-    u8* bytearray_output_stream_dup(output_stream* out_stream);
-    
-#ifdef	__cplusplus
+/*
+ * most of bytearray_output_stream_t usages function-enclosed : init, work on, close
+ * this variant of initialisation avoids an malloc
+ */
+
+void bytearray_output_stream_init_ex_static(output_stream_t *out_stream, void *array, uint32_t size, uint8_t flags, bytearray_output_stream_context *ctx);
+
+/**
+ * Resets the content of the output stream.
+ *
+ * @param out_stream the output stream
+ */
+
+void bytearray_output_stream_reset(output_stream_t *out_stream);
+
+/**
+ * If the buffer is owned, grows it to ensure it has at least the specified size.
+ * If the buffer is not owned: fails.
+ *
+ * @param out_stream the stream
+ * @param size the minimum required size
+ * @return an error code
+ */
+
+ya_result bytearray_output_stream_ensure(output_stream_t *out_stream, uint32_t size);
+uint32_t  bytearray_output_stream_size(output_stream_t *out_stream);
+uint8_t  *bytearray_output_stream_buffer(output_stream_t *out_stream);
+uint8_t  *bytearray_output_stream_detach(output_stream_t *out_stream);
+
+void      bytearray_output_stream_set(output_stream_t *out_stream, uint8_t *buffer, uint32_t buffer_size, bool owned);
+
+/**
+ * Rewinds the position in the stream to by that amount of bytes
+ *
+ * @param steam
+ * @param rewind_count
+ * @return the actual rewind_count
+ */
+
+uint32_t bytearray_output_stream_rewind(output_stream_t *out_stream, uint32_t rewind_count);
+
+/**
+ * Sets the position in the stream.
+ * If the buffer is dynamic, may grow the buffer.
+ * If the buffer is static, may be limited to the size of the buffer.
+ *
+ * @param steam
+ * @param position
+ * @return the new position
+ */
+
+uint32_t bytearray_output_stream_setposition(output_stream_t *out_stream, uint32_t position);
+
+/**
+ * Makes a zallocated copy of the buffer up to the current position.
+ *
+ * @param stream
+ * @return a pointer to the zallocated copy
+ */
+
+uint8_t *bytearray_output_stream_zdup(output_stream_t *stream);
+
+/**
+ * Makes a mallocated copy of the buffer up to the current position.
+ *
+ * @param stream
+ * @return a pointer to the mallocated copy
+ */
+
+uint8_t *bytearray_output_stream_dup(output_stream_t *stream);
+
+#ifdef __cplusplus
 }
 #endif
 

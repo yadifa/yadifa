@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -53,39 +51,40 @@ typedef struct buffer_output_stream_data buffer_output_stream_data;
 
 struct buffer_output_stream_data
 {
-    output_stream filtered;
-    u32 buffer_maxsize;
+    output_stream_t filtered;
+    uint32_t        buffer_maxsize;
 
-    u32 buffer_offset;
+    uint32_t        buffer_offset;
 
-    u8 buffer[1];
+    uint8_t         buffer[1];
 };
 
-static inline ya_result buffer_output_stream_data_write_buffer(buffer_output_stream_data* data)
+static inline ya_result buffer_output_stream_data_write_buffer(buffer_output_stream_data *data)
 {
-    ya_result ret;
-    u8 *base = data->buffer;
-    u8 *buffer = base;
-    u32 len = data->buffer_offset;
-    
+    ya_result                   ret;
+    uint8_t                    *base = data->buffer;
+    uint8_t                    *buffer = base;
+    uint32_t                    len = data->buffer_offset;
+    output_stream_write_method *writefunc = data->filtered.vtbl->write;
+
     for(;;)
     {
-        ret = output_stream_write_fully(&data->filtered, buffer, len);
-        
+        ret = writefunc(&data->filtered, buffer, len);
+
         if(ISOK(ret))
         {
-            if((u32)ret == len)
+            if((uint32_t)ret == len)
             {
                 return data->buffer_offset;
             }
-            
+
             len -= ret;
             buffer += ret;
         }
         else
         {
-            s32 d = buffer - base;
-            
+            int32_t d = buffer - base;
+
             if(d > 0)
             {
                 memmove(base, buffer, len);
@@ -94,27 +93,26 @@ static inline ya_result buffer_output_stream_data_write_buffer(buffer_output_str
             }
             else
             {
-                return  ret;
+                return ret;
             }
         }
     }
 }
 
-static ya_result
-buffer_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result buffer_output_stream_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
-    buffer_output_stream_data* data = (buffer_output_stream_data*)stream->data;
-    u8* src = data->buffer;
+    buffer_output_stream_data *data = (buffer_output_stream_data *)stream->data;
+    uint8_t                   *src = data->buffer;
 
-    ya_result ret;
-    
+    ya_result                  ret;
+
     if(data->buffer_offset == 0) // empty buffer
     {
         if(len < data->buffer_maxsize) // few bytes
         {
             MEMCOPY(src, buffer, len); // accumulate
             data->buffer_offset = len;
-            
+
             return len;
         }
         else // write
@@ -125,57 +123,41 @@ buffer_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
     }
     else // buffer not empty
     {
-        u32 remaining = data->buffer_maxsize - data->buffer_offset;
-        
+        uint32_t remaining = data->buffer_maxsize - data->buffer_offset;
+
         if(len < data->buffer_maxsize) // will not immediately require two writes
         {
             if(len < remaining)
             {
                 MEMCOPY(&src[data->buffer_offset], buffer, len);
                 data->buffer_offset += len;
-                
+
                 return len;
             }
             else // len >= remaining
             {
-                // fill the remaining of the buffer
-                
+                // fill the buffer
+
                 MEMCOPY(&src[data->buffer_offset], buffer, remaining);
                 data->buffer_offset += remaining;
-                
+
                 // write the content
-                
+
                 if(ISOK(ret = buffer_output_stream_data_write_buffer(data)))
                 {
                     len -= remaining;
                     buffer += remaining;
-                    
-                    // still have len to write
-                
-                    if(len < data->buffer_maxsize)
-                    {
-                        MEMCOPY(src, buffer, len);
-                        data->buffer_offset = len;
-                        
-                        return remaining + len;
-                    }
-                    else
-                    {
-                        data->buffer_offset = 0;
 
-                        if(ISOK(ret = output_stream_write(&data->filtered, buffer, len)))
-                        {
-                            return remaining + ret;
-                        }
-                        else
-                        {
-                            return (remaining > 0) ? (s32)remaining : ret;
-                        }
-                    }
+                    // still have len to write
+
+                    // this is always true: len < data->buffer_maxsize
+                    MEMCOPY(src, buffer, len);
+                    data->buffer_offset = len;
+                    return remaining + len;
                 }
                 else
                 {
-                    return (remaining > 0)? (s32)remaining : ret;
+                    return (remaining > 0) ? (int32_t)remaining : ret;
                 }
             }
         }
@@ -187,21 +169,20 @@ buffer_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 
                 ret = output_stream_write(&data->filtered, buffer, len);
             }
-            
+
             return ret;
         }
     }
 }
 
-static ya_result
-buffer_output_stream_flush(output_stream* stream)
+static ya_result buffer_output_stream_flush(output_stream_t *stream)
 {
-    buffer_output_stream_data* data = (buffer_output_stream_data*)stream->data;
+    buffer_output_stream_data *data = (buffer_output_stream_data *)stream->data;
 
     if(data->buffer_offset > 0)
     {
         ya_result ret;
-        
+
         if(ISOK(ret = buffer_output_stream_data_write_buffer(data)))
         {
             data->buffer_offset = 0;
@@ -218,41 +199,35 @@ buffer_output_stream_flush(output_stream* stream)
     }
 }
 
-static void
-buffer_output_stream_close(output_stream* stream)
+static void buffer_output_stream_close(output_stream_t *stream)
 {
     buffer_output_stream_flush(stream);
 
-    buffer_output_stream_data* data = (buffer_output_stream_data*)stream->data;
+    buffer_output_stream_data *data = (buffer_output_stream_data *)stream->data;
     output_stream_close(&data->filtered);
     free(data);
-    
+
     output_stream_set_void(stream);
 }
 
-static const output_stream_vtbl buffer_output_stream_vtbl ={
+static const output_stream_vtbl buffer_output_stream_vtbl = {
     buffer_output_stream_write,
     buffer_output_stream_flush,
     buffer_output_stream_close,
     "buffer_output_stream",
 };
 
-ya_result
-buffer_output_stream_init(output_stream* stream, output_stream* filtered, int buffer_size)
+ya_result buffer_output_stream_init(output_stream_t *stream, output_stream_t *filtered, int buffer_size)
 {
-    buffer_output_stream_data* data;
+    buffer_output_stream_data *data;
+    assert((filtered != NULL) && (filtered->vtbl != NULL));
 
-    if(filtered->vtbl == NULL)
-    {
-        return OBJECT_NOT_INITIALIZED;
-    }
-    
     if(buffer_size <= 0)
     {
         buffer_size = 512;
     }
 
-    MALLOC_OR_DIE(buffer_output_stream_data*, data, sizeof(buffer_output_stream_data) + buffer_size - 1, BUFFER_OUTPUT_STREAM_TAG);
+    MALLOC_OR_DIE(buffer_output_stream_data *, data, sizeof(buffer_output_stream_data) + buffer_size - 1, BUFFER_OUTPUT_STREAM_TAG);
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
@@ -268,18 +243,13 @@ buffer_output_stream_init(output_stream* stream, output_stream* filtered, int bu
     return SUCCESS;
 }
 
-output_stream*
-buffer_output_stream_get_filtered(output_stream* bos)
+output_stream_t *buffer_output_stream_get_filtered(output_stream_t *bos)
 {
-    buffer_output_stream_data* data = (buffer_output_stream_data*)bos->data;
+    buffer_output_stream_data *data = (buffer_output_stream_data *)bos->data;
     yassert(bos->vtbl == &buffer_output_stream_vtbl);
     return &data->filtered;
 }
 
-bool
-is_buffer_output_stream(output_stream* os)
-{
-    return (os != NULL) && (os->vtbl == &buffer_output_stream_vtbl);
-}
+bool is_buffer_output_stream(output_stream_t *os) { return (os != NULL) && (os->vtbl == &buffer_output_stream_vtbl); }
 
 /** @} */

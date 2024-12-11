@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
-
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
- *
- * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
+ *
+ *
+ *
+ * @{
+ *----------------------------------------------------------------------------*/
+
+#include "dnscore/dnscore_config.h"
 
 #include <sys/file.h>
 #include <fcntl.h>
@@ -57,60 +55,38 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/process.h"
 
-
-/*------------------------------------------------------------------------------
- * GLOBAL VARIABLES */
-
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
-/*------------------------------------------------------------------------------
- * STATIC PROTOTYPES */
-
-/*------------------------------------------------------------------------------
- * FUNCTIONS */
-
-/** \brief Read \b pid \b file, program quits on log_quit
+/**
+ * Seeks at 0, reads pid
  *
- *  @param[in] path
- *  @param[in] file_name
+ * @param fd the file descriptor to use
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid from inside the file
  *
- *  @retval pid
- *  @retval NOK (negative number),
- *  @return otherwise log_quit will stop the program with correct exit code
+ * @return SUCCESS or an error code
  */
-pid_t
-pid_file_read(const char *pid_file_path)
+
+ya_result pid_file_read_fd(int fd, const char *pid_file_path, pid_t *pidp)
 {
-    ssize_t                                                        received;
-    int                                                                  fd;
-    char                                                                 *p;
-    u32                                                                 pid;
-    ya_result                                                           ret;
-    char                                                      buffer[8 + 1];
+    ssize_t   received;
+    char     *p;
+    uint32_t  pid;
+    ya_result ret;
+    char      buffer[8 + 1];
 
-    /*    ------------------------------------------------------------    */
-    
-    yassert(pid_file_path != NULL);
+    off_t     offset = lseek(fd, 0, SEEK_SET);
 
-    if(strlen(pid_file_path) > PATH_MAX)
-    {
-        log_err("pid file '%s': path is bigger than %i", pid_file_path, PATH_MAX);
-
-        return INVALID_PATH;
-    }
-
-    if(FAIL(fd = open_ex(pid_file_path, O_RDONLY|O_CLOEXEC)))
+    if(offset < 0)
     {
         ret = ERRNO_ERROR;
-
-        log_debug("pid file '%s': cannot open: %r", pid_file_path, ret);
-
-        return ret; /* no file found : not running assumed */
+        log_err("pid file '%s': cannot seek: %r", pid_file_path, ret);
+        return ret;
     }
-    
+
     received = readfully(fd, buffer, sizeof(buffer) - 1);
-    
+
     if(received <= 0)
     {
         if(received < 0)
@@ -123,78 +99,153 @@ pid_file_read(const char *pid_file_path)
             ret = UNEXPECTED_EOF;
         }
 
-        close_ex(fd);      /* close the pid file */
-
         return ret;
     }
-    
-    buffer[received] = '\0';    /* Append a terminator for strlen */
+
+    buffer[received] = '\0'; /* Append a terminator for strlen */
 
     p = buffer;
-    while(isdigit(*p)!=0) p++;  /* Cut after the first character that is not a digit (ie: CR LF ...) */
+    while(isdigit(*p) != 0)
+    {
+        p++; /* Cut after the first character that is not a digit (ie: CR LF ...) */
+    }
     *p = '\0';
 
-    if(FAIL(ret = parse_u32_check_range(buffer, &pid, 0, MAX_S32, BASE_10)))
+    ret = parse_u32_check_range(buffer, &pid, 0, INT32_MAX, BASE_10);
+
+    if(FAIL(ret))
     {
         log_err("pid file '%s': invalid pid number: %r", pid_file_path, ret);
 
         return ret;
     }
-    
-    close_ex(fd);      /* close the pid file */
 
-    return (pid_t)pid;
-}
-
-/** \brief Create or overwrite the \b pid \b file with its new process id
- *
- *  @param[in] config is a config_data structure
- *
- *  @retval OK
- *  @retval YDF_ERROR_CHOWN if can not "chown"
- *  @return otherwise log_quit will stop the program with correct exit code
- */
-ya_result
-pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_gid)
-{
-    ya_result ret;
-    int                                                                  fd;
-    mode_t                                               permissions = 0644;
-#if __unix__
-    uid_t                                                    uid = getuid();
-#endif
-    char                                                         buffer[16];
-    pid_t pid_tmp;
-
-    if(pid == NULL)
+    if(pidp != NULL)
     {
-        pid = &pid_tmp;
+        *pidp = pid;
     }
 
-    /*    ------------------------------------------------------------    */
-    
+    return SUCCESS;
+}
+
+/**
+ * Opens and read pid file
+ *
+ * Made available again for a project still using it.
+ *
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid from inside the file
+ *
+ * @return SUCCESS or an error code
+ */
+
+ya_result pid_file_read(const char *pid_file_path, pid_t *pidp)
+{
+    int       fd;
+    ya_result ret;
+
     yassert(pid_file_path != NULL);
 
     if(strlen(pid_file_path) > PATH_MAX)
     {
         log_err("pid file '%s': path is bigger than %i", pid_file_path, PATH_MAX);
-
         return INVALID_PATH;
     }
 
-    *pid           = getpid_ex();
-    int buffer_len = snprintf(buffer, sizeof(buffer), "%d\n", *pid); // VS complains for something that's Windows specific and wrong at the moment anyhow.
+    if(FAIL(fd = open_ex(pid_file_path, O_RDONLY | O_CLOEXEC)))
+    {
+        ret = ERRNO_ERROR;
+        log_debug("pid file '%s': cannot open: %r", pid_file_path, ret);
+        return ret; /* no file found : not running assumed */
+    }
 
-    yassert(buffer_len > 0);
+    for(;;)
+    {
+#if __unix__
+        if(flock(fd, LOCK_EX | LOCK_NB) < 0)
+        {
+            ret = errno;
+            if(ret == EINTR)
+            {
+                continue;
+            }
 
-    fd = open_create_ex(pid_file_path, O_WRONLY | O_CREAT | O_TRUNC, permissions);
+            if(ret == EWOULDBLOCK)
+            {
+                // already locked
+                close_ex(fd);
+                return PID_LOCKED;
+            }
+
+            if(ret == EBADF)
+            {
+                // happened on an NFS mount with an opened file descriptor
+                break;
+            }
+
+            abort();
+        }
+#endif
+
+        break;
+    }
+
+    ret = pid_file_read_fd(fd, pid_file_path, pidp);
+
+    close_ex(fd);
+
+    return ret;
+}
+
+static bool pid_is_running_and_not_myself(pid_t pid)
+{
+    return ((pid != getpid_ex()) && ((kill(pid, 0) == 0) || (errno == EPERM))); // note: the errno is the one for 'kill'
+}
+
+/**
+ * Creates or overwrites a pid file with its new process id
+ * Doesn't work if another program has already created the pid file
+ *
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid of the running instance of the program
+ * @param new_uid the user owner of the file (if the program runs as root), it's doing a fchown
+ * @param new_gid the group owner of the file (if the program runs as root), it's doing a fchown
+ *
+ * @return SUCCESS or an error code
+ */
+
+ya_result pid_file_create(const char *pid_file_path, pid_t *pidp, uid_t new_uid, gid_t new_gid)
+{
+    ya_result ret;
+    int       fd;
+    mode_t    permissions = 0644;
+#if __unix__
+    uid_t uid = getuid();
+#endif
+    pid_t pid_tmp;
+    char  buffer[16];
+
+    if(pidp == NULL)
+    {
+        pidp = &pid_tmp;
+    }
+
+    yassert(pid_file_path != NULL);
+
+    if(strlen(pid_file_path) > PATH_MAX)
+    {
+        log_err("pid file '%s': path is bigger than %i", pid_file_path, PATH_MAX);
+        return INVALID_PATH;
+    }
+
+    fd = open_create_ex(pid_file_path, O_RDWR, permissions);
 
     if(fd >= 0)
     {
         for(;;)
         {
 #if __unix__
-            if(flock(fd, LOCK_EX|LOCK_NB) < 0)
+            if(flock(fd, LOCK_EX | LOCK_NB) < 0)
             {
                 ret = errno;
                 if(ret == EINTR)
@@ -208,43 +259,80 @@ pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_
                     close_ex(fd);
                     return PID_LOCKED;
                 }
-                
+
                 abort();
             }
 #endif
-            
+
             break;
         }
-        
-        if(ISOK(ret = pid_check_running_program(pid_file_path, NULL)))
-        {
-            // got the lock
 
-            if(writefully(fd, buffer, buffer_len) > 0)
+        if(ISOK(ret = pid_file_read_fd(fd, pid_file_path, pidp)))
+        {
+            if(pid_is_running_and_not_myself(*pidp))
             {
-                ret = SUCCESS;
+                close_ex(fd);
+                return PID_LOCKED;
+            }
+        }
+
+        // can proceed
+
+        for(;;)
+        {
+            ret = ftruncate(fd, 0);
+            if(ret >= 0)
+            {
+                break;
+            }
+
+            ret = errno;
+            if(ret != EINTR)
+            {
+                close_ex(fd);
+                return MAKE_ERRNO_ERROR(ret);
+            }
+        }
+
+        off_t offset = lseek(fd, 0, SEEK_SET);
+        if(offset < 0)
+        {
+            ret = ERRNO_ERROR;
+            log_err("pid file '%s': cannot seek: %r", pid_file_path, ret);
+            close_ex(fd);
+            return ret;
+        }
+
+        *pidp = getpid_ex();
+        int buffer_len = snprintf(buffer, sizeof(buffer), "%d\n",
+                                  *pidp); // VS complains for something that's Windows specific and wrong at the moment anyhow.
+
+        yassert(buffer_len > 0);
+
+        if(writefully(fd, buffer, buffer_len) > 0)
+        {
+            ret = SUCCESS;
 #if __unix__
-                if(uid == 0)  // only applicable if you are root
-                {
-                    if(fchown(fd, new_uid, new_gid) >= 0) // avoid race condition (Flawfinder)
-                    {
-                        log_debug("pid file '%s': created", pid_file_path);
-                    }
-                    else
-                    {
-                        ret = ERRNO_ERROR;
-                        log_err("pid file '%s': cannot change owner.group to %i.%i: %r", pid_file_path, new_uid, new_gid, ret);
-                        pid_file_destroy(pid_file_path);
-                    }
-                }
-#endif
-            }
-            else
+            if(uid == 0) // only applicable if you are root
             {
-                ret = ERRNO_ERROR;
-                log_err("pid file '%s': cannot write pid: %r", pid_file_path, ret);
-                pid_file_destroy(pid_file_path);
+                if(fchown(fd, new_uid, new_gid) >= 0) // avoid race condition (Flawfinder)
+                {
+                    log_debug("pid file '%s': created", pid_file_path);
+                }
+                else
+                {
+                    ret = ERRNO_ERROR;
+                    log_err("pid file '%s': cannot change owner.group to %i.%i: %r", pid_file_path, new_uid, new_gid, ret);
+                    pid_file_destroy(pid_file_path);
+                }
             }
+#endif
+        }
+        else
+        {
+            ret = ERRNO_ERROR;
+            log_err("pid file '%s': cannot write pid: %r", pid_file_path, ret);
+            pid_file_destroy(pid_file_path);
         }
     }
     else
@@ -258,22 +346,23 @@ pid_file_create(pid_t *pid, const char *pid_file_path, uid_t new_uid, gid_t new_
     return ret;
 }
 
-/** \brief Check if program is already running
- * 
- *  @param[in] config is a config_data structure
+/**
+ * Check if program is already running checking the existence of a pid file.
  *
- *  @return NONE
- *  @return otherwise log_quit will stop the program with correct exit code
+ * @param pid_file_path the path of the pid file
+ * @param pidp a pointer that will be set with the pid from inside the file
+ *
+ * @return SUCCESS if the program doesn't appear to be running.
+ * @return an error code (INVALID_PATH or PID_LOCKED)
  */
-ya_result
-pid_check_running_program(const char *pid_file_path, pid_t *out_pid)
+
+ya_result pid_check_running_program(const char *pid_file_path, pid_t *out_pid)
 {
 #if __unix__
     yassert(pid_file_path != NULL);
-    pid_t                                                               pid;
+    ya_result ret;
+    pid_t     pid = 0;
 
-    /*    ------------------------------------------------------------    */
-    
     yassert(pid_file_path != NULL);
 
     if(strlen(pid_file_path) > PATH_MAX)
@@ -283,9 +372,9 @@ pid_check_running_program(const char *pid_file_path, pid_t *out_pid)
         return INVALID_PATH;
     }
 
-    if(ISOK(pid = pid_file_read(pid_file_path)))
+    if(ISOK(ret = pid_file_read(pid_file_path, &pid)))
     {
-        if((pid != getpid_ex()) && ((kill(pid, 0) == 0) || (errno == EPERM)))
+        if(pid_is_running_and_not_myself(pid))
         {
             if(out_pid != NULL)
             {
@@ -294,31 +383,89 @@ pid_check_running_program(const char *pid_file_path, pid_t *out_pid)
             return PID_LOCKED;
         }
     }
+    else
+    {
+        if(ret == MAKE_ERRNO_ERROR(ENOENT))
+        {
+            ret = SUCCESS;
+        }
+    }
+    return ret;
 #endif
-    return SUCCESS;
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
-void
-pid_file_destroy(const char *pid_file_path)
+/**
+ * Deletes a pid file.
+ * File is being opened and locked while the deletion occurs. This is to avoid race conditions.
+ *
+ * @param pid_file_path the path of the pid file
+ */
+
+void pid_file_destroy(const char *pid_file_path)
 {
     yassert(pid_file_path != NULL);
+
+    ya_result ret;
+    int       fd;
 
     if(strlen(pid_file_path) > PATH_MAX)
     {
         log_err("pid file '%s': path is bigger than %i", pid_file_path, PATH_MAX);
         return;
     }
-    
+
+    if(FAIL(fd = open_ex(pid_file_path, O_RDONLY | O_CLOEXEC)))
+    {
+        ret = ERRNO_ERROR;
+
+        log_debug("pid file '%s': cannot open: %r", pid_file_path, ret);
+
+        return;
+    }
+
+    for(int tries = 50; tries > 0; --tries)
+    {
+#if __unix__
+        if(flock(fd, LOCK_EX | LOCK_NB) < 0)
+        {
+            ret = errno;
+            if(ret == EINTR)
+            {
+                continue;
+            }
+
+            if(ret == EWOULDBLOCK)
+            {
+                usleep(1000);
+                continue;
+            }
+
+            if(ret == EBADF)
+            {
+                // happened on an NFS mount with an opened file descriptor
+                break;
+            }
+
+            ret = errno;
+            log_debug("pid file '%s': error locking: %r", pid_file_path, MAKE_ERRNO_ERROR(ret));
+        }
+#endif
+
+        break;
+    }
+
     if(FAIL(unlink(pid_file_path)))
     {
         int ret = ERRNO_ERROR;
-        
+
         // don't complain if the file has already been destroyed
         if(ret != ENOENT)
         {
             log_err("pid file '%s': cannot delete: %r", pid_file_path, ret);
         }
     }
+    close_ex(fd);
 }
 
 /** @} */

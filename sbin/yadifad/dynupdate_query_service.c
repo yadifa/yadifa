@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
-
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
- *
- * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "server-config.h"
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
+ *
+ *
+ *
+ * @{
+ *----------------------------------------------------------------------------*/
+
+#include "server_config.h"
 
 #if HAS_PTHREAD_SETNAME_NP
 #if DEBUG
@@ -56,7 +54,7 @@
 #include <dnscore/logger.h>
 #include <dnscore/threaded_queue.h>
 #include <dnscore/service.h>
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnsdb/zdb_types.h>
 
 #include "database.h"
@@ -84,12 +82,14 @@
  */
 
 /**
- * 
+ *
  * The dynupdate service loads the next update from the queue and runs it.
  */
 
-static threaded_queue dynupdate_query_service_queue = THREADED_QUEUE_EMPTY;
-static u32 g_dynupdate_query_service_queue_size = 4096;
+#if ZDB_HAS_PRIMARY_SUPPORT && ZDB_HAS_DYNUPDATE_SUPPORT
+
+static threaded_queue                       dynupdate_query_service_queue = THREADED_QUEUE_EMPTY;
+static uint32_t                             g_dynupdate_query_service_queue_size = 4096;
 
 typedef struct dynupdate_query_service_args dynupdate_query_service_args;
 
@@ -97,21 +97,20 @@ typedef struct dynupdate_query_service_args dynupdate_query_service_args;
 
 struct dynupdate_query_service_args
 {
-    zdb            *db;
-    message_data   *mesg;
-    s64             timestamp;
-    int             sockfd;
+    zdb_t         *db;
+    dns_message_t *mesg;
+    int64_t        timestamp;
+    int            sockfd;
 };
 
-static const s64 dynupdate_query_timeout_us = ONE_SECOND_US * 3;
+static const int64_t dynupdate_query_timeout_us = ONE_SECOND_US * 3;
 
-static void
-dynupdate_query_service_queue_clear()
+static void          dynupdate_query_service_queue_clear()
 {
-    dynupdate_query_service_args* parms;
-    while((parms = (dynupdate_query_service_args*)threaded_queue_try_dequeue(&dynupdate_query_service_queue)) != NULL)
+    dynupdate_query_service_args *parms;
+    while((parms = (dynupdate_query_service_args *)threaded_queue_try_dequeue(&dynupdate_query_service_queue)) != NULL)
     {
-        message_free(parms->mesg);
+        dns_message_delete(parms->mesg);
         free(parms);
     }
 }
@@ -119,7 +118,7 @@ dynupdate_query_service_queue_clear()
 static void dynupdate_query_service_wakeup(struct service_s *desc)
 {
     (void)desc;
-    threaded_queue_try_enqueue(&dynupdate_query_service_queue, NULL);
+    threaded_queue_enqueue(&dynupdate_query_service_queue, NULL);
 }
 
 static int dynupdate_query_service_thread(struct service_worker_s *worker)
@@ -146,14 +145,14 @@ static int dynupdate_query_service_thread(struct service_worker_s *worker)
         }
 
         /**
-         * 
+         *
          * Needs all the parameters for UDP answer.
          * Needs the time of the query.  If it's too old (> 3s) forget it.
-         * 
+         *
          */
-        
-        dynupdate_query_service_args* parms = (dynupdate_query_service_args*)threaded_ringbuffer_cw_dequeue(&dynupdate_query_service_queue);
-        
+
+        dynupdate_query_service_args *parms = (dynupdate_query_service_args *)threaded_ringbuffer_cw_dequeue(&dynupdate_query_service_queue);
+
         if(parms == NULL)
         {
 #if DEBUG
@@ -162,113 +161,95 @@ static int dynupdate_query_service_thread(struct service_worker_s *worker)
             continue;
         }
 
-        message_data *mesg = parms->mesg;
-        
-        s64 now = timeus();
-        
+        dns_message_t *mesg = parms->mesg;
+
+        int64_t        now = timeus();
+
         if((now - parms->timestamp) <= dynupdate_query_timeout_us)
         {
             /* process */
 
-            zdb *database = parms->db;
+            zdb_t *database = parms->db;
 
             /* clone the message */
             /* use the same scheduling mechanism as for TCP */
 
-            log_info("update (%04hx) %{dnsname} %{dnstype} (%{sockaddr})",
-                                        ntohs(message_get_id(mesg)),
-                                        message_get_canonised_fqdn(mesg),
-                                        message_get_query_type_ptr(mesg),
-                                        message_get_sender_sa(mesg));
+            log_info("update (%04hx) %{dnsname} %{dnstype} (%{sockaddr})", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_sender_sa(mesg));
 
             ya_result ret = database_update(database, mesg);
 
             if(FAIL(ret))
             {
-                if(message_get_query_type(mesg) == TYPE_SOA)
+                if(dns_message_get_query_type(mesg) == TYPE_SOA)
                 {
                     if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
                     {
-                        log_info("update (%04hx) %{dnsname} temporary failure: zone file must be stored: %r",
-                                 ntohs(message_get_id(mesg)),
-                                 message_get_canonised_fqdn(mesg),
-                                 ret);
+                        log_info("update (%04hx) %{dnsname} temporary failure: zone file must be stored: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), ret);
                     }
                     else
                     {
-                        log_warn("update (%04hx) %{dnsname} failed: %r",
-                                 ntohs(message_get_id(mesg)),
-                                 message_get_canonised_fqdn(mesg),
-                                 ret);
+                        log_warn("update (%04hx) %{dnsname} failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), ret);
                     }
                 }
                 else
                 {
                     if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
                     {
-                        log_info("update (%04hx) %{dnsname} %{dnstype} temporary failure: zone file must be stored: %r",
-                                 ntohs(message_get_id(mesg)),
-                                 message_get_canonised_fqdn(mesg),
-                                 message_get_query_type_ptr(mesg),
-                                 ret);
+                        log_info("update (%04hx) %{dnsname} %{dnstype} temporary failure: zone file must be stored: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), ret);
                     }
                     else
                     {
-                        log_warn("update (%04hx) %{dnsname} %{dnstype} failed: %r",
-                                ntohs(message_get_id(mesg)),
-                                message_get_canonised_fqdn(mesg),
-                                message_get_query_type_ptr(mesg),
-                                ret);
+                        log_warn("update (%04hx) %{dnsname} %{dnstype} failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), ret);
                     }
                 }
             }
 
-            //local_statistics->udp_fp[message_get_status(mesg)]++;
+            // local_statistics->udp_fp[message_get_status(mesg)]++;
 
 #if !HAS_DROPALL_SUPPORT
 
-            s32 sent;
+            int32_t sent;
 
 #if DEBUG
             log_debug("dynupdate_query_service_thread: sendto(%d, %p, %d, %d, %{sockaddr}, %d)",
-                    parms->sockfd, message_get_buffer_const(mesg), message_get_size(mesg), 0,
-                    message_get_sender_sa(mesg), message_get_sender_size(mesg));
-            log_memdump_ex(g_server_logger, MSG_DEBUG5, message_get_buffer_const(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_HEXTEXT);
+                      parms->sockfd,
+                      dns_message_get_buffer_const(mesg),
+                      dns_message_get_size(mesg),
+                      0,
+                      dns_message_get_sender_sa(mesg),
+                      dns_message_get_sender_size(mesg));
+            log_memdump_ex(g_server_logger, MSG_DEBUG5, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 16, OSPRINT_DUMP_HEXTEXT);
 #endif
-            
-            if(FAIL(sent = message_send_udp(mesg, parms->sockfd)))
+
+            if(FAIL(sent = dns_message_send_udp(mesg, parms->sockfd)))
             {
                 ya_result err = sent;
 
                 /** @warning server_st_process_udp needs to be modified */
 
-                log_err("update (%04hx) %{dnsname} %{dnstype} send failed: %r",
-                        ntohs(message_get_id(mesg)),
-                        message_get_canonised_fqdn(mesg),
-                        message_get_query_type_ptr(mesg),
-                        err);
+                log_err("update (%04hx) %{dnsname} %{dnstype} send failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), err);
 
-                message_free(mesg);
+                dns_message_delete(mesg);
                 free(parms);
                 continue;
             }
-            
-            //local_statistics->udp_output_size_total += sent;
 
-            if(sent != (s32)message_get_size(mesg))
+            // local_statistics->udp_output_size_total += sent;
+
+            if(sent != (int32_t)dns_message_get_size(mesg))
             {
                 /** @warning server_st_process_udp needs to be modified */
-                log_err("short byte count sent (%lli instead of %i)", sent, message_get_size(mesg));
+                log_err("short byte count sent (%lli instead of %i)", sent, dns_message_get_size(mesg));
             }
 #else
             log_debug("dynupdate_query_service_thread: drop all");
 #endif
         }
 
-        message_free(mesg);
+        dns_message_delete(mesg);
         free(parms);
     }
-    
+
     log_info("dynupdate: service stopped");
 
     return SUCCESS;
@@ -276,9 +257,10 @@ static int dynupdate_query_service_thread(struct service_worker_s *worker)
 
 static struct service_s dynupdate_query_service_handler = UNINITIALIZED_SERVICE;
 
-ya_result
-dynupdate_query_service_init()
+ya_result               dynupdate_query_service_init()
 {
+    /// @TODO 20230517 edf -- use initialiser mechanic
+
     ya_result ret;
     if(ISOK(ret = service_init_ex2(&dynupdate_query_service_handler, dynupdate_query_service_thread, dynupdate_query_service_wakeup, "svrudpdu", 1)))
     {
@@ -293,8 +275,7 @@ dynupdate_query_service_init()
     return ret;
 }
 
-ya_result
-dynupdate_query_service_start()
+ya_result dynupdate_query_service_start()
 {
     ya_result ret;
     log_debug("dynupdate_query_service_start: starting service");
@@ -302,8 +283,7 @@ dynupdate_query_service_start()
     return ret;
 }
 
-ya_result
-dynupdate_query_service_stop()
+ya_result dynupdate_query_service_stop()
 {
     ya_result ret = SUCCESS;
 
@@ -325,20 +305,18 @@ dynupdate_query_service_stop()
     return ret;
 }
 
-void
-dynupdate_query_service_finalise()
+void dynupdate_query_service_finalise()
 {
     if(service_initialised(&dynupdate_query_service_handler))
     {
         dynupdate_query_service_stop();
-        service_finalize(&dynupdate_query_service_handler);
+        service_finalise(&dynupdate_query_service_handler);
         dynupdate_query_service_queue_clear();
         threaded_queue_finalize(&dynupdate_query_service_queue);
     }
 }
 
-ya_result
-dynupdate_query_service_enqueue(zdb *db, message_data *mesg, int sockfd)
+ya_result dynupdate_query_service_enqueue(zdb_t *db, dns_message_t *mesg, int sockfd)
 {
     if(!service_started(&dynupdate_query_service_handler))
     {
@@ -347,10 +325,10 @@ dynupdate_query_service_enqueue(zdb *db, message_data *mesg, int sockfd)
 
     if(threaded_queue_size(&dynupdate_query_service_queue) == g_dynupdate_query_service_queue_size)
     {
-        return MAKE_DNSMSG_ERROR(RCODE_SERVFAIL); // it will not be used as is, but that's what needs to be said
+        return MAKE_RCODE_ERROR(RCODE_SERVFAIL); // it will not be used as is, but that's what needs to be said
     }
 
-    message_data *clone = message_dup(mesg);
+    dns_message_t *clone = dns_message_dup(mesg);
     if(clone == NULL)
     {
         return BUFFER_WOULD_OVERFLOW;
@@ -367,15 +345,14 @@ dynupdate_query_service_enqueue(zdb *db, message_data *mesg, int sockfd)
     threaded_queue_enqueue(&dynupdate_query_service_queue, parms);
 
 #if DNSCORE_HAS_TSIG_SUPPORT
-    message_tsig_clear_key(mesg);
+    dns_message_tsig_clear_key(mesg);
 #endif
-    message_set_size(mesg, 0);  // resets the message size
+    dns_message_set_size(mesg, 0); // resets the message size
 
     return SUCCESS;
 }
 
-void
-dynupdate_query_service_reset()
+void dynupdate_query_service_reset()
 {
     if(service_initialised(&dynupdate_query_service_handler) && service_started(&dynupdate_query_service_handler))
     {
@@ -383,5 +360,7 @@ dynupdate_query_service_reset()
         threaded_queue_enqueue(&dynupdate_query_service_queue, NULL); // to wake up the service
     }
 }
+
+#endif
 
 /** @} */

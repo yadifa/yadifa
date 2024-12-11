@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,55 +28,53 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup nsec3 NSEC3 functions
- *  @ingroup dnsdbdnssec
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup nsec3 NSEC3 functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _NSEC3_ZONE_H
-#define	_NSEC3_ZONE_H
+#define _NSEC3_ZONE_H
 
 #include <dnsdb/nsec3_types.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-int  nsec3param_compare_by_rdata(const u8* a_rdata, const u8* b_rdata);
-int  nsec3_zone_compare(nsec3_zone* a, nsec3_zone* b);
-void nsec3_zone_destroy(zdb_zone* zone, nsec3_zone* n3);
+int           nsec3param_compare_by_rdata(const uint8_t *a_rdata, const uint8_t *b_rdata);
+int           nsec3_zone_compare(nsec3_zone_t *a, nsec3_zone_t *b);
+void          nsec3_zone_destroy(zdb_zone_t *zone, nsec3_zone_t *n3);
 
-nsec3_zone* nsec3_zone_new(const u8 *nsec3param_rdata, u16 nsec3param_rdata_size);
+nsec3_zone_t *nsec3_zone_new(const uint8_t *nsec3param_rdata, uint16_t nsec3param_rdata_size);
 
 /**
  * Frees the memory allocated by the nsec3_zone struct.
  * Must not be called for a nsec3_zone that's being linked into a zdb_zone or
  * that still contains items.
- * 
+ *
  * @param n3
  */
 
-void nsec3_zone_free(nsec3_zone *n3);
+void          nsec3_zone_free(nsec3_zone_t *n3);
 
-nsec3_zone* nsec3_zone_from_item(const zdb_zone* zone, const nsec3_zone_item* item);
-nsec3_zone* nsec3_zone_add_from_rdata(zdb_zone* zone, u16 nsec3param_rdata_size, const u8* nsec3param_rdata);
-nsec3_zone* nsec3_zone_get_from_rdata(const zdb_zone* zone, u16 nsec3param_rdata_size, const u8* nsec3param_rdata);
+nsec3_zone_t *nsec3_zone_from_item(const zdb_zone_t *zone, const nsec3_zone_item_t *item);
+nsec3_zone_t *nsec3_zone_add_from_rdata(zdb_zone_t *zone, uint16_t nsec3param_rdata_size, const uint8_t *nsec3param_rdata);
+nsec3_zone_t *nsec3_zone_get_from_rdata(const zdb_zone_t *zone, uint16_t nsec3param_rdata_size, const uint8_t *nsec3param_rdata);
 
-bool nsec3_zone_detach(zdb_zone *zone, nsec3_zone *n3);
+bool          nsec3_zone_detach(zdb_zone_t *zone, nsec3_zone_t *n3);
 
-ya_result nsec3_zone_chain_count(zdb_zone* zone);
+ya_result     nsec3_zone_chain_count(zdb_zone_t *zone);
 
 /**
- * 
+ *
  * Adds the nsec3_zone (NSEC3PARAM "alter-ego") to the zone.
  *
  * Updates labels flags + nsec3 item references placeholders
@@ -87,35 +85,32 @@ ya_result nsec3_zone_chain_count(zdb_zone* zone);
  * Used by nsec3_add_nsec3param and nsec3_load_add_nsec3param
  *
  * @note Does not add the record.
- * 
+ *
  * @param zone
  * @param nsec3param_rdata
  * @param nsec3param_rdata_size
- * 
+ *
  * @return an error code
  */
 
-ya_result nsec3_zone_chain_add_with_rdata(zdb_zone* zone, const u8* nsec3param_rdata, u16 nsec3param_rdata_size);
+ya_result nsec3_zone_chain_add_with_rdata(zdb_zone_t *zone, const uint8_t *nsec3param_rdata, uint16_t nsec3param_rdata_size);
 
 /**
  * Returns the index of an NSEC3PARAM in the zone, or an error code
- * 
+ *
  * @param zone
  * @param nsec3param_rdata
  * @param nsec3param_rdata_size
- * @return 
+ * @return
  */
 
-ya_result nsec3_zone_chain_get_index_from_rdata(zdb_zone* zone, const u8* nsec3param_rdata, u16 nsec3param_rdata_size);
+ya_result nsec3_zone_chain_get_index_from_rdata(zdb_zone_t *zone, const uint8_t *nsec3param_rdata, uint16_t nsec3param_rdata_size);
 
-ya_result nsec3_zone_chain_get_index_from_rdata(zdb_zone* zone, const u8* nsec3param_rdata, u16 nsec3param_rdata_size);
+ya_result nsec3_zone_chain_get_index_from_rdata(zdb_zone_t *zone, const uint8_t *nsec3param_rdata, uint16_t nsec3param_rdata_size);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _NSEC3_ZONE_H */
+#endif /* _NSEC3_ZONE_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

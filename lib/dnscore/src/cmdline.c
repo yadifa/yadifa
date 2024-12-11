@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,27 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include <dnscore/cmdline.h>
-#include "dnscore/dnscore-config.h"
+#include <sys/ioctl.h>
+#include <stdio.h>
+
+#include "dnscore/cmdline.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/bytearray_input_stream.h"
 #include "dnscore/bytearray_output_stream.h"
-#include "dnscore/ptr_set.h"
+#include "dnscore/ptr_treemap.h"
 #include "dnscore/format.h"
 
 #include "dnscore/cmdline.h"
+#include "dnscore/mutex.h"
 
-#define CMDLOSAP_TAG 0x5041534f4c444d43
+#define CMDLOSAP_TAG         0x5041534f4c444d43
 
-static ptr_set g_cmdline_sections = PTR_SET_ASCIIZ_EMPTY;
-static bool cmdline_init_error_codes_done = FALSE;
+#define TEXT_COLUMNS_DEFAULT 80
+
+static ptr_treemap_t       g_cmdline_sections = PTR_TREEMAP_ASCIIZ_EMPTY;
+static initialiser_state_t cmdline_error_codes_init_state = INITIALISE_STATE_INIT;
 
 /*
 #if 0
@@ -52,7 +56,7 @@ v = value;
 t = translate;
 
 ya_result
-cmdline_tsigkey_translate(output_stream *os, const char *text, const char *section_name)
+cmdline_tsigkey_translate(output_stream_t *os, const char *text, const char *section_name)
 {
 
 
@@ -73,25 +77,24 @@ thread-count || t , "10"
 #endif
 */
 
-ya_result
-cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, const char *arg)
+ya_result cmdline_process_argument(const cmdline_desc_t *desc, const char *section_name, const char *arg)
 {
-    ya_result return_code; 
+    ya_result return_code;
 
     if((desc->flags & CMDLINE_FLAG_ARGUMENTS) && (arg == NULL))
     {
         return CMDLINE_OPT_EXPECTS_ARGUMENT;
     }
 
-    ptr_node *node;
+    ptr_treemap_node_t *node;
 
-    node = ptr_set_insert(&g_cmdline_sections, (char*)section_name);
+    node = ptr_treemap_insert(&g_cmdline_sections, (char *)section_name);
 
-    output_stream *os; 
+    output_stream_t *os;
 
     if(node->value == NULL)
     {
-        MALLOC_OBJECT_OR_DIE(os, output_stream, CMDLOSAP_TAG);
+        MALLOC_OBJECT_OR_DIE(os, output_stream_t, CMDLOSAP_TAG);
         bytearray_output_stream_init(os, NULL, 0);
 
         osformatln(os, "<%s>", section_name);
@@ -99,11 +102,11 @@ cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, c
         node->value = os;
     }
 
-    os = (output_stream *)node->value;
+    os = (output_stream_t *)node->value;
 
     switch(desc->flags)
     {
-        case CMDLINE_FLAG_SECTION:    
+        case CMDLINE_FLAG_SECTION:
 
             return_code = CMDLINE_PROCESSING_SECTION_AS_ARGUMENT;
 
@@ -142,16 +145,14 @@ cmdline_process_argument(const cmdline_desc_s *desc, const char *section_name, c
     return return_code;
 }
 
-
-ya_result 
-cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *arg)
+ya_result cmdline_get_opt_long(const cmdline_desc_t *table, const char *name, const char *arg)
 {
     ya_result return_code = CMDLINE_LONG_OPT_UNDEFINED;
-    int i;
-    bool internal_arg = FALSE;
-    
-    char clean_name[128];
-    
+    int       i;
+    bool      internal_arg = false;
+
+    char      clean_name[128];
+
     for(i = 0; name[i] != '\0'; i++)
     {
         if(name[i] != '=')
@@ -162,8 +163,8 @@ cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *
         {
             arg = &name[i + 1];
 
-            internal_arg = TRUE;
-            
+            internal_arg = true;
+
             break;
         }
     }
@@ -171,7 +172,7 @@ cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *
 
     const char *section_name = "";
 
-    for(const cmdline_desc_s *desc = table; cmdline_desc_not_end(desc); desc++)
+    for(const cmdline_desc_t *desc = table; cmdline_desc_not_end(desc); desc++)
     {
         if(desc->flags == CMDLINE_FLAG_SECTION)
         {
@@ -194,7 +195,7 @@ cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *
             {
                 if(arg != NULL)
                 {
-                    for(char *p = (char*)arg; *p != '\0'; ++p)
+                    for(char *p = (char *)arg; *p != '\0'; ++p)
                     {
                         *p = '\t';
                     }
@@ -205,22 +206,21 @@ cmdline_get_opt_long(const cmdline_desc_s *table, const char *name, const char *
         }
     }
 
-   return return_code;
+    return return_code;
 }
 
 /**
  * Returns 1 if the argument has been eaten, 0 if not.
  */
 
-ya_result
-cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char *arg)
+ya_result cmdline_get_opt_short(const cmdline_desc_t *table, const char *name, const char *arg)
 {
-    ya_result return_code = CMDLINE_SHORT_OPT_UNDEFINED;
+    ya_result   return_code = CMDLINE_SHORT_OPT_UNDEFINED;
     const char *section_name = "";
 
     while(*name != '\0')
     {
-        for(const cmdline_desc_s *desc = table; cmdline_desc_not_end(desc); desc++)
+        for(const cmdline_desc_t *desc = table; cmdline_desc_not_end(desc); desc++)
         {
             if(desc->flags == CMDLINE_FLAG_SECTION)
             {
@@ -244,7 +244,7 @@ cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char 
                     {
                         if((desc->flags & CMDLINE_FLAG_OBFUSCATE) != 0)
                         {
-                            for(char *p = (char*)arg; *p != '\0'; ++p)
+                            for(char *p = (char *)arg; *p != '\0'; ++p)
                             {
                                 *p = '\t';
                             }
@@ -266,7 +266,7 @@ cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char 
                     {
                         if((desc->flags & CMDLINE_FLAG_OBFUSCATE) != 0)
                         {
-                            for(char *p = (char*)arg; *p != '\0'; ++p)
+                            for(char *p = (char *)arg; *p != '\0'; ++p)
                             {
                                 *p = '\t';
                             }
@@ -283,8 +283,22 @@ cmdline_get_opt_short(const cmdline_desc_s *table, const char *name, const char 
     return return_code;
 }
 
-ya_result
-cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter_callback *filter, void *filter_arg, input_stream *is, int *argc_errorp)
+/**
+ * Parses a command line and returns an input stream ready to be parsed by a configuration reader.
+ *
+ * The function works by generating a configuration file in a stream using the command line table as a map.
+ * The table is used to check for the existence of the options
+ *
+ * @param table the name of a table defined using CMDLINE_BEGIN
+ * @param argc the argc of main()
+ * @param argv the argv of main()
+ * @param filter a callback function that will be called for unhandled command line parameters (file names, "--", ...)
+ * @param filter_arg a pointer given to the filter callback
+ * @param is the input stream to initialise with the command line
+ * @return an error code
+ */
+
+ya_result cmdline_parse(const cmdline_desc_t *table, int argc, char **argv, cmdline_filter_callback *filter, void *filter_arg, input_stream_t *is, int *argc_errorp)
 {
     if((table == NULL) || (argv == NULL) || (is == NULL))
     {
@@ -307,36 +321,30 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
         filter = table->target.filter;
         filter_arg = CMDLINE_CALLBACK_ARG_GET(table);
     }
-            
-    for(int i = 1; i < argc; i++)
+
+    for(int_fast32_t i = 1; i < argc; i++)
     {
-        char *arg = argv[i];
-        int arg_len = strlen(arg);
+        char     *arg = argv[i];
+        int       arg_len = strlen(arg);
         ya_result return_code;
-        
+
         if((arg[0] == '-') && (arg_len > 1))
         {
             // fetch next val
-            
+
             const char *val = NULL;
-            
+
             if(i < argc - 1)
             {
                 val = argv[i + 1];
-                /*
-                if(val[0] == '-')
-                {
-                    val = NULL;
-                }
-                */
             }
-            
+
             // check opt(long/short) or add
 
             if(arg[1] != '-')
             {
                 // short argument
-                
+
                 if(FAIL(return_code = cmdline_get_opt_short(table, &arg[1], val)))
                 {
                     if(argc_errorp != NULL)
@@ -347,13 +355,13 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
                 }
 
                 i += return_code;
-                
+
                 continue;
             }
             else
             {
                 // long argument
-                
+
                 if(arg_len > 2)
                 {
                     if(FAIL(return_code = cmdline_get_opt_long(table, &arg[2], val)))
@@ -364,20 +372,20 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
                         }
                         return return_code;
                     }
-                    
+
                     i += return_code;
-                    
+
                     continue;
                 }
                 else // == 2
                 {
                     // case of "--"
-                    
+
                     // fall outside of the if
                 }
             }
         }
-        
+
         if(filter != NULL)
         {
             return_code = filter(table, arg, filter_arg);
@@ -386,7 +394,7 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
             {
                 case CMDLINE_ARG_STOP_PROCESSING_FLAG_OPTIONS:
                 {
-                    for(++i;i < argc;i++)
+                    for(++i; i < argc; i++)
                     {
                         char *arg_i = argv[i];
 
@@ -412,22 +420,22 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
         }
     } // for
 
-    /// 
-    output_stream complete_config_os;
+    ///
+    output_stream_t complete_config_os;
     bytearray_output_stream_init(&complete_config_os, NULL, 0);
 
-    ptr_set_iterator iter;
-    ptr_set_iterator_init(&g_cmdline_sections, &iter);
-    while(ptr_set_iterator_hasnext(&iter))
+    ptr_treemap_iterator_t iter;
+    ptr_treemap_iterator_init(&g_cmdline_sections, &iter);
+    while(ptr_treemap_iterator_hasnext(&iter))
     {
-        ptr_node *node = ptr_set_iterator_next_node(&iter);
-        output_stream *os = (output_stream *)node->value;
-        const char *section_name = (const char *)node->key;
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        output_stream_t    *os = (output_stream_t *)node->value;
+        const char         *section_name = (const char *)node->key;
 
         osformatln(os, "</%s>", section_name);
 
-        u32 buffer_size = bytearray_output_stream_size(os);
-        const u8 *buffer = bytearray_output_stream_buffer(os);
+        uint32_t       buffer_size = bytearray_output_stream_size(os);
+        const uint8_t *buffer = bytearray_output_stream_buffer(os);
 
         output_stream_write(&complete_config_os, buffer, buffer_size);
         output_stream_close(os); // VS false positive: 'os' cannot be NULL or the node would not exist
@@ -435,40 +443,105 @@ cmdline_parse(const cmdline_desc_s *table, int argc, char **argv, cmdline_filter
         node->value = NULL;
     }
 
-    ptr_set_destroy(&g_cmdline_sections);
+    ptr_treemap_finalise(&g_cmdline_sections);
 
-    u32 buffer_size = bytearray_output_stream_size(&complete_config_os);
-    u8 *buffer      = bytearray_output_stream_detach(&complete_config_os);
-    
+    uint32_t buffer_size = bytearray_output_stream_size(&complete_config_os);
+    uint8_t *buffer = bytearray_output_stream_detach(&complete_config_os);
+
     output_stream_close(&complete_config_os);
 
-    bytearray_input_stream_init(is, buffer, buffer_size, TRUE);
+    bytearray_input_stream_init(is, buffer, buffer_size, true);
 
     return buffer_size;
 }
 
-void
-cmdline_init_error_codes()
+void cmdline_init_error_codes()
 {
-    if(cmdline_init_error_codes_done)
+    if(initialise_state_begin(&cmdline_error_codes_init_state))
     {
-        return;
+        error_register(CMDLINE_PROCESSING_SECTION_AS_ARGUMENT, "CMDLINE_PROCESSING_SECTION_AS_ARGUMENT");
+        error_register(CMDLINE_PROCESSING_INVALID_DESCRIPTOR, "CMDLINE_PROCESSING_INVALID_DESCRIPTOR");
+        error_register(CMDLINE_LONG_OPT_UNDEFINED, "CMDLINE_LONG_OPT_UNDEFINED");
+        error_register(CMDLINE_SHORT_OPT_UNDEFINED, "CMDLINE_SHORT_OPT_UNDEFINED");
+        error_register(CMDLINE_OPT_EXPECTS_ARGUMENT, "CMDLINE_OPT_EXPECTS_ARGUMENT");
+
+        initialise_state_ready(&cmdline_error_codes_init_state);
     }
-    
-    cmdline_init_error_codes_done = TRUE;
-    
-    error_register(CMDLINE_PROCESSING_SECTION_AS_ARGUMENT, "CMDLINE_PROCESSING_SECTION_AS_ARGUMENT");
-    error_register(CMDLINE_PROCESSING_INVALID_DESCRIPTOR, "CMDLINE_PROCESSING_INVALID_DESCRIPTOR");
-    error_register(CMDLINE_LONG_OPT_UNDEFINED, "CMDLINE_LONG_OPT_UNDEFINED");
-    error_register(CMDLINE_SHORT_OPT_UNDEFINED, "CMDLINE_SHORT_OPT_UNDEFINED");
-    error_register(CMDLINE_OPT_EXPECTS_ARGUMENT, "CMDLINE_OPT_EXPECTS_ARGUMENT");
 }
 
-ya_result
-cmdline_print_help(const cmdline_desc_s *table, int arg_column_prefix, int arg_width, const char *column_separator, int text_width, output_stream *os)
+/**
+ * Prints the embedded help in the cmdline table.
+ *
+ * @param table the cmdline table
+ * @param arg_column_prefix the number of spaces to put before printing the first '-' of a parameter
+ * @param arg_width the space to reserve for parameters (width that column). A negative value = automatic fit.
+ * @param column_separator what to print between the parameters and the explanation
+ * @param text_width to wrap text (0 means detect columns)
+ * @param os the stream where to print the table (e.g. termout)
+ *
+ */
+
+ya_result cmdline_print_help_ex(const cmdline_desc_t *table, int arg_column_prefix, int arg_width, const char *column_separator, int text_width, output_stream_t *os)
 {
-    const cmdline_desc_s *p = NULL;
-    const cmdline_desc_s *t = table;
+    if(text_width == 0)
+    {
+#ifdef TIOCGWINSZ
+        struct winsize w;
+        ioctl(0, TIOCGWINSZ, &w);
+        text_width = w.ws_col;
+        if(text_width <= 0)
+        {
+            text_width = TEXT_COLUMNS_DEFAULT;
+        }
+#else
+        text_width = TEXT_COLUMNS_DEFAULT;
+#endif
+    }
+
+    if(arg_width < 0)
+    {
+        int                   computed_width_max = 0;
+        const cmdline_desc_t *p = NULL;
+        const cmdline_desc_t *t = table;
+        while(cmdline_desc_not_end(t))
+        {
+            int computed_width = 0;
+            if((t->flags & CMDLINE_FLAG_HELP_LINE) && (p != NULL))
+            {
+                if(p->letter != '\0')
+                {
+                    computed_width += 2;
+                    if(p->name != NULL)
+                    {
+                        computed_width++;
+                    }
+                }
+                if(p->name != NULL)
+                {
+                    computed_width += 2 + strlen(p->name);
+
+                    if((t->name != NULL) && (t->name[0] != '\0'))
+                    {
+                        computed_width += 1 + strlen(t->name);
+                    }
+                }
+                if(computed_width > computed_width_max)
+                {
+                    computed_width_max = computed_width;
+                }
+            }
+            p = t;
+            ++t;
+        }
+        arg_width = computed_width_max + 1;
+    }
+
+    const cmdline_desc_t *p = NULL;
+    const cmdline_desc_t *t = table;
+    size_t                column_separator_len = strlen(column_separator);
+    size_t                text_first_column = arg_column_prefix + arg_width + column_separator_len;
+    size_t                text_space = text_width - text_first_column; // if the text_width is too low, the unsigned arithmetic will
+                                                                       // fix it automatically by not wrapping at all
     while(cmdline_desc_not_end(t))
     {
         if((t->flags & CMDLINE_FLAG_HELP_LINE) && (p != NULL))
@@ -480,7 +553,7 @@ cmdline_print_help(const cmdline_desc_s *table, int arg_column_prefix, int arg_w
             if(p->letter != '\0')
             {
                 width += output_stream_write_u8(os, '-');
-                width += output_stream_write_u8(os, (u8)p->letter);
+                width += output_stream_write_u8(os, (uint8_t)p->letter);
                 if(p->name != NULL)
                 {
                     width += output_stream_write(os, ", ", 2);
@@ -502,18 +575,15 @@ cmdline_print_help(const cmdline_desc_s *table, int arg_column_prefix, int arg_w
 
             osprint(os, column_separator);
 
-            int help_len = (int)strlen(t->value);
+            size_t help_len = strlen(t->value);
 
-            if(help_len < text_width)
+            if(help_len <= text_space)
             {
                 osprint(os, t->value);
             }
             else
             {
-#if DEBUG
-#pragma message("TODO: (COSMETIC) cut the t->value text word by word and wrap to the next line when needed")
-#endif
-                osprint(os, t->value);
+                osprint_wrapped(os, t->value, text_first_column, text_width, text_first_column);
             }
 
             output_stream_write_u8(os, '\n');
@@ -545,10 +615,25 @@ cmdline_print_help(const cmdline_desc_s *table, int arg_column_prefix, int arg_w
         else if(t->flags == CMDLINE_FLAG_INDENTED)
         {
             arg_column_prefix = MAX(arg_column_prefix + t->target.integer_value, 0);
+            text_first_column = arg_column_prefix + arg_width + column_separator_len;
+            text_space = text_width - text_first_column; // if the text_width is too
         }
         p = t;
         ++t;
     }
 
     return SUCCESS;
+}
+
+/**
+ * Prints the embedded help in the cmdline table.
+ *
+ * = cmdline_print_help_ex(table, 4, -1, " :  ", text_width, os);
+ *
+ */
+
+ya_result cmdline_print_help(const cmdline_desc_t *table, output_stream_t *os)
+{
+    ya_result ret = cmdline_print_help_ex(table, 4, -1, " :  ", 0, os);
+    return ret;
 }

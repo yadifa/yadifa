@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief AVL structure and functions
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief AVL structure and functions
  *
  *  AVL structure and functions
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 #ifndef _AVL_H
-#define	_AVL_H
+#define _AVL_H
 
 #include <dnsdb/zdb_config.h>
 #include <dnscore/hash.h>
@@ -50,7 +49,7 @@
 #error "ZDB_INLINES_AVL_FIND not defined"
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -144,12 +143,12 @@ F# 62  Value= 6557470319842  Items= 17167680177564  Log2= 43.9647603385
 F# 63  Value= 10610209857723  Items= 27777890035287  Log2= 44.6590022522
 */
 
-#define AVL_MAX_DEPTH 52 // 139*10^9 items max (worst case)*/
+#define AVL_DEPTH_MAX         52 // 139*10^9 items max (worst case)*/
 
 struct avl_leftrightchildren
 {
-    struct avl_node_* left;
-    struct avl_node_* right;
+    struct avl_node_ *left;
+    struct avl_node_ *right;
 };
 
 struct avl_node_
@@ -157,28 +156,28 @@ struct avl_node_
 
     union
     {
-	struct avl_node_ * child[2]; /* 2 ptr    */
-	struct avl_leftrightchildren lr;
+        struct avl_node_            *child[2]; /* 2 ptr    */
+        struct avl_leftrightchildren lr;
     } children;
 
-    void* data; /* 1 ptr    */
+    void    *data; /* 1 ptr    */
     hashcode hash; /* hashcode of the data (32 bits) */
 
-    s8 balance; /* used for balance check */
+    int8_t   balance; /* used for balance check */
     // 3 unused bytes
 }; /* 17 29 => 24 32 */
 
 typedef struct avl_node_ avl_node;
 
-typedef avl_node* avl_tree;
+typedef avl_node        *avl_tree;
 
 typedef struct
 {
-    s32 stack_pointer;
-    avl_node *stack[AVL_MAX_DEPTH]; /* An AVL depth of 64 is HUGE */
+    int32_t   stack_pointer;
+    avl_node *stack[AVL_DEPTH_MAX]; /* An AVL depth of 64 is HUGE */
 } avl_iterator;
 
-#undef AVL_MAX_DEPTH
+#undef AVL_DEPTH_MAX
 
 /** @brief Initializes the tree
  *
@@ -189,7 +188,7 @@ typedef struct
  *
  */
 
-void avl_init(avl_tree* tree);
+void avl_init(avl_tree *tree);
 
 /** @brief Find a node in the tree
  *
@@ -201,18 +200,17 @@ void avl_init(avl_tree* tree);
  *  @return A pointer to the node or NULL if there is no such node.
  */
 #if !ZDB_INLINES_AVL_FIND
-void* avl_find(avl_tree* tree, hashcode obj_hash);
+void *avl_find(avl_tree *tree, hashcode obj_hash);
 #else
 
-#define CHILD(node,id) ((node)->children.child[(id)])
+#define CHILD(node, id) ((node)->children.child[(id)])
 
-static inline void*
-avl_find(const avl_tree* root, hashcode obj_hash)
+static inline void *avl_find(const avl_tree *root, hashcode obj_hash)
 {
     assert(root != NULL);
 
-    avl_node* node = *root;
-    hashcode h;
+    avl_node *node = *root;
+    hashcode  h;
 
     /* This is one of the parts I could try to optimize
      * I've checked the assembly, and it sucks ...
@@ -229,7 +227,7 @@ avl_find(const avl_tree* root, hashcode obj_hash)
             return node->data;
         }
 
-        node = CHILD(node, (obj_hash > h)&1);
+        node = CHILD(node, (obj_hash > h) & 1);
     }
 
     /*return (node!=NULL)?node->data:NULL;*/
@@ -249,15 +247,14 @@ avl_find(const avl_tree* root, hashcode obj_hash)
  */
 
 #if !ZDB_INLINES_AVL_FIND
-void** avl_findp(avl_tree* tree, hashcode obj_hash);
+void **avl_findp(avl_tree *tree, hashcode obj_hash);
 #else
-static inline void**
-avl_findp(const avl_tree* root, hashcode obj_hash)
+static inline void **avl_findp(const avl_tree *root, hashcode obj_hash)
 {
     assert(root != NULL);
 
-    avl_node* node = *root;
-    hashcode h;
+    avl_node *node = *root;
+    hashcode  h;
 
     while(node != NULL /* &&((h=node->hash)!=obj_hash) */)
     {
@@ -266,7 +263,7 @@ avl_findp(const avl_tree* root, hashcode obj_hash)
             return &node->data;
         }
 
-        node = CHILD(node, (obj_hash > h)&1);
+        node = CHILD(node, (obj_hash > h) & 1);
     }
 
     /* return (node!=NULL)?&node->data:NULL; */
@@ -295,7 +292,7 @@ avl_findp(const avl_tree* root, hashcode obj_hash)
  *  @return The node associated to the hash
  */
 
-void** avl_insert(avl_tree* tree, hashcode obj_hash);
+void **avl_insert(avl_tree *tree, hashcode obj_hash);
 
 /** @brief Deletes a node from the tree.
  *
@@ -307,7 +304,7 @@ void** avl_insert(avl_tree* tree, hashcode obj_hash);
  *  @return The node associated to the hash, NULL if it did not exist.
  */
 
-void* avl_delete(avl_tree* tree, hashcode obj_hash);
+void *avl_delete(avl_tree *tree, hashcode obj_hash);
 
 /** @brief Releases all the nodes of a tree
  *
@@ -316,35 +313,31 @@ void* avl_delete(avl_tree* tree, hashcode obj_hash);
  *  @param[in] tree the tree to empty
  */
 
-void avl_destroy(avl_tree* tree);
+void avl_finalise(avl_tree *tree);
 
-void avl_iterator_init(avl_tree tree, avl_iterator* iter);
+void avl_iterator_init(avl_tree tree, avl_iterator *iter);
 
 /**
  * Initialises an iterator from right after a given key.
  * Returns the node, or NULL if the node does not exist.
  * The next call to avl_iterator_next* will return the next node (provided the first one exists)
- * 
+ *
  * @param tree the avl_tree collection
  * @param iter an iterator that will be initialised to the node following the returned one (if not NULL)
  * @param obj_hash the key of the node to look for
  * @return the sought node
  */
 
-avl_node* avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_hash);
+avl_node *avl_iterator_init_from_after(avl_tree tree, avl_iterator *iter, hashcode obj_hash);
 
 #if !ZDB_INLINES_AVL_FIND
-bool avl_iterator_hasnext(avl_iterator* iter);
+bool avl_iterator_hasnext(avl_iterator *iter);
 #else
-static inline bool
-avl_iterator_hasnext(avl_iterator* iter)
-{
-    return iter->stack_pointer >= 0;
-}
+static inline bool avl_iterator_hasnext(avl_iterator *iter) { return iter->stack_pointer >= 0; }
 #endif
 
-void** avl_iterator_next(avl_iterator* iter);
-avl_node* avl_iterator_next_node(avl_iterator* iter);
+void    **avl_iterator_next(avl_iterator *iter);
+avl_node *avl_iterator_next_node(avl_iterator *iter);
 
 /** @brief Releases all the nodes of a tree
  *
@@ -356,7 +349,7 @@ avl_node* avl_iterator_next_node(avl_iterator* iter);
  *  @param[in] tree the tree to empty
  */
 
-void avl_callback_and_destroy(avl_tree tree, void (*callback)(void*));
+void avl_callback_and_finalise(avl_tree tree, void (*callback)(void *));
 
 #if DEBUG
 
@@ -384,7 +377,7 @@ ya_result avl_check(avl_tree tree);
  *
  */
 
-s32 avl_checkdepth(avl_node* node);
+int32_t avl_checkdepth(avl_node *node);
 
 /** @brief DEBUG: Prints the (sorted) content of the AVL
  *
@@ -396,7 +389,6 @@ s32 avl_checkdepth(avl_node* node);
 
 void avl_print(avl_tree tree);
 
-
 /** @brief DEBUG: Prints the content of the AVL node
  *
  *  DEBUG: Prints the (sorted) content of the AVL node
@@ -405,14 +397,14 @@ void avl_print(avl_tree tree);
  *
  */
 
-void avl_printnode(avl_node* node);
+void avl_printnode(avl_node *node);
 
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _AVL_H */
+#endif /* _AVL_H */
 
 /** @} */

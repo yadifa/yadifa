@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,26 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef JOURNAL_IX_H
-#define	JOURNAL_IX_H
+#define JOURNAL_IX_H
 
 #include <dnsdb/journal.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-ya_result journal_ix_open(journal **jh, const u8* origin, const char *workingdir, bool create);
+ya_result journal_ix_open(journal **jh, const uint8_t *origin, const char *workingdir, bool create);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* JOURNAL_IX_H */
+#endif /* JOURNAL_IX_H */
 
 /** @} */
-

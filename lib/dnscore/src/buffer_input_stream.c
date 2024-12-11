@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,50 +28,47 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "dnscore/buffer_input_stream.h"
 
-#define BUFFER_INPUT_STREAM_TAG 0x53495246465542    /* BUFFERIS */
+#define BUFFER_INPUT_STREAM_TAG 0x53495246465542 /* BUFFERIS */
 
 typedef struct buffer_input_stream_data buffer_input_stream_data;
 
 struct buffer_input_stream_data
 {
-    input_stream filtered;
-    u32 buffer_maxsize; // physical size of the buffer
+    input_stream_t filtered;
+    uint32_t       buffer_maxsize; // physical size of the buffer
 
-    u32 buffer_size;    // amount of the buffer that's filled
-    u32 buffer_offset;  // position in the buffer
+    uint32_t       buffer_size;   // amount of the buffer that's filled
+    uint32_t       buffer_offset; // position in the buffer
 
-    u8 buffer[1];
+    uint8_t        buffer[1];
 };
 
-static ya_result
-buffer_input_stream_read(input_stream *stream, void* buffer_, u32 len)
+static ya_result buffer_input_stream_read(input_stream_t *stream, void *buffer_, uint32_t len)
 {
-    buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
-    u8* buffer = (u8*)buffer_;
-    u8* src = data->buffer;
+    buffer_input_stream_data *data = (buffer_input_stream_data *)stream->data;
+    uint8_t                  *buffer = (uint8_t *)buffer_;
+    uint8_t                  *src = data->buffer;
 
-    ya_result ret;
+    ya_result                 ret;
 
-    u32 remaining = data->buffer_size - data->buffer_offset;
+    uint32_t                  remaining = data->buffer_size - data->buffer_offset;
 
     if(len <= remaining)
     {
@@ -100,11 +97,11 @@ buffer_input_stream_read(input_stream *stream, void* buffer_, u32 len)
         if(ISOK(ret = input_stream_read(&data->filtered, buffer, len)))
         {
             return remaining + ret; /* the chunk we've read from the buffer +
-				   the chunk we've read from the stream */
+                                   the chunk we've read from the stream */
         }
         else // 'remaining' bytes may have been copied already, if so, return that before the error
         {
-            return (remaining > 0) ? (s32)remaining : ret;
+            return (remaining > 0) ? (int32_t)remaining : ret;
         }
     }
 
@@ -119,42 +116,40 @@ buffer_input_stream_read(input_stream *stream, void* buffer_, u32 len)
     {
         data->buffer_size = 0;
         data->buffer_offset = 0;
-        
+
         // 'remaining' bytes may have been copied already, if so, return that before the error
 
-        return (remaining > 0) ? (s32)remaining : ERROR /* eof */;
+        return (remaining > 0) ? (int32_t)remaining : ERROR /* eof */;
     }
-    
-    if(len > (u32)ret) // ret > 0
+
+    if(len > (uint32_t)ret) // ret > 0
     {
-        len = (u32)ret;
+        len = (uint32_t)ret;
     }
 
     MEMCOPY(buffer, data->buffer, len); /* starts at offset 0 */
 
-    data->buffer_size = (u32)ret;
+    data->buffer_size = (uint32_t)ret;
     data->buffer_offset = len;
 
     return remaining + len;
 }
 
-static void
-buffer_input_stream_close(input_stream* stream)
+static void buffer_input_stream_close(input_stream_t *stream)
 {
-    buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
+    buffer_input_stream_data *data = (buffer_input_stream_data *)stream->data;
     input_stream_close(&data->filtered);
     free(data);
 
     input_stream_set_void(stream);
 }
 
-static ya_result
-buffer_input_stream_skip(input_stream* stream, u32 len)
+static ya_result buffer_input_stream_skip(input_stream_t *stream, uint32_t len)
 {
-    ya_result ret;
-    
-    buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
-    u32 remaining = data->buffer_size - data->buffer_offset;
+    ya_result                 ret;
+
+    buffer_input_stream_data *data = (buffer_input_stream_data *)stream->data;
+    uint32_t                  remaining = data->buffer_size - data->buffer_offset;
 
     if(len <= remaining)
     {
@@ -169,26 +164,27 @@ buffer_input_stream_skip(input_stream* stream, u32 len)
     if(FAIL(ret = input_stream_skip(&data->filtered, len)))
     {
         // 'remaining' bytes may have been skipped already, if so, return that before the error
-        
-        return (remaining > 0)?(s32)remaining:ret;
+
+        return (remaining > 0) ? (int32_t)remaining : ret;
     }
 
     return remaining + ret;
 }
 
-static const input_stream_vtbl buffer_input_stream_vtbl =
-{
-    buffer_input_stream_read,
-    buffer_input_stream_skip,
-    buffer_input_stream_close,
-    "buffer_input_stream"
-};
+static const input_stream_vtbl buffer_input_stream_vtbl = {buffer_input_stream_read, buffer_input_stream_skip, buffer_input_stream_close, "buffer_input_stream"};
 
-void
-buffer_input_stream_init(input_stream* stream, input_stream* filtered, int buffer_size)
+/**
+ * Initialises a buffer input stream.
+ *
+ * @param stream the stream to initialise
+ * @param filtered_in the stream to filter
+ * @param buffer_size the size of the buffer
+ */
+
+void buffer_input_stream_init(input_stream_t *stream, input_stream_t *filtered, int buffer_size)
 {
-    buffer_input_stream_data* data;
-    
+    buffer_input_stream_data *data;
+
     if(buffer_size == 0)
     {
         buffer_size = BUFFER_INPUT_STREAM_DEFAULT_BUFFER_SIZE;
@@ -196,7 +192,7 @@ buffer_input_stream_init(input_stream* stream, input_stream* filtered, int buffe
 
     yassert(filtered->vtbl != NULL);
 
-    MALLOC_OR_DIE(buffer_input_stream_data*, data, sizeof(buffer_input_stream_data) + buffer_size - 1, BUFFER_INPUT_STREAM_TAG);
+    MALLOC_OR_DIE(buffer_input_stream_data *, data, sizeof(buffer_input_stream_data) + buffer_size - 1, BUFFER_INPUT_STREAM_TAG);
 
     data->filtered.data = filtered->data;
     data->filtered.vtbl = filtered->vtbl;
@@ -204,7 +200,7 @@ buffer_input_stream_init(input_stream* stream, input_stream* filtered, int buffe
     filtered->data = NULL;
     filtered->vtbl = NULL;
 
-    data->buffer_maxsize = (u32)buffer_size;
+    data->buffer_maxsize = (uint32_t)buffer_size;
     data->buffer_size = 0;
     data->buffer_offset = 0;
 
@@ -212,61 +208,58 @@ buffer_input_stream_init(input_stream* stream, input_stream* filtered, int buffe
     stream->vtbl = &buffer_input_stream_vtbl;
 }
 
-ya_result
-buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
+ya_result buffer_input_stream_read_line(input_stream_t *stream, char *buffer, uint32_t len)
 {
     assert(stream->vtbl == &buffer_input_stream_vtbl);
-    
-    buffer_input_stream_data* data = (buffer_input_stream_data*)stream->data;
-    
-    assert(data->buffer_offset <= data->buffer_size); 
-    
-    char *src = (char*)data->buffer;
-    
+
+    buffer_input_stream_data *data = (buffer_input_stream_data *)stream->data;
+
+    assert(data->buffer_offset <= data->buffer_size);
+
+    char *src = (char *)data->buffer;
+
     if(len == 0)
     {
         return BUFFER_WOULD_OVERFLOW;
     }
-    
+
     len--;
 
-    u32 total = 0;
-    
+    uint32_t total = 0;
+
     /*
      * look for '\n' in the remaining bytes
      */
 
-    char *b = &src[data->buffer_offset];
-    s32 n = data->buffer_size - data->buffer_offset;
-    
+    char   *b = &src[data->buffer_offset];
+    int32_t n = data->buffer_size - data->buffer_offset;
+
     if(n == 0)
     {
-        if((n = input_stream_read(&data->filtered, (u8*)src, data->buffer_maxsize)) <= 0)
+        if((n = input_stream_read(&data->filtered, (uint8_t *)src, data->buffer_maxsize)) <= 0)
         {
             data->buffer_offset = 0;
             data->buffer_size = 0;
-            
+
             return n /* eof */;
         }
-        
+
         data->buffer_offset = 0;
-        data->buffer_size = (u32)n;
+        data->buffer_size = (uint32_t)n;
         b = src;
     }
-    
+
     for(;;)
-    { 
-        
-        n = MIN((s32)len, n);
-        
-#if 0 /* fix */
-#else
+    {
+
+        n = MIN((int32_t)len, n);
+
         //
-        char *eol = (char*)memchr(b, '\n', (size_t)n);
+        char *eol = (char *)memchr(b, '\n', (size_t)n);
         if(eol != NULL)
         {
             ++eol;
-            u32 len_to_the_end = eol - b;
+            uint32_t len_to_the_end = eol - b;
             data->buffer_offset = eol - src;
             memcpy(buffer, b, len_to_the_end);
             buffer[len_to_the_end] = '\0';
@@ -274,63 +267,60 @@ buffer_input_stream_read_line(input_stream* stream, char* buffer, u32 len)
         }
         memcpy(buffer, b, (size_t)n);
         buffer += n;
-#endif
         //
         total += n;
-        len -= (s32)n;
-        
+        len -= (int32_t)n;
+
         if(len == 0)
         {
             data->buffer_offset += len;
-            
+
             *buffer = '\0';
-            
+
             return total;
         }
 
-       /* What remains to read is smaller than the buffer max size */
+        /* What remains to read is smaller than the buffer max size */
 
         data->buffer_offset = 0;
 
-        if((n = input_stream_read(&data->filtered, (u8*)src, data->buffer_maxsize)) <= 0)
+        if((n = input_stream_read(&data->filtered, (uint8_t *)src, data->buffer_maxsize)) <= 0)
         {
             data->buffer_size = 0;
-            
+
             *buffer = '\0';
 
-            return (total > 0) ? (s32)total : ERROR /* eof */;
+            return (total > 0) ? (int32_t)total : ERROR /* eof */;
         }
-        
-        data->buffer_size = (u32)n;
+
+        data->buffer_size = (uint32_t)n;
 
         b = src;
     }
 }
 
-input_stream*
-buffer_input_stream_get_filtered(input_stream *bos)
+input_stream_t *buffer_input_stream_get_filtered(input_stream_t *bos)
 {
-    buffer_input_stream_data* data = (buffer_input_stream_data*)bos->data;
+    buffer_input_stream_data *data = (buffer_input_stream_data *)bos->data;
 
     return &data->filtered;
 }
 
 /**
  * Rewinds the input stream back of a given number of bytes
- * 
+ *
  * @param bos
  * @param bytes_back
- * 
+ *
  * @return bytes_back : the operation was successful
  *         > 0        : the maximum number of bytes available for rewind at the time of the call
  */
 
-ya_result
-buffer_input_stream_rewind(input_stream *bos, u32 bytes_back)
+ya_result buffer_input_stream_rewind(input_stream_t *bos, uint32_t bytes_back)
 {
-    buffer_input_stream_data* data = (buffer_input_stream_data*)bos->data;
-    
-    if(bytes_back < data->buffer_offset)
+    buffer_input_stream_data *data = (buffer_input_stream_data *)bos->data;
+
+    if(bytes_back <= data->buffer_offset)
     {
         data->buffer_offset -= bytes_back;
         return bytes_back;
@@ -343,15 +333,11 @@ buffer_input_stream_rewind(input_stream *bos, u32 bytes_back)
 
 /**
  * Returns true iff the input stream is a buffer input stream
- * 
+ *
  * @param bos
- * @return 
+ * @return
  */
 
-bool
-is_buffer_input_stream(input_stream *bos)
-{
-    return bos->vtbl == &buffer_input_stream_vtbl;
-}
+bool is_buffer_input_stream(input_stream_t *bos) { return bos->vtbl == &buffer_input_stream_vtbl; }
 
 /** @} */

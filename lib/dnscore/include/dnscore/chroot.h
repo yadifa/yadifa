@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,42 +28,41 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup chroot
- *  @ingroup dnscore
- *  @brief Chroot functions
+/**-----------------------------------------------------------------------------
+ * @defgroup chroot
+ * @ingroup dnscore
+ * @brief Chroot functions
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
 #include <dnscore/sys_types.h>
 
 /**
- * 
+ *
  * Returns the base path by taking into account the chroot path.
- * 
+ *
  * This is seldom used because it's usually more efficient to update paths
  * with the right prefix once at initialisation.
- * 
+ *
  * @return if the chroot jail is on, returns "/", else returns the last value set by:  chroot_set_path(const char*)
- * 
+ *
  */
 
 const char *chroot_get_path();
 
-ya_result chroot_set_path(const char *path);
+ya_result   chroot_set_path(const char *path);
 
-ya_result chroot_jail();
+ya_result   chroot_jail();
 
-ya_result chroot_manage_path(char **managed_location, const char *path, bool chroot_relative);
+ya_result   chroot_manage_path(char **managed_location, const char *path, bool chroot_relative);
 
-ya_result chroot_unmanage_path(char **managed_location);
+ya_result   chroot_unmanage_path(char **managed_location);
 
-void chroot_unmanage_all();
+void        chroot_unmanage_all();
 
 /** @} */

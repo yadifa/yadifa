@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,59 +28,81 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/network.h"
+#include "dnscore/fdtools.h"
+#include "dnscore/logger.h"
+#include "dnscore/tcp_io_stream.h"
+#include "dnscore/parsing.h"
 
+#define DEBUG_ACCEPT_EX 0
+
+#if __unix__
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <ifaddrs.h>
+#include <poll.h>
+#else
+#include <winsock2.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "Iphlpapi.lib")
+#endif
 
-bool
-addr_info_is_any(struct addrinfo* addr)
+extern logger_handle_t *g_system_logger;
+#define MODULE_MSG_HANDLE g_system_logger
+
+bool addr_info_is_any(struct addrinfo *addr)
 {
-    bool is_any;
-    if(addr->ai_family == AF_INET6)
+    if(addr != NULL)
     {
-        static const struct in6_addr in6addr_any = IN6ADDR_ANY_INIT;
-        const struct sockaddr_in6 *addr_v6 = (const struct sockaddr_in6*)addr->ai_addr->sa_data;
-        is_any = memcmp(&addr_v6->sin6_addr, &in6addr_any, 16) == 0;
-    }
-    else if(addr->ai_family == AF_INET)
-    {
-        const struct sockaddr_in *addr_v4 = (const struct sockaddr_in*)addr->ai_addr->sa_data;
-        is_any = (addr_v4->sin_addr.s_addr == INADDR_ANY);
+        bool is_any;
+
+        if(addr->ai_family == AF_INET6)
+        {
+            static const struct in6_addr in6addr_any = IN6ADDR_ANY_INIT;
+            const struct sockaddr_in6   *addr_v6 = (const struct sockaddr_in6 *)addr->ai_addr->sa_data;
+            is_any = memcmp(&addr_v6->sin6_addr, &in6addr_any, 16) == 0;
+        }
+        else if(addr->ai_family == AF_INET)
+        {
+            const struct sockaddr_in *addr_v4 = (const struct sockaddr_in *)addr->ai_addr->sa_data;
+            is_any = (addr_v4->sin_addr.s_addr == INADDR_ANY);
+        }
+        else
+        {
+            // no supported, so no
+            is_any = false;
+        }
+
+        return is_any;
     }
     else
     {
-        // no supported, so no
-        is_any = FALSE;
+        return false;
     }
-    return is_any;
 }
 
-ya_result
-network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
+#if __unix__
+ya_result network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
 {
-    ya_result ret = SUCCESS;
+    ya_result       ret = SUCCESS;
     struct ifaddrs *ia = NULL;
     if(getifaddrs(&ia) == 0)
     {
-        socketaddress tmp;
-        char tmp_name[128];
+        socketaddress_t tmp;
+        char            tmp_name[128];
         for(struct ifaddrs *a = ia; a != NULL; a = a->ifa_next)
         {
             if((a->ifa_flags & IFF_UP) == 0)
@@ -95,24 +117,23 @@ network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
                 continue;
             }
 
-            socketaddress* sa = (socketaddress*)a->ifa_addr;
-            switch(sa->sa.sa_family)
+            socketaddressp_t sa;
+            sa.sa = a->ifa_addr;
+            switch(sa.sa->sa_family)
             {
                 case AF_INET:
                 {
-                    tmp = *sa;
-                    strncpy(tmp_name, a->ifa_name, sizeof(tmp_name));
+                    tmp.ss = *sa.ss;
+                    strcpy_ex(tmp_name, a->ifa_name, sizeof(tmp_name));
                     tmp_name[sizeof(tmp_name) - 1] = '\0';
-                    //formatln("v4: %s: %{sockaddr}", tmp_name, &tmp);
                     ret = cb(tmp_name, &tmp, data);
                     break;
                 }
                 case AF_INET6:
                 {
-                    tmp = *sa;
-                    strncpy(tmp_name, a->ifa_name, sizeof(tmp_name));
+                    tmp.ss = *sa.ss;
+                    strcpy_ex(tmp_name, a->ifa_name, sizeof(tmp_name));
                     tmp_name[sizeof(tmp_name) - 1] = '\0';
-                    //formatln("v6: %s: %{sockaddr}", tmp_name, &tmp);
                     ret = cb(tmp_name, &tmp, data);
                     break;
                 }
@@ -138,6 +159,70 @@ network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
 
     return ret;
 }
+#else
+ya_result network_interfaces_forall(network_interfaces_forall_callback cb, void *data)
+{
+    static ULONG          families[] = {AF_INET, AF_INET6};
+    size_t                n = 16;
+    PIP_ADAPTER_ADDRESSES addresses = (PIP_ADAPTER_ADDRESSES)malloc(sizeof(PIP_ADAPTER_ADDRESSES) * n);
+    if(addresses == NULL)
+    {
+        return ERROR;
+    }
+
+    for(int_fast32_t family_index = 0; family_index < 2; ++family_index)
+    {
+        ULONG addresses_bytesize = (ULONG)(n * sizeof(PIP_ADAPTER_ADDRESSES));
+        DWORD ret = GetAdaptersAddresses(families[family_index], GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER, NULL, addresses, &addresses_bytesize);
+
+        if(ret == NO_ERROR)
+        {
+            PIP_ADAPTER_ADDRESSES address = addresses;
+            while(address != NULL)
+            {
+                PIP_ADAPTER_UNICAST_ADDRESS unicast = address->FirstUnicastAddress;
+                while(unicast != NULL)
+                {
+
+                    socketaddress_t sa;
+                    if(unicast->Address.iSockaddrLength < sizeof(sa))
+                    {
+                        memcpy(&sa, unicast->Address.lpSockaddr, unicast->Address.iSockaddrLength);
+                        ya_result ret = cb(address->AdapterName, &sa, data);
+                        if(FAIL(ret))
+                        {
+                            free(addresses);
+                            return ret;
+                        }
+                    }
+                    unicast = unicast->Next;
+                }
+                address = address->Next;
+            }
+        }
+        else if(ret == ERROR_BUFFER_OVERFLOW)
+        {
+            n *= 2;
+            free(addresses);
+            addresses = (PIP_ADAPTER_ADDRESSES)malloc(sizeof(PIP_ADAPTER_ADDRESSES) * n);
+            if(addresses == NULL)
+            {
+                return ERROR;
+            }
+            --family_index;
+        }
+        else
+        {
+            free(addresses);
+            return ERROR;
+        }
+    }
+
+    free(addresses);
+
+    return SUCCESS;
+}
+#endif
 
 int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *b)
 {
@@ -145,36 +230,39 @@ int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *
     ret = a->sa_family;
     ret -= b->sa_family;
 
-    if(ret ==  0)
+    if(ret == 0)
     {
         switch(a->sa_family)
         {
             case AF_INET:
             {
-                const struct sockaddr_in *sa4 = (const struct sockaddr_in *)a;
-                const struct sockaddr_in *sb4 = (const struct sockaddr_in *)b;
+                socketaddresscp_t saa;
+                socketaddresscp_t sab;
+                saa.sa = a;
+                sab.sa = b;
 
-                ret = sa4->sin_port;
-                ret -= sb4->sin_port;
+                ret = saa.sa4->sin_port;
+                ret -= sab.sa4->sin_port;
 
                 if(ret == 0)
                 {
-                    ret = memcmp(&sa4->sin_addr.s_addr, &sb4->sin_addr.s_addr, 4);
+                    ret = memcmp(&saa.sa4->sin_addr.s_addr, &sab.sa4->sin_addr.s_addr, 4);
                 }
                 break;
             }
-            case  AF_INET6:
+            case AF_INET6:
             {
+                socketaddresscp_t saa;
+                socketaddresscp_t sab;
+                saa.sa = a;
+                sab.sa = b;
 
-                const struct sockaddr_in6 *sa6 = (const struct sockaddr_in6 *)a;
-                const struct sockaddr_in6 *sb6 = (const struct sockaddr_in6 *)b;
-
-                ret = sa6->sin6_port;
-                ret -= sb6->sin6_port;
+                ret = saa.sa6->sin6_port;
+                ret -= sab.sa6->sin6_port;
 
                 if(ret == 0)
                 {
-                    ret = memcmp(&sa6->sin6_addr, &sb6->sin6_addr, 16);
+                    ret = memcmp(&saa.sa6->sin6_addr, &sab.sa6->sin6_addr, 16);
                 }
                 break;
             }
@@ -186,8 +274,8 @@ int sockaddr_compare_addr_port(const struct sockaddr *a, const struct sockaddr *
 
 int socketaddress_compare_ip(const void *a, const void *b)
 {
-    const socketaddress *sa = (const socketaddress*)a;
-    const socketaddress *sb = (const socketaddress*)b;
+    const socketaddress_t *sa = (const socketaddress_t *)a;
+    const socketaddress_t *sb = (const socketaddress_t *)b;
 
     if(sa != sb)
     {
@@ -204,7 +292,7 @@ int socketaddress_compare_ip(const void *a, const void *b)
                     ret = memcmp(&sa->sa6.sin6_addr, &sb->sa6.sin6_addr, sizeof(sa->sa6.sin6_addr));
                     break;
                 default:
-                    ret = (int)(intptr)(sa - sb);
+                    ret = memcmp(sa, sb, sizeof(socketaddress_t));
                     break;
             }
         }
@@ -217,32 +305,46 @@ int socketaddress_compare_ip(const void *a, const void *b)
     }
 }
 
+void socketaddress_copy(socketaddress_t *dst, const socketaddress_t *src)
+{
+    switch(src->sa.sa_family)
+    {
+        case AF_INET:
+            memcpy(dst, src, sizeof(src->sa4));
+            break;
+        case AF_INET6:
+            memcpy(dst, src, sizeof(src->sa6));
+            break;
+        default:
+            memcpy(dst, src, sizeof(socketaddress_t));
+            break;
+    }
+}
+
 int sockaddr_storage_compare_ip(const void *key_a, const void *key_b)
 {
-    const struct sockaddr_storage *ssap = (const struct sockaddr_storage *)key_a;
-    const struct sockaddr_storage *ssbp = (const struct sockaddr_storage *)key_b;
-    int d = ssap->ss_family - ssbp->ss_family;
+    socketaddresscp_t ssap;
+    ssap.sa = key_a;
+    socketaddresscp_t ssbp;
+    ssbp.sa = key_b;
+    int d = *ssap.sa_family - *ssbp.sa_family;
     if(d == 0)
     {
-        switch(ssap->ss_family)
+        switch(*ssap.sa_family)
         {
             case AF_INET:
             {
-                struct sockaddr_in *ina = (struct sockaddr_in*)ssap;
-                struct sockaddr_in *inb = (struct sockaddr_in*)ssbp;
-                d = memcmp(&ina->sin_addr, &inb->sin_addr, sizeof(ina->sin_addr));
+                d = memcmp(&ssap.sa4->sin_addr, &ssbp.sa4->sin_addr, 4);
                 break;
             }
             case AF_INET6:
             {
-                struct sockaddr_in6 *ina = (struct sockaddr_in6*)ssap;
-                struct sockaddr_in6 *inb = (struct sockaddr_in6*)ssbp;
-                d = memcmp(&ina->sin6_addr, &inb->sin6_addr, sizeof(ina->sin6_addr));
+                d = memcmp(&ssap.sa6->sin6_addr, &ssbp.sa6->sin6_addr, 16);
                 break;
             }
             default:
             {
-                d = memcmp(ssap, ssbp, sizeof(struct sockaddr_storage));
+                d = memcmp(ssap.ss, ssbp.ss, sizeof(socketaddress_t));
                 break;
             }
         }
@@ -271,5 +373,314 @@ void sockaddr_storage_copy(struct sockaddr_storage *dest, const struct sockaddr_
         }
     }
 }
+
+ya_result socketaddress_init_parse_with_port(socketaddress_t *sa, const char *text, int port)
+{
+    uint8_t   ip_buffer[16];
+    ya_result ret = parse_ip_address(text, strlen(text), ip_buffer, sizeof(ip_buffer));
+    if(ISOK(ret))
+    {
+        if(ret == 4)
+        {
+            sa->sa4.sin_family = AF_INET;
+            sa->sa4.sin_port = htons(port);
+            memcpy(&sa->sa4.sin_addr, ip_buffer, 4);
+        }
+        else // ret == 16
+        {
+            sa->sa6.sin6_family = AF_INET6;
+            sa->sa6.sin6_port = htons(port);
+            sa->sa6.sin6_flowinfo = 0;
+            memcpy(&sa->sa6.sin6_addr, ip_buffer, 16);
+            sa->sa6.sin6_scope_id = 0;
+        }
+    }
+    return ret;
+}
+
+int socket_server(struct sockaddr *sa, socklen_t sa_len, int family, int listen_queue_size)
+{
+    ya_result        ret;
+    int              sockfd;
+    static const int on = 1;
+
+    if(FAIL(sockfd = socket(sa->sa_family, family, 0)))
+    {
+        ret = ERRNO_ERROR;
+        ttylog_err("failed to create socket %{sockaddr}: %r", sa, ret);
+
+        return ret;
+    }
+
+    /**
+     * Associate the name of the interface to the socket
+     */
+
+    /**
+     * This is distribution/system dependent. With this we ensure that IPv6 will only listen on IPv6 addresses.
+     */
+
+    if(sa->sa_family == AF_INET6)
+    {
+        if(FAIL(setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&on, sizeof(on))))
+        {
+            ret = ERRNO_ERROR;
+            ttylog_err("failed to force IPv6 on %{sockaddr}: %r", sa, ret);
+            close_ex(sockfd);
+            return ret;
+        }
+    }
+
+    if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on))))
+    {
+        ret = ERRNO_ERROR;
+        ttylog_err("failed to reuse address %{sockaddr}: %r", sa, ret);
+        close_ex(sockfd);
+        return ret;
+    }
+
+    if(FAIL(setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (void *)&on, sizeof(on))))
+    {
+        ret = ERRNO_ERROR;
+        ttylog_err("failed to use reuse feature: %r", ret);
+        close_ex(sockfd);
+        return ret;
+    }
+
+    if(FAIL(bind(sockfd, sa, sa_len)))
+    {
+        ret = ERRNO_ERROR;
+        ttylog_err("failed to bind address %{sockaddr}: %r", sa, ret);
+        close_ex(sockfd);
+        return ret;
+    }
+
+    if(listen_queue_size <= 0)
+    {
+        listen_queue_size = 64;
+    }
+
+    if(family == SOCK_STREAM)
+    {
+        if(FAIL(listen(sockfd, listen_queue_size)))
+        {
+            ret = ERRNO_ERROR;
+            ttylog_err("failed to listen to address %{sockaddr}: %r", sa, ret);
+            close_ex(sockfd);
+            return ret;
+        }
+    }
+
+    return sockfd;
+}
+
+#if 0 && __linux__
+
+int accept_ex(int sockfd, struct sockaddr *address, socklen_t *address_lenp)
+{
+#if DEBUG_ACCEPT_EX
+    log_info("accept_ex(%i,%{sockaddr},%p)", sockfd, address, address_lenp);
+#endif
+
+    int epoll_id = epoll_create(1); // needs to be > 0
+
+    struct epoll_event e_event;
+    e_event.events = EPOLLIN | EPOLLRDHUP | EPOLLHUP;
+    e_event.data.fd = sockfd;
+    epoll_ctl(epoll_id, EPOLL_CTL_ADD, sockfd, &e_event);
+
+    fd_setnonblocking(sockfd);
+
+    while(!dnscore_shuttingdown())
+    {
+        int n = epoll_wait(epoll_id, &e_event, 1, 5000);
+        if(n > 0)
+        {
+#if DEBUG_ACCEPT_EX
+            log_info("accept_ex(%i,%{sockaddr},%p) fd=%i events=%x", sockfd, address, address_lenp, e_event.data.fd, e_event.events);
+#endif
+            if((e_event.events & EPOLLIN) != 0)
+            {
+                int clientfd = accept(sockfd, address, address_lenp);
+                log_info("accept_ex(%i,%{sockaddr},%p) fd=%i clientfd=%i", sockfd, address, address_lenp, e_event.data.fd, clientfd);
+                fd_setblocking(sockfd);
+                close_ex(epoll_id);
+                return clientfd;
+            }
+            else if((e_event.events & (EPOLLHUP|EPOLLRDHUP)) != 0)
+            {
+#if DEBUG_ACCEPT_EX
+                log_info("accept_ex(%i,%{sockaddr},%p) fd=%i close", sockfd, address, address_lenp, e_event.data.fd);
+#endif
+                //epoll_ctl(epoll_id, EPOLL_CTL_DEL, e_event.data.fd, NULL);
+                fd_setblocking(sockfd);
+                close_ex(epoll_id);
+                return -1;
+            }
+            else
+            {
+#if DEBUG_ACCEPT_EX
+                log_info("accept_ex(%i,%{sockaddr},%p) fd=%i unexpected", sockfd, address, address_lenp, e_event.data.fd);
+#endif
+            }
+        }
+    }
+
+    fd_setblocking(sockfd);
+
+    return -1;
+}
+
+#elif 0 && (__FreeBSD__ || __OpenBSD__)
+
+#include <sys/event.h>
+
+int accept_ex(int sockfd, struct sockaddr *address, socklen_t *address_lenp)
+{
+#if DEBUG_ACCEPT_EX
+    log_info("accept_ex(%i,%{sockaddr},%p)", sockfd, address, address_lenp);
+#endif
+
+#define MONITOR_COUNT 2
+
+    kevent monitor[MONITOR_COUNT];
+    kevent event[MONITOR_COUNT];
+
+    int    kq = kqueue();
+    if(kq < 0)
+    {
+        return -1;
+    }
+
+    EV_SET(&monitor[0], sockfd, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 5000, 0);
+    EV_SET(&monitor[1], sockfd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+
+    while(!dnscore_shuttingdown())
+    {
+        int n = kevent(kq, &monitor[0], MONITOR_COUNT, &event, NULL);
+        if(n > 0)
+        {
+            for(int_fast32_t i = 0; i < n; ++i)
+            {
+#if DEBUG_ACCEPT_EX
+                log_info("accept_ex(%i,%{sockaddr},%p) fd=%i events=%x", sockfd, address, address_lenp, e_event.data.fd, e_event.events);
+#endif
+
+                if((e_event.events & EPOLLIN) != 0)
+                {
+                    int clientfd = accept(sockfd, address, address_lenp);
+                    log_info("accept_ex(%i,%{sockaddr},%p) fd=%i clientfd=%i", sockfd, address, address_lenp, e_event.data.fd, clientfd);
+                    fd_setblocking(sockfd);
+                    close_ex(epoll_id);
+                    return clientfd;
+                }
+                else if((e_event.events & (EPOLLHUP | EPOLLRDHUP)) != 0)
+                {
+#if DEBUG_ACCEPT_EX
+                    log_info("accept_ex(%i,%{sockaddr},%p) fd=%i close", sockfd, address, address_lenp, e_event.data.fd);
+#endif
+                }
+
+                close_ex(epoll_id);
+                return -1;
+            }
+            else
+            {
+#if DEBUG_ACCEPT_EX
+                log_info("accept_ex(%i,%{sockaddr},%p) fd=%i unexpected", sockfd, address, address_lenp, e_event.data.fd);
+#endif
+            }
+        }
+    }
+
+    return -1;
+}
+#else
+
+int accept_ex(int sockfd, struct sockaddr *address, socklen_t *address_lenp)
+{
+#if DEBUG_ACCEPT_EX
+    log_info("accept_ex(%i,%{sockaddr},%p)", sockfd, address, address_lenp);
+#endif
+
+    tcp_set_recvtimeout(sockfd, 1, 0);
+
+    while(!dnscore_shuttingdown())
+    {
+        int clientfd = accept_ex2(sockfd, address, address_lenp, 1000);
+        if(clientfd >= 0)
+        {
+            return clientfd;
+        }
+        else
+        {
+            if(dnscore_shuttingdown())
+            {
+                return -1;
+            }
+
+            int err = errno;
+            switch(err)
+            {
+                case EINTR:
+                case EAGAIN:
+                case ETIMEDOUT:
+                    break;
+                default:
+                    return -1;
+            }
+        }
+    }
+
+    return -1;
+}
+
+int accept_ex2(int sockfd, struct sockaddr *address, socklen_t *address_lenp, int timeout_ms)
+{
+    struct pollfd pfd;
+    pfd.fd = sockfd;
+    pfd.events = POLLIN;
+
+    for(;;)
+    {
+        pfd.revents = 0;
+        int ret = poll(&pfd, 1, timeout_ms);
+        if(ret > 0)
+        {
+            for(;;)
+            {
+                int clientfd = accept(sockfd, address, address_lenp);
+
+                if(clientfd >= 0)
+                {
+                    return clientfd;
+                }
+                else
+                {
+                    int err = errno;
+                    if(err != EINTR)
+                    {
+                        return MAKE_ERRNO_ERROR(err);
+                    }
+                }
+            }
+        }
+        else if(ret == 0)
+        {
+            errno = ETIMEDOUT;
+            return MAKE_ERRNO_ERROR(ETIMEDOUT);
+        }
+        else
+        {
+            int err = errno;
+            if(err != EINTR)
+            {
+                return MAKE_ERRNO_ERROR(err);
+            }
+        }
+    } // loop
+}
+
+#endif
 
 /** @} */

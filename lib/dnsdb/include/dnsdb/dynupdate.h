@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,35 +28,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbupdate Dynamic update functions
- *  @ingroup dnsdb
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbupdate Dynamic update functions
+ * @ingroup dnsdb
+ * @brief
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 #ifndef _ZDB_DYNUPDATE_H
-#define	_ZDB_DYNUPDATE_H
+#define _ZDB_DYNUPDATE_H
 /*------------------------------------------------------------------------------
  *
  * USE INCLUDES */
 
 #include <dnscore/output_stream.h>
-#include <dnscore/packet_reader.h>
+#include <dnscore/dns_packet_reader.h>
 
 #include <dnsdb/zdb_types.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
 #define HAS_DYNUPDATE_DIFF_ENABLED 1
-
 
 /*
  * HOWTO :
@@ -67,21 +64,21 @@ extern "C"
  * smoothly
  *   if OK Save the query on a permanent storage to recover it in case of crash
  * Answer to the querier
- * Call dynupdate_update on run mode (dryrun = FALSE)
+ * Call dynupdate_update on run mode (dryrun = false)
  *
  * The result is
- * 
+ *
  * either the number of bytes read from the buffer
  * either an encapsulated server error code retrievable with SERVER_ERROR_GETCODE(error)
  *
  */
 
-ya_result dynupdate_check_prerequisites(zdb_zone* zone, packet_unpack_reader_data *reader, u16 count);
+ya_result dynupdate_check_prerequisites(zdb_zone_t *zone, dns_packet_reader_t *reader, uint16_t count);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _ZDB_DYNUPDATE_H */
+#endif /* _ZDB_DYNUPDATE_H */
 
 /** @} */

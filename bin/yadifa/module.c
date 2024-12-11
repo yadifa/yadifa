@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,26 +28,29 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup yadifa
- *  @ingroup ###
- *  @brief
- */
+/**-----------------------------------------------------------------------------
+ * @defgroup yadifa
+ * @ingroup ###
+ * @brief
+ *----------------------------------------------------------------------------*/
 
 #include <strings.h>
 
-#include "client-config.h"
+#include "client_config.h"
 
 #include "module.h"
 #include "common.h"
-#include "ya-conf.h"
+#include "ya_conf.h"
 #include "main.h"
 
 #if DNSCORE_HAS_CTRL
 #include "module/ctrl.h"
+#endif
+
+#if HAS_CRAFT
+#include "module/craft.h"
 #endif
 
 #if HAS_KEYGEN
@@ -68,25 +71,20 @@
 #endif
 
 #include <dnscore/logger_handle.h>
-#include <dnscore/config-cmdline.h>
+#include <dnscore/config_cmdline.h>
 #include <dnscore/config_settings.h>
 
-logger_handle *g_yadifa_logger = LOGGER_HANDLE_SINK;
+logger_handle_t        *g_yadifa_logger = LOGGER_HANDLE_SINK;
 
-extern logger_handle *g_generate_logger;
+extern logger_handle_t *g_generate_logger;
 
-static int verbosity_level = 0;
+static int              verbosity_level = 0;
 
-int module_verbosity_level()
-{
-    return verbosity_level;
-}
-
+int                     module_verbosity_level() { return verbosity_level; }
 
 // each module has a structure --> virtual table
 // only those that are compiled in the program are taken in
-static const module_s *module_list[] =
-{
+static const module_s *module_list[] = {
 #if DNSCORE_HAS_CTRL
     &ctrl_program,
 #endif
@@ -106,11 +104,9 @@ static const module_s *module_list[] =
 #if HAS_CRAFT
     &craft_program,
 #endif
-    NULL
-};
+    NULL};
 
-void
-module_print_help(const module_s *module, const char* program_name, int is_executable)
+void module_print_help(const module_s *module, const char *program_name, int is_executable)
 {
     // formatln("is_executable=%i", is_executable);
 
@@ -125,8 +121,7 @@ module_print_help(const module_s *module, const char* program_name, int is_execu
     module->help_print(module, termout);
 }
 
-static void
-module_program_print_help(const char *program_name, int help_count, int version_count)
+static void module_program_print_help(const char *program_name, int help_count, int version_count)
 {
     yadifa_show_version(version_count); // level 0 prints nothing
 
@@ -137,7 +132,7 @@ module_program_print_help(const char *program_name, int help_count, int version_
         formatln("%s command [parameters]\n", program_name);
         println("\tCommands:");
 
-        for(int i = 0; module_list[i] != NULL; ++i) // VS false positive: the last item of the array is guaranteed to be NULL
+        for(int_fast32_t i = 0; module_list[i] != NULL; ++i) // VS false positive: the last item of the array is guaranteed to be NULL
         {
             formatln("\t\t%12s : %s", module_list[i]->parametername, module_list[i]->name);
         }
@@ -146,8 +141,7 @@ module_program_print_help(const char *program_name, int help_count, int version_
     }
 }
 
-const module_s *
-module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
+const module_s *module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
 {
     // const char *executable_name = filename_from_path(argv[0]); // note: not used
 
@@ -159,12 +153,12 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
 
     // if <parametername> is used there must be at least 3 parameters.
     // if not we print an help page
-    
+
     if(argc >= 2) // if there is at least one parameter after the name
     {
         // compares the parameter name with each module "parametername"
 
-        for(int i = 0; module_list[i] != NULL; ++i) // VS false positive: the last item of the array is guaranted to be NULL
+        for(int_fast32_t i = 0; module_list[i] != NULL; ++i) // VS false positive: the last item of the array is guaranted to be NULL
         {
             if(strcmp(argv[1], module_list[i]->parametername) == 0)
             {
@@ -173,12 +167,12 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
                 *is_executable_ptr = 0;
 
                 // patch the command parameters (shifts out the first parameter)
-                
-                for(int i = 2; i < argc; ++i)
+
+                for(int_fast32_t i = 2; i < argc; ++i)
                 {
                     argv[i - 1] = argv[i];
                 }
-                
+
                 --argc;
                 *argcp = argc;
 
@@ -199,7 +193,7 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
 
                 // find the module whose help was requested and print it
 
-                for(int i = 0; module_list[i] != NULL; ++i)
+                for(int_fast32_t i = 0; module_list[i] != NULL; ++i)
                 {
                     if(strcmp(argv[2], module_list[i]->parametername) == 0)
                     {
@@ -233,21 +227,22 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
         }
         else
         {
-            // whatever was asked to yadifa is unknown: complain about it then print the general help listing the modules
+            // whatever was asked to yadifa is unknown: complain about it then print the general help listing the
+            // modules
         }
     }
     else
     {
         // nothing was asked to yadifa: print the general help listing the modules
     }
-    
+
     int help_count = 0;
     int version_count = 0;
     int verbose_level = 0;
 
-    for(int i = 1; i < argc; ++i)
-    {        
-        if((strcmp(argv[1], "--help") == 0) || (strcmp(argv[1], "-h") == 0) )
+    for(int_fast32_t i = 1; i < argc; ++i)
+    {
+        if((strcmp(argv[1], "--help") == 0) || (strcmp(argv[1], "-h") == 0))
         {
             ++help_count;
         }
@@ -266,30 +261,29 @@ module_get_from_args(int *argcp, char **argv, int *is_executable_ptr)
             flusherr();
         }
     }
-    
+
     verbosity_level = verbose_level;
 
     module_program_print_help(argv[0], help_count, version_count);
-    
+
     return NULL;
 }
 
-ya_result
-module_run_from_args(int *argcp, char *argv[])
+ya_result module_run_from_args(int *argcp, char *argv[])
 {
-    ya_result ret = ERROR;
-    
-    int argc = *argcp;
-    int is_executable = -2;
+    ya_result       ret = ERROR;
+
+    int             argc = *argcp;
+    int             is_executable = -2;
 
     const module_s *module = module_get_from_args(&argc, argv, &is_executable);
 
     module_arg_set(argv, argc);
 
     *argcp = argc;
-    
+
     // at this point, the program to execute is known
-    
+
     if(module != NULL)
     {
         if(FAIL(ret = module->init()))
@@ -297,7 +291,7 @@ module_run_from_args(int *argcp, char *argv[])
             formatln("module %s initialisation failed: %r", module->name, ret);
             return ret;
         }
-    
+
         // if the logger is running (not a guarantee), register the system logger
 
         if(logger_is_running())
@@ -322,7 +316,7 @@ module_run_from_args(int *argcp, char *argv[])
                 }
                 else
                 {
-                    if(ret  == 0)
+                    if(ret == 0)
                     {
                         if(ISOK(ret = module->setup()))
                         {
@@ -344,7 +338,6 @@ module_run_from_args(int *argcp, char *argv[])
                         }
                         else
                         {
-                            /// @todo 20220511 edf -- print the error if it's not YADIFA_MODULE_HELP_REQUESTED ?
                             flushout();
                             flusherr();
                             osformatln(termerr, "error: %r", ret);
@@ -365,15 +358,15 @@ module_run_from_args(int *argcp, char *argv[])
     else
     {
         // no module matched but maybe 'help' was asked instead
-        if (is_executable == 0)
+        if(is_executable == 0)
         {
             // 'help' was asked instead
             ret = 0;
         }
     }
-    
+
     *argcp = argc;
-    
+
     return ret;
 }
 
@@ -384,8 +377,7 @@ module_run_from_args(int *argcp, char *argv[])
 // ***** module initializer
 // ********************************************************************************
 
-ya_result
-module_default_init(const struct module_s* m)
+ya_result module_default_init(const struct module_s *m)
 {
     (void)m;
     return SUCCESS;
@@ -395,32 +387,24 @@ module_default_init(const struct module_s* m)
 // ***** module finalizer
 // ********************************************************************************
 
-ya_result
-module_default_finalize()
-{
-    return SUCCESS;
-}
+ya_result module_default_finalize() { return SUCCESS; }
 
 // ********************************************************************************
 // ***** module register
 // ********************************************************************************
 
-int
-module_default_config_register(int argc, char **argv)
+int module_default_config_register(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
     return 0;
 }
 
-
-
 // ********************************************************************************
 // ***** module setup
 // ********************************************************************************
 
-int
-module_default_setup()
+int module_default_setup()
 {
     return SUCCESS; // returns anything else than 0 => program will exit
 }
@@ -429,14 +413,9 @@ module_default_setup()
 // ***** module run
 // ********************************************************************************
 
-ya_result
-module_default_run()
-{
-    return SUCCESS;
-}
+ya_result module_default_run() { return SUCCESS; }
 
-ya_result
-module_default_help_print(const struct module_s* m, output_stream *os)
+ya_result module_default_help_print(const struct module_s *m, output_stream_t *os)
 {
     if(m->help_text != NULL)
     {
@@ -449,9 +428,8 @@ module_default_help_print(const struct module_s* m, output_stream *os)
     return SUCCESS;
 }
 
-ya_result
-module_default_cmdline_help_print(const struct module_s* m, output_stream *os)
+ya_result module_default_cmdline_help_print(const struct module_s *m, output_stream_t *os)
 {
-    cmdline_print_help(m->cmdline_table, 16, 28, " :  ", 48, os);
+    cmdline_print_help(m->cmdline_table, os);
     return SUCCESS;
 }

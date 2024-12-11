@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup config Configuration handling
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup config Configuration handling
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "server-config.h"
+#include "server_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -47,39 +46,35 @@
 #include <dnscore/config_settings.h>
 #include <dnscore/logger.h>
 
-extern logger_handle *g_server_logger;
+extern logger_handle_t *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
-#if DNSCORE_HAS_CTRL
+#if HAS_CTRL
 #include "ctrl.h"
-static config_control tmp_config_control =
-{
+static config_control_t tmp_config_control = {
 
-    NULL,
-    TRUE
-};
+    NULL, true};
 
-static bool ctrl_registered = FALSE;
+static bool ctrl_registered = false;
 
-#define CONFIG_TYPE config_control
+#define CONFIG_TYPE config_control_t
 CONFIG_BEGIN(config_control_desc)
 CONFIG_BOOL(enabled, "1")
-CONFIG_HOST_LIST_EX(listen, NULL, CONFIG_HOST_LIST_FLAGS_DEFAULT,4)
-
+CONFIG_HOST_LIST_EX(listen, NULL, CONFIG_HOST_LIST_FLAGS_DEFAULT, 4)
 CONFIG_END(config_control_desc)
 #undef CONFIG_TYPE
 
-static ya_result
-config_control_section_postprocess(struct config_section_descriptor_s *csd)
+static ya_result config_control_section_postprocess(struct config_section_descriptor_s *csd, config_error_t *cfgerr)
 {
     (void)csd;
+    (void)cfgerr;
 
     /* here check that the settings are right */
 
-    host_address **hap = &tmp_config_control.listen;
+    host_address_t **hap = &tmp_config_control.listen;
     while(*hap != NULL)
     {
-        host_address *ha = *hap;
+        host_address_t *ha = *hap;
 
         if(ha->port == 0)
         {
@@ -91,33 +86,30 @@ config_control_section_postprocess(struct config_section_descriptor_s *csd)
 
     ctrl_set_listen(tmp_config_control.listen);
 
-
-
     return SUCCESS;
 }
 
-ya_result
-config_register_control(s32 priority)
+ya_result config_register_control(int32_t priority)
 {
     if(ctrl_registered)
     {
         return SUCCESS;
     }
-    
-    ctrl_registered = TRUE;
+
+    ctrl_registered = true;
 
     const char *section_name = "control";
-    
-    ya_result return_code = config_register_struct(section_name, config_control_desc, &tmp_config_control, priority);
+
+    ya_result   return_code = config_register_struct(section_name, config_control_desc, &tmp_config_control, priority);
     if(ISOK(return_code))
-    {    
+    {
         // hook a new finaliser before the standard one
-        
-        config_section_descriptor_s *section_desc = config_section_get_descriptor(section_name);
+
+        config_section_descriptor_t      *section_desc = config_section_get_descriptor(section_name);
         config_section_descriptor_vtbl_s *vtbl = (config_section_descriptor_vtbl_s *)section_desc->vtbl;
         vtbl->postprocess = config_control_section_postprocess;
     }
-    
+
     return return_code;
 }
 

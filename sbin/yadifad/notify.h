@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,34 +28,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup yadifad
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup yadifad
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _NOTIFY_H
 #define _NOTIFY_H
 
-#include "server-config.h"
+#include "server_config.h"
 
-#if DNSCORE_HAS_CTRL
+#if HAS_CTRL
 #include "ctrl.h"
 #endif
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/host_address.h>
 #include "database.h"
 
 /**
- *  @brief Handle a notify from the master (or another slave)
+ *  @brief Handle a notify from the primary (or another secondary)
  *
  *  @param database : the database
  *  @param mesg     : the input message
@@ -64,27 +62,23 @@
  *  @retval NOK
  */
 
-ya_result notify_process(message_data *msg);
+ya_result notify_process(dns_message_t *msg);
 
 /**
- * Sends a notify to all the slave for a given domain name
- * 
+ * Sends a notify to all the secondary for a given domain name
+ *
  * @param origin
  */
 
-void notify_slaves(const u8 *origin);
+void notify_secondaries(const uint8_t *origin);
 
 /**
  * Stops all notification for zone with origin
- * 
+ *
  * @param origin
  */
 
-void notify_clear(const u8 *origin);
-
-
-
-
+void      notify_clear(const uint8_t *origin);
 
 ya_result notify_service_init();
 
@@ -94,7 +88,7 @@ ya_result notify_service_init();
 
 ya_result notify_service_start();
 
-void notify_wait_servicing();
+void      notify_wait_servicing();
 
 /**
  * Stops the notify service thread
@@ -104,7 +98,7 @@ ya_result notify_service_stop();
 
 ya_result notify_service_finalize();
 
-bool notify_has_candidates_for_zone(zone_desc_s *zone_desc);
+bool      notify_has_candidates_for_zone(zone_desc_t *zone_desc);
 
 #endif /* _NOTIFY_H */
 

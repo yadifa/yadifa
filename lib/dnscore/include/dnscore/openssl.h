@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,31 +28,31 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
 #include <openssl/ssl.h>
 
-
-#define SSL_TOSTRING(s) TOSTRING_(s)
-#define SSL_TOSTRING_(s) #s    
+#define SSL_TOSTRING(s)  TOSTRING_(s)
+#define SSL_TOSTRING_(s) #s
 
 #if LIBRESSL_VERSION_NUMBER
 // Cannot trust LIBRESSL's OPENSSL_VERSION_NUMBER value
 #define SSL_API 1
 
-#if (LIBRESSL_VERSION_NUMBER >= 0x20000000L) && (LIBRESSL_VERSION_NUMBER < 0x40000000L)
-//#pragma message "LIBRESSL [v2; v4["
+#if(LIBRESSL_VERSION_NUMBER >= 0x20000000L) && (LIBRESSL_VERSION_NUMBER < 0x40000000L)
+// #pragma message "LIBRESSL [v2; v4["
+#define SSL_API_GT_300 0
+#define SSL_API_LT_300 1
 #define SSL_API_LT_111 1
 #define SSL_API_LT_110 0
 #define SSL_API_LT_100 0
@@ -61,7 +61,7 @@
 #error "Unsupported LibreSSL version"
 #endif
 
-#elif  OPENSSL_VERSION_NUMBER
+#elif OPENSSL_VERSION_NUMBER
 #define SSL_API 1
 
 // warning: this use of "defined" may not be portable [-Wexpansion-to-defined]
@@ -95,11 +95,9 @@
 #endif
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
-
-
-
 
 #ifdef __cplusplus
 }

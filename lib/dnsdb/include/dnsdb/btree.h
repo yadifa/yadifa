@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Balanced Tree structures and functions for the database
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Balanced Tree structures and functions for the database
  *
  *  Definitions of the Balanced Tree structures and functions for the database.
  *
@@ -43,14 +42,14 @@
  *  It could be set to something else. ie: Red-Black Tree.
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _btree_H
-#define	_btree_H
+#define _btree_H
 
 #include <dnsdb/avl.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -63,33 +62,31 @@ extern "C"
 
 #define BTREE_ITERATION_SORTED 1
 
-typedef avl_node btree_node;
-typedef avl_tree btree;
+typedef avl_node     btree_node;
+typedef avl_tree     btree;
 typedef avl_iterator btree_iterator;
 
+#define btree_init                  avl_init
+#define btree_find                  avl_find
+#define btree_findp                 avl_findp
+#define btree_insert                avl_insert
+#define btree_delete                avl_delete
+#define btree_finalise              avl_finalise
+#define btree_callback_and_finalise avl_callback_and_finalise
 
+#define btree_iterator_init         avl_iterator_init
+#define btree_iterator_init_from    avl_iterator_init_from_after
+#define btree_iterator_hasnext      avl_iterator_hasnext
+#define btree_iterator_next         avl_iterator_next
+#define btree_iterator_next_node    avl_iterator_next_node
 
-#define btree_init avl_init
-#define btree_find avl_find
-#define btree_findp avl_findp
-#define btree_insert avl_insert
-#define btree_delete avl_delete
-#define btree_destroy avl_destroy
-#define btree_callback_and_destroy avl_callback_and_destroy
+#define btree_notempty(tree)        ((tree) != NULL)
+#define btree_isempty(tree)         ((tree) == NULL)
 
-#define btree_iterator_init avl_iterator_init
-#define btree_iterator_init_from avl_iterator_init_from_after
-#define btree_iterator_hasnext avl_iterator_hasnext
-#define btree_iterator_next avl_iterator_next
-#define btree_iterator_next_node avl_iterator_next_node
-
-#define btree_notempty(tree) ((tree)!=NULL)
-#define btree_isempty(tree) ((tree)==NULL)
-
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _btree_H */
+#endif /* _btree_H */
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,155 +28,153 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
- /* It's a suggestion for a common interface for stored files.
+
+/*------------------------------------------------------------------------------
+ *
+ It's a suggestion for a common interface for stored files.
  * I'd add an "add" and "remove" status on a record in order to
  * accommodate dynupdate features.
  *
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _ZONEFILE_READER_H
-#define	_ZONEFILE_READER_H
+#define _ZONEFILE_READER_H
 
 #error DONT USE YET
 
 #include <dnscore/sys_types.h>
 
-#define ZONEFILE_OPERATION_ADD          0x00   /* The next record is meant to be added */
-#define ZONEFILE_OPERATION_REMOVE       0x01   /* The next record is meant to be removed */
+#define ZONEFILE_OPERATION_ADD          0x00 /* The next record is meant to be added */
+#define ZONEFILE_OPERATION_REMOVE       0x01 /* The next record is meant to be removed */
 
-#define ZONEFILE_OPERATION_LABELCHANGED 0x02   /* The caller should reload the label */
-#define ZONEFILE_OPERATION_TYPECHANGED  0x04   /* The caller should reload the type */
+#define ZONEFILE_OPERATION_LABELCHANGED 0x02 /* The caller should reload the label */
+#define ZONEFILE_OPERATION_TYPECHANGED  0x04 /* The caller should reload the type */
 
-#define ZONEFILE_OPERATION_EOF          0x80   /* End of file */
+#define ZONEFILE_OPERATION_EOF          0x80 /* End of file */
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-    typedef struct zonefile_reader zonefile_reader;
-    
+typedef struct zonefile_reader_s zonefile_reader_t;
 
-    /*
-     * Opens a zone file using the filename (mostly used for TXT zone files)
-     * The next dnsname is made ready
-     */
+/*
+ * Opens a zone file using the filename (mostly used for TXT zone files)
+ * The next dnsname is made ready
+ */
 
-    typedef ya_result zonefile_openfile_method(zonefile_reader* reader, const char* filename);
+typedef ya_result zonefile_openfile_method(zonefile_reader_t *reader, const char *filename);
 
-    /*
-     * Opens a zone file using the origin (used for any internal file)
-     * The next dnsname is made ready
-     */
+/*
+ * Opens a zone file using the origin (used for any internal file)
+ * The next dnsname is made ready
+ */
 
-    typedef ya_result zonefile_openzone_method(zonefile_reader* reader,const u8* origin,u16 zclass);
-    
-    /*
-     * Go to the next dnrecord if any
-     *
-     * return the operation
-     */
+typedef ya_result zonefile_openzone_method(zonefile_reader_t *reader, const uint8_t *origin, uint16_t zclass);
 
-    typedef ya_result zonefile_nextrecord_method(zonefile_reader* reader);
+/*
+ * Go to the next dnrecord if any
+ *
+ * return the operation
+ */
 
-    /*
-     * Closes the file(s)
-     */
+typedef ya_result zonefile_nextrecord_method(zonefile_reader_t *reader);
 
-    typedef ya_result zonefile_close_method(zonefile_reader* reader);
+/*
+ * Closes the file(s)
+ */
 
-    /*
-     * Returns true if the format name is supported by the current implementation
-     */
+typedef ya_result zonefile_close_method(zonefile_reader_t *reader);
 
-    typedef bool zonefile_supports_method(zonefile_reader* reader,const char* format);
+/*
+ * Returns true if the format name is supported by the current implementation
+ */
 
-    /*
-     * Returns the current operation
-     */
+typedef bool zonefile_supports_method(zonefile_reader_t *reader, const char *format);
 
-    typedef ya_result zonefile_getcurrenoperation_method(zonefile_reader* reader);
+/*
+ * Returns the current operation
+ */
 
-    /*
-     * Returns the current class (should be constant for the whole zone
-     */
+typedef ya_result zonefile_getcurrenoperation_method(zonefile_reader_t *reader);
 
-    typedef u16 zonefile_getcurrentclass_method(zonefile_reader* reader);
+/*
+ * Returns the current class (should be constant for the whole zone
+ */
 
-    /*
-     * Returns the current type
-     */
+typedef uint16_t zonefile_getcurrentclass_method(zonefile_reader_t *reader);
 
-    typedef u16 zonefile_getcurrenttype_method(zonefile_reader* reader);
+/*
+ * Returns the current type
+ */
 
-    /*
-     * Returns the current ttl
-     */
+typedef uint16_t zonefile_getcurrenttype_method(zonefile_reader_t *reader);
 
-    typedef u32 zonefile_getcurrentttl_method(zonefile_reader* reader);
+/*
+ * Returns the current ttl
+ */
 
-    /*
-     * Returns the current rdata_size
-     */
+typedef uint32_t zonefile_getcurrentttl_method(zonefile_reader_t *reader);
 
-    typedef u16 zonefile_getcurrentrdatasize_method(zonefile_reader* reader);
+/*
+ * Returns the current rdata_size
+ */
 
-    /*
-     * Returns the current rdata
-     */
-    
-    typedef const u8* zonefile_getcurrentrdata_method(zonefile_reader* reader);
+typedef uint16_t zonefile_getcurrentrdatasize_method(zonefile_reader_t *reader);
 
-    struct zonefile_reader
-    {
-        void*   data;
+/*
+ * Returns the current rdata
+ */
 
-        zonefile_openfile_method* openfile;
-        zonefile_openzone_method* openzone;
+typedef const uint8_t *zonefile_getcurrentrdata_method(zonefile_reader_t *reader);
 
-        zonefile_nextrecord_method* nextrecord;
-        
-        zonefile_getcurrentclass_method* getcurrentclass;
-        zonefile_getcurrenttype_method* getcurrenttype;
-        zonefile_getcurrentttl_method* getcurrentttl;
-        zonefile_getcurrentrdatasize_method* getcurrentrdatasize;
-        zonefile_getcurrentrdata_method* getcurrentrdata;
+struct zonefile_reader_s
+{
+    void                                *data;
 
-        zonefile_close_method* close;
-        zonefile_supports_method* supports;
-    };
+    zonefile_openfile_method            *openfile;
+    zonefile_openzone_method            *openzone;
 
-    #define zonefile_openfile(zf,filename)   (zf)->openfile_method(zf,filename)
-    #define zonefile_openzone(zf,origin)     (zf)->openzone_method(zf,origin)
-    #define zonefile_close(zf)               (zf)->close_method(zf)
+    zonefile_nextrecord_method          *nextrecord;
 
-    #define zonefile_supports(zf)            (zf)->zonefile_supports_method_method(zf)
+    zonefile_getcurrentclass_method     *getcurrentclass;
+    zonefile_getcurrenttype_method      *getcurrenttype;
+    zonefile_getcurrentttl_method       *getcurrentttl;
+    zonefile_getcurrentrdatasize_method *getcurrentrdatasize;
+    zonefile_getcurrentrdata_method     *getcurrentrdata;
 
-    #define zonefile_nextrecord(zf)          (zf)->zonefile_nextrecord_method(zf)
-    #define zonefile_getcurrentclass(zf)     (zf)->zonefile_getcurrentclass_method(zf)
-    #define zonefile_getcurrenttype(zf)      (zf)->zonefile_getcurrenttype_method(zf)
-    #define zonefile_getcurrentttl(zf)       (zf)->zonefile_getcurrentttl_method(zf)
-    #define zonefile_getcurrentrdatasize(zf) (zf)->zonefile_getcurrentrdatasize_method(zf)
-    #define zonefile_getcurrentrdata(zf)     (zf)->zonefile_getcurrentrdata_method(zf)
+    zonefile_close_method               *close;
+    zonefile_supports_method            *supports;
+};
 
-#ifdef	__cplusplus
+#define zonefile_openfile(zf, filename)  (zf)->openfile_method(zf, filename)
+#define zonefile_openzone(zf, origin)    (zf)->openzone_method(zf, origin)
+#define zonefile_close(zf)               (zf)->close_method(zf)
+
+#define zonefile_supports(zf)            (zf)->zonefile_supports_method_method(zf)
+
+#define zonefile_nextrecord(zf)          (zf)->zonefile_nextrecord_method(zf)
+#define zonefile_getcurrentclass(zf)     (zf)->zonefile_getcurrentclass_method(zf)
+#define zonefile_getcurrenttype(zf)      (zf)->zonefile_getcurrenttype_method(zf)
+#define zonefile_getcurrentttl(zf)       (zf)->zonefile_getcurrentttl_method(zf)
+#define zonefile_getcurrentrdatasize(zf) (zf)->zonefile_getcurrentrdatasize_method(zf)
+#define zonefile_getcurrentrdata(zf)     (zf)->zonefile_getcurrentrdata_method(zf)
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _ZONEFILE_READER_H */
+#endif /* _ZONEFILE_READER_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

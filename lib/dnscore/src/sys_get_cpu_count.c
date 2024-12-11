@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup cpu CPU
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup cpu CPU
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
-#include "dnscore/dnscore-config-features.h"
+#include "dnscore/dnscore_config.h"
+#include "dnscore/dnscore_config_features.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -57,28 +55,26 @@
  *
  */
 
-static u32 cpu_count_override = 0;
+static uint32_t cpu_count_override = 0;
 
-void
-sys_set_cpu_count(int override)
+void            sys_set_cpu_count(int override)
 {
     if(override < 0)
     {
         override = 0;
     }
 
-    cpu_count_override = (u32)override;
+    cpu_count_override = (uint32_t) override;
 }
 
-u32
-sys_get_cpu_count()
+uint32_t sys_get_cpu_count()
 {
     if(cpu_count_override == 0)
     {
 #if __unix__
         int cc = sysconf(_SC_NPROCESSORS_ONLN);
 
-        if( cc <= 0 )
+        if(cc <= 0)
         {
             /*
              * This fix has been made for FreeBSD that returns -1 for the above call
@@ -87,7 +83,7 @@ sys_get_cpu_count()
             cc = 1;
         }
 
-        return (u32)cc;
+        return (uint32_t)cc;
 #else
         SYSTEM_INFO sysinfo;
         GetSystemInfo(&sysinfo);
@@ -101,26 +97,24 @@ sys_get_cpu_count()
 
             cc = 1;
         }
-        return (u32)cc;
+        return (uint32_t)cc;
 #endif
     }
-
 
     return cpu_count_override;
 }
 
-bool
-sys_has_hyperthreading()
+bool sys_has_hyperthreading()
 {
 #if defined(__linux__) && HAVE_CPUID_H
-    unsigned int a,c,d,b;
-    int ret = __get_cpuid(1,&a,&b,&c,&d);
+    unsigned int a, c, d, b;
+    int          ret = __get_cpuid(1, &a, &b, &c, &d);
     if(ret == 1)
     {
-        return (d & (1<<28)) != 0;
+        return (d & (1 << 28)) != 0;
     }
-#endif    
-    return FALSE;
+#endif
+    return false;
 }
 
 /** @} */

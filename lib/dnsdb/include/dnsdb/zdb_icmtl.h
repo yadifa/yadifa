@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdb
- *  @ingroup dnsdb
- *  @brief journal file & incremental changes
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdb
+ * @ingroup dnsdb
+ * @brief journal file & incremental changes
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
@@ -53,49 +51,42 @@
 #include <dnscore/counter_output_stream.h>
 #include <dnscore/ptr_vector.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-
 #define ZDB_ICMTL_REPLAY_SERIAL_OFFSET 1 // avoids scanning
 #define ZDB_ICMTL_REPLAY_SERIAL_LIMIT  2 // don't try to go beyond the set serial
 
-
 struct zdb_icmtl_replay_commit_state
 {
-    u32 dnskey_removed;
-    u32 dnskey_added;
-    u32 end_serial;
-#if __SIZEOF_POINTER__ ==  8
-    u32 reserved0;
+    uint32_t dnskey_removed;
+    uint32_t dnskey_added;
+    uint32_t end_serial;
+#if __SIZEOF_POINTER__ == 8
+    uint32_t reserved0;
 #endif
 #if HAS_EVENT_DYNAMIC_MODULE
-    ptr_vector dnskey_added_list;
-    ptr_vector dnskey_removed_list;
+    ptr_vector_t dnskey_added_list;
+    ptr_vector_t dnskey_removed_list;
 #endif
 };
 
 typedef struct zdb_icmtl_replay_commit_state zdb_icmtl_replay_commit_state;
 
-ya_result zdb_icmtl_replay_commit_ex(zdb_zone *zone, input_stream *is, zdb_icmtl_replay_commit_state *out_state);
+ya_result                                    zdb_icmtl_replay_commit_ex(zdb_zone_t *zone, input_stream_t *is, zdb_icmtl_replay_commit_state *out_state);
 
-ya_result zdb_icmtl_replay_commit(zdb_zone *zone, input_stream *is, u32 *out_serial_after_replayp);
-
+ya_result                                    zdb_icmtl_replay_commit(zdb_zone_t *zone, input_stream_t *is, uint32_t *out_serial_after_replayp);
 
 /**
  * Replays incremental changes for the zone, looking in the directory for the files (.ix)
  */
 
-ya_result zdb_icmtl_replay(zdb_zone *zone);
+ya_result zdb_icmtl_replay(zdb_zone_t *zone);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

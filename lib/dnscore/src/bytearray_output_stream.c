@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,36 +28,34 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "dnscore/bytearray_output_stream.h"
 #include "dnscore/zalloc.h"
 
-#define BYTE_ARRAY_OUTPUT_STREAM_TAG 0x534f4142 /* BAOS */
-#define BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG 0x41544144534f4142 /* BAOSDATA */
-#define BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG 0x46465542534f4142 /* BAOSBUFF */
+#define BYTE_ARRAY_OUTPUT_STREAM_TAG             0x534f4142         /* BAOS */
+#define BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG        0x41544144534f4142 /* BAOSDATA */
+#define BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG        0x46465542534f4142 /* BAOSBUFF */
 
-#define BYTEARRAY_STARTSIZE 1024
+#define BYTEARRAY_STARTSIZE                      1024
 
 #define BYTEARRAY_OUTPUT_STREAM_GROWTH_THRESHOLD 0x100000
 
-#define BAOSZDUP_TAG 0x5055445a534f4142
-#define BAOSDUP_TAG 0x505544534f4142
+#define BAOSZDUP_TAG                             0x5055445a534f4142
+#define BAOSDUP_TAG                              0x505544534f4142
 
 typedef struct bytearray_output_stream_data bytearray_output_stream_data;
 
@@ -67,23 +65,22 @@ typedef struct bytearray_output_stream_data bytearray_output_stream_data;
 
 struct bytearray_output_stream_data
 {
-    u8* buffer;
-    u32 buffer_size;
-    u32 buffer_offset;
-    u8 flags;
+    uint8_t *buffer;
+    uint32_t buffer_size;
+    uint32_t buffer_offset;
+    uint8_t  flags;
 };
 
-static ya_result
-bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result bytearray_output_stream_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
     if(len == 0)
     {
         return 0;
     }
 
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
 
-    u32 remaining = data->buffer_size - data->buffer_offset;
+    uint32_t                      remaining = data->buffer_size - data->buffer_offset;
 
     if(len > remaining)
     {
@@ -91,8 +88,8 @@ bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
 
         if((data->flags & BYTEARRAY_DYNAMIC) != 0)
         {
-            u8* newbuffer;
-            u32 newsize = data->buffer_size;
+            uint8_t *newbuffer;
+            uint32_t newsize = data->buffer_size;
 
             do
             {
@@ -104,10 +101,9 @@ bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
                 {
                     newsize += BYTEARRAY_OUTPUT_STREAM_GROWTH_THRESHOLD;
                 }
-            }
-            while(newsize < data->buffer_size + len);
+            } while(newsize < data->buffer_size + len);
 
-            MALLOC_OR_DIE(u8*, newbuffer, newsize, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
+            MALLOC_OR_DIE(uint8_t *, newbuffer, newsize, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
             MEMCOPY(newbuffer, data->buffer, data->buffer_offset);
 
             if((data->flags & BYTEARRAY_OWNED) != 0)
@@ -132,48 +128,45 @@ bytearray_output_stream_write(output_stream* stream, const u8* buffer, u32 len)
     return len;
 }
 
-static ya_result
-bytearray_output_stream_flush(output_stream* stream)
+static ya_result bytearray_output_stream_flush(output_stream_t *stream)
 {
     (void)stream;
 
     return SUCCESS;
 }
 
-static void
-bytearray_output_stream_close(output_stream* stream)
+static void bytearray_output_stream_close(output_stream_t *stream)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
 
     if((data->flags & BYTEARRAY_OWNED) != 0)
     {
 #if DEBUG
         memset(data->buffer, 0xe5, data->buffer_size);
-#endif        
+#endif
         free(data->buffer);
     }
 
     if((data->flags & BYTEARRAY_ZALLOC_CONTEXT) != 0)
     {
-        ZFREE(data,bytearray_output_stream_data);
+        ZFREE(data, bytearray_output_stream_data);
     }
 
     output_stream_set_void(stream);
 }
 
-static const output_stream_vtbl bytearray_output_stream_vtbl =
-{
+static const output_stream_vtbl bytearray_output_stream_vtbl = {
     bytearray_output_stream_write,
     bytearray_output_stream_flush,
     bytearray_output_stream_close,
     "bytearray_output_stream",
 };
 
-void
-bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 size, u8 flags, bytearray_output_stream_context *ctx)
+void bytearray_output_stream_init_ex_static(output_stream_t *out_stream, void *array_, uint32_t size, uint8_t flags, bytearray_output_stream_context *ctx)
 {
-    bytearray_output_stream_data *data = (bytearray_output_stream_data*)ctx;
- 
+    uint8_t                      *array = (uint8_t *)array_;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)ctx;
+
     if(array == NULL)
     {
         flags |= BYTEARRAY_OWNED;
@@ -185,7 +178,7 @@ bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 
             size = BYTEARRAY_STARTSIZE;
         }
 
-        MALLOC_OR_DIE(u8*, array, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);      
+        MALLOC_OR_DIE(uint8_t *, array, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
     }
 
     data->buffer = array;
@@ -197,47 +190,56 @@ bytearray_output_stream_init_ex_static(output_stream* out_stream, u8* array,u32 
     out_stream->vtbl = &bytearray_output_stream_vtbl;
 }
 
-void
-bytearray_output_stream_init_ex(output_stream* out_stream, u8* array, u32 size, u8 flags)
+void bytearray_output_stream_init_ex(output_stream_t *out_stream, void *array_, uint32_t size, uint8_t flags)
 {
-    bytearray_output_stream_data* data;
+    uint8_t                      *array = (uint8_t *)array_;
+    bytearray_output_stream_data *data;
 
-    ZALLOC_OBJECT_OR_DIE( data, bytearray_output_stream_data, BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
+    ZALLOC_OBJECT_OR_DIE(data, bytearray_output_stream_data, BYTE_ARRAY_OUTPUT_STREAM_DATA_TAG);
 
     flags |= BYTEARRAY_ZALLOC_CONTEXT;
-    
-    bytearray_output_stream_init_ex_static(out_stream, array, size, flags, (bytearray_output_stream_context*)data);
+
+    bytearray_output_stream_init_ex_static(out_stream, array, size, flags, (bytearray_output_stream_context *)data);
 }
 
-void
-bytearray_output_stream_init(output_stream* out_stream, u8* array, u32 size)
-{
-    bytearray_output_stream_init_ex(out_stream, array, size, 0);
-}
+void bytearray_output_stream_init(output_stream_t *out_stream, void *array, uint32_t size) { bytearray_output_stream_init_ex(out_stream, array, size, 0); }
 
-void
-bytearray_output_stream_reset(output_stream* stream)
+/**
+ * Resets the content of the output stream.
+ *
+ * @param out_stream the output stream
+ */
+
+void bytearray_output_stream_reset(output_stream_t *stream)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
     data->buffer_offset = 0;
 }
 
-ya_result
-bytearray_output_stream_ensure(output_stream* stream, u32 size)
+/**
+ * If the buffer is owned, grows it to ensure it has at least the specified size.
+ * If the buffer is not owned: fails.
+ *
+ * @param out_stream the stream
+ * @param size the minimum required size
+ * @return an error code
+ */
+
+ya_result bytearray_output_stream_ensure(output_stream_t *stream, uint32_t size)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
-    
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
+
     if(data->buffer_size < size)
     {
         /* Either we can resize, either we have to trunk */
-        
+
         size = (size + 7) & ~7;
 
         if((data->flags & BYTEARRAY_DYNAMIC) != 0)
         {
-            u8* newbuffer;
+            uint8_t *newbuffer;
 
-            MALLOC_OR_DIE(u8*, newbuffer, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
+            MALLOC_OR_DIE(uint8_t *, newbuffer, size, BYTE_ARRAY_OUTPUT_STREAM_BUFF_TAG);
             MEMCOPY(newbuffer, data->buffer, data->buffer_offset);
 
             if((data->flags & BYTEARRAY_OWNED) != 0)
@@ -255,39 +257,35 @@ bytearray_output_stream_ensure(output_stream* stream, u32 size)
             return ERROR; // not dynamic
         }
     }
-    
+
     return SUCCESS;
 }
 
-u32
-bytearray_output_stream_size(output_stream* stream)
+uint32_t bytearray_output_stream_size(output_stream_t *stream)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
     return data->buffer_offset;
 }
 
-u8*
-bytearray_output_stream_buffer(output_stream* stream)
+uint8_t *bytearray_output_stream_buffer(output_stream_t *stream)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
 
     return data->buffer;
 }
 
-u8*
-bytearray_output_stream_detach(output_stream* stream)
+uint8_t *bytearray_output_stream_detach(output_stream_t *stream)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
 
     data->flags &= ~BYTEARRAY_OWNED;
-    
+
     return data->buffer;
 }
 
-void
-bytearray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size, bool owned)
+void bytearray_output_stream_set(output_stream_t *stream, uint8_t *buffer, uint32_t buffer_size, bool owned)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)stream->data;
     if((data->buffer != buffer) && ((data->flags & BYTEARRAY_OWNED) != 0))
     {
         free(data->buffer);
@@ -295,19 +293,20 @@ bytearray_output_stream_set(output_stream* stream, u8 *buffer, u32 buffer_size, 
     data->buffer = buffer;
     data->buffer_offset = buffer_size;
     data->buffer_size = buffer_size;
-    data->flags = (data->flags & BYTEARRAY_ZALLOC_CONTEXT) | ((owned)?BYTEARRAY_OWNED:0);
+    data->flags = (data->flags & BYTEARRAY_ZALLOC_CONTEXT) | ((owned) ? BYTEARRAY_OWNED : 0);
 }
-    /**
-     
-     * @param out_stream
-     * @param by
-     * @return the actual rewind_count
-     */
-    
-u32
-bytearray_output_stream_rewind(output_stream* out_stream, u32 rewind_count)
+
+/**
+ * Rewinds the position in the stream to by that amount of bytes
+ *
+ * @param steam
+ * @param rewind_count
+ * @return the actual rewind_count
+ */
+
+uint32_t bytearray_output_stream_rewind(output_stream_t *out_stream, uint32_t rewind_count)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)out_stream->data;
     if(rewind_count < data->buffer_offset)
     {
         data->buffer_offset -= rewind_count;
@@ -317,31 +316,79 @@ bytearray_output_stream_rewind(output_stream* out_stream, u32 rewind_count)
         rewind_count = data->buffer_offset;
         data->buffer_offset = 0;
     }
-    
+
     return rewind_count;
 }
 
-u8*
-bytearray_output_stream_zdup(output_stream* out_stream)
+/**
+ * Sets the position in the stream.
+ * If the buffer is dynamic, may grow the buffer.
+ * If the buffer is static, may be limited to the size of the buffer.
+ *
+ * @param steam
+ * @param position
+ * @return the new position
+ */
+
+uint32_t bytearray_output_stream_setposition(output_stream_t *out_stream, uint32_t position)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
-    u8 *ret;
-    u32 n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
-    ZALLOC_OBJECT_ARRAY_OR_DIE(ret, u8, n, BAOSZDUP_TAG);
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)out_stream->data;
+
+    if(position <= data->buffer_size)
+    {
+        data->buffer_offset = position;
+    }
+    else
+    {
+        ya_result ret = bytearray_output_stream_ensure(out_stream, position);
+
+        if(ISOK(ret))
+        {
+            data->buffer_offset = position;
+        }
+        else
+        {
+            data->buffer_offset = data->buffer_size;
+            position = data->buffer_offset;
+        }
+    }
+
+    return position;
+}
+
+/**
+ * Makes a zallocated copy of the buffer up to the current position.
+ *
+ * @param stream
+ * @return a pointer to the zallocated copy
+ */
+
+uint8_t *bytearray_output_stream_zdup(output_stream_t *out_stream)
+{
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)out_stream->data;
+    uint8_t                      *ret;
+    uint32_t                      n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
+    ZALLOC_OBJECT_ARRAY_OR_DIE(ret, uint8_t, n, BAOSZDUP_TAG);
     memcpy(ret, data->buffer, n);
-    
+
     return ret;
 }
 
-u8*
-bytearray_output_stream_dup(output_stream* out_stream)
+/**
+ * Makes a mallocated copy of the buffer up to the current position.
+ *
+ * @param stream
+ * @return a pointer to the mallocated copy
+ */
+
+uint8_t *bytearray_output_stream_dup(output_stream_t *out_stream)
 {
-    bytearray_output_stream_data* data = (bytearray_output_stream_data*)out_stream->data;
-    u8 *ret;
-    u32 n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
-    MALLOC_OR_DIE(u8*, ret, n, BAOSDUP_TAG);
+    bytearray_output_stream_data *data = (bytearray_output_stream_data *)out_stream->data;
+    uint8_t                      *ret;
+    uint32_t                      n = MAX(data->buffer_offset, 1); // because allocating 0 bytes can be an hassle
+    MALLOC_OR_DIE(uint8_t *, ret, n, BAOSDUP_TAG);
     memcpy(ret, data->buffer, n);
-    
+
     return ret;
 }
 

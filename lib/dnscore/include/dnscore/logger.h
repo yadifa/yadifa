@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,24 +28,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _LOGGER_H
-#define	_LOGGER_H
+#define _LOGGER_H
 
 #include <dnscore/logger_handle.h>
 
-#endif	/* _LOGGER_H */
+void ttylog_handle_out(logger_handle_t *handle, const char *format, ...);
+void ttylog_handle_notice(logger_handle_t *handle, const char *format, ...);
+void ttylog_handle_warn(logger_handle_t *handle, const char *format, ...);
+void ttylog_handle_err(logger_handle_t *handle, const char *format, ...);
+
+#define ttylog_out(...)    ttylog_handle_out(MODULE_MSG_HANDLE, __VA_ARGS__)
+#define ttylog_notice(...) ttylog_handle_notice(MODULE_MSG_HANDLE, __VA_ARGS__)
+#define ttylog_warn(...)   ttylog_handle_warn(MODULE_MSG_HANDLE, __VA_ARGS__)
+#define ttylog_err(...)    ttylog_handle_err(MODULE_MSG_HANDLE, __VA_ARGS__)
+
+#endif /* _LOGGER_H */
 
 /** @} */

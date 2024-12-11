@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,71 +28,69 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 #define CHECKED_OUTPUT_STREAM_STATES_COUNT 6
 
-#define CHECKED_OUTPUT_STREAM_NOSPC 0x00000001
-#define CHECKED_OUTPUT_STREAM_PERM  0x00000002
-#define CHECKED_OUTPUT_STREAM_IO    0x00000004
-#define CHECKED_OUTPUT_STREAM_FBIG  0x00000008
-#define CHECKED_OUTPUT_STREAM_DQUOT 0x00000010
-#define CHECKED_OUTPUT_STREAM_BADF  0x00000020
+#define CHECKED_OUTPUT_STREAM_NOSPC        0x00000001
+#define CHECKED_OUTPUT_STREAM_PERM         0x00000002
+#define CHECKED_OUTPUT_STREAM_IO           0x00000004
+#define CHECKED_OUTPUT_STREAM_FBIG         0x00000008
+#define CHECKED_OUTPUT_STREAM_DQUOT        0x00000010
+#define CHECKED_OUTPUT_STREAM_BADF         0x00000020
 
 struct checked_output_stream_data_s
 {
-    output_stream* filtered;
-    u32 state;
+    output_stream_t *filtered;
+    uint32_t         state;
 };
 
 typedef struct checked_output_stream_data_s checked_output_stream_data_t;
 
-void checked_output_stream_init(output_stream* os, output_stream* filtered, checked_output_stream_data_t* checked_data);
+void                                        checked_output_stream_init(output_stream_t *os, output_stream_t *filtered, checked_output_stream_data_t *checked_data);
 
-bool checked_output_stream_instance(output_stream *stream);
+bool                                        checked_output_stream_instance(output_stream_t *stream);
 
-ya_result checked_output_stream_error(output_stream* os);
+ya_result                                   checked_output_stream_error(output_stream_t *os);
 
 /**
  * Every single of the kept states are show-breakers.
  */
 
-static inline bool checked_output_stream_failed(output_stream* os)
+static inline bool checked_output_stream_failed(output_stream_t *os)
 {
     assert(checked_output_stream_instance(os));
-    checked_output_stream_data_t* data = (checked_output_stream_data_t*)os->data;
+    checked_output_stream_data_t *data = (checked_output_stream_data_t *)os->data;
     return data->state != 0;
 }
 
-static inline void checked_output_stream_state_clear(output_stream* os)
+static inline void checked_output_stream_state_clear(output_stream_t *os)
 {
     assert(checked_output_stream_instance(os));
-    checked_output_stream_data_t* data = (checked_output_stream_data_t*)os->data;
+    checked_output_stream_data_t *data = (checked_output_stream_data_t *)os->data;
     data->state = 0;
 }
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
 /** @} */
-

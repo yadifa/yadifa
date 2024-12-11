@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logger Logging functions
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup logger Logging functions
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _LOGGER_CHANNEL_SYSLOG_H
-#define	_LOGGER_CHANNEL_SYSLOG_H
+#define _LOGGER_CHANNEL_SYSLOG_H
 
 #include <dnscore/logger.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -55,14 +53,11 @@ extern "C"
  * NOTE: ONLY ONE SYSLOG CHANNEL SHOULD BE OPEN !!!
  */
 
-void logger_channel_syslog_open(const char* ident, int options, int facility, logger_channel *chan);
+void logger_channel_syslog_open(const char *ident, int options, int facility, logger_channel_t *chan);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _LOGGER_CHANNEL_SYSLOG_H */
+#endif /* _LOGGER_CHANNEL_SYSLOG_H */
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

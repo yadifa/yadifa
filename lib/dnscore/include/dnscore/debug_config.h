@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,31 +28,28 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup debug Debug functions
- *  @ingroup dnscore
- *  @brief Debug functions settings
+/**-----------------------------------------------------------------------------
+ * @defgroup debug Debug functions
+ * @ingroup dnscore
+ * @brief Debug functions settings
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 #ifndef _DEBUG_CONFIG_H
-#define	_DEBUG_CONFIG_H
+#define _DEBUG_CONFIG_H
 
 /**
  *
  * DEBUG: Enables (1) or disables (0) dumping each time a malloc of a free
  * is called.
- * Recommende value: FALSE
+ * Recommende value: false
  */
 
-#define DNSCORE_DEBUG_SHOW_ALLOCS FALSE
+#define DNSCORE_DEBUG_SHOW_ALLOCS false
 
-#if DEBUG
-
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -70,12 +67,12 @@ extern "C"
  * Recommended value: 0
  *
  */
-    
+
 /**
  * Freed memory is trashed
  */
 
-#define DNSCORE_DEBUG_MALLOC_TRASHMEMORY 1
+#define DNSCORE_DEBUG_MALLOC_TRASHMEMORY                     1
 
 /**
  *
@@ -86,7 +83,7 @@ extern "C"
  * Recommended value: 1
  */
 
-#define DNSCORE_DEBUG_ENHANCED_STATISTICS 1
+#define DNSCORE_DEBUG_ENHANCED_STATISTICS                    1
 
 /**
  *
@@ -97,19 +94,19 @@ extern "C"
  * Recommended value: 256
  */
 
-#define DNSCORE_DEBUG_ENHANCED_STATISTICS_MAX_MONITORED_SIZE 8192
+#define DNSCORE_DEBUG_ENHANCED_STATISTICS_MONITORED_SIZE_MAX 8192
 
 /**
- * DEBUG: Sets a limit on the memory available for the database.
+ * DEBUG: Sets a limit on the memory available for the program.
  * Debug overhead is not taken in account here.
  *
- * 1GB should be enough.
+ * 32GB should be enough.
  *
- * Recommended value: 0x40000000
+ * Recommended value: 0x800000000LL
  *
  */
 
-#define DNSCORE_DEBUG_ALLOC_MAX 0x200000000LL // 8GB
+#define DNSCORE_DEBUG_ALLOC_MAX                              0x800000000LL // 32GB
 
 /**
  * DEBUG: Enables block chaining (RECOMMENDED)
@@ -117,7 +114,7 @@ extern "C"
  * Recommended value: 1
  */
 
-#define DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS 1
+#define DNSCORE_DEBUG_CHAIN_ALLOCATED_BLOCKS                 1
 
 /**
  * DEBUG: Enable memory block tagging
@@ -125,7 +122,7 @@ extern "C"
  * Recommended value: 1
  */
 
-#define DNSCORE_DEBUG_HAS_BLOCK_TAG 1
+#define DNSCORE_DEBUG_HAS_BLOCK_TAG                          1
 
 /**
  * DEBUG: Each block has got an "unique" serial id of 64 bits.
@@ -133,13 +130,13 @@ extern "C"
  * Recommended value: 1
  */
 
-#define DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS 1
+#define DNSCORE_DEBUG_SERIALNUMBERIZE_BLOCKS                 1
 
 /**
  * DEBUG: measure timings on open/close/...
  */
-    
-#define DNSCORE_DEBUG_KEEP_STACKTRACE 1
+
+#define DNSCORE_DEBUG_KEEP_STACKTRACE                        1
 
 #if DEBUG
 #define DEBUG_BENCH_FD 1
@@ -147,17 +144,10 @@ extern "C"
 #define DEBUG_BENCH_FD 0
 #endif // DEBUG
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#else // !DEBUG
-
-#define DEBUG_BENCH_FD 0
-
-#endif // DEBUG
-
-#endif	/* _DEBUG_CONFIG_H */
+#endif /* _DEBUG_CONFIG_H */
 
 /** @} */
-

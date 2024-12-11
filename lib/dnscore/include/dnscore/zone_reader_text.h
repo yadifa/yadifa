@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #pragma once
 
 #include <dnscore/zone_reader.h>
 #include <dnscore/input_stream.h>
 
-void zone_reader_text_init_error_codes();
+void      zone_reader_text_init_error_codes();
 
-ya_result zone_reader_text_parse_stream(input_stream *ins, zone_reader *zr);
+ya_result zone_reader_text_parse_stream(zone_reader_t *zr, input_stream_t *ins);
 
-ya_result zone_reader_text_open(const char *fullpath, zone_reader *zr);
+ya_result zone_reader_text_open(zone_reader_t *zr, const char *fullpath);
 
-ya_result zone_reader_text_set_origin(zone_reader *zr, const u8* origin);
+ya_result zone_reader_text_set_origin(zone_reader_t *zr, const uint8_t *origin);
 
-void zone_reader_text_ignore_missing_soa(zone_reader *zr);
+void      zone_reader_text_ignore_missing_soa(zone_reader_t *zr);
 
-ya_result zone_reader_text_copy_rdata(const char *text, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin);
+ya_result zone_reader_text_copy_rdata(const char *text, uint16_t rtype, uint8_t *rdata, uint32_t rdata_size, const uint8_t *origin);
 
-ya_result zone_reader_text_len_copy_rdata(const char *text, u32 n, u16 rtype, u8 *rdata, u32 rdata_size, const u8 *origin);
+ya_result zone_reader_text_len_copy_rdata(const char *text, uint32_t n, uint16_t rtype, uint8_t *rdata, uint32_t rdata_size, const uint8_t *origin);

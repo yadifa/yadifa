@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,97 +28,138 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnscore
- *  @ingroup dnscore
- *  @brief serial arithmetic
+/**-----------------------------------------------------------------------------
+ * @defgroup dnscore
+ * @ingroup dnscore
+ * @brief serial arithmetic
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _SERIAL_H
-#define	_SERIAL_H
+#define _SERIAL_H
 
 #include <dnscore/sys_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-    /*
-     * SERIAL ARITHMETIC
-     */
+#define DNSCORE_SERIAL_INLINE_ALL 0 // enabling this is counter-productive
 
-    /*
-     * Returns TRUE if a >,<,>=,<= b
-     */
-    
-    /**
-     * 
-     * Returns TRUE iff a > b in serial arithmetic, else FALSE
-     * 
-     * @param a
-     * @param b
-     * @return a > b
-     */
+/*
+ * SERIAL ARITHMETIC
+ */
 
-    bool serial_gt(u32 a, u32 b);
-    
-    /**
-     * 
-     * Returns TRUE iff a < b in serial arithmetic, else FALSE
-     * 
-     * @param a
-     * @param b
-     * @return a < b
-     */
-    
-    bool serial_lt(u32 a, u32 b);
-    
-    /**
-     * 
-     * Returns TRUE iff a >= b in serial arithmetic, else FALSE
-     * 
-     * @param a
-     * @param b
-     * @return a >= b
-     */
-    
-    bool serial_ge(u32 a, u32 b);
-    
-    /**
-     * 
-     * Returns TRUE iff a <= b in serial arithmetic, else FALSE
-     * 
-     * @param a
-     * @param b
-     * @return a <= b
-     */
-    
-    bool serial_le(u32 a, u32 b);
-    
-    static inline bool serial_eq(u32 a, u32 b)
-    {
-        return a == b;
-    }
-    
-    static inline u32 serial_max(u32 a, u32 b)
-    {
-        return serial_ge(a,b) ? a : b;
-    }
+/*
+ * Returns true if a >,<,>=,<= b
+ */
 
-    static inline u32 serial_min(u32 a, u32 b)
-    {
-        return serial_le(a,b) ? a : b;
-    }
-    
-#ifdef	__cplusplus
+#if !DNSCORE_SERIAL_INLINE_ALL
+
+/**
+ *
+ * Returns true iff a > b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a > b
+ */
+
+bool serial_gt(uint32_t a, uint32_t b);
+
+/**
+ *
+ * Returns true iff a < b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a < b
+ */
+
+bool serial_lt(uint32_t a, uint32_t b);
+
+/**
+ *
+ * Returns true iff a >= b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a >= b
+ */
+
+bool serial_ge(uint32_t a, uint32_t b);
+
+/**
+ *
+ * Returns true iff a <= b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a <= b
+ */
+
+bool serial_le(uint32_t a, uint32_t b);
+
+#else
+
+/**
+ *
+ * Returns true iff a > b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a > b
+ */
+
+static inline bool serial_gt(uint32_t a, uint32_t b) { return ((a < b) && ((b - a) > 0x7fffffff)) || ((a > b) && ((a - b) < 0x7fffffff)); }
+
+/**
+ *
+ * Returns true iff a < b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a < b
+ */
+
+static inline bool serial_lt(uint32_t a, uint32_t b) { return ((a < b) && ((b - a) < 0x7fffffff)) || ((a > b) && ((a - b) > 0x7fffffff)); }
+
+/**
+ *
+ * Returns true iff a >= b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a >= b
+ */
+
+static inline bool serial_ge(uint32_t a, uint32_t b) { return (a == b) || ((a < b) && ((b - a) > 0x7fffffff)) || ((a > b) && ((a - b) < 0x7fffffff)); }
+
+/**
+ *
+ * Returns true iff a <= b in serial arithmetic, else false
+ *
+ * @param a
+ * @param b
+ * @return a <= b
+ */
+
+static inline bool serial_le(uint32_t a, uint32_t b) { return (a == b) || ((a < b) && ((b - a) < 0x7fffffff)) || ((a > b) && ((a - b) > 0x7fffffff)); }
+
+#endif
+
+static inline bool     serial_eq(uint32_t a, uint32_t b) { return a == b; }
+
+static inline uint32_t serial_max(uint32_t a, uint32_t b) { return serial_ge(a, b) ? a : b; }
+
+static inline uint32_t serial_min(uint32_t a, uint32_t b) { return serial_le(a, b) ? a : b; }
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _SERIAL_H */
+#endif /* _SERIAL_H */
 /** @} */
-

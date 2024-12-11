@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup logging Server logging
- *  @ingroup yadifad
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup logging Server logging
+ * @ingroup yadifad
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 
 #ifndef _LOG_QUERY_H
 #define _LOG_QUERY_H
 
 #include <dnscore/logger.h>
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/dnsname.h>
 
 /*******************************************************************************************************************
@@ -56,40 +54,46 @@
  ******************************************************************************************************************/
 
 #ifndef LOG_QUERY_C_
-extern logger_handle* g_queries_logger;
+extern logger_handle_t *g_queries_logger;
 #endif
 
-#define log_query_i(...) logger_handle_msg(g_queries_logger,MSG_INFO,__VA_ARGS__)
-#define log_query_w(...) logger_handle_msg(g_queries_logger,MSG_WARNING,__VA_ARGS__)
-#define log_query_e(...) logger_handle_msg(g_queries_logger,MSG_ERR,__VA_ARGS__)
+#define log_query_i(...) logger_handle_msg(g_queries_logger, MSG_INFO, __VA_ARGS__)
+#define log_query_w(...) logger_handle_msg(g_queries_logger, MSG_WARNING, __VA_ARGS__)
+#define log_query_e(...) logger_handle_msg(g_queries_logger, MSG_ERR, __VA_ARGS__)
 
 #ifndef LOG_QUERY_C_
-typedef void log_query_function(int, message_data*);
+typedef void log_query_function(int, dns_message_t *);
 #endif
 
-extern log_query_function* log_query;
+#define LOG_QUERY_MODE_MIN_VALUE 0
+#define LOG_QUERY_MODE_NONE      0
+#define LOG_QUERY_MODE_YADIFA    1
+#define LOG_QUERY_MODE_BIND      2
+#define LOG_QUERY_MODE_BOTH      3
+#define LOG_QUERY_MODE_MAX_VALUE 3
 
-void log_query_bind(int socket_fd, message_data *mesg);
+extern log_query_function *log_query;
 
-void log_query_yadifa(int socket_fd, message_data *mesg);
+void                       log_query_bind(int socket_fd, dns_message_t *mesg);
 
-static inline void
-log_query_both(int socket_fd, message_data *mesg)
+void                       log_query_yadifa(int socket_fd, dns_message_t *mesg);
+
+static inline void         log_query_both(int socket_fd, dns_message_t *mesg)
 {
     log_query_yadifa(socket_fd, mesg);
     log_query_bind(socket_fd, mesg);
 }
 
-static inline void
-log_query_none(int socket_fd, message_data *mesg)
+static inline void log_query_none(int socket_fd, dns_message_t *mesg)
 {
     (void)socket_fd;
     (void)mesg;
 }
 
-void log_query_set_mode(u32 mode);
+void     log_query_mode_set(uint32_t mode);
+
+uint32_t log_query_mode();
 
 #endif
 
 /** @} */
-

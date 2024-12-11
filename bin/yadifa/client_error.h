@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,29 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _CLIENT_ERROR_H
 #define _CLIENT_ERROR_H
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#define     YDF_ERROR_BASE              0x80080000
-#define     YDF_ERROR_CODE(code_)       ((s32)(YDF_ERROR_BASE+(code_)))
+#define YDF_ERROR_BASE        0x80080000
+#define YDF_ERROR_CODE(code_) ((int32_t)(YDF_ERROR_BASE + (code_)))
 
-    // MAIN ERRORCODES
+// MAIN ERRORCODES
 
-#define     EXIT_CONFIG_ERROR                10
+#define EXIT_CONFIG_ERROR     10
 
-
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif  /* _CLIENT_ERROR_H */
+#endif /* _CLIENT_ERROR_H */
 
 /*    ------------------------------------------------------------    */
 
 /** @} */
-

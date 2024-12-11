@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,32 +28,30 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <unistd.h>
 #include "dnscore/pipe_stream.h"
 
 #include "dnscore/logger.h"
 
-/** @defgroup 
- *  @ingroup 
- *  @brief 
+/** @defgroup
+ *  @ingroup
+ *  @brief
  *
- *  
+ *
  *
  * @{
  *
  *----------------------------------------------------------------------------*/
 
-#define MODULE_MSG_HANDLE		g_system_logger
+#define MODULE_MSG_HANDLE        g_system_logger
 
 #define DEBUG_PIPE_OUTPUT_STREAM 0
 
-#define OUTPUT_OPENED 1
-#define INPUT_OPENED 2
+#define OUTPUT_OPENED            1
+#define INPUT_OPENED             2
 
 typedef struct pipe_stream_data pipe_stream_data;
 
@@ -62,13 +60,13 @@ typedef struct pipe_stream_data pipe_stream_data;
 
 struct pipe_stream_data
 {
-    u8* buffer;
-    u32 buffer_size;
-    u32 write_offset;
-    u32 write_avail;
-    u32 read_offset;
-    u32 read_avail;
-    u8  flags;
+    uint8_t *buffer;
+    uint32_t buffer_size;
+    uint32_t write_offset;
+    uint32_t write_avail;
+    uint32_t read_offset;
+    uint32_t read_avail;
+    uint8_t  flags;
 };
 
 /*------------------------------------------------------------------------------
@@ -80,29 +78,27 @@ struct pipe_stream_data
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
-
-static ya_result
-pipe_stream_output_write(output_stream* stream, const u8* buffer, u32 len)
+static ya_result pipe_stream_output_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
     if(len == 0)
     {
         return 0;
     }
 
-    pipe_stream_data *data = (pipe_stream_data*)stream->data;
-    
-    u32 remaining = len;
-    
+    pipe_stream_data *data = (pipe_stream_data *)stream->data;
+
+    uint32_t          remaining = len;
+
     while((remaining > 0) && (data->write_avail > 0))
     {
-        u32 chunk_len = MIN(data->buffer_size - data->write_offset, data->write_avail);
+        uint32_t chunk_len = MIN(data->buffer_size - data->write_offset, data->write_avail);
         chunk_len = MIN(remaining, chunk_len);
-        
+
 #if DEBUG_PIPE_OUTPUT_STREAM
         log_debug("pipe: w: %d bytes", len);
         log_memdump_ex(g_system_logger, LOG_DEBUG, buffer, chunk_len, 16, OSPRINT_DUMP_ALL);
 #endif
-        
+
         MEMCOPY(&data->buffer[data->write_offset], buffer, chunk_len);
         buffer += chunk_len;
         data->write_offset += chunk_len;
@@ -113,13 +109,13 @@ pipe_stream_output_write(output_stream* stream, const u8* buffer, u32 len)
             data->write_offset = 0;
         }
         remaining -= chunk_len;
-        
-        //usleep(1000);
+
+        // usleep(1000);
     }
-    
+
     len -= remaining;
-    
-    if((len == 0) && ( (data->flags & (INPUT_OPENED|OUTPUT_OPENED))  != (INPUT_OPENED|OUTPUT_OPENED)))
+
+    if((len == 0) && ((data->flags & (INPUT_OPENED | OUTPUT_OPENED)) != (INPUT_OPENED | OUTPUT_OPENED)))
     {
         return UNEXPECTED_EOF; // if one of the sides is closed ...
     }
@@ -127,20 +123,18 @@ pipe_stream_output_write(output_stream* stream, const u8* buffer, u32 len)
     return len;
 }
 
-static ya_result
-pipe_stream_output_flush(output_stream* stream)
+static ya_result pipe_stream_output_flush(output_stream_t *stream)
 {
     (void)stream;
     return SUCCESS;
 }
 
-static void
-pipe_stream_output_close(output_stream* stream)
+static void pipe_stream_output_close(output_stream_t *stream)
 {
-    pipe_stream_data* data = (pipe_stream_data*)stream->data;
+    pipe_stream_data *data = (pipe_stream_data *)stream->data;
 
     data->flags &= ~OUTPUT_OPENED;
-    
+
     if((data->flags & INPUT_OPENED) == 0)
     {
         free(data->buffer);
@@ -157,28 +151,26 @@ static const output_stream_vtbl pipe_stream_output_vtbl = {
     "pipe_stream_output",
 };
 
-
-static ya_result
-pipe_stream_input_read(input_stream* stream, void *buffer_, u32 len)
+static ya_result pipe_stream_input_read(input_stream_t *stream, void *buffer_, uint32_t len)
 {
     if(len == 0)
     {
         return 0;
     }
-    
-    u8 *buffer = (u8*)buffer_;
-    
+
+    uint8_t *buffer = (uint8_t *)buffer_;
+
 #if DEBUG
     memset(buffer, 0xff, len);
 #endif
 
-    pipe_stream_data* data = (pipe_stream_data*)stream->data;
-    
-    u32 remaining = len;
-    
+    pipe_stream_data *data = (pipe_stream_data *)stream->data;
+
+    uint32_t          remaining = len;
+
     while((remaining > 0) && (data->read_avail > 0))
     {
-        u32 chunk_len = MIN(data->buffer_size - data->read_offset, data->read_avail);
+        uint32_t chunk_len = MIN(data->buffer_size - data->read_offset, data->read_avail);
         chunk_len = MIN(remaining, chunk_len);
         MEMCOPY(buffer, &data->buffer[data->read_offset], chunk_len);
         buffer += chunk_len;
@@ -196,25 +188,24 @@ pipe_stream_input_read(input_stream* stream, void *buffer_, u32 len)
     return len - remaining;
 }
 
-static ya_result
-pipe_stream_input_skip(input_stream* stream, u32 len)
+static ya_result pipe_stream_input_skip(input_stream_t *stream, uint32_t len)
 {
     if(len == 0)
     {
         return 0;
     }
 
-    pipe_stream_data* data = (pipe_stream_data*)stream->data;
-    
-    u32 remaining = len;
-    
+    pipe_stream_data *data = (pipe_stream_data *)stream->data;
+
+    uint32_t          remaining = len;
+
     for(;;)
     {
         while((remaining > 0) && (data->read_avail > 0))
         {
-            u32 chunk_len = MIN(data->buffer_size - data->read_offset, data->read_avail);
+            uint32_t chunk_len = MIN(data->buffer_size - data->read_offset, data->read_avail);
             chunk_len = MIN(remaining, chunk_len);
-            
+
             data->read_offset += chunk_len;
             data->read_avail -= chunk_len;
             data->write_avail += chunk_len;
@@ -225,25 +216,24 @@ pipe_stream_input_skip(input_stream* stream, u32 len)
             }
             remaining -= chunk_len;
         }
-        
+
         if((len != remaining) || ((data->flags & OUTPUT_OPENED) == 0))
         {
             break;
         }
-        
+
         usleep(1000);
     }
-    
+
     return len - remaining;
 }
 
-static void
-pipe_stream_input_close(input_stream* stream)
+static void pipe_stream_input_close(input_stream_t *stream)
 {
-    pipe_stream_data* data = (pipe_stream_data*)stream->data;
+    pipe_stream_data *data = (pipe_stream_data *)stream->data;
 
     data->flags &= ~INPUT_OPENED;
-    
+
     if((data->flags & OUTPUT_OPENED) == 0)
     {
         free(data->buffer);
@@ -253,8 +243,7 @@ pipe_stream_input_close(input_stream* stream)
     input_stream_set_void(stream);
 }
 
-static const input_stream_vtbl pipe_stream_input_vtbl =
-{
+static const input_stream_vtbl pipe_stream_input_vtbl = {
     pipe_stream_input_read,
     pipe_stream_input_skip,
     pipe_stream_input_close,
@@ -265,26 +254,25 @@ static const input_stream_vtbl pipe_stream_input_vtbl =
  * Creates both output and input stream
  * Writing in the output stream makes it available for the input stream
  * This is not currently threadable.
- * 
+ *
  * @param output
  * @param input
  */
 
-void
-pipe_stream_init(output_stream *output, input_stream *input, u32 buffer_size)
+void pipe_stream_init(output_stream_t *output, input_stream_t *input, uint32_t buffer_size)
 {
     pipe_stream_data *data;
-    MALLOC_OBJECT_OR_DIE(data, pipe_stream_data, PIPESDTA_TAG);   
+    MALLOC_OBJECT_OR_DIE(data, pipe_stream_data, PIPESDTA_TAG);
     ZEROMEMORY(data, sizeof(pipe_stream_data));
-    MALLOC_OR_DIE(u8*, data->buffer, buffer_size, PIPESBFR_TAG);
-    
+    MALLOC_OR_DIE(uint8_t *, data->buffer, buffer_size, PIPESBFR_TAG);
+
 #if DEBUG
     memset(data->buffer, 0xff, buffer_size);
 #endif
-    
+
     data->buffer_size = buffer_size;
     data->write_avail = buffer_size;
-    data->flags       = OUTPUT_OPENED|INPUT_OPENED;
+    data->flags = OUTPUT_OPENED | INPUT_OPENED;
     output->data = data;
     output->vtbl = &pipe_stream_output_vtbl;
     input->data = data;
@@ -292,32 +280,30 @@ pipe_stream_init(output_stream *output, input_stream *input, u32 buffer_size)
 }
 
 /**
- * 
+ *
  * Number of available bytes in the input stream
- * 
+ *
  * @param input
- * @return 
+ * @return
  */
 
-ya_result
-pipe_stream_read_available(input_stream *input)
+ya_result pipe_stream_read_available(input_stream_t *input)
 {
-    pipe_stream_data *data = (pipe_stream_data*)input->data;
+    pipe_stream_data *data = (pipe_stream_data *)input->data;
     return data->read_avail;
 }
 
 /**
- * 
+ *
  * Room for bytes in the output stream
- * 
+ *
  * @param input
- * @return 
+ * @return
  */
 
-ya_result
-pipe_stream_write_available(output_stream *input)
+ya_result pipe_stream_write_available(output_stream_t *output)
 {
-    pipe_stream_data *data = (pipe_stream_data*)input->data;
+    pipe_stream_data *data = (pipe_stream_data *)output->data;
     return data->write_avail;
 }
 

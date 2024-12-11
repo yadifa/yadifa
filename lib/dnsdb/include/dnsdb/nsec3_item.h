@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,34 +28,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup nsec3 NSEC3 functions
- *  @ingroup dnsdbdnssec
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup nsec3 NSEC3 functions
+ * @ingroup dnsdbdnssec
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _NSEC3_ITEM_H
-#define	_NSEC3_ITEM_H
+#define _NSEC3_ITEM_H
 
 #include <dnsdb/nsec3_types.h>
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
 /* NOTE: The first byte of the digest is its length */
-nsec3_zone_item *nsec3_zone_item_find_encloser_start(const nsec3_zone *n3, const u8 *digest);
+nsec3_zone_item_t *nsec3_zone_item_find_encloser_start(const nsec3_zone_t *n3, const uint8_t *digest);
 
-nsec3_zone_item* nsec3_zone_item_find(const nsec3_zone* n3, const u8 *digest);
+nsec3_zone_item_t *nsec3_zone_item_find(const nsec3_zone_t *n3, const uint8_t *digest);
 
 /**
  *
@@ -63,7 +61,7 @@ nsec3_zone_item* nsec3_zone_item_find(const nsec3_zone* n3, const u8 *digest);
  * @param dnsnamedigest
  * @return
  */
-nsec3_zone_item *nsec3_zone_item_find_by_name(const nsec3_zone *n3, const u8 *dnsnamedigest);
+nsec3_zone_item_t *nsec3_zone_item_find_by_name(const nsec3_zone_t *n3, const uint8_t *dnsnamedigest);
 
 /**
  *
@@ -74,80 +72,47 @@ nsec3_zone_item *nsec3_zone_item_find_by_name(const nsec3_zone *n3, const u8 *dn
  * @param out_n3
  * @return
  */
-nsec3_zone_item *nsec3_zone_item_find_by_name_ext(const zdb_zone *zone, const u8 *nsec3_label, nsec3_zone **out_n3);
+nsec3_zone_item_t *nsec3_zone_item_find_by_name_ext(const zdb_zone_t *zone, const uint8_t *nsec3_label, nsec3_zone_t **out_n3);
 
-nsec3_zone_item *nsec3_zone_item_find_by_record(const zdb_zone *zone, const u8 *fqdn, u16 rdata_size, const u8 *rdata);
+nsec3_zone_item_t *nsec3_zone_item_find_by_record(const zdb_zone_t *zone, const uint8_t *fqdn, uint16_t rdata_size, const uint8_t *rdata);
 
-bool nsec3_zone_item_equals_rdata(
-                            const nsec3_zone* n3,
-                            const nsec3_zone_item *item,
-                            u16 rdata_size,
-                            const u8* rdata);
+bool               nsec3_zone_item_equals_rdata(const nsec3_zone_t *n3, const nsec3_zone_item_t *item, uint16_t rdata_size, const uint8_t *rdata);
 
-bool
-nsec3_zone_item_equals_rdata_lenient(const nsec3_zone* n3,
-                             const nsec3_zone_item *item,
-                             u16 rdata_size,
-                             const u8* rdata);
-
-ya_result nsec3_zone_item_to_zdb_packed_ttlrdata(
-                            const nsec3_zone* n3,
-                            const nsec3_zone_item *item,
-                            const u8* origin,
-                            u8* out_owner, /* dnsname */
-                            u32 ttl,
-                            zdb_packed_ttlrdata* nsec3,
-                            u32  nsec3_max_size);
-
-struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm
+struct nsec3_zone_item_to_new_zdb_resource_record_data_parm
 {
-    const nsec3_zone* n3;
-    const nsec3_zone_item *item;
-    const u8* origin;
-    u8 * restrict * pool; // memory pool
-    s32 ttl;
+    const nsec3_zone_t      *n3;
+    const nsec3_zone_item_t *item;
+    const uint8_t           *origin;
+    uint8_t *restrict       *pool; // memory pool
+    int32_t                  ttl;
 };
 
-typedef struct nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm;
+typedef struct nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_zone_item_to_new_zdb_resource_record_data_parm;
 
-#define NSEC3_ZONE_ITEM_TO_NEW_ZDB_PACKED_TTLRDATA_SIZE (ALIGN16(MAX_DOMAIN_LENGTH) + ALIGN16(NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(255)))
+#define NSEC3_ZONE_ITEM_TO_NEW_zdb_resource_record_data_SIZE (ALIGN16(DOMAIN_LENGTH_MAX) + ALIGN16(NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(255)))
 
-void nsec3_zone_item_to_new_zdb_packed_ttlrdata(
-                            nsec3_zone_item_to_new_zdb_packed_ttlrdata_parm *nsec3_parms,
-                            u8 **out_owner_p, /* dnsname */
-                            zdb_packed_ttlrdata** out_nsec3,
-                            const zdb_packed_ttlrdata** out_nsec3_rrsig);
+void     nsec3_zone_item_to_new_zdb_resource_record_data(nsec3_zone_item_to_new_zdb_resource_record_data_parm *nsec3_parms, uint8_t **out_owner_p, /* dnsname */
+                                                         zdb_resource_record_set_t *out_nsec3_rrset, zdb_resource_record_set_t *out_nsec3_rrsig_rrset);
 
-u32 nsec3_zone_item_rdata_size(const nsec3_zone* n3, const nsec3_zone_item *item);
+uint32_t nsec3_zone_item_rdata_size(const nsec3_zone_t *n3, const nsec3_zone_item_t *item);
 
-u16 nsec3_zone_item_to_rdata(const nsec3_zone* n3, const nsec3_zone_item *item, u8 *out_rdata, u16 out_rdata_size);
+uint16_t nsec3_zone_item_to_rdata(const nsec3_zone_t *n3, const nsec3_zone_item_t *item, uint8_t *out_rdata, uint16_t out_rdata_size);
 
-u32 nsec3_zone_item_get_label(
-                            const nsec3_zone_item *item,
-                            u8* output_buffer,
-                            u32 buffer_size);
+uint32_t nsec3_zone_item_get_label(const nsec3_zone_item_t *item, uint8_t *output_buffer, uint32_t buffer_size);
 
-void nsec3_zone_item_write_owner(  output_stream* os,
-				    const nsec3_zone_item *item,
-				    const u8* origin);
+void     nsec3_zone_item_write_owner(output_stream_t *os, const nsec3_zone_item_t *item, const uint8_t *origin);
 
-void nsec3_zone_item_to_output_stream(output_stream* os,
-                                      const nsec3_zone* n3,
-				      const nsec3_zone_item *item,
-				      const u8* origin,
-                                      u32 ttl);
+void     nsec3_zone_item_to_output_stream(output_stream_t *os, const nsec3_zone_t *n3, const nsec3_zone_item_t *item, const uint8_t *origin, uint32_t ttl);
 
-void nsec3_zone_item_rrsig_del_by_keytag(nsec3_zone_item *item, u16 native_key_tag);
+void     nsec3_zone_item_rrsig_del(nsec3_zone_item_t *item, const zdb_ttlrdata *nsec3_rrsig);
 
-void nsec3_zone_item_rrsig_del(nsec3_zone_item *item, const zdb_ttlrdata *nsec3_rrsig);
-
-void nsec3_zone_item_rrsig_add(nsec3_zone_item *item, zdb_packed_ttlrdata *nsec3_rrsig);
+void     nsec3_zone_item_rrsig_add(nsec3_zone_item_t *item, zdb_resource_record_data_t *nsec3_rrsig);
 
 /*
  * Deletes ALL rrsig in the NSEC3 item
  */
 
-void nsec3_zone_item_rrsig_delete_all(nsec3_zone_item *item);
+void nsec3_zone_item_rrsig_delete_all(nsec3_zone_item_t *item);
 
 /*
  * Empties an nsec3_zone_item
@@ -157,7 +122,7 @@ void nsec3_zone_item_rrsig_delete_all(nsec3_zone_item *item);
  * This should be followed by the destruction of the item itself
  */
 
-void nsec3_zone_item_empties(nsec3_zone_item *item);
+void nsec3_zone_item_empties(nsec3_zone_item_t *item);
 
 /*
  * Sets the type bitmap of the nsec3 item to match the one in the rdata
@@ -173,42 +138,43 @@ void nsec3_zone_item_empties(nsec3_zone_item *item);
  *  _ next_hashed_owner_name
  */
 
-ya_result nsec3_zone_item_update_bitmap(nsec3_zone_item *nsec3_item, const u8 *rdata, u16 rdatasize);
+ya_result                                    nsec3_zone_item_update_bitmap(nsec3_zone_item_t *nsec3_item, const uint8_t *rdata, uint16_t rdatasize);
 
 typedef struct nsec3_item_format_writer_args nsec3_item_format_writer_args;
 
 struct nsec3_item_format_writer_args
 {
-    const u8 *origin;
-    const nsec3_zone* n3;
-    const nsec3_zone_item* item;
-    s32 ttl;
+    const uint8_t           *origin;
+    const nsec3_zone_t      *n3;
+    const nsec3_zone_item_t *item;
+    int32_t                  ttl;
 };
 
 /**
- * This helper macro declares a format_writer variable to be used with %w
- * 
+ * This helper macro declares a format_writer_t variable to be used with %w
+ *
  * It has been written for debug builds.
- * 
+ *
  * usage:
  * DECLARE_NSEC3_ITEM_FORMAT_WRITER(myvar, origin, n3, nsec3_item, 600);
  * format("%w", &myvar);
- * 
- * The implementation is not very efficient.  It first writes the record as a wire, then prints the wire using the "normal" call.
- * 
+ *
+ * The implementation is not very efficient.  It first writes the record as a wire, then prints the wire using the
+ * "normal" call.
+ *
  * The callback should NOT be registered as a format class.
  */
 
-#define DECLARE_NSEC3_ITEM_FORMAT_WRITER(variable_name_,origin_,n3_,item_,ttl_) \
-    const nsec3_item_format_writer_args variable_name_##args = {(origin_),(n3_),(item_),(ttl_)}; \
-    const format_writer variable_name_ = {nsec3_item_format_writer_callback, &variable_name_##args};
+#define DECLARE_NSEC3_ITEM_FORMAT_WRITER(variable_name_, origin_, n3_, item_, ttl_)                                                                                                                                                            \
+    const nsec3_item_format_writer_args variable_name_##args = {(origin_), (n3_), (item_), (ttl_)};                                                                                                                                            \
+    const format_writer_t               variable_name_ = {nsec3_item_format_writer_callback, &variable_name_##args};
 
-void nsec3_item_format_writer_callback(const void*, output_stream*, s32, char, bool, void* reserved_for_method_parameters);
+void nsec3_item_format_writer_callback(const void *, output_stream_t *, int32_t, char, bool, void *reserved_for_method_parameters);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _NSEC3_ITEM_H */
+#endif /* _NSEC3_ITEM_H */
 
 /** @} */

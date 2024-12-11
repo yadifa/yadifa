@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** 
- *  @defgroup dnskey DNSSEC keys functions
- *  @ingroup dnsdbdnssec
- *  @addtogroup dnskey DNSKEY functions
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup dnskey DNSSEC keys functions
+ * @ingroup dnsdbdnssec
+ * @addtogroup dnskey DNSKEY functions
+ * @brief
  *
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
+
 /*------------------------------------------------------------------------------
  *
- * USE INCLUDES */
-#include "dnscore/dnscore-config.h"
+ * USE INCLUDES
+ *
+ *----------------------------------------------------------------------------*/
+#include "dnscore/dnscore_config.h"
 
 #define DNSCORE_DNSKEY_C 1
 
@@ -63,6 +64,9 @@
 #if DNSCORE_HAS_EDDSA_SUPPORT
 #include "dnscore/dnskey_eddsa.h"
 #endif
+#if DNSCORE_HAS_OQS_SUPPORT
+#include "dnscore/dnskey_postquantumsafe.h"
+#endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
 #include "dnscore/dnskey_dummy.h"
 #endif
@@ -79,20 +83,21 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/mutex.h"
 #include "dnscore/timeformat.h"
+#include "dnscore/tools.h"
 
-extern logger_handle* g_system_logger;
-#define MODULE_MSG_HANDLE g_system_logger
+extern logger_handle_t *g_system_logger;
+#define MODULE_MSG_HANDLE                g_system_logger
 
-#define ZDB_DNSKEY_TAG          0x59454b534e44
-#define ZDB_DNSKEY_NAME_TAG     0x454d414e59454b
+#define ZDB_DNSKEY_TAG                   0x59454b534e44
+#define ZDB_DNSKEY_NAME_TAG              0x454d414e59454b
 
-#define ORIGNDUP_TAG 0x5055444e4749524f
-#define DNSKRAWB_TAG 0x425741524b534e44
+#define ORIGNDUP_TAG                     0x5055444e4749524f
+#define DNSKRAWB_TAG                     0x425741524b534e44
 
 // dumps key acquisition/release
 #define DUMP_ACQUIRE_RELEASE_STACK_TRACE 0
 
-static string_set dnssec_key_load_private_keywords_set = STRING_SET_EMPTY;
+static string_treemap_t dnskey_load_private_keywords_set = STRING_SET_EMPTY;
 
 #define DNSKEY_FIELD_ALGORITHM 1
 #define DNSKEY_FIELD_FORMAT    2
@@ -104,169 +109,164 @@ static string_set dnssec_key_load_private_keywords_set = STRING_SET_EMPTY;
 #define DNSKEY_FIELD_DELETE    8
 #define DNSKEY_FIELD_ENGINE    9
 
-static value_name_table dnssec_key_load_private_keywords_common_names[] =
-{
-    {DNSKEY_FIELD_ALGORITHM,    "Algorithm"},
-    {DNSKEY_FIELD_FORMAT,       "Private-key-format"},
-    {DNSKEY_FIELD_CREATED,      "Created"},
-    {DNSKEY_FIELD_PUBLISH,      "Publish"},
-    {DNSKEY_FIELD_ACTIVATE,     "Activate"},
+static value_name_table_t dnskey_load_private_keywords_common_names[] = {{DNSKEY_FIELD_ALGORITHM, "Algorithm"},
+                                                                         {DNSKEY_FIELD_FORMAT, "Private-key-format"},
+                                                                         {DNSKEY_FIELD_CREATED, "Created"},
+                                                                         {DNSKEY_FIELD_PUBLISH, "Publish"},
+                                                                         {DNSKEY_FIELD_ACTIVATE, "Activate"},
 
-    {DNSKEY_FIELD_INACTIVE,     "Inactive"},
-    {DNSKEY_FIELD_DELETE,       "Delete"},
-    {DNSKEY_FIELD_ENGINE,       "Engine"},
-    {0, NULL}
-};
+                                                                         {DNSKEY_FIELD_INACTIVE, "Inactive"},
+                                                                         {DNSKEY_FIELD_DELETE, "Delete"},
+                                                                         {DNSKEY_FIELD_ENGINE, "Engine"},
+                                                                         {0, NULL}};
 
-static group_mutex_t dnskey_rc_mtx = GROUP_MUTEX_INITIALIZER;
+static group_mutex_t      dnskey_rc_mtx = GROUP_MUTEX_INITIALIZER;
 
-static const char *rsamd5_names[] = {DNSKEY_ALGORITHM_RSAMD5_NAME,"1", NULL};
-static const char *dsasha1_names[] = {DNSKEY_ALGORITHM_DSASHA1_NAME,"3", NULL};
-static const char *rsasha1_names[] = {DNSKEY_ALGORITHM_RSASHA1_NAME,"5", NULL};
-static const char *dsasha1nsec3_names[] = {DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME,"6", NULL};
-static const char *rsasha1nsec3_names[] = {DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME,"7", NULL};
-static const char *rsasha256_names[] = {DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME,"8", NULL};
-static const char *rsasha512_names[] = {DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME,"10", NULL};
+static const char        *rsamd5_names[] = {DNSKEY_ALGORITHM_RSAMD5_NAME, "1", NULL};
+static const char        *dsasha1_names[] = {DNSKEY_ALGORITHM_DSASHA1_NAME, "3", NULL};
+static const char        *rsasha1_names[] = {DNSKEY_ALGORITHM_RSASHA1_NAME, "5", NULL};
+static const char        *dsasha1nsec3_names[] = {DNSKEY_ALGORITHM_DSASHA1_NSEC3_NAME, "6", NULL};
+static const char        *rsasha1nsec3_names[] = {DNSKEY_ALGORITHM_RSASHA1_NSEC3_NAME, "7", NULL};
+static const char        *rsasha256_names[] = {DNSKEY_ALGORITHM_RSASHA256_NSEC3_NAME, "8", NULL};
+static const char        *rsasha512_names[] = {DNSKEY_ALGORITHM_RSASHA512_NSEC3_NAME, "10", NULL};
 #if DNSCORE_HAS_ECDSA_SUPPORT
-static const char *ecdsap256sha256_names[] = {DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME,"13", NULL};
-static const char *ecdsap384sha384_names[] = {DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME,"14", NULL};
+static const char *ecdsap256sha256_names[] = {DNSKEY_ALGORITHM_ECDSAP256SHA256_NAME, "13", NULL};
+static const char *ecdsap384sha384_names[] = {DNSKEY_ALGORITHM_ECDSAP384SHA384_NAME, "14", NULL};
 #endif
 #if DNSCORE_HAS_EDDSA_SUPPORT
-static const char *ed25619_names[] = { DNSKEY_ALGORITHM_ED25519_NAME, "15", NULL};
-static const char *ed448_names[] = { DNSKEY_ALGORITHM_ED448_NAME, "16", NULL};
+static const char *ed25619_names[] = {DNSKEY_ALGORITHM_ED25519_NAME, "15", NULL};
+static const char *ed448_names[] = {DNSKEY_ALGORITHM_ED448_NAME, "16", NULL};
 #endif
-#ifdef DNSKEY_ALGORITHM_DUMMY
-static const char *dnskey_dummy_names[] = {DNSKEY_ALGORITHM_DUMMY_NAME,"122", NULL};
+#if DNSCORE_HAS_OQS_SUPPORT
+static const char *dilithium2_names[] = {DNSKEY_ALGORITHM_DILITHIUM2_NAME, "24", NULL};
+static const char *dilithium3_names[] = {DNSKEY_ALGORITHM_DILITHIUM3_NAME, "25", NULL};
+static const char *dilithium5_names[] = {DNSKEY_ALGORITHM_DILITHIUM5_NAME, "26", NULL};
+static const char *falcon512_names[] = {DNSKEY_ALGORITHM_FALCON512_NAME, "27", NULL};
+static const char *falcon1024_names[] = {DNSKEY_ALGORITHM_FALCON1024_NAME, "28", NULL};
+static const char *falconp512_names[] = {DNSKEY_ALGORITHM_FALCONPAD512_NAME, "29", NULL};
+static const char *falconp1024_names[] = {DNSKEY_ALGORITHM_FALCONPAD1024_NAME, "30", NULL};
+static const char *sphincssha2128f_names[] = {DNSKEY_ALGORITHM_SPHINCSSHA2128F_NAME, "31", NULL};
+static const char *sphincssha2128s_names[] = {DNSKEY_ALGORITHM_SPHINCSSHA2128S_NAME, "32", NULL};
+static const char *sphincssha2192f_names[] = {DNSKEY_ALGORITHM_SPHINCSSHA2192F_NAME, "33", NULL};
+static const char *sphincssha2192s_names[] = {DNSKEY_ALGORITHM_SPHINCSSHA2192S_NAME, "34", NULL};
+static const char *sphincssha2256f_names[] = {DNSKEY_ALGORITHM_SPHINCSSHA2256F_NAME, "35", NULL};
+static const char *sphincssha2256s_names[] = {DNSKEY_ALGORITHM_SPHINCSSHA2256S_NAME, "36", NULL};
+static const char *sphincsshake128f_names[] = {DNSKEY_ALGORITHM_SPHINCSSHAKE128F_NAME, "37", NULL};
+static const char *sphincsshake128s_names[] = {DNSKEY_ALGORITHM_SPHINCSSHAKE128S_NAME, "38", NULL};
+static const char *sphincsshake192f_names[] = {DNSKEY_ALGORITHM_SPHINCSSHAKE192F_NAME, "39", NULL};
+static const char *sphincsshake192s_names[] = {DNSKEY_ALGORITHM_SPHINCSSHAKE192S_NAME, "40", NULL};
+static const char *sphincsshake256f_names[] = {DNSKEY_ALGORITHM_SPHINCSSHAKE256F_NAME, "41", NULL};
+static const char *sphincsshake256s_names[] = {DNSKEY_ALGORITHM_SPHINCSSHAKE256S_NAME, "42", NULL};
+static const char *mayo1_names[] = {DNSKEY_ALGORITHM_MAYO1_NAME, "43", NULL};
+static const char *mayo2_names[] = {DNSKEY_ALGORITHM_MAYO2_NAME, "44", NULL};
+static const char *mayo3_names[] = {DNSKEY_ALGORITHM_MAYO3_NAME, "45", NULL};
+static const char *mayo4_names[] = {DNSKEY_ALGORITHM_MAYO5_NAME, "46", NULL};
+static const char *cross_rsdp128balanced_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP128BALANCED_NAME, "47", NULL};
+static const char *cross_rsdp128fast_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP128FAST_NAME, "48", NULL};
+static const char *cross_rsdp128small_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP128SMALL_NAME, "49", NULL};
+static const char *cross_rsdp192balanced_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP192BALANCED_NAME, "50", NULL};
+static const char *cross_rsdp192fast_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP192FAST_NAME, "51", NULL};
+static const char *cross_rsdp192small_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP192SMALL_NAME, "52", NULL};
+static const char *cross_rsdp256balanced_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP256BALANCED_NAME, "53", NULL};
+// static const char *cross_rsdp256fast_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP256FAST_NAME, "54", NULL};
+static const char *cross_rsdp256small_names[] = {DNSKEY_ALGORITHM_CROSS_RSDP256SMALL_NAME, "55", NULL};
+static const char *cross_rsdpg128balanced_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG128BALANCED_NAME, "56", NULL};
+static const char *cross_rsdpg128fast_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG128FAST_NAME, "57", NULL};
+static const char *cross_rsdpg128small_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG128SMALL_NAME, "58", NULL};
+static const char *cross_rsdpg192balanced_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG192BALANCED_NAME, "59", NULL};
+static const char *cross_rsdpg192fast_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG192FAST_NAME, "60", NULL};
+static const char *cross_rsdpg192small_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG192SMALL_NAME, "61", NULL};
+static const char *cross_rsdpg256balanced_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG256BALANCED_NAME, "62", NULL};
+static const char *cross_rsdpg256fast_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG256FAST_NAME, "63", NULL};
+static const char *cross_rsdpg256small_names[] = {DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL_NAME, "64", NULL};
 #endif
-//static const char *empty_names[] = {NULL};
 
-static const struct dnskey_features dnskey_supported_algorithms[] =
-{
+#ifdef DNSKEY_ALGORITHM_DUMMY
+static const char *dnskey_dummy_names[] = {DNSKEY_ALGORITHM_DUMMY_NAME, "122", NULL};
+#endif
+// static const char *empty_names[] = {NULL};
+
+static const dnskey_features_t dnskey_supported_algorithms[] = {
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 0
-    {
-        rsamd5_names,
-        512,4096,
-        2048,
-        1024,
-        1,
-        DNSKEY_ALGORITHM_RSAMD5,
-        DNSKEY_FEATURE_ZONE_NSEC
-    },
+    {rsamd5_names, 512, 4096, 2048, 1024, 1, DNSKEY_ALGORITHM_RSAMD5, DNSKEY_FEATURE_ZONE_NSEC},
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 2
-    {
-        dsasha1_names,
-        512,1024,
-        1024,
-        1024,
-        64,
-        DNSKEY_ALGORITHM_DSASHA1,
-        DNSKEY_FEATURE_ZONE_NSEC
-    },
+    {dsasha1_names, 512, 1024, 1024, 1024, 64, DNSKEY_ALGORITHM_DSASHA1, DNSKEY_FEATURE_ZONE_NSEC},
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 4
-    {
-        rsasha1_names,
-        512,4096,
-        2048,
-        1024,
-        1,
-        DNSKEY_ALGORITHM_RSASHA1,
-        DNSKEY_FEATURE_ZONE_NSEC
-    },
-    {
-        dsasha1nsec3_names,
-        512,1024,
-        1024,
-        1024,
-        64,
-        DNSKEY_ALGORITHM_DSASHA1_NSEC3,
-        DNSKEY_FEATURE_ZONE_NSEC3
-    },
-    {
-        rsasha1nsec3_names,
-        512,4096,
-        2048,
-        1024,
-        1,
-        DNSKEY_ALGORITHM_RSASHA1_NSEC3,
-        DNSKEY_FEATURE_ZONE_NSEC3
-    },
-    {
-        rsasha256_names,
-        512,4096,
-        2048,
-        1024,
-        1,
-        DNSKEY_ALGORITHM_RSASHA256_NSEC3,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
+    {rsasha1_names, 512, 4096, 2048, 1024, 1, DNSKEY_ALGORITHM_RSASHA1, DNSKEY_FEATURE_ZONE_NSEC},
+    {dsasha1nsec3_names, 512, 1024, 1024, 1024, 64, DNSKEY_ALGORITHM_DSASHA1_NSEC3, DNSKEY_FEATURE_ZONE_NSEC3},
+    {rsasha1nsec3_names, 512, 4096, 2048, 1024, 1, DNSKEY_ALGORITHM_RSASHA1_NSEC3, DNSKEY_FEATURE_ZONE_NSEC3},
+    {rsasha256_names, 512, 4096, 2048, 1024, 1, DNSKEY_ALGORITHM_RSASHA256_NSEC3, DNSKEY_FEATURE_ZONE_MODERN},
     //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 9
-    {
-        rsasha512_names,
-        1024,4096,
-        2048,
-        1024,
-        1,
-        DNSKEY_ALGORITHM_RSASHA512_NSEC3,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
-    //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 11
-    //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 12
+    {rsasha512_names, 1024, 4096, 2048, 1024, 1, DNSKEY_ALGORITHM_RSASHA512_NSEC3, DNSKEY_FEATURE_ZONE_MODERN},
+//{NULL, 0, 0, 0, 0, 0, 0, 0}, // 11
+//{NULL, 0, 0, 0, 0, 0, 0, 0}, // 12
 #if DNSCORE_HAS_ECDSA_SUPPORT
-    {
-        ecdsap256sha256_names,
-        256,256,
-        256,
-        256,
-        1,
-        DNSKEY_ALGORITHM_ECDSAP256SHA256,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
-    {
-        ecdsap384sha384_names,
-        384,384,
-        384,
-        384,
-        1,
-        DNSKEY_ALGORITHM_ECDSAP384SHA384,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
+    {ecdsap256sha256_names, 256, 256, 256, 256, 1, DNSKEY_ALGORITHM_ECDSAP256SHA256, DNSKEY_FEATURE_ZONE_MODERN},
+    {ecdsap384sha384_names, 384, 384, 384, 384, 1, DNSKEY_ALGORITHM_ECDSAP384SHA384, DNSKEY_FEATURE_ZONE_MODERN},
 #else
-    //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 13
-    //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 14
+//{NULL, 0, 0, 0, 0, 0, 0, 0}, // 13
+//{NULL, 0, 0, 0, 0, 0, 0, 0}, // 14
 #endif
 #if DNSCORE_HAS_EDDSA_SUPPORT
-        {
-        ed25619_names,
-        0,0,
-        0,
-        0,
-        1,
-        DNSKEY_ALGORITHM_ED25519,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
-    {
-        ed448_names,
-        0,0,
-        0,
-        0,
-        1,
-        DNSKEY_ALGORITHM_ED448,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
+    {ed25619_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_ED25519, DNSKEY_FEATURE_ZONE_MODERN},
+    {ed448_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_ED448, DNSKEY_FEATURE_ZONE_MODERN},
 #else
-    //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 15
-    //{NULL, 0, 0, 0, 0, 0, 0, 0}, // 16
+//{NULL, 0, 0, 0, 0, 0, 0, 0}, // 15
+//{NULL, 0, 0, 0, 0, 0, 0, 0}, // 16
+#endif
+#if DNSCORE_HAS_OQS_SUPPORT
+    {dilithium2_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_DILITHIUM2, DNSKEY_FEATURE_ZONE_MODERN},
+    {dilithium3_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_DILITHIUM3, DNSKEY_FEATURE_ZONE_MODERN},
+    {dilithium5_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_DILITHIUM5, DNSKEY_FEATURE_ZONE_MODERN},
+    {falcon512_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_FALCON512, DNSKEY_FEATURE_ZONE_MODERN},
+    {falcon1024_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_FALCON1024, DNSKEY_FEATURE_ZONE_MODERN},
+    {falconp512_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_FALCONPAD512, DNSKEY_FEATURE_ZONE_MODERN},
+    {falconp1024_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_FALCONPAD1024, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincssha2128f_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHA2128F, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincssha2128s_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHA2128S, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincssha2192f_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHA2192F, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincssha2192s_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHA2192S, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincssha2256f_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHA2256F, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincssha2256s_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHA2256S, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincsshake128f_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHAKE128F, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincsshake128s_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHAKE128S, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincsshake192f_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHAKE192F, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincsshake192s_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHAKE192S, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincsshake256f_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHAKE256F, DNSKEY_FEATURE_ZONE_MODERN},
+    {sphincsshake256s_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_SPHINCSSHAKE256S, DNSKEY_FEATURE_ZONE_MODERN},
+    {mayo1_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_MAYO1, DNSKEY_FEATURE_ZONE_MODERN},
+    {mayo2_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_MAYO2, DNSKEY_FEATURE_ZONE_MODERN},
+    {mayo3_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_MAYO3, DNSKEY_FEATURE_ZONE_MODERN},
+    {mayo4_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_MAYO5, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp128balanced_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP128BALANCED, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp128fast_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP128FAST, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp128small_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP128SMALL, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp192balanced_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP192BALANCED, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp192fast_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP192FAST, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp192small_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP192SMALL, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdp256balanced_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP256BALANCED, DNSKEY_FEATURE_ZONE_MODERN},
+    /*{
+        cross_rsdp256fast_names,
+        0,0,
+        0,
+        0,
+        1,
+        DNSKEY_ALGORITHM_CROSS_RSDP256FAST,
+        DNSKEY_FEATURE_ZONE_MODERN
+    },*/
+    {cross_rsdp256small_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDP256SMALL, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg128balanced_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG128BALANCED, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg128fast_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG128FAST, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg128small_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG128SMALL, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg192balanced_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG192BALANCED, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg192fast_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG192FAST, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg192small_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG192SMALL, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg256balanced_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG256BALANCED, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg256fast_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG256FAST, DNSKEY_FEATURE_ZONE_MODERN},
+    {cross_rsdpg256small_names, 0, 0, 0, 0, 1, DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL, DNSKEY_FEATURE_ZONE_MODERN},
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
-    {
-        dnskey_dummy_names,
-        16,16,
-        16,
-        16,
-        16,
-        DNSKEY_ALGORITHM_DUMMY,
-        DNSKEY_FEATURE_ZONE_MODERN
-    },
+    {dnskey_dummy_names, 16, 16, 16, 16, 16, DNSKEY_ALGORITHM_DUMMY, DNSKEY_FEATURE_ZONE_MODERN},
 #endif
     /*
     {   // terminator
@@ -279,8 +279,7 @@ static const struct dnskey_features dnskey_supported_algorithms[] =
     }*/
 };
 
-static const char *
-dnskey_get_algorithm_name_from_value(int alg)
+static const char *dnskey_get_algorithm_name_from_value(int alg)
 {
     switch(alg)
     {
@@ -319,55 +318,43 @@ dnskey_get_algorithm_name_from_value(int alg)
     }
 }
 
-static ya_result
-dnskey_field_parser_dummy_parse_field(struct dnskey_field_parser *parser, struct parser_s *p)
+static ya_result dnskey_field_parser_dummy_parse_field(struct dnskey_field_parser *parser, struct parser_s *p)
 {
     (void)parser;
     (void)p;
     return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
-static ya_result
-dnskey_field_parser_dummy_set_key(struct dnskey_field_parser *parser, dnssec_key *key)
+static ya_result dnskey_field_parser_dummy_set_key(struct dnskey_field_parser *parser, dnskey_t *key)
 {
     (void)parser;
     (void)key;
     return FEATURE_NOT_IMPLEMENTED_ERROR;
 }
 
-static void
-dnskey_field_parser_dummy_finalize_method(struct dnskey_field_parser *parser)
-{
-    (void)parser;
-}
+static void                     dnskey_field_parser_dummy_finalize_method(struct dnskey_field_parser *parser) { (void)parser; }
 
-struct dnskey_field_parser_vtbl dnskey_field_dummy_parser =
-{
-    dnskey_field_parser_dummy_parse_field,
-    dnskey_field_parser_dummy_set_key,
-    dnskey_field_parser_dummy_finalize_method,
-    "DUMMY"
-};
+struct dnskey_field_parser_vtbl dnskey_field_dummy_parser = {dnskey_field_parser_dummy_parse_field, dnskey_field_parser_dummy_set_key, dnskey_field_parser_dummy_finalize_method, "DUMMY"};
 
-ya_result
-dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, parser_s *p)
+ya_result                       dnskey_field_access_parse(const struct dnskey_field_access_s *sd, void *base, parser_t *p)
 {
-    ya_result ret = INVALID_STATE_ERROR;
+    ya_result   ret = INVALID_STATE_ERROR;
 
-    u32 label_len = parser_text_length(p);
+    uint32_t    label_len = parser_text_length(p);
     const char *label = parser_text(p);
-    bool parsed_it = FALSE;
-    u8 tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
-    
+    bool        parsed_it = false;
+    uint8_t     tmp_out[DNSSEC_MAXIMUM_KEY_SIZE_BYTES];
+
     for(; sd->type != STRUCTDESCRIPTOR_NONE; sd++)
     {
         switch(sd->type)
         {
+#if OPENSSL_VERSION_MAJOR < 3
             case STRUCTDESCRIPTOR_BN:
             {
                 if(memcmp(label, sd->name, label_len) == 0)
                 {
-                    BIGNUM **bnp = (BIGNUM**)(((u8*)base) + sd->relative);
+                    BIGNUM **bnp = (BIGNUM **)(((uint8_t *)base) + sd->relative);
 
                     ret = parser_next_word(p);
 
@@ -376,10 +363,10 @@ dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, pars
                         return ret;
                     }
 
-                    u32 word_len = parser_text_length(p);
+                    uint32_t    word_len = parser_text_length(p);
                     const char *word = parser_text(p);
 
-                    ya_result n = base64_decode(word, word_len, tmp_out);
+                    ya_result   n = base64_decode(word, word_len, tmp_out);
 
                     if(FAIL(n))
                     {
@@ -395,18 +382,22 @@ dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, pars
                         return DNSSEC_ERROR_BNISNULL;
                     }
 
-                    parsed_it = TRUE;
+                    parsed_it = true;
 
                     goto dnskey_field_access_parse_loop_exit;
                 }
 
                 break;
             }
+#endif
             case STRUCTDESCRIPTOR_RAW:
+#ifdef STRUCTDESCRIPTOR_REVRAW
+            case STRUCTDESCRIPTOR_REVRAW:
+#endif
             {
                 if(memcmp(label, sd->name, label_len) == 0)
                 {
-                    dnskey_raw_field_t *raw = (dnskey_raw_field_t*)(((u8*)base) + sd->relative);
+                    dnskey_raw_field_t *raw = (dnskey_raw_field_t *)(((uint8_t *)base) + sd->relative);
 
                     ret = parser_next_word(p);
 
@@ -415,10 +406,10 @@ dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, pars
                         return ret;
                     }
 
-                    u32 word_len = parser_text_length(p);
+                    uint32_t    word_len = parser_text_length(p);
                     const char *word = parser_text(p);
 
-                    ya_result n = base64_decode(word, word_len, tmp_out);
+                    ya_result   n = base64_decode(word, word_len, tmp_out);
 
                     if(FAIL(n))
                     {
@@ -426,11 +417,18 @@ dnskey_field_access_parse(const struct dnskey_field_access *sd, void *base, pars
                         return n;
                     }
 
-                    ZALLOC_OBJECT_ARRAY_OR_DIE(raw->buffer, u8, n, DNSKRAWB_TAG);
-                    memcpy(raw->buffer, tmp_out, n);
+                    ZALLOC_OBJECT_ARRAY_OR_DIE(raw->buffer, uint8_t, n, DNSKRAWB_TAG);
+                    if(sd->type == STRUCTDESCRIPTOR_RAW)
+                    {
+                        memcpy(raw->buffer, tmp_out, n);
+                    }
+                    else // STRUCTDESCRIPTOR_REVRAW
+                    {
+                        bytes_copy_swap(raw->buffer, tmp_out, n);
+                    }
                     raw->size = n;
 
-                    parsed_it = TRUE;
+                    parsed_it = true;
 
                     goto dnskey_field_access_parse_loop_exit;
                 }
@@ -443,23 +441,23 @@ dnskey_field_access_parse_loop_exit:
     {
         return SUCCESS; // unknown keyword (ignore)
     }
-            
+
     return ret;
 }
 
-ya_result
-dnskey_field_access_print(const struct dnskey_field_access *sd, const void *base, output_stream *os)
+ya_result dnskey_field_access_print(const struct dnskey_field_access_s *sd, const void *base, output_stream_t *os)
 {
     ya_result ret = SUCCESS;
-    
+
     for(; sd->type != STRUCTDESCRIPTOR_NONE; sd++)
     {
         switch(sd->type)
         {
+#if OPENSSL_VERSION_MAJOR < 3
             case STRUCTDESCRIPTOR_BN:
             {
-                const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
-                const BIGNUM **bn = (const BIGNUM**)bn_ptr_ptr;
+                const uint8_t *bn_ptr_ptr = (((const uint8_t *)base) + sd->relative);
+                const BIGNUM **bn = (const BIGNUM **)bn_ptr_ptr;
 
                 if(bn != NULL)
                 {
@@ -469,34 +467,79 @@ dnskey_field_access_print(const struct dnskey_field_access *sd, const void *base
                 }
                 break;
             }
+#endif
             case STRUCTDESCRIPTOR_RAW:
             {
-                const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
+                const uint8_t            *bn_ptr_ptr = (((const uint8_t *)base) + sd->relative);
                 const dnskey_raw_field_t *raw = (const dnskey_raw_field_t *)bn_ptr_ptr;
 
                 osformat(os, "%s: ", sd->name);
 
-                char buffer[1024];
-                u32 encoded_size = BASE64_ENCODED_SIZE(raw->size);
+                char    *buffer;
+                char     buffer_[2048];
+                uint32_t encoded_size = BASE64_ENCODED_SIZE(raw->size);
+
+                if(encoded_size < sizeof(buffer_))
+                {
+                    buffer = buffer_;
+                }
+                else
+                {
+                    buffer = malloc(encoded_size);
+                }
+
+                uint32_t n = base64_encode(raw->buffer, raw->size, buffer);
+                output_stream_write(os, buffer, n);
+                osprintln(os, "");
+                memset(buffer, 0, encoded_size);
+                if(encoded_size > sizeof(buffer_))
+                {
+                    free(buffer);
+                }
+                break;
+            }
+#ifdef STRUCTDESCRIPTOR_REVRAW
+            case STRUCTDESCRIPTOR_REVRAW:
+            {
+                const uint8_t            *bn_ptr_ptr = (((const uint8_t *)base) + sd->relative);
+                const dnskey_raw_field_t *raw = (const dnskey_raw_field_t *)bn_ptr_ptr;
+                osformat(os, "%s: ", sd->name);
+                char    buffer[1024];
+                uint8_t reverse[1024];
+                if(raw->size > sizeof(reverse))
+                {
+                    return BUFFER_WOULD_OVERFLOW;
+                }
+
+                bytes_copy_swap(reverse, raw->buffer, raw->size);
+
+                uint32_t encoded_size = BASE64_ENCODED_SIZE(raw->size);
                 if(encoded_size > sizeof(buffer))
                 {
                     return BUFFER_WOULD_OVERFLOW;
                 }
-                u32 n = base64_encode(raw->buffer, raw->size, buffer);
+                uint32_t n = base64_encode(reverse, raw->size, buffer);
                 output_stream_write(os, buffer, n);
                 osprintln(os, "");
                 break;
             }
+#endif
+#ifdef STRUCTDESCRIPTOR_U16
             case STRUCTDESCRIPTOR_U16:
             {
-                const u8 *bn_ptr_ptr = (((const u8*)base) + sd->relative);
-                const u16 *valuep = (const u16 *)bn_ptr_ptr;
+                const uint8_t  *bn_ptr_ptr = (((const uint8_t *)base) + sd->relative);
+                const uint16_t *valuep = (const uint16_t *)bn_ptr_ptr;
                 osformat(os, "%s: %hu", sd->name, *valuep);
                 break;
             }
+#endif
+            default:
+            {
+                return INVALID_STATE_ERROR;
+            }
         }
     }
-    
+
     return ret;
 }
 
@@ -528,17 +571,16 @@ The least significant byte will have the add carry bit carried to the most signi
 
 /**
  * Generates a key tag from the DNSKEY RDATA wire
- * 
+ *
  * @param dnskey_rdata
  * @param dnskey_rdata_size
- * @return 
+ * @return
  */
 
-u16
-dnskey_get_tag_from_rdata(const u8* dnskey_rdata, u32 dnskey_rdata_size)
+uint16_t dnskey_get_tag_from_rdata(const uint8_t *dnskey_rdata, uint32_t dnskey_rdata_size)
 {
-    u32 sum = 0;
-    u32 sumh = 0;
+    uint32_t sum = 0;
+    uint32_t sumh = 0;
     while(dnskey_rdata_size > 1)
     {
         sumh += *dnskey_rdata++;
@@ -552,19 +594,18 @@ dnskey_get_tag_from_rdata(const u8* dnskey_rdata, u32 dnskey_rdata_size)
     sum += sumh << 8;
     sum += sum >> 16;
 
-    return (u16)sum;
+    return (uint16_t)sum;
 }
 
 /**
  * Initialises the context for a key algorithm.
- * 
+ *
  * @param ctx
  * @param algorithm
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_digest_init(digest_s *ctx, u8 algorithm)
+ya_result dnskey_digest_init(digest_t *ctx, uint8_t algorithm)
 {
     switch(algorithm)
     {
@@ -597,28 +638,27 @@ dnskey_digest_init(digest_s *ctx, u8 algorithm)
         default:
             return DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
     }
-    
+
     return SUCCESS;
 }
 
 /**
  * Generate the RDATA of a DS records using the RDATA from a DSNKEY record
- * 
+ *
  * @param digest_type the type of DS
  * @param dnskey_fqdn the domain of the record
  * @param dnskey_rdata the rdata of the DNSKEY
  * @param dnskey_rdata_size the size of the rdata of the DNSKEY
  * @param out_rdata the output buffer that has to be the right size (known given digest_type)
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_generate_ds_rdata(u8 digest_type, const u8 *dnskey_fqdn, const u8 *dnskey_rdata,u16 dnskey_rdata_size, u8 *out_rdata)
+ya_result dnskey_generate_ds_rdata(uint8_t digest_type, const uint8_t *dnskey_fqdn, const uint8_t *dnskey_rdata, uint16_t dnskey_rdata_size, uint8_t *out_rdata)
 {
-    digest_s ctx;
-    
-    s32 digest_size;    
-    
+    digest_t ctx;
+
+    int32_t  digest_size;
+
     switch(digest_type)
     {
         case DS_DIGEST_SHA1:
@@ -630,15 +670,15 @@ dnskey_generate_ds_rdata(u8 digest_type, const u8 *dnskey_fqdn, const u8 *dnskey
         default:
             return DNSSEC_ERROR_UNSUPPORTEDDIGESTALGORITHM;
     }
-    
+
     digest_size = digest_get_size(&ctx);
-        
-    u16 tag = dnskey_get_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
-    u8 algorithm = dnskey_rdata[3];
-    
+
+    uint16_t tag = dnskey_get_tag_from_rdata(dnskey_rdata, dnskey_rdata_size);
+    uint8_t  algorithm = dnskey_rdata[3];
+
     digest_update(&ctx, dnskey_fqdn, dnsname_len(dnskey_fqdn));
     digest_update(&ctx, dnskey_rdata, dnskey_rdata_size);
-    
+
     out_rdata[0] = tag >> 8;
     out_rdata[1] = tag;
     out_rdata[2] = algorithm;
@@ -651,15 +691,14 @@ dnskey_generate_ds_rdata(u8 digest_type, const u8 *dnskey_fqdn, const u8 *dnskey
 
 /**
  * Sanitises an text origin and returns a zallocated copy of it
- * 
+ *
  * @param origin
  * @return a sanitized zallocated copy of origin
  */
 
-static char*
-dnskey_origin_zdup_sanitize(const char* origin)
+static char *dnskey_origin_zdup_sanitize(const char *origin)
 {
-    char* ret;
+    char *ret;
 
     if(origin == NULL)
     {
@@ -683,8 +722,8 @@ dnskey_origin_zdup_sanitize(const char* origin)
     {
         origin_len++;
         ZALLOC_OBJECT_ARRAY_OR_DIE(ret, char, origin_len, ORIGNDUP_TAG);
-        //MEMCOPY(ret, origin, origin_len);
-        for(int i = 0; i < origin_len; i++)
+        // MEMCOPY(ret, origin, origin_len);
+        for(int_fast32_t i = 0; i < origin_len; i++)
         {
             ret[i] = tolower(origin[i]);
         }
@@ -692,8 +731,8 @@ dnskey_origin_zdup_sanitize(const char* origin)
     else
     {
         ZALLOC_OBJECT_ARRAY_OR_DIE(ret, char, (origin_len + 2), ORIGNDUP_TAG);
-        //MEMCOPY(ret, origin, origin_len);
-        for(int i = 0; i < origin_len; i++)
+        // MEMCOPY(ret, origin, origin_len);
+        for(int_fast32_t i = 0; i < origin_len; i++)
         {
             ret[i] = tolower(origin[i]);
         }
@@ -708,22 +747,19 @@ dnskey_origin_zdup_sanitize(const char* origin)
  * Initialises an empty instance of a DNSKEY
  * No cryptographic content is put in the key.
  * Needs further setup.
- * 
+ *
  * @param algorithm the algorithm of the key.
  * @param flags the flags of the key
  * @param origin the origin of the key
- * 
+ *
  * @return a pointer to an empty instance (no real key attached) of a key.
  */
 
-dnssec_key*
-dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
+dnskey_t *dnskey_newemptyinstance(uint8_t algorithm, uint16_t flags, const char *origin)
 {
-    yassert(origin != NULL);
+    char    *origin_copy = dnskey_origin_zdup_sanitize(origin);
 
-    char *origin_copy = dnskey_origin_zdup_sanitize(origin);
-
-    u8 *owner_name = dnsname_zdup_from_name(origin_copy);
+    uint8_t *owner_name = dnsname_zdup_from_name(origin_copy);
     if(owner_name == NULL)
     {
         log_err("dnskey_newemptyinstance(%hhu, %hx, %s = '%s'): origin parameter is not a domain name", algorithm, flags, origin, origin_copy);
@@ -731,11 +767,11 @@ dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
         return NULL;
     }
 
-    dnssec_key* key;
-    
-    ZALLOC_OBJECT_OR_DIE( key, dnssec_key, ZDB_DNSKEY_TAG);
-    ZEROMEMORY(key, sizeof(dnssec_key));
-    
+    dnskey_t *key;
+
+    ZALLOC_OBJECT_OR_DIE(key, dnskey_t, ZDB_DNSKEY_TAG);
+    ZEROMEMORY(key, sizeof(dnskey_t));
+
     key->origin = origin_copy;
 
     /* origin is allocated with ZALLOC using ZALLOC_STRING_OR_DIE
@@ -743,9 +779,9 @@ dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
      */
 
     key->owner_name = owner_name;
-    
+
     key->rc = 1;
-    
+
     key->epoch_created = 0;
     key->epoch_publish = 0;
     key->epoch_activate = 0;
@@ -759,8 +795,8 @@ dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
     /*key->status = 0;*/
     /*key->key.X=....*/
     /*key->tag=00000*/
-    /*key->is_private=TRUE;*/
-    
+    /*key->is_private=true;*/
+
     log_debug("dnskey_newemptyinstance: %{dnsname} +%03d+-----/%d status=%x rc=%i (%p)", dnskey_get_domain(key), key->algorithm, ntohs(key->flags), key->status, key->rc, key);
 
     return key;
@@ -768,7 +804,7 @@ dnskey_newemptyinstance(u8 algorithm, u16 flags, const char *origin)
 
 /**
  * Increases the reference count on a dnssec_key
- * 
+ *
  * @param key
  */
 
@@ -786,8 +822,7 @@ static void dnskey_release_debug()
 }
 #endif
 
-void
-dnskey_acquire(dnssec_key *key)
+void dnskey_acquire(dnskey_t *key)
 {
     yassert(key->rc > 0);
     log_debug("dnskey_acquire: %{dnsname} +%03d+%05d/%d status=%x rc=%i (%p)", dnskey_get_domain(key), key->algorithm, key->tag, ntohs(key->flags), key->status, key->rc + 1, key);
@@ -795,25 +830,24 @@ dnskey_acquire(dnssec_key *key)
     ++key->rc;
 #if DUMP_ACQUIRE_RELEASE_STACK_TRACE
     dnskey_acquire_debug();
-#endif 
+#endif
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 }
 
 /**
  * Releases the reference count on a dnssec_key.
  * If the reference count reaches zero, destroys the key.
- * 
+ *
  * @param a
  * @param b
  */
 
-void
-dnskey_release(dnssec_key *key)
-{   
+void dnskey_release(dnskey_t *key)
+{
     yassert(key != NULL && key->rc > 0);
-    
+
     log_debug("dnskey_release: %{dnsname} +%03d+%05d/%d status=%x rc=%i (%p)", dnskey_get_domain(key), key->algorithm, key->tag, ntohs(key->flags), key->status, key->rc - 1, key);
-    
+
 #if DUMP_ACQUIRE_RELEASE_STACK_TRACE
     dnskey_release_debug();
 #endif
@@ -822,7 +856,7 @@ dnskey_release(dnssec_key *key)
     if(--key->rc == 0)
     {
         group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
-        
+
 #if DEBUG
         if(key->next != NULL)
         {
@@ -831,18 +865,18 @@ dnskey_release(dnssec_key *key)
             abort();
         }
 #endif
-        
+
         if(key->vtbl != NULL)
         {
-            key->vtbl->dnssec_key_free(key);
+            key->vtbl->dnskey_free(key);
         }
 
         ZFREE_ARRAY(key->origin, strlen(key->origin) + 1); // +1 because the 0 has to be taken in account too (duh!)
         dnsname_zfree(key->owner_name);
 #if DEBUG
-        memset(key, 0xfe, sizeof(dnssec_key));
+        memset(key, 0xfe, sizeof(dnskey_t));
 #endif
-        ZFREE(key, dnssec_key);
+        ZFREE(key, dnskey_t);
     }
     else
     {
@@ -852,31 +886,30 @@ dnskey_release(dnssec_key *key)
 
 /**
  * Generate a (public) key using the RDATA
- * 
+ *
  * RC ok
- * 
+ *
  * @param rdata
  * @param rdata_size
  * @param origin
  * @param out_key points to  a pointer for the instantiated key
- * 
+ *
  * @return an error code (success or error)
  */
 
-ya_result
-dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_key **out_key)
+ya_result dnskey_new_from_rdata(const uint8_t *rdata, uint16_t rdata_size, const uint8_t *fqdn, dnskey_t **out_key)
 {
     if(out_key == NULL)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
-    
-    ya_result return_value;    
-    u8 algorithm = rdata[3];
-    char origin[MAX_DOMAIN_LENGTH];
-    
-    dnsname_to_cstr(origin, fqdn);
-    
+
+    ya_result return_value;
+    uint8_t   algorithm = rdata[3];
+    char      origin[DOMAIN_LENGTH_MAX];
+
+    cstr_init_with_dnsname(origin, fqdn);
+
     *out_key = NULL;
 
     switch(algorithm)
@@ -887,11 +920,13 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_ke
         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             return_value = dnskey_rsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
-            
+
+#if DNSCORE_HAS_DSA_SUPPORT
         case DNSKEY_ALGORITHM_DSASHA1:
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
             return_value = dnskey_dsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
+#endif
 #if DNSCORE_HAS_ECDSA_SUPPORT
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
@@ -904,6 +939,51 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_ke
             return_value = dnskey_eddsa_loadpublic(rdata, rdata_size, origin, out_key); // RC
             break;
 #endif
+#if DNSCORE_HAS_OQS_SUPPORT
+        case DNSKEY_ALGORITHM_DILITHIUM2:
+        case DNSKEY_ALGORITHM_DILITHIUM3:
+        case DNSKEY_ALGORITHM_DILITHIUM5:
+        case DNSKEY_ALGORITHM_FALCON512:
+        case DNSKEY_ALGORITHM_FALCON1024:
+        case DNSKEY_ALGORITHM_FALCONPAD512:
+        case DNSKEY_ALGORITHM_FALCONPAD1024:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2128F:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2128S:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2192F:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2192S:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2256F:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2256S:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE128F:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE128S:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE192F:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE192S:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE256F:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE256S:
+        case DNSKEY_ALGORITHM_MAYO1:
+        case DNSKEY_ALGORITHM_MAYO2:
+        case DNSKEY_ALGORITHM_MAYO3:
+        case DNSKEY_ALGORITHM_MAYO5:
+        case DNSKEY_ALGORITHM_CROSS_RSDP128BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDP128FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDP128SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDP192BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDP192FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDP192SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDP256BALANCED:
+        // case DNSKEY_ALGORITHM_CROSS_RSDP256FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDP256SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG128BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG128FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG128SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG192BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG192FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG192SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG256BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG256FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL:
+            return_value = dnskey_postquantumsafe_loadpublic(rdata, rdata_size, origin, out_key); // RC
+            break;
+#endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
         case DNSKEY_ALGORITHM_DUMMY:
             return_value = dnskey_dummy_loadpublic(rdata, rdata_size, origin, out_key);
@@ -913,40 +993,40 @@ dnskey_new_from_rdata(const u8 *rdata, u16 rdata_size, const u8 *fqdn, dnssec_ke
             return_value = DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
             break;
     }
-    
+
     return return_value;
 }
 
+#if OPENSSL_VERSION_MAJOR < 3
 /**
  * Writes a BIGNUM integer to a stream
  */
 
-ya_result
-dnskey_write_bignum_as_base64_to_stream(const BIGNUM *num, output_stream *os)
+ya_result dnskey_write_bignum_as_base64_to_stream(const BIGNUM *num, output_stream_t *os)
 {
-    u8 *buffer;
-    char *buffer2;
-    u8 buffer_[4096];
-    char buffer2_[4096];
-    
+    uint8_t *buffer;
+    char    *buffer2;
+    uint8_t  buffer_[4096];
+    char     buffer2_[4096];
+
     if(num == NULL)
     {
         return DNSSEC_ERROR_BNISNULL;
     }
 
-    u32 n = BN_num_bytes(num);
-    u32 m = BASE64_ENCODED_SIZE(n);
-    
+    uint32_t n = BN_num_bytes(num);
+    uint32_t m = BASE64_ENCODED_SIZE(n);
+
     if(n <= sizeof(buffer_))
     {
         buffer = buffer_;
     }
     else
     {
-        MALLOC_OBJECT_ARRAY_OR_DIE(buffer, u8, n, TMPBUFFR_TAG);
-        //buffer = (u8*)malloc(n);
+        MALLOC_OBJECT_ARRAY_OR_DIE(buffer, uint8_t, n, TMPBUFFR_TAG);
+        // buffer = (uint8_t*)malloc(n);
     }
-    
+
     if(m <= sizeof(buffer2_))
     {
         buffer2 = buffer2_;
@@ -954,36 +1034,43 @@ dnskey_write_bignum_as_base64_to_stream(const BIGNUM *num, output_stream *os)
     else
     {
         MALLOC_OBJECT_ARRAY_OR_DIE(buffer2, char, m, TMPBUFFR_TAG);
-        //buffer2 = (char*)malloc(m);
+        // buffer2 = (char*)malloc(m);
     }
-    
+
     BN_bn2bin(num, buffer);
-    
-    u32 o = base64_encode(buffer,n,buffer2);
-    
+
+    uint32_t o = base64_encode(buffer, n, buffer2);
+
     yassert(o <= m);
-    
+
     output_stream_write(os, buffer2, o);
-    
-    if(buffer != buffer_) free(buffer);
-    if(buffer2 != buffer2_) free(buffer2);
-    
+
+    if(buffer != buffer_)
+    {
+        free(buffer);
+    }
+    if(buffer2 != buffer2_)
+    {
+        free(buffer2);
+    }
+
     return SUCCESS;
 }
 
+#endif
+
 /**
  * Returns the most relevant publication time.
- * 
+ *
  * publish > activate > created > now
- * 
+ *
  * @param key
- * @return 
+ * @return
  */
 
-time_t
-dnskey_get_publish_epoch(const dnssec_key *key)
+time_t dnskey_get_publish_epoch(const dnskey_t *key)
 {
-    u32 ret;
+    uint32_t ret;
 
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
 
@@ -1005,12 +1092,11 @@ dnskey_get_publish_epoch(const dnssec_key *key)
     }
 
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
-    
+
     return ret;
 }
 
-void
-dnskey_set_created_epoch(dnssec_key *key, time_t t)
+void dnskey_set_created_epoch(dnskey_t *key, time_t t)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     key->epoch_created = t;
@@ -1018,8 +1104,7 @@ dnskey_set_created_epoch(dnssec_key *key, time_t t)
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 }
 
-void
-dnskey_set_publish_epoch(dnssec_key *key, time_t t)
+void dnskey_set_publish_epoch(dnskey_t *key, time_t t)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     key->epoch_publish = t;
@@ -1029,17 +1114,16 @@ dnskey_set_publish_epoch(dnssec_key *key, time_t t)
 
 /**
  * Returns the most relevant activation time.
- * 
+ *
  * activate > publish > created > now
- * 
+ *
  * @param key
- * @return 
+ * @return
  */
 
-time_t
-dnskey_get_activate_epoch(const dnssec_key *key)
+time_t dnskey_get_activate_epoch(const dnskey_t *key)
 {
-    u32 ret;
+    uint32_t ret;
 
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 
@@ -1061,12 +1145,11 @@ dnskey_get_activate_epoch(const dnssec_key *key)
     }
 
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
-    
+
     return ret;
 }
 
-void
-dnskey_set_activate_epoch(dnssec_key *key, time_t t)
+void dnskey_set_activate_epoch(dnskey_t *key, time_t t)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     key->epoch_activate = t;
@@ -1074,22 +1157,18 @@ dnskey_set_activate_epoch(dnssec_key *key, time_t t)
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 }
 
-
-
-
 /**
  * Returns the most relevant inactivation time.
- * 
+ *
  * inactive > delete > never
- * 
+ *
  * @param key
- * @return 
+ * @return
  */
 
-time_t
-dnskey_get_inactive_epoch(const dnssec_key *key)
+time_t dnskey_get_inactive_epoch(const dnskey_t *key)
 {
-    u32 ret;
+    uint32_t ret;
 
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 
@@ -1102,35 +1181,37 @@ dnskey_get_inactive_epoch(const dnssec_key *key)
         // if activation was a lie, inactivation is one too anyway
         if((key->epoch_created != 0) && (key->epoch_delete > key->epoch_created))
         {
-            s64 leniency = (key->epoch_delete - key->epoch_created) / 4;
+            int64_t leniency = (key->epoch_delete - key->epoch_created) / 4;
 
             if(leniency > 86400)
             {
                 leniency = 86400;
             }
 
-            s64 inactive_epoch = key->epoch_delete - leniency;
+            int64_t inactive_epoch = key->epoch_delete - leniency;
 
-            if(inactive_epoch > MAX_S32) inactive_epoch = MAX_S32;
-            ret = (s32)inactive_epoch;
+            if(inactive_epoch > INT32_MAX)
+            {
+                inactive_epoch = INT32_MAX;
+            }
+            ret = (int32_t)inactive_epoch;
         }
         else
         {
-            ret = MAX_S32;
+            ret = INT32_MAX;
         }
     }
     else
     {
-        ret = MAX_S32; // don't use MAX_U32 here
+        ret = INT32_MAX; // don't use U32_MAX here
     }
 
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
-    
+
     return ret;
 }
 
-void
-dnskey_set_inactive_epoch(dnssec_key *key, time_t t)
+void dnskey_set_inactive_epoch(dnskey_t *key, time_t t)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     key->epoch_inactive = t;
@@ -1140,20 +1221,19 @@ dnskey_set_inactive_epoch(dnssec_key *key, time_t t)
 
 /**
  * Returns the most relevant delete time.
- * 
+ *
  * delete > inactive > never
- * 
+ *
  * @param key
- * @return 
+ * @return
  */
 
-time_t
-dnskey_get_delete_epoch(const dnssec_key *key)
+time_t dnskey_get_delete_epoch(const dnskey_t *key)
 {
-    u32 ret;
+    uint32_t ret;
 
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
-    
+
     if(key->epoch_delete != 0)
     {
         ret = key->epoch_delete;
@@ -1163,109 +1243,109 @@ dnskey_get_delete_epoch(const dnssec_key *key)
         // if publication was a lie, delete is one too anyway
         if((key->epoch_created != 0) && (key->epoch_inactive > key->epoch_activate))
         {
-            s64 leniency = (key->epoch_inactive - key->epoch_activate) / 4;
+            int64_t leniency = (key->epoch_inactive - key->epoch_activate) / 4;
 
             if(leniency > 86400)
             {
                 leniency = 86400;
             }
 
-            s64 delete_epoch = key->epoch_inactive + leniency;
+            int64_t delete_epoch = key->epoch_inactive + leniency;
 
-            if(delete_epoch > MAX_S32) delete_epoch = MAX_S32;
-            ret = (s32)delete_epoch;
+            if(delete_epoch > INT32_MAX)
+            {
+                delete_epoch = INT32_MAX;
+            }
+            ret = (int32_t)delete_epoch;
         }
         else
         {
-            ret = MAX_S32;
+            ret = INT32_MAX;
         }
     }
     else
     {
-        ret = MAX_S32; // don't use MAX_U32 here
+        ret = INT32_MAX; // don't use U32_MAX here
     }
 
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
-    
+
     return ret;
 }
 
-void
-dnskey_set_delete_epoch(dnssec_key *key, time_t t)
+void dnskey_set_delete_epoch(dnskey_t *key, time_t t)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
-    key->epoch_delete= t;
+    key->epoch_delete = t;
     key->status |= DNSKEY_KEY_HAS_SMART_FIELD_DELETE;
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 }
 
 /**
- * 
+ *
  * Compares two keys for equality on a cryptographic point of view
  * Uses the tag, flags, algorithm, origin and key content.
- * 
+ *
  * @param a
  * @param b
- * 
- * @return TRUE iff the keys are the same.
+ *
+ * @return true iff the keys are the same.
  */
 
-bool
-dnskey_equals(const dnssec_key* a, const dnssec_key* b)
+bool dnskey_equals(const dnskey_t *a, const dnskey_t *b)
 {
     if(a == b)
     {
-        return TRUE;
-    }
-    
-    if(dnssec_key_tag_field_set(a) && dnssec_key_tag_field_set(b))
-    {
-       if(a->tag != b->tag)
-       {
-           return FALSE;
-       }
+        return true;
     }
 
-    if((a->flags == b->flags) && (a->algorithm == b->algorithm))
+    if(dnskey_tag_field_set(a) && dnskey_tag_field_set(b))
     {
-        /* Compare the origin */
-
-        if(strcmp(a->origin, b->origin) == 0)
+        if(a->tag != b->tag)
         {
-            /* Compare the content of the key */
-            
-            return a->vtbl->dnssec_key_equals(a, b);
+            return false;
         }
     }
 
-    return FALSE;
+    if((a->flags == b->flags) && (a->algorithm == b->algorithm))
+    {
+        /* Compare the origin */
+
+        if(strcmp(a->origin, b->origin) == 0)
+        {
+            /* Compare the content of the key */
+
+            return a->vtbl->dnskey_equals(a, b);
+        }
+    }
+
+    return false;
 }
 
 /**
- * 
+ *
  * Compares two keys for equality on a cryptographic point of view
  * Uses the tag, flags, algorithm, origin and public key content.
- * 
+ *
  * @param a
  * @param b
- * 
- * @return TRUE iff the keys are the same.
+ *
+ * @return true iff the keys are the same.
  */
 
-bool
-dnskey_public_equals(const dnssec_key *a, const dnssec_key *b)
+bool dnskey_public_equals(const dnskey_t *a, const dnskey_t *b)
 {
     if(a == b)
     {
-        return TRUE;
+        return true;
     }
-    
-    if(dnssec_key_tag_field_set(a) && dnssec_key_tag_field_set(b))
+
+    if(dnskey_tag_field_set(a) && dnskey_tag_field_set(b))
     {
-       if(a->tag != b->tag)
-       {
-           return FALSE;
-       }
+        if(a->tag != b->tag)
+        {
+            return false;
+        }
     }
 
     if((a->flags == b->flags) && (a->algorithm == b->algorithm))
@@ -1275,13 +1355,13 @@ dnskey_public_equals(const dnssec_key *a, const dnssec_key *b)
         if(strcmp(a->origin, b->origin) == 0)
         {
             /* Compare the content of the key */
-            
-            u8 rdata_a[4096];
-            u8 rdata_b[4096];
-            
-            u32 rdata_a_size = a->vtbl->dnssec_key_writerdata(a, rdata_a, sizeof(rdata_a));
-            u32 rdata_b_size = b->vtbl->dnssec_key_writerdata(b, rdata_b, sizeof(rdata_b));
-            
+
+            uint8_t  rdata_a[4096];
+            uint8_t  rdata_b[4096];
+
+            uint32_t rdata_a_size = a->vtbl->dnskey_writerdata(a, rdata_a, sizeof(rdata_a));
+            uint32_t rdata_b_size = b->vtbl->dnskey_writerdata(b, rdata_b, sizeof(rdata_b));
+
             if(rdata_a_size == rdata_b_size)
             {
                 bool ret = (memcmp(rdata_a, rdata_b, rdata_a_size) == 0);
@@ -1290,85 +1370,91 @@ dnskey_public_equals(const dnssec_key *a, const dnssec_key *b)
         }
     }
 
-    return FALSE;
+    return false;
 }
 
 /**
- * Returns TRUE if the tag and algorithm of the rdata are matching the ones of the key.
- * 
+ * Returns true if the tag and algorithm of the rdata are matching the ones of the key.
+ *
  * @param key
  * @param rdata
  * @param rdata_size
- * @return 
+ * @return
  */
 
-bool
-dnskey_matches_rdata(const dnssec_key *key, const u8 *rdata, u16 rdata_size)
+bool dnskey_matches_rdata(const dnskey_t *key, const uint8_t *rdata, uint16_t rdata_size)
 {
-     if(dnskey_get_algorithm(key) == rdata[3])
-     {
-        u16 key_tag = dnskey_get_tag_const(key);
-        u16 rdata_tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
-        
+    if(dnskey_get_algorithm(key) == rdata[3])
+    {
+        uint16_t key_tag = dnskey_get_tag_const(key);
+        uint16_t rdata_tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
+
         return key_tag == rdata_tag;
-     }
-     
-     return FALSE;
+    }
+
+    return false;
 }
 
-u16
-dnskey_get_tag(dnssec_key *key)
+uint16_t dnskey_get_tag(dnskey_t *key)
 {
     if((dnskey_state_get(key) & DNSKEY_KEY_TAG_SET) == 0)
     {
-        u8 rdata[2048];
+        uint8_t *rdata;
+        uint8_t  rdata_[2048];
 
-        u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
-        
-        yassert(rdata_size <= 2048);
-        
-        u16 tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
-        
+        uint32_t expected_rdata_size = key->vtbl->dnskey_rdatasize(key);
+        if(expected_rdata_size < sizeof(rdata_))
+        {
+            rdata = rdata_;
+        }
+        else
+        {
+            rdata = malloc(expected_rdata_size);
+        }
+
+        uint32_t rdata_size = key->vtbl->dnskey_writerdata(key, rdata, expected_rdata_size);
+
+        uint16_t tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
+
+        if(rdata != rdata_)
+        {
+            free(rdata);
+        }
+
         group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
         key->tag = tag;
         key->status |= DNSKEY_KEY_TAG_SET;
         group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     }
-    
+
     return key->tag;
 }
 
-u16
-dnskey_get_tag_const(const dnssec_key *key)
+uint16_t dnskey_get_tag_const(const dnskey_t *key)
 {
-    u16 tag;
-    
+    uint16_t tag;
+
     if(key->status & DNSKEY_KEY_TAG_SET)
     {
         tag = key->tag;
     }
     else
     {
-        u8 rdata[2048];
+        uint8_t  rdata[2048];
 
-        u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
-        
+        uint32_t rdata_size = key->vtbl->dnskey_writerdata(key, rdata, sizeof(rdata));
+
         yassert(rdata_size <= 2048);
-        
+
         tag = dnskey_get_tag_from_rdata(rdata, rdata_size);
     }
-    
+
     return tag;
 }
 
-u8
-dnskey_get_algorithm(const dnssec_key *key)
-{
-    return key->algorithm;
-}
+uint8_t        dnskey_get_algorithm(const dnskey_t *key) { return key->algorithm; }
 
-const u8 *
-dnskey_get_domain(const dnssec_key *key)
+const uint8_t *dnskey_get_domain(const dnskey_t *key)
 {
     if(key != NULL)
     {
@@ -1376,33 +1462,28 @@ dnskey_get_domain(const dnssec_key *key)
     }
     else
     {
-        return (const u8*)"\004NULL";
+        return (const uint8_t *)"\004NULL";
     }
 }
 
-bool
-dnskey_is_private(const dnssec_key *key)
-{
-    return (key->status & DNSKEY_KEY_IS_PRIVATE) != 0;
-}
+bool dnskey_is_private(const dnskey_t *key) { return (key->status & DNSKEY_KEY_IS_PRIVATE) != 0; }
 
 /**
  * Adds/Remove a key from a key chain.
  * The 'next' field of the key is used.
  * A key can only be in one chain at a time.
  * This is meant to be used in the keystore.
- * 
+ *
  * RC ok
- * 
+ *
  * @param keyp
  */
 
-void
-dnskey_add_to_chain(dnssec_key *key, dnssec_key **prevp)
+void dnskey_add_to_chain(dnskey_t *key, dnskey_t **prevp)
 {
     yassert(key->next == NULL);
-    
-    u16 key_tag = dnskey_get_tag(key);
+
+    uint16_t key_tag = dnskey_get_tag(key);
 
     while(*prevp != NULL)
     {
@@ -1420,9 +1501,9 @@ dnskey_add_to_chain(dnssec_key *key, dnssec_key **prevp)
     // append
 
     *prevp = key;
-    
+
     dnskey_acquire(key);
-    
+
     key->next = NULL;
 }
 
@@ -1431,25 +1512,24 @@ dnskey_add_to_chain(dnssec_key *key, dnssec_key **prevp)
  * The 'next' field of the key is used.
  * A key can only be in one chain at a time.
  * This is meant to be used in the keystore.
- * 
+ *
  * RC ok
- * 
+ *
  * @param keyp
  */
 
-void
-dnskey_remove_from_chain(dnssec_key *key, dnssec_key **prevp)
-{   
-    u16 key_tag = dnskey_get_tag(key);
+void dnskey_remove_from_chain(dnskey_t *key, dnskey_t **prevp)
+{
+    uint16_t key_tag = dnskey_get_tag(key);
 
     while(*prevp != NULL)
     {
-        u16 tag;
+        uint16_t tag;
         if((tag = dnskey_get_tag(*prevp)) >= key_tag)
         {
             if(tag == key_tag)
             {
-                dnssec_key *key_to_release = *prevp;
+                dnskey_t *key_to_release = *prevp;
                 *prevp = (*prevp)->next;
                 // now (and only now) the next field can (and must) be cleared
                 key_to_release->next = NULL;
@@ -1463,21 +1543,20 @@ dnskey_remove_from_chain(dnssec_key *key, dnssec_key **prevp)
     }
 }
 
-ya_result
-dnskey_new_public_key_from_stream(input_stream *is, dnssec_key** keyp)
+ya_result dnskey_new_public_key_from_stream(input_stream_t *is, dnskey_t **keyp)
 {
-    parser_s parser;
+    parser_t  parser;
     ya_result ret;
-    u16 rclass;
-    u16 rtype;
-    u16 flags;
-    u16 rdata_size;
-    char origin[MAX_DOMAIN_LENGTH + 1];
-    u8 fqdn[MAX_DOMAIN_LENGTH];
-    u8 rdata[1024 + 4];
+    uint16_t  rclass;
+    uint16_t  rtype;
+    uint16_t  flags;
+    uint16_t  rdata_size;
+    char      origin[DOMAIN_LENGTH_MAX + 1];
+    uint8_t   fqdn[DOMAIN_LENGTH_MAX];
+    uint8_t   rdata[65531 + 4];
 
     parser_init(&parser, "\"\"''", "()", ";#", "\040\t\r", "\\");
-    parser.close_last_stream = FALSE;
+    parser.close_last_stream = false;
     parser_push_stream(&parser, is);
 
     for(;;)
@@ -1486,14 +1565,14 @@ dnskey_new_public_key_from_stream(input_stream *is, dnssec_key** keyp)
         {
             if(!(ret & PARSER_WORD))
             {
-                if(ret & (PARSER_COMMENT|PARSER_EOL))
+                if(ret & (PARSER_COMMENT | PARSER_EOL))
                 {
                     continue;
                 }
 
                 if(ret & PARSER_EOF)
                 {
-                    input_stream *completed_stream = parser_pop_stream(&parser);
+                    input_stream_t *completed_stream = parser_pop_stream(&parser);
                     if(completed_stream != is)
                     {
                         input_stream_close(completed_stream);
@@ -1506,16 +1585,33 @@ dnskey_new_public_key_from_stream(input_stream *is, dnssec_key** keyp)
         }
 
         const char *text = parser_text(&parser);
-        u32 text_len = parser_text_length(&parser);
+        uint32_t    text_len = parser_text_length(&parser);
         memcpy(origin, text, text_len);
         origin[text_len] = '\0';
 
-        if(FAIL(ret = cstr_to_dnsname_with_check_len(fqdn, text, text_len)))
+        if(FAIL(ret = dnsname_init_check_nostar_with_charp(fqdn, text, text_len)))
         {
             break;
         }
 
-        if(FAIL(ret = parser_copy_next_class(&parser, &rclass)))
+        char word[32];
+
+        if(FAIL(ret = parser_copy_next_word(&parser, word, sizeof(word))))
+        {
+            return ret;
+        }
+
+        if(isdigit(word[0]))
+        {
+            if(FAIL(ret = parser_copy_next_word(&parser, word, sizeof(word))))
+            {
+                return ret;
+            }
+        }
+
+        ret = dns_class_from_name(word, &rclass);
+
+        if(FAIL(ret))
         {
             break;
         }
@@ -1580,7 +1676,7 @@ dnskey_new_public_key_from_stream(input_stream *is, dnssec_key** keyp)
             break;
         }
 
-        if(ret > 1024)
+        if(ret > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
         {
             ret = DNSSEC_ERROR_KEYISTOOBIG;
             break;
@@ -1600,48 +1696,45 @@ dnskey_new_public_key_from_stream(input_stream *is, dnssec_key** keyp)
 
 /**
  * Loads a public key from a file.
- * 
+ *
  * ie: Keu.+007+12345.key
- * 
+ *
  * RC ok
- * 
+ *
  * @param filename
  * @param keyp
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_new_public_key_from_file(const char *filename, dnssec_key** keyp)
+ya_result dnskey_new_public_key_from_file(const char *filename, dnskey_t **keyp)
 {
-    input_stream is;
-    ya_result ret;
+    input_stream_t is;
+    ya_result      ret;
 
-    
     if(keyp == NULL)
     {
         return UNEXPECTED_NULL_ARGUMENT_ERROR;
     }
-    
+
     *keyp = NULL;
-    
+
     if(ISOK(ret = file_input_stream_open(&is, filename)))
     {
         ret = dnskey_new_public_key_from_stream(&is, keyp);
         input_stream_close(&is);
     }
 
-    return ret;    
+    return ret;
 }
 
-ya_result
-dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char* path, u8 algorithm)
+ya_result dnskey_add_private_key_from_stream(input_stream_t *is, dnskey_t *key, const char *path, uint8_t algorithm)
 {
     dnskey_field_parser dnskey_parser = {NULL, &dnskey_field_dummy_parser};
-    parser_s parser;
-    s64 timestamp;
-    u32 smart_fields = 0;
-    ya_result ret;
-    u8 parsed_algorithm;
+    parser_t            parser;
+    int64_t             timestamp;
+    uint32_t            smart_fields = 0;
+    ya_result           ret;
+    uint8_t             parsed_algorithm;
 
     if(path == NULL)
     {
@@ -1653,14 +1746,14 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
     fd_mtime(fd_input_stream_get_filedescriptor(is), &timestamp);
 
     if(ISOK(ret = parser_init(&parser,
-                              "",      // by 2
-                              "",      // by 2
-                              "#;",    // by 1
+                              "",       // by 2
+                              "",       // by 2
+                              "#;",     // by 1
                               " \t\r:", // by 1
-                              ""       // by 1
-    )))
+                              ""        // by 1
+                              )))
     {
-        parser.close_last_stream = FALSE;
+        parser.close_last_stream = false;
 
         parser_push_stream(&parser, is);
 
@@ -1672,7 +1765,7 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
             {
                 if(!(ret & PARSER_WORD))
                 {
-                    if(ret & (PARSER_COMMENT|PARSER_EOL))
+                    if(ret & (PARSER_COMMENT | PARSER_EOL))
                     {
                         continue;
                     }
@@ -1683,14 +1776,14 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                 }
             }
 
-            // u32 label_len = parser_text_length(&parser);
+            // uint32_t label_len = parser_text_length(&parser);
             const char *label = parser_text(&parser);
             // makes the word asciiz (need to be undone)
             parser_text_asciiz(&parser);
 #if DEBUG
             log_debug("dnskey: parsing %s::%s", path, label);
 #endif
-            string_node *node = string_set_find(&dnssec_key_load_private_keywords_set, label);
+            string_treemap_node_t *node = string_treemap_find(&dnskey_load_private_keywords_set, label);
             // makes the word asciiz (need to be undone)
             parser_text_unasciiz(&parser);
 
@@ -1705,7 +1798,7 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                     break;
                 }
 
-                u32 word_len = parser_text_length(&parser);
+                uint32_t    word_len = parser_text_length(&parser);
                 const char *word = parser_text(&parser);
 
                 switch(node->value)
@@ -1833,12 +1926,14 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                             dnskey_rsa_parse_init(&dnskey_parser);
                             break;
                         }
+#if DNSCORE_HAS_DSA_SUPPORT
                         case DNSKEY_ALGORITHM_DSASHA1:
                         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
                         {
                             dnskey_dsa_parse_init(&dnskey_parser);
                             break;
                         }
+#endif
 #if DNSCORE_HAS_ECDSA_SUPPORT
                         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
                         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
@@ -1855,6 +1950,51 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                             break;
                         }
 #endif
+#if DNSCORE_HAS_OQS_SUPPORT
+                        case DNSKEY_ALGORITHM_DILITHIUM2:
+                        case DNSKEY_ALGORITHM_DILITHIUM3:
+                        case DNSKEY_ALGORITHM_DILITHIUM5:
+                        case DNSKEY_ALGORITHM_FALCON512:
+                        case DNSKEY_ALGORITHM_FALCON1024:
+                        case DNSKEY_ALGORITHM_FALCONPAD512:
+                        case DNSKEY_ALGORITHM_FALCONPAD1024:
+                        case DNSKEY_ALGORITHM_SPHINCSSHA2128F:
+                        case DNSKEY_ALGORITHM_SPHINCSSHA2128S:
+                        case DNSKEY_ALGORITHM_SPHINCSSHA2192F:
+                        case DNSKEY_ALGORITHM_SPHINCSSHA2192S:
+                        case DNSKEY_ALGORITHM_SPHINCSSHA2256F:
+                        case DNSKEY_ALGORITHM_SPHINCSSHA2256S:
+                        case DNSKEY_ALGORITHM_SPHINCSSHAKE128F:
+                        case DNSKEY_ALGORITHM_SPHINCSSHAKE128S:
+                        case DNSKEY_ALGORITHM_SPHINCSSHAKE192F:
+                        case DNSKEY_ALGORITHM_SPHINCSSHAKE192S:
+                        case DNSKEY_ALGORITHM_SPHINCSSHAKE256F:
+                        case DNSKEY_ALGORITHM_SPHINCSSHAKE256S:
+                        case DNSKEY_ALGORITHM_MAYO1:
+                        case DNSKEY_ALGORITHM_MAYO2:
+                        case DNSKEY_ALGORITHM_MAYO3:
+                        case DNSKEY_ALGORITHM_MAYO5:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP128BALANCED:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP128FAST:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP128SMALL:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP192BALANCED:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP192FAST:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP192SMALL:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP256BALANCED:
+                        // case DNSKEY_ALGORITHM_CROSS_RSDP256FAST:
+                        case DNSKEY_ALGORITHM_CROSS_RSDP256SMALL:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG128BALANCED:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG128FAST:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG128SMALL:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG192BALANCED:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG192FAST:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG192SMALL:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG256BALANCED:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG256FAST:
+                        case DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL:
+                            dnskey_postquantumsafe_parse_init(&dnskey_parser);
+                            break;
+#endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
                         case DNSKEY_ALGORITHM_DUMMY:
                         {
@@ -1865,8 +2005,8 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
                         default:
                         {
                             ret = DNSSEC_ERROR_UNSUPPORTEDKEYALGORITHM;
-                            goto dnskey_new_private_key_from_file_failure;  /// *** GOTO *** ///
-//                              break;
+                            goto dnskey_new_private_key_from_file_failure; /// *** GOTO *** ///
+                                                                           //                              break;
                         }
                     }
                 }
@@ -1900,7 +2040,7 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
 
             key->status |= smart_fields;
 
-            switch(smart_fields & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE))
+            switch(smart_fields & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH | DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE))
             {
                 case DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH:
                 {
@@ -1915,10 +2055,10 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
             }
         }
 
-        dnskey_new_private_key_from_file_failure:
+    dnskey_new_private_key_from_file_failure:
 
         dnskey_parser.vtbl->finalise(&dnskey_parser);
-        parser_finalize(&parser);   // also closes the stream
+        parser_finalize(&parser); // also closes the stream
 
         if(ISOK(ret))
         {
@@ -1938,50 +2078,49 @@ dnskey_add_private_key_from_stream(input_stream *is, dnssec_key *key, const char
             dnskey_release(key);
             key = NULL;
         }
-   }
+    }
 
     return ret;
 }
 
 /**
  * Loads a private key from a file.
- *  
+ *
  * ie: Keu.+007+12345.private
- * 
+ *
  * The public key must be in the same folder as the private key.
- * 
+ *
  * ie: Keu.+007+12345.key
- * 
+ *
  * RC ok
- * 
+ *
  * @param filename
  * @param keyp
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
+ya_result dnskey_new_private_key_from_file(const char *filename, dnskey_t **keyp)
 {
-    dnssec_key *key;
+    dnskey_t *key = NULL;
 
     ya_result ret;
-    //u32 smart_fields = 0;
+    // uint32_t smart_fields = 0;
     int path_len;
     int algorithm = -1;
     int tag;
-    //u8 parsed_algorithm;
-    //bool ext_is_private;
-    char extension[16];
-    char domain[256];
-    u8 origin[256];
-    char path[PATH_MAX];
-    
+    // uint8_t parsed_algorithm;
+    // bool ext_is_private;
+    char    extension[16];
+    char    domain[256];
+    uint8_t origin[256];
+    char    path[PATH_MAX];
+
     if(keyp == NULL)
     {
         return INVALID_ARGUMENT_ERROR;
     }
-    
-    const char *name = strrchr(filename,'/');
+
+    const char *name = strrchr(filename, '/');
     if(name == NULL)
     {
         name = filename;
@@ -1990,29 +2129,29 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
     {
         ++name;
     }
-    
+
     if(sscanf(name, "K%255[^+]+%03d+%05d.%15s", domain, &algorithm, &tag, extension) != 4)
     {
         log_err("dnssec: don't know how to parse key file name: '%s'", filename);
         return PARSESTRING_ERROR;
     }
-    
-    if(FAIL(ret = cstr_to_dnsname_with_check(origin, domain)))
+
+    if(FAIL(ret = dnsname_init_check_star_with_cstr(origin, domain)))
     {
         log_err("dnssec: could not parse domain name from file name: '%s': %r", filename, ret);
         return ret;
     }
-    
+
     path_len = strlen(filename);
-    
+
     if(memcmp(extension, "private", 7) == 0)
     {
-        //ext_is_private = TRUE;
+        // ext_is_private = true;
         path_len -= 7;
     }
     else if(memcmp(extension, "key", 3) == 0)
     {
-        //ext_is_private = FALSE;
+        // ext_is_private = false;
         path_len -= 3;
     }
     else
@@ -2020,33 +2159,36 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
         log_err("dnssec: expected .private or .key extension for the file: '%s'", filename);
         return INVALID_STATE_ERROR;
     }
-    
+
     memcpy(path, filename, path_len);
-    
+
     // first open the public key file, to get the flags
-    
+
     memcpy(&path[path_len], "key", 4);
     if(FAIL(ret = dnskey_new_public_key_from_file(path, &key))) // RC
     {
         return ret;
     }
-    
+
     // then open the private key file
-    
+
     key->nid = 0; // else it will not be editable // scan-build false positive. key cannot be NULL.
-    
+
     memcpy(&path[path_len], "private", 8);
-    
+
     // open parser
-    input_stream is;
+    input_stream_t is;
     if(ISOK(ret = file_input_stream_open(&is, filename)))
     {
-        ret = dnskey_add_private_key_from_stream(&is, key, path, algorithm);
+        if(FAIL(ret = dnskey_add_private_key_from_stream(&is, key, path, algorithm)))
+        {
+            key = NULL;
+        }
         input_stream_close(&is);
     }
-    
+
     *keyp = key;
-    
+
     return ret;
 }
 
@@ -2059,14 +2201,13 @@ dnskey_new_private_key_from_file(const char *filename, dnssec_key **keyp)
  * @return
  */
 
-ya_result
-dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os)
+ya_result dnskey_store_private_key_to_stream(dnskey_t *key, output_stream_t *os)
 {
     yassert(os != NULL);
     yassert(key != NULL);
 
     checked_output_stream_data_t chkos_data;
-    output_stream chkos;
+    output_stream_t              chkos;
     checked_output_stream_init(&chkos, os, &chkos_data);
     os = &chkos;
 
@@ -2079,39 +2220,43 @@ dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os)
 
     // internal fields
 
-    key->vtbl->dnssec_key_print_fields(key, os);
+    int ret = key->vtbl->dnskey_print_fields(key, os);
+    if(ret < 0)
+    {
+        return ret;
+    }
 
     // time fields : all are stored as an UTC YYYYMMDDhhmmss
 
-    format_writer epoch = {packedepoch_format_handler_method, NULL};
+    format_writer_t epoch = {packedepoch_format_handler_method, NULL};
 
     if(key->epoch_created != 0)
     {
-        epoch.value = (void*)(intptr)key->epoch_created;
+        epoch.value = (void *)(intptr_t)key->epoch_created;
         osformatln(os, "Created: %w", &epoch);
     }
 
     if(key->epoch_publish != 0)
     {
-        epoch.value = (void*)(intptr)key->epoch_publish;
+        epoch.value = (void *)(intptr_t)key->epoch_publish;
         osformatln(os, "Publish: %w", &epoch);
     }
 
     if(key->epoch_activate != 0)
     {
-        epoch.value = (void*)(intptr)key->epoch_activate;
+        epoch.value = (void *)(intptr_t)key->epoch_activate;
         osformatln(os, "Activate: %w", &epoch);
     }
 
     if(key->epoch_inactive != 0)
     {
-        epoch.value = (void*)(intptr)key->epoch_inactive;
+        epoch.value = (void *)(intptr_t)key->epoch_inactive;
         osformatln(os, "Inactive: %w", &epoch);
     }
 
     if(key->epoch_delete != 0)
     {
-        epoch.value = (void*)(intptr)key->epoch_delete;
+        epoch.value = (void *)(intptr_t)key->epoch_delete;
         osformatln(os, "Delete: %w", &epoch);
     }
 
@@ -2119,23 +2264,22 @@ dnskey_store_private_key_to_stream(dnssec_key *key, output_stream *os)
 }
 
 /**
- * 
+ *
  * Save the private part of a key to a file with the given name
- * 
+ *
  * @param key
  * @param filename
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_store_private_key_to_file(dnssec_key *key, const char *filename)
+ya_result dnskey_store_private_key_to_file(dnskey_t *key, const char *filename)
 {
     yassert(filename != NULL);
     yassert(key != NULL);
-    
-    output_stream os;
-    ya_result ret;
-        
+
+    output_stream_t os;
+    ya_result       ret;
+
     if(ISOK(ret = file_output_stream_create(&os, filename, 0644)))
     {
         buffer_output_stream_init(&os, &os, 4096);
@@ -2149,7 +2293,7 @@ dnskey_store_private_key_to_file(dnssec_key *key, const char *filename)
             unlink(filename);
         }
     }
-    
+
     return ret;
 }
 
@@ -2162,49 +2306,62 @@ dnskey_store_private_key_to_file(dnssec_key *key, const char *filename)
  * @return
  */
 
-ya_result
-dnskey_store_public_key_to_stream(dnssec_key *key, output_stream *os)
+ya_result dnskey_store_public_key_to_stream(dnskey_t *key, output_stream_t *os)
 {
-    u8 rdata[2048];
+    uint8_t *rdata;
+    uint8_t  rdata_buffer[2048];
 
-    if(key->vtbl->dnssec_key_rdatasize(key) < sizeof(rdata))
+    uint32_t key_size = key->vtbl->dnskey_rdatasize(key);
+
+    if(key_size <= sizeof(rdata_buffer))
     {
-        checked_output_stream_data_t chkos_data;
-        output_stream chkos;
-        checked_output_stream_init(&chkos, os, &chkos_data);
-        os = &chkos;
-
-        int rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
-        rdata_desc dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
-
-        osformatln(os, "; This is a key, keyid %d, for domain %{dnsname}", dnskey_get_tag(key), key->owner_name);
-        osformatln(os, "%{dnsname} IN %{typerdatadesc}", key->owner_name, &dnskeyrdata);
-
-        return checked_output_stream_error(os);
+        rdata = rdata_buffer;
     }
     else
     {
-        return BUFFER_WOULD_OVERFLOW;
+        if(key_size > DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+
+        rdata = malloc(key_size);
     }
+
+    checked_output_stream_data_t chkos_data;
+    output_stream_t              chkos;
+    checked_output_stream_init(&chkos, os, &chkos_data);
+    os = &chkos;
+
+    int          rdata_size = key->vtbl->dnskey_writerdata(key, rdata, key_size);
+    rdata_desc_t dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
+
+    if(rdata != rdata_buffer)
+    {
+        free(rdata);
+    }
+
+    osformatln(os, "; This is a key, keyid %d, for domain %{dnsname}", dnskey_get_tag(key), key->owner_name);
+    osformatln(os, "%{dnsname} IN %{typerdatadesc}", key->owner_name, &dnskeyrdata);
+
+    return checked_output_stream_error(os);
 }
 
 /**
- * 
+ *
  * Save the public part of a key to a file with the given name
- * 
+ *
  * @param key
  * @param filename
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_store_public_key_to_file(dnssec_key *key, const char *filename)
+ya_result dnskey_store_public_key_to_file(dnskey_t *key, const char *filename)
 {
     ya_result ret;
 
-    if(key->vtbl->dnssec_key_rdatasize(key) < 2048)
+    if(key->vtbl->dnskey_rdatasize(key) < DNSSEC_MAXIMUM_KEY_SIZE_BYTES)
     {
-        output_stream os;
+        output_stream_t os;
 
         if(ISOK(ret = file_output_stream_create(&os, filename, 0644)))
         {
@@ -2219,33 +2376,27 @@ dnskey_store_public_key_to_file(dnssec_key *key, const char *filename)
     {
         ret = DNSSEC_ERROR_KEYISTOOBIG; // key too big (should never happen)
     }
-    
+
     return ret;
 }
 
 /**
  * Save the private part of a key to a dir
- * 
+ *
  * @param key
  * @param dirname
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_store_private_key_to_dir(dnssec_key *key, const char *dirname)
+ya_result dnskey_store_private_key_to_dir(dnskey_t *key, const char *dirname)
 {
     ya_result ret;
-    char filename[PATH_MAX];
-    
-    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.private",
-            dirname,
-            key->owner_name,
-            key->algorithm,
-            dnskey_get_tag(key)
-            )))
+    char      filename[PATH_MAX];
+
+    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.private", dirname, key->owner_name, key->algorithm, dnskey_get_tag(key))))
     {
         ret = file_exists(filename);
-    
+
         if(ret == 0)
         {
             ret = dnskey_store_private_key_to_file(key, filename);
@@ -2256,34 +2407,28 @@ dnskey_store_private_key_to_dir(dnssec_key *key, const char *dirname)
             ret = DNSSEC_ERROR_CANNOT_WRITE_NEW_FILE;
         }
     }
-    
+
     return ret;
 }
 
 /**
- * 
+ *
  * Saves the public part of the key in a dir
- * 
+ *
  * @param key
  * @param dirname
- * @return 
+ * @return
  */
 
-ya_result
-dnskey_store_public_key_to_dir(dnssec_key *key, const char *dirname)
+ya_result dnskey_store_public_key_to_dir(dnskey_t *key, const char *dirname)
 {
     ya_result ret;
-    char filename[PATH_MAX];
-    
-    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.key",
-            dirname,
-            key->owner_name,
-            key->algorithm,
-            dnskey_get_tag(key)
-            )))
+    char      filename[PATH_MAX];
+
+    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.key", dirname, key->owner_name, key->algorithm, dnskey_get_tag(key))))
     {
         ret = file_exists(filename);
-    
+
         if(ret == 0)
         {
             ret = dnskey_store_public_key_to_file(key, filename);
@@ -2294,24 +2439,23 @@ dnskey_store_public_key_to_dir(dnssec_key *key, const char *dirname)
             ret = DNSSEC_ERROR_CANNOT_WRITE_NEW_FILE;
         }
     }
-    
+
     return ret;
 }
 
 /**
  * Save both parts of the key to the directory.
- * 
+ *
  * @param key
  * @param dir
- * 
+ *
  * @return an error code
  */
 
-ya_result
-dnskey_store_keypair_to_dir(dnssec_key *key, const char *dir)
+ya_result dnskey_store_keypair_to_dir(dnskey_t *key, const char *dir)
 {
     ya_result ret;
-    
+
     if(ISOK(ret = dnskey_store_public_key_to_dir(key, dir)))
     {
         if(FAIL(ret = dnskey_store_private_key_to_dir(key, dir)))
@@ -2320,22 +2464,16 @@ dnskey_store_keypair_to_dir(dnssec_key *key, const char *dir)
             dnskey_delete_public_key_from_dir(key, dir);
         }
     }
-    
+
     return ret;
 }
 
-ya_result
-dnskey_delete_public_key_from_dir(dnssec_key *key, const char *dirname)
+ya_result dnskey_delete_public_key_from_dir(dnskey_t *key, const char *dirname)
 {
     ya_result ret;
-    char filename[PATH_MAX];
+    char      filename[PATH_MAX];
 
-    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.key",
-                           dirname,
-                           key->owner_name,
-                           key->algorithm,
-                           dnskey_get_tag(key)
-    )))
+    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.key", dirname, key->owner_name, key->algorithm, dnskey_get_tag(key))))
     {
         unlink(filename);
         ret = ERRNO_ERROR;
@@ -2344,18 +2482,12 @@ dnskey_delete_public_key_from_dir(dnssec_key *key, const char *dirname)
     return ret;
 }
 
-ya_result
-dnskey_delete_private_key_from_dir(dnssec_key *key, const char *dirname)
+ya_result dnskey_delete_private_key_from_dir(dnskey_t *key, const char *dirname)
 {
     ya_result ret;
-    char filename[PATH_MAX];
+    char      filename[PATH_MAX];
 
-    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.private",
-                           dirname,
-                           key->owner_name,
-                           key->algorithm,
-                           dnskey_get_tag(key)
-    )))
+    if(ISOK(ret = snformat(filename, sizeof(filename), "%s/K%{dnsname}+%03d+%05d.private", dirname, key->owner_name, key->algorithm, dnskey_get_tag(key))))
     {
         unlink(filename);
         ret = ERRNO_ERROR;
@@ -2364,8 +2496,7 @@ dnskey_delete_private_key_from_dir(dnssec_key *key, const char *dirname)
     return ret;
 }
 
-ya_result
-dnskey_delete_keypair_from_dir(dnssec_key *key, const char *dirname)
+ya_result dnskey_delete_keypair_from_dir(dnskey_t *key, const char *dirname)
 {
     ya_result ret1 = dnskey_delete_public_key_from_dir(key, dirname);
     ya_result ret2 = dnskey_delete_private_key_from_dir(key, dirname);
@@ -2379,57 +2510,47 @@ dnskey_delete_keypair_from_dir(dnssec_key *key, const char *dirname)
     }
 }
 
-bool
-dnskey_is_expired(const dnssec_key *key, time_t now)
-{
-    return (key->epoch_delete != 0 && key->epoch_delete < now) || (key->epoch_inactive != 0 && key->epoch_inactive < now);
-}
+bool dnskey_is_expired(const dnskey_t *key, time_t now) { return (key->epoch_delete != 0 && key->epoch_delete < now) || (key->epoch_inactive != 0 && key->epoch_inactive < now); }
 
-bool
-dnskey_is_expired_now(const dnssec_key *key)
+bool dnskey_is_expired_now(const dnskey_t *key)
 {
     time_t now = time(NULL);
-    bool ret = dnskey_is_expired(key, now);
+    bool   ret = dnskey_is_expired(key, now);
     return ret;
 }
 
-int
-dnskey_get_size(const dnssec_key *key)
+int dnskey_get_size(const dnskey_t *key)
 {
-    int bits_size = key->vtbl->dnssec_key_size(key);
+    int bits_size = key->vtbl->dnskey_size(key);
     return bits_size;
 }
 
-u16
-dnskey_get_flags(const dnssec_key *key)
+uint16_t dnskey_get_flags(const dnskey_t *key)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
-    u16 flags = key->flags;
+    uint16_t flags = key->flags;
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
     return flags;
 }
 
-void
-dnskey_state_enable(dnssec_key *key, u32 status)
+void dnskey_state_enable(dnskey_t *key, uint32_t status)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     key->status |= status;
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 }
 
-void
-dnskey_state_disable(dnssec_key *key, u32 status)
+void dnskey_state_disable(dnskey_t *key, uint32_t status)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
     key->status &= ~status;
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_WRITE);
 }
 
-u32
-dnskey_state_get(const dnssec_key *key)
+uint32_t dnskey_state_get(const dnskey_t *key)
 {
     group_mutex_lock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
-    u32 state = key->status;
+    uint32_t state = key->status;
     group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
     return state;
 }
@@ -2438,44 +2559,46 @@ dnskey_state_get(const dnssec_key *key)
  * Initialises internal info.
  */
 
-void
-dnskey_init()
+void dnskey_init()
 {
-    if(dnssec_key_load_private_keywords_set == STRING_SET_EMPTY)
+    if(dnskey_load_private_keywords_set == STRING_SET_EMPTY)
     {
-        for(int i = 0; dnssec_key_load_private_keywords_common_names[i].data != NULL; i++)
+        for(int_fast32_t i = 0; dnskey_load_private_keywords_common_names[i].data != NULL; i++)
         {
-            string_node *node = string_set_insert(&dnssec_key_load_private_keywords_set, dnssec_key_load_private_keywords_common_names[i].data);
-            node->value = dnssec_key_load_private_keywords_common_names[i].id;
+            string_treemap_node_t *node = string_treemap_insert(&dnskey_load_private_keywords_set, dnskey_load_private_keywords_common_names[i].data);
+            node->value = dnskey_load_private_keywords_common_names[i].id;
         }
     }
 }
 
-void
-dnskey_finalize()
-{
-    string_set_destroy(&dnssec_key_load_private_keywords_set);
-}
+void dnskey_finalize() { string_treemap_finalise(&dnskey_load_private_keywords_set); }
 
 /**
  * Returns true if the key is supposed to have been added in the zone at the chosen time already.
- * 
+ *
  * @param key
  * @param t
- * @return 
+ * @return
  */
 
-bool
-dnskey_is_published(const dnssec_key *key, time_t t)
+bool dnskey_is_published(const dnskey_t *key, time_t t)
 {
     // there is a publish time and it has occurred
 
-    if(dnskey_has_explicit_publish(key) && (key->epoch_publish <= t))
+    if(dnskey_has_explicit_publish(key))
     {
-        bool ret = !dnskey_is_unpublished(key, t);
-        return ret;
+        // if between publish and unpublish
+        if(key->epoch_publish <= t)
+        {
+            bool ret = !dnskey_is_unpublished(key, t);
+            return ret;
+        }
+        else
+        {
+            return false;
+        }
     }
-    
+
     // there is no publish time
 
     return !dnskey_is_unpublished(key, t);
@@ -2483,30 +2606,29 @@ dnskey_is_published(const dnssec_key *key, time_t t)
 
 /**
  * Returns true if the key is supposed to have been removed from the zone at the chosen time already.
- * 
+ * If no such time is defined, returns false.
+ *
  * @param key
  * @param t
- * @return 
+ * @return
  */
 
-bool
-dnskey_is_unpublished(const dnssec_key *key, time_t t)
+bool dnskey_is_unpublished(const dnskey_t *key, time_t t)
 {
-    // true if and only if there is a removal time that occurred already 
-    
+    // true if and only if there is a removal time that occurred already
+
     return dnskey_has_explicit_delete(key) && (key->epoch_delete <= t);
 }
 
 /**
  * Returns true if the key is supposed to be used for signatures.
- * 
+ *
  * @param key
  * @param t
- * @return 
+ * @return
  */
 
-bool
-dnskey_is_activated(const dnssec_key *key, time_t t)
+bool dnskey_is_activated(const dnskey_t *key, time_t t)
 {
     // there is a active time and it has occurred
 
@@ -2517,11 +2639,11 @@ dnskey_is_activated(const dnssec_key *key, time_t t)
         group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
         if(epoch_activate <= t) // activation time passed
         {
-            bool ret = !dnskey_is_deactivated(key, t);  // not deactivated yet ?
+            bool ret = !dnskey_is_deactivated(key, t); // not deactivated yet ?
             return ret;
         }
 
-        return FALSE;   // not active yet
+        return false; // not active yet
     }
     else
     {
@@ -2535,8 +2657,7 @@ dnskey_is_activated(const dnssec_key *key, time_t t)
  * Assumes we are in 'leniency' seconds in the future for activation (and in the present for deactivation)
  */
 
-bool
-dnskey_is_activated_lenient(const dnssec_key *key, time_t t, u32 leniency)
+bool dnskey_is_activated_lenient(const dnskey_t *key, time_t t, uint32_t leniency)
 {
     // there is a active time and it has occurred
 
@@ -2547,11 +2668,11 @@ dnskey_is_activated_lenient(const dnssec_key *key, time_t t, u32 leniency)
         group_mutex_unlock(&dnskey_rc_mtx, GROUP_MUTEX_READ);
         if(epoch_activate <= t + leniency) // activation time passed
         {
-            bool ret = !dnskey_is_deactivated(key, t);  // not deactivated yet ?
+            bool ret = !dnskey_is_deactivated(key, t); // not deactivated yet ?
             return ret;
         }
 
-        return FALSE;   // not active yet
+        return false; // not active yet
     }
     else
     {
@@ -2563,14 +2684,13 @@ dnskey_is_activated_lenient(const dnssec_key *key, time_t t, u32 leniency)
 
 /**
  * Returns true if the key must not be used for signatures anymore.
- * 
+ *
  * @param key
  * @param t
- * @return 
+ * @return
  */
 
-bool
-dnskey_is_deactivated(const dnssec_key *key, time_t t)
+bool dnskey_is_deactivated(const dnskey_t *key, time_t t)
 {
     // there is a inactive time and it has occurred
 
@@ -2590,78 +2710,46 @@ dnskey_is_deactivated(const dnssec_key *key, time_t t)
     }
 }
 
-bool
-dnskey_has_explicit_publish(const dnssec_key *key)
+bool dnskey_has_explicit_publish(const dnskey_t *key) { return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH) != 0; }
+
+bool dnskey_has_explicit_delete(const dnskey_t *key) { return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_DELETE) != 0; }
+
+bool dnskey_has_explicit_publish_or_delete(const dnskey_t *key) { return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH | DNSKEY_KEY_HAS_SMART_FIELD_DELETE)) != 0; }
+
+bool dnskey_has_explicit_publish_and_delete(const dnskey_t *key)
 {
-    return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH) != 0;
+    return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH | DNSKEY_KEY_HAS_SMART_FIELD_DELETE)) == (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH | DNSKEY_KEY_HAS_SMART_FIELD_DELETE);
 }
 
-bool
-dnskey_has_explicit_delete(const dnssec_key *key)
+bool dnskey_has_explicit_activate(const dnskey_t *key) { return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE) != 0; }
+
+bool dnskey_has_explicit_deactivate(const dnskey_t *key) { return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE) != 0; }
+
+bool dnskey_has_activate_and_deactivate(const dnskey_t *key)
 {
-    return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_DELETE) != 0;
+    return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE | DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE)) == (DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE | DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE);
 }
 
-bool
-dnskey_has_explicit_publish_or_delete(const dnssec_key *key)
-{
-    return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE)) != 0;
-}
+bool                     dnskey_has_activate_or_deactivate(const dnskey_t *key) { return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE | DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE)) != 0; }
 
-bool
-dnskey_has_explicit_publish_and_delete(const dnssec_key *key)
-{
-    return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE)) == (DNSKEY_KEY_HAS_SMART_FIELD_PUBLISH|DNSKEY_KEY_HAS_SMART_FIELD_DELETE);
-}
+uint8_t                  dnskey_supported_algorithm_count() { return sizeof(dnskey_supported_algorithms) / sizeof(dnskey_supported_algorithms[0]); }
 
-bool
-dnskey_has_explicit_activate(const dnssec_key *key)
-{
-    return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE) != 0;
-}
-
-bool
-dnskey_has_explicit_deactivate(const dnssec_key *key)
-{
-    return (dnskey_state_get(key) & DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE) != 0;
-}
-
-bool
-dnskey_has_activate_and_deactivate(const dnssec_key *key)
-{
-    return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE)) == (DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE);
-}
-
-bool
-dnskey_has_activate_or_deactivate(const dnssec_key *key)
-{
-    return (dnskey_state_get(key) & (DNSKEY_KEY_HAS_SMART_FIELD_ACTIVATE|DNSKEY_KEY_HAS_SMART_FIELD_INACTIVE)) != 0;
-}
-
-u8
-dnskey_supported_algorithm_count()
-{
-    return sizeof(dnskey_supported_algorithms)/sizeof(dnskey_supported_algorithms[0]);
-}
-
-const dnskey_features*
-dnskey_supported_algorithm_by_index(u8 index)
+const dnskey_features_t *dnskey_supported_algorithm_by_index(uint8_t index)
 {
     if(index < dnskey_supported_algorithm_count())
     {
-        const dnskey_features* ret = &dnskey_supported_algorithms[index];
+        const dnskey_features_t *ret = &dnskey_supported_algorithms[index];
         return ret;
     }
 
     return NULL;
 }
 
-const dnskey_features*
-dnskey_supported_algorithm(u8 algorithm)
+const dnskey_features_t *dnskey_supported_algorithm(uint8_t algorithm)
 {
-    for(int i = 0; i < dnskey_supported_algorithm_count(); ++i)
+    for(int_fast32_t i = 0; i < dnskey_supported_algorithm_count(); ++i)
     {
-        const dnskey_features* ret = &dnskey_supported_algorithms[i];
+        const dnskey_features_t *ret = &dnskey_supported_algorithms[i];
         if(ret->algorithm == algorithm)
         {
             return ret;
@@ -2671,7 +2759,7 @@ dnskey_supported_algorithm(u8 algorithm)
     return NULL;
 }
 
-ya_result dnskey_newinstance(u32 size, u8 algorithm, u16 flags, const char* origin, dnssec_key** out_key)
+ya_result dnskey_newinstance(uint32_t size, uint8_t algorithm, uint16_t flags, const char *origin, dnskey_t **out_key)
 {
     if(size > DNSSEC_MAXIMUM_KEY_SIZE)
     {
@@ -2688,10 +2776,12 @@ ya_result dnskey_newinstance(u32 size, u8 algorithm, u16 flags, const char* orig
         case DNSKEY_ALGORITHM_RSASHA512_NSEC3:
             ret = dnskey_rsa_newinstance(size, algorithm, flags, origin, out_key);
             break;
+#if DNSCORE_HAS_DSA_SUPPORT
         case DNSKEY_ALGORITHM_DSASHA1:
         case DNSKEY_ALGORITHM_DSASHA1_NSEC3:
             ret = dnskey_dsa_newinstance(size, algorithm, flags, origin, out_key);
             break;
+#endif
 #if DNSCORE_HAS_ECDSA_SUPPORT
         case DNSKEY_ALGORITHM_ECDSAP256SHA256:
         case DNSKEY_ALGORITHM_ECDSAP384SHA384:
@@ -2702,6 +2792,51 @@ ya_result dnskey_newinstance(u32 size, u8 algorithm, u16 flags, const char* orig
         case DNSKEY_ALGORITHM_ED25519:
         case DNSKEY_ALGORITHM_ED448:
             ret = dnskey_eddsa_newinstance(size, algorithm, flags, origin, out_key);
+            break;
+#endif
+#if DNSCORE_HAS_OQS_SUPPORT
+        case DNSKEY_ALGORITHM_DILITHIUM2:
+        case DNSKEY_ALGORITHM_DILITHIUM3:
+        case DNSKEY_ALGORITHM_DILITHIUM5:
+        case DNSKEY_ALGORITHM_FALCON512:
+        case DNSKEY_ALGORITHM_FALCON1024:
+        case DNSKEY_ALGORITHM_FALCONPAD512:
+        case DNSKEY_ALGORITHM_FALCONPAD1024:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2128F:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2128S:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2192F:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2192S:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2256F:
+        case DNSKEY_ALGORITHM_SPHINCSSHA2256S:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE128F:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE128S:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE192F:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE192S:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE256F:
+        case DNSKEY_ALGORITHM_SPHINCSSHAKE256S:
+        case DNSKEY_ALGORITHM_MAYO1:
+        case DNSKEY_ALGORITHM_MAYO2:
+        case DNSKEY_ALGORITHM_MAYO3:
+        case DNSKEY_ALGORITHM_MAYO5:
+        case DNSKEY_ALGORITHM_CROSS_RSDP128BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDP128FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDP128SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDP192BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDP192FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDP192SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDP256BALANCED:
+        // case DNSKEY_ALGORITHM_CROSS_RSDP256FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDP256SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG128BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG128FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG128SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG192BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG192FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG192SMALL:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG256BALANCED:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG256FAST:
+        case DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL:
+            ret = dnskey_postquantumsafe_newinstance(size, algorithm, flags, origin, out_key);
             break;
 #endif
 #ifdef DNSKEY_ALGORITHM_DUMMY
@@ -2726,12 +2861,24 @@ ya_result dnskey_newinstance(u32 size, u8 algorithm, u16 flags, const char* orig
     return ret;
 }
 
-void
-dnskey_init_dns_resource_record(dnssec_key *key, s32 ttl, dns_resource_record *rr)
+void dnskey_init_dns_resource_record(dnskey_t *key, int32_t ttl, dns_resource_record_t *rr)
 {
-    u8 rdata[8191];
-    u32 rdata_size = key->vtbl->dnssec_key_writerdata(key, rdata, sizeof(rdata));
+    uint8_t  rdata[8191];
+    uint32_t rdata_size = key->vtbl->dnskey_writerdata(key, rdata, sizeof(rdata));
     dns_resource_record_init_record(rr, dnskey_get_domain(key), TYPE_DNSKEY, CLASS_IN, ttl, rdata_size, rdata);
 }
+
+void dnskey_raw_field_clean_finalize(dnskey_raw_field_t *drf)
+{
+    if((drf != NULL) && (drf->buffer != NULL))
+    {
+        ZEROMEMORY(drf->buffer, drf->size);
+        ZFREE_ARRAY(drf->buffer, drf->size);
+    }
+}
+
+#if UNUSED
+void dnskey_raw_field_bytes(dnskey_raw_field_t *field) { bytes_swap(field->buffer, field->size); }
+#endif
 
 /** @} */

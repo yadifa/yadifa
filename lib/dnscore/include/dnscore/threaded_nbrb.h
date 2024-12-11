@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,23 +28,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup threading Threading, pools, queues, ...
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup threading Threading, pools, queues, ...
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _THREADED_NB_RINGBUFFER_H
-#define	_THREADED_NB_RINGBUFFER_H
+#define _THREADED_NB_RINGBUFFER_H
 
 #include <dnscore/thread.h>
 
 #include <dnscore/sys_types.h>
 
-#endif	/* _THREADED_QUEUE_H */
+#endif /* _THREADED_QUEUE_H */
 /** @} */

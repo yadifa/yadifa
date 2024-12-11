@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,85 +28,75 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnscore
- *  @ingroup dnscore
- *  @brief serial arithmetic
+/**-----------------------------------------------------------------------------
+ * @defgroup dnscore
+ * @ingroup dnscore
+ * @brief serial arithmetic
  *
  * @{
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
+ *
+//#include "dnscore/dnscore_config.h"
  *
  *----------------------------------------------------------------------------*/
 
-//#include "dnscore/dnscore-config.h"
-
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/serial.h"
 
 /*
  * SERIAL
  */
 
+#if !DNSCORE_SERIAL_INLINE_ALL
+
 /**
- * 
- * Returns TRUE iff a > b in serial arithmetic, else FALSE
- * 
+ *
+ * Returns true iff a > b in serial arithmetic, else false
+ *
  * @param a
  * @param b
  * @return a > b
  */
 
-bool
-serial_gt(u32 a, u32 b)
-{
-    return ( (a < b) && ((b - a) > 0x7fffffff)) || ((a > b) && ((a - b) < 0x7fffffff));
-}
+bool serial_gt(uint32_t a, uint32_t b) { return ((a < b) && ((b - a) > 0x80000000U)) || ((a > b) && ((a - b) < 0x80000000U)); }
 
 /**
- * 
- * Returns TRUE iff a < b in serial arithmetic, else FALSE
- * 
+ *
+ * Returns true iff a < b in serial arithmetic, else false
+ *
  * @param a
  * @param b
  * @return a < b
  */
 
-bool
-serial_lt(u32 a, u32 b)
-{
-    return ( (a < b) && ((b - a) < 0x7fffffff)) || ((a > b) && ((a - b) > 0x7fffffff));
-}
+bool serial_lt(uint32_t a, uint32_t b) { return ((a < b) && ((b - a) < 0x80000000U)) || ((a > b) && ((a - b) > 0x80000000U)); }
 
 /**
- * 
- * Returns TRUE iff a >= b in serial arithmetic, else FALSE
- * 
+ *
+ * Returns true iff a >= b in serial arithmetic, else false
+ *
  * @param a
  * @param b
  * @return a >= b
  */
 
-bool
-serial_ge(u32 a, u32 b)
-{
-    return (a == b) || ((a < b) && ((b - a) > 0x7fffffff)) || ((a > b) && ((a - b) < 0x7fffffff));
-}
+bool serial_ge(uint32_t a, uint32_t b) { return (a == b) || ((a < b) && ((b - a) > 0x80000000U)) || ((a > b) && ((a - b) < 0x80000000U)); }
 
 /**
- * 
- * Returns TRUE iff a <= b in serial arithmetic, else FALSE
- * 
+ *
+ * Returns true iff a <= b in serial arithmetic, else false
+ *
  * @param a
  * @param b
  * @return a <= b
  */
 
-bool
-serial_le(u32 a, u32 b)
-{
-    return (a == b) || ((a < b) && ((b - a) < 0x7fffffff)) || ((a > b) && ((a - b) > 0x7fffffff));
-}
+bool serial_le(uint32_t a, uint32_t b) { return (a == b) || ((a < b) && ((b - a) < 0x80000000U)) || ((a > b) && ((a - b) > 0x80000000U)); }
+
+#endif
 
 /** @} */

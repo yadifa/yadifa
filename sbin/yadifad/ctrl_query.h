@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,39 +28,37 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #ifndef __CTRL_QUERY__H__
 #define __CTRL_QUERY__H__
 
-#include "server-config.h"
+#include "server_config.h"
 
 #if !HAS_CTRL
 #error "CTRL has not been enabled : do not include this"
 #endif
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/host_address.h>
 
 /**
  * CTRL handling of the queries
  */
 
-#if DNSCORE_HAS_CTRL
+#if HAS_CTRL
 bool ctrl_query_is_listened(int sockfd);
-void ctrl_query_process(message_data *mesg);
+void ctrl_query_process(dns_message_t *mesg);
 #endif
 
 /** @} */

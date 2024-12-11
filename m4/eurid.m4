@@ -1,6 +1,6 @@
-dnl ############################################################################
+dnl ----------------------------------------------------------------------------
 dnl
-dnl Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2024, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -10,9 +10,8 @@ dnl
 dnl        * Redistributions of source code must retain the above copyright
 dnl          notice, this list of conditions and the following disclaimer.
 dnl        * Redistributions in binary form must reproduce the above copyright
-dnl          notice, this list of conditions and the following disclaimer in
-dnl          the documentation and/or other materials provided with the
-dnl          distribution.
+dnl          notice, this list of conditions and the following disclaimer in the
+dnl          documentation and/or other materials provided with the distribution.
 dnl        * Neither the name of EURid nor the names of its contributors may be
 dnl          used to endorse or promote products derived from this software
 dnl          without specific prior written permission.
@@ -25,13 +24,17 @@ dnl LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
 dnl CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 dnl SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-dnl CONTRACT, STRICT LIABILITY,OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+dnl CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 dnl ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 dnl POSSIBILITY OF SUCH DAMAGE.
 dnl
-dnl ############################################################################        
-        
+dnl ----------------------------------------------------------------------------
+
+dnl ----------------------------------------------------------------------------
+dnl
 dnl Assume it is true
+dnl
+dnl ----------------------------------------------------------------------------
 
 cpu_intel_compatible=1
 icc_enabled=0
@@ -114,25 +117,6 @@ AC_DEFINE_UNQUOTED([HAS_$2], [1], [$1 = $2 enabled])
 AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
 AC_SUBST(HAS_$2)
 # AC_FORCE_ENABLE $1 DONE
-])
-
-dnl ####################################################
-dnl
-dnl AC_FORCE_ENABLE(var)
-dnl
-dnl Forces --enable-var
-dnl
-dnl ####################################################
-
-AC_DEFUN([AC_FORCE_DISABLE], [
-#
-# AC_FORCE_DISABLE $1
-#
-enable_[$1]=no
-AC_DEFINE_UNQUOTED([HAS_$2], [0], [$1 = $2 enabled])
-AM_CONDITIONAL([HAS_$2], [test y$enable_[$1] = yyes])
-AC_SUBST(HAS_$2)
-# AC_FORCE_DISABLE $1 DONE
 ])
 
 dnl ####################################################
@@ -487,10 +471,10 @@ fi
 cat > test-gcc-$2.c <<_ACEOF
 #include "confdefs.h"
 #if HAVE_STDLIB_H
-#include<stdlib.h>
+#include <stdlib.h>
 #endif
 #if HAVE_STDIO_H
-#include<stdio.h>
+#include <stdio.h>
 #endif
 int main(int argc,char** argv)
 {
@@ -1423,6 +1407,36 @@ fi
 rm -f sockaddr_in6_sin6_len.c sockaddr_in6_sin6_len
 AM_CONDITIONAL([HAS_SOCKADDR_IN6_SIN6_LEN], [test $has_sockaddr_in6_sin6_len = yes])
 AC_DEFINE_UNQUOTED([HAS_SOCKADDR_IN6_SIN6_LEN], [$has_sockaddr_in6_sin6_len], [The sockaddr_in6 struct has an sin6_len field])
+])
+
+dnl ####################################################
+
+AC_DEFUN([AC_HAS_GNU_SOURCE_CHECK],
+[
+dnl Check is the lib used is glibc
+AC_MSG_CHECKING([if lib C is glibc])
+cat > gnusource_check.c <<_ACEOF
+#include <features.h>
+#ifdef __GLIBC__
+int main()
+{
+    return 0;
+}
+#else
+Not using glibc
+#endif
+_ACEOF
+has_gnusource=0
+${CC} ${CFLAGS} gnusource_check.c > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+    has_gnusource=1;
+    AC_MSG_RESULT([yes])
+else
+    AC_MSG_RESULT([no])
+fi
+rm -f gnusource_check.c gnusource_check
+AM_CONDITIONAL([HAS_GNU_SOURCE], [test $has_gnusource = yes])
+AC_DEFINE_UNQUOTED([HAS_GNU_SOURCE], [$has_gnusource], [Lib C is glibc])
 ])
 
 dnl ####################################################

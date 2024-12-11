@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,24 +28,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <arpa/inet.h>  /* or netinet/in.h */
+#include <arpa/inet.h> /* or netinet/in.h */
 
 #include "dnscore/input_stream.h"
 #include "dnscore/rfc.h"
@@ -55,14 +53,13 @@
 
 #define MODULE_MSG_HANDLE g_system_logger
 
-ya_result
-input_stream_read_fully(input_stream *stream, void* buffer_start, u32 len_start)
+ya_result input_stream_read_fully(input_stream_t *stream, void *buffer_start, uint32_t len_start)
 {
-    input_stream_read_method* readfunc = stream->vtbl->read;
-    u32 len = len_start;
-    u8* buffer = (u8*)buffer_start;
-    ya_result ret;
-    
+    input_stream_read_method *readfunc = stream->vtbl->read;
+    uint32_t                  len = len_start;
+    uint8_t                  *buffer = (uint8_t *)buffer_start;
+    ya_result                 ret;
+
     while(len > 0)
     {
         if(FAIL(ret = readfunc(stream, buffer, len)))
@@ -89,15 +86,14 @@ input_stream_read_fully(input_stream *stream, void* buffer_start, u32 len_start)
         return UNABLE_TO_COMPLETE_FULL_READ;
     }
 
-    return (ya_result)(buffer - (u8*)buffer_start);
+    return (ya_result)(buffer - (uint8_t *)buffer_start);
 }
 
-ya_result
-input_stream_skip_fully(input_stream *stream, u32 len_start)
+ya_result input_stream_skip_fully(input_stream_t *stream, uint32_t len_start)
 {
-    input_stream_skip_method* skipfunc = stream->vtbl->skip;
-    u32 len = len_start;
-    ya_result ret;
+    input_stream_skip_method *skipfunc = stream->vtbl->skip;
+    uint32_t                  len = len_start;
+    ya_result                 ret;
 
     while(len > 0)
     {
@@ -127,10 +123,9 @@ input_stream_skip_fully(input_stream *stream, u32 len_start)
     return len_start;
 }
 
-ya_result
-input_stream_read_nu32(input_stream *stream, u32 *output)
+ya_result input_stream_read_nu32(input_stream_t *stream, uint32_t *output)
 {
-    u32 data;
+    uint32_t  data;
     ya_result err;
 
     if(ISOK(err = input_stream_read_fully(stream, &data, 4)))
@@ -141,10 +136,9 @@ input_stream_read_nu32(input_stream *stream, u32 *output)
     return err;
 }
 
-ya_result
-input_stream_read_nu16(input_stream *stream, u16 *output)
+ya_result input_stream_read_nu16(input_stream_t *stream, uint16_t *output)
 {
-    u16 data;
+    uint16_t  data;
     ya_result err;
 
     if(ISOK(err = input_stream_read_fully(stream, &data, 2)))
@@ -155,10 +149,9 @@ input_stream_read_nu16(input_stream *stream, u16 *output)
     return err;
 }
 
-ya_result
-input_stream_read_u32(input_stream *stream, u32 *output)
+ya_result input_stream_read_u32(input_stream_t *stream, uint32_t *output)
 {
-    u32 data;
+    uint32_t  data;
     ya_result err;
 
     if(ISOK(err = input_stream_read_fully(stream, &data, 4)))
@@ -169,10 +162,9 @@ input_stream_read_u32(input_stream *stream, u32 *output)
     return err;
 }
 
-ya_result
-input_stream_read_s32(input_stream *stream, s32 *output)
+ya_result input_stream_read_s32(input_stream_t *stream, int32_t *output)
 {
-    u32 data;
+    uint32_t  data;
     ya_result err;
 
     if(ISOK(err = input_stream_read_fully(stream, &data, 4)))
@@ -183,10 +175,9 @@ input_stream_read_s32(input_stream *stream, s32 *output)
     return err;
 }
 
-ya_result
-input_stream_read_u16(input_stream *stream, u16 *output)
+ya_result input_stream_read_u16(input_stream_t *stream, uint16_t *output)
 {
-    u16 data;
+    uint16_t  data;
     ya_result err;
 
     if(ISOK(err = input_stream_read_fully(stream, &data, 2)))
@@ -197,23 +188,67 @@ input_stream_read_u16(input_stream *stream, u16 *output)
     return err;
 }
 
-union t32
+union t16
 {
-    u8 bytes[4];
-    u32 value; 
+    uint8_t  bytes[4];
+    uint32_t value;
 };
 
-ya_result
-input_stream_read_pu32(input_stream* is, u32 *output)
+ya_result input_stream_read_pu16(input_stream_t *is, uint16_t *output)
 {
     ya_result ret;
-    u32 value = 0;
+    uint16_t  value = 0;
+    union t16 buffer;
+    buffer.value = 0;
+    ya_result n = 0;
+    uint8_t   s = 0;
+
+    for(int8_t words = 3; words >= 0; --words)
+    {
+#if WORDS_BIGENDIAN
+        if(FAIL(ret = input_stream_read(is, &buffer.bytes[1], 1)))
+        {
+            return ret;
+        }
+#else
+        if(FAIL(ret = input_stream_read(is, &buffer.bytes[0], 1)))
+        {
+            return ret;
+        }
+#endif
+
+        value |= (buffer.value & 127) << s; // scan-builds complains for a case that only happens if the input is badly encoded
+
+        ++n;
+
+        if(buffer.value < 128)
+        {
+            *output = value;
+            return n;
+        }
+
+        s += 7;
+    }
+
+    return PARSEINT_ERROR;
+}
+
+union t32
+{
+    uint8_t  bytes[4];
+    uint32_t value;
+};
+
+ya_result input_stream_read_pu32(input_stream_t *is, uint32_t *output)
+{
+    ya_result ret;
+    uint32_t  value = 0;
     union t32 buffer;
     buffer.value = 0;
     ya_result n = 0;
-    u8 s = 0;
-       
-    for(;;)
+    uint8_t   s = 0;
+
+    for(int8_t words = 4; words >= 0; --words)
     {
 #if WORDS_BIGENDIAN
         if(FAIL(ret = input_stream_read(is, &buffer.bytes[3], 1)))
@@ -226,37 +261,38 @@ input_stream_read_pu32(input_stream* is, u32 *output)
             return ret;
         }
 #endif
-        
-        value |= (buffer.value & 127) << s;
-        
+
+        value |= (buffer.value & 127) << s; // scan-builds complains for a case that only happens if the input is badly encoded
+
         ++n;
-        
+
         if(buffer.value < 128)
         {
             *output = value;
             return n;
         }
-        
+
         s += 7;
     }
+
+    return PARSEINT_ERROR;
 }
 
 union t64
 {
-    u8 bytes[8];
-    u64 value; 
+    uint8_t  bytes[8];
+    uint64_t value;
 };
 
-ya_result
-input_stream_read_pu64(input_stream* is, u64 *output)
+ya_result input_stream_read_pu64(input_stream_t *is, uint64_t *output)
 {
     ya_result ret;
-    u64 value = 0;
+    uint64_t  value = 0;
     union t64 buffer;
     buffer.value = 0;
     ya_result n = 0;
-    u8 s = 0;
-       
+    uint8_t   s = 0;
+
     for(;;)
     {
 #if WORDS_BIGENDIAN
@@ -270,26 +306,25 @@ input_stream_read_pu64(input_stream* is, u64 *output)
             return ret;
         }
 #endif
-        
+
         value |= (buffer.value & 127) << s;
-        
+
         ++n;
-        
+
         if(buffer.value < 128)
         {
             *output = value;
             return n;
         }
-        
+
         s += 7;
     }
 }
 
-ya_result
-input_stream_read_dnsname(input_stream *stream, u8 *output_buffer)
+ya_result input_stream_read_dnsname(input_stream_t *stream, uint8_t *output_buffer)
 {
-    u8 *output = output_buffer;
-    const u8 * const limit = &output_buffer[MAX_DOMAIN_LENGTH - 1];  /* -1 because the limit is computed after the terminator */
+    uint8_t             *output = output_buffer;
+    const uint8_t *const limit = &output_buffer[DOMAIN_LENGTH_MAX - 1]; /* -1 because the limit is computed after the terminator */
 
     for(;;)
     {
@@ -305,12 +340,12 @@ input_stream_read_dnsname(input_stream *stream, u8 *output_buffer)
             break;
         }
 
-        if(n > MAX_LABEL_LENGTH)
+        if(n > LABEL_LENGTH_MAX)
         {
             return LABEL_TOO_LONG;
         }
 
-        u8* tmp = output;
+        uint8_t *tmp = output;
 
         output += n;
 
@@ -323,9 +358,9 @@ input_stream_read_dnsname(input_stream *stream, u8 *output_buffer)
         {
             return n;
         }
-        
+
         /* 0x012a = 01 '*' = wildcard */
-        
+
         /*if(GET_U16_AT(tmp[-1]) != NU16(0x012a))*/
         {
             if(!dnslabel_locase_verify_charspace(&tmp[-1]))
@@ -338,11 +373,10 @@ input_stream_read_dnsname(input_stream *stream, u8 *output_buffer)
     return (ya_result)(output - output_buffer);
 }
 
-ya_result
-input_stream_read_rname(input_stream *stream, u8 *output_buffer)
+ya_result input_stream_read_rname(input_stream_t *stream, uint8_t *output_buffer)
 {
-    u8 *output = output_buffer;
-    const u8 * const limit = &output_buffer[MAX_DOMAIN_LENGTH - 1];  /* -1 because the limit is computed after the terminator */
+    uint8_t             *output = output_buffer;
+    const uint8_t *const limit = &output_buffer[DOMAIN_LENGTH_MAX - 1]; /* -1 because the limit is computed after the terminator */
 
     for(;;)
     {
@@ -358,12 +392,12 @@ input_stream_read_rname(input_stream *stream, u8 *output_buffer)
             break;
         }
 
-        if(n > MAX_LABEL_LENGTH)
+        if(n > LABEL_LENGTH_MAX)
         {
             return LABEL_TOO_LONG;
         }
 
-        u8* tmp = output;
+        uint8_t *tmp = output;
 
         output += n;
 
@@ -381,42 +415,56 @@ input_stream_read_rname(input_stream *stream, u8 *output_buffer)
     return (ya_result)(output - output_buffer);
 }
 
-ya_result
-input_stream_read_line(input_stream *stream, char *output_, int max_len)
+ya_result input_stream_read_line(input_stream_t *stream, char *output_, int max_len)
 {
-    const char * const limit = &output_[max_len];
-    char *output = output_;
-    
+    const char *const limit = &output_[max_len];
+    char             *output = output_;
+
     /*
      * Cache the method
      */
-    
+
     input_stream_read_method *read_method = stream->vtbl->read;
-    
+
     while(output < limit)
     {
-        ya_result n = read_method(stream, (u8*)output, 1);
-        
+        ya_result n = read_method(stream, (uint8_t *)output, 1);
+
         if(n <= 0)
         {
             if(n == 0)
             {
                 n = ((ya_result)(output - output_));
             }
-            
+            else
+            {
+                if((output - output_) > 0)
+                {
+                    switch(n)
+                    {
+                        case MAKE_ERRNO_ERROR(EAGAIN):
+                        case MAKE_ERRNO_ERROR(EINTR):
+                            // case MAKE_ERRNO_ERROR(ETIMEDOUT):
+                            {
+                                continue;
+                            }
+                    }
+                }
+            }
+
             return n;
         }
-        
+
         if(*output++ == '\n')
         {
             return ((ya_result)(output - output_));
         }
     }
-    
+
     return max_len;
 }
 
-static ya_result input_stream_void_read(input_stream *stream, void* in_buffer,u32 in_len)
+static ya_result input_stream_void_read(input_stream_t *stream, void *in_buffer, uint32_t in_len)
 {
     (void)stream;
     (void)in_buffer;
@@ -426,7 +474,7 @@ static ya_result input_stream_void_read(input_stream *stream, void* in_buffer,u3
     return INVALID_STATE_ERROR;
 }
 
-static ya_result input_stream_void_skip(input_stream *stream, u32 byte_count)
+static ya_result input_stream_void_skip(input_stream_t *stream, uint32_t byte_count)
 {
     (void)stream;
     (void)byte_count;
@@ -435,7 +483,7 @@ static ya_result input_stream_void_skip(input_stream *stream, u32 byte_count)
     return INVALID_STATE_ERROR;
 }
 
-static void input_stream_void_close(input_stream *stream)
+static void input_stream_void_close(input_stream_t *stream)
 {
     (void)stream;
 
@@ -446,7 +494,7 @@ static void input_stream_void_close(input_stream *stream)
 #endif
 }
 
-static const input_stream_vtbl void_input_stream_vtbl ={
+static const input_stream_vtbl void_input_stream_vtbl = {
     input_stream_void_read,
     input_stream_void_skip,
     input_stream_void_close,
@@ -458,14 +506,14 @@ static const input_stream_vtbl void_input_stream_vtbl ={
  * It sets the stream to a sink that warns abouts its usage and for which every call that can fail fails.
  */
 
-void input_stream_set_void(input_stream* is)
+void input_stream_set_void(input_stream_t *is)
 {
     yassert(is != NULL);
     is->data = NULL;
     is->vtbl = &void_input_stream_vtbl;
 }
 
-static ya_result input_stream_sink_read(input_stream *stream, void* in_buffer,u32 in_len)
+static ya_result input_stream_sink_read(input_stream_t *stream, void *in_buffer, uint32_t in_len)
 {
     (void)stream;
     (void)in_buffer;
@@ -473,18 +521,16 @@ static ya_result input_stream_sink_read(input_stream *stream, void* in_buffer,u3
     return -1;
 }
 
-static ya_result input_stream_sink_skip(input_stream *stream, u32 byte_count)
+static ya_result input_stream_sink_skip(input_stream_t *stream, uint32_t byte_count)
 {
     (void)stream;
-    return byte_count;
+    (void)byte_count;
+    return -1;
 }
 
-static void input_stream_sink_close(input_stream *stream)
-{
-    (void)stream;
-}
+static void                    input_stream_sink_close(input_stream_t *stream) { (void)stream; }
 
-static const input_stream_vtbl sink_input_stream_vtbl ={
+static const input_stream_vtbl sink_input_stream_vtbl = {
     input_stream_sink_read,
     input_stream_sink_skip,
     input_stream_sink_close,
@@ -495,15 +541,46 @@ static const input_stream_vtbl sink_input_stream_vtbl ={
  * Used to temporarily initialise a stream with a sink that can be closed safely.
  * Typically used as pre-init so the stream can be closed even if the function
  * setup failed before reaching stream initialisation.
- * 
+ *
  * @param is
  */
 
-void input_stream_set_sink(input_stream* is)
+void input_stream_set_sink(input_stream_t *is)
 {
     yassert(is != NULL);
     is->data = NULL;
     is->vtbl = &sink_input_stream_vtbl;
+}
+
+/**
+ * Reads a buffer from the input stream and writes it to the output stream.
+ *
+ * @param is the input stream
+ * @param os the output stream
+ * @param byte_count the amount of bytes to copy
+ *
+ * @return byte_count or an error code
+ */
+
+ya_result input_stream_to_output_stream_copy(input_stream_t *is, output_stream_t *os, int byte_count)
+{
+    ya_result ret = byte_count;
+    int       remaining = byte_count;
+    uint8_t   buffer[4096];
+    while(remaining > 0)
+    {
+        int block_size = MIN(remaining, (int)sizeof(buffer));
+        if(FAIL(ret = input_stream_read(is, buffer, block_size)))
+        {
+            return ret;
+        }
+        remaining -= ret;
+        if(FAIL(ret = output_stream_write_fully(os, buffer, ret)))
+        {
+            return ret;
+        }
+    }
+    return byte_count;
 }
 
 /** @} */

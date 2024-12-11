@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,51 +28,54 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup yadifad
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup yadifad
+ * @brief
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
 #ifndef DATABASE_H_
 #define DATABASE_H_
 
 #ifdef __cplusplus
-extern "C"{
+extern "C"
+{
 #endif
 
-#include "server-config.h"
+#include "server_config.h"
 
-#include <dnscore/message.h>
+#include <dnscore/dns_message.h>
 #include <dnscore/fingerprint.h>
-    
-#include <dnscore/ptr_set.h>
-    
+
+#include <dnscore/ptr_treemap.h>
+
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb.h>
+#include <dnsdb/zdb_query_to_wire.h>
 
 #include "zone.h"
 #if HAS_RRL_SUPPORT
 #include "rrl.h"
 #endif
+#if ZDB_HAS_QUERY_US_DEBUG
+#include <dnscore/dns_message.h>
+#endif
 
 /* List of database type in string form */
-    
-#define     DB_STRING_NO            "no database"
-    
-#define     DATABASE_JOURNAL_MINIMUM_SIZE 65536
 
-void            database_init();
-void            database_finalize();
+#define DB_STRING_NO                  "no database"
 
-ya_result       database_clear_zones(zdb *database, zone_data_set *dset);
-ya_result       database_startup(zdb **);
+#define DATABASE_JOURNAL_MINIMUM_SIZE 65536
+
+void      database_init();
+void      database_finalize();
+
+ya_result database_clear_zones(zdb_t *database, zone_data_set *dset);
+ya_result database_startup(zdb_t **);
 
 /** \brief Get dns answer from database
  *
@@ -80,14 +83,18 @@ ya_result       database_startup(zdb **);
  *  @param mesg
  */
 
-static inline void database_query(zdb *database, message_data *mesg)
+static inline void database_query(zdb_t *database, dns_message_t *mesg)
 {
-    zdb_query_and_update(database, mesg, message_get_pool_buffer(mesg));
-#if DNSCORE_HAS_TSIG_SUPPORT
-    if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
-    {
-        tsig_sign_answer(mesg);
-    }
+#if DNSCORE_HAS_QUERY_US_DEBUG
+    int64_t ts_start = timeus();
+#endif
+    zdb_query_to_wire_context_t context;
+    zdb_query_to_wire_context_init(&context, mesg);
+    zdb_query_to_wire(database, &context);
+    zdb_query_to_wire_finalize(&context);
+#if DNSCORE_HAS_QUERY_US_DEBUG
+    int64_t ts_stop = timeus();
+    dns_message_log_query_us(mesg, ts_start, ts_stop);
 #endif
 }
 
@@ -96,41 +103,43 @@ static inline void database_query(zdb *database, message_data *mesg)
 /** \brief Get DNS answer from database
  *
  *  Get DNS answer from database
- * 
+ *
  *  @param mesg
  *
  *  @return RRL code
  */
 
-static inline ya_result database_query_with_rrl(zdb *db, message_data *mesg)
+static inline ya_result database_query_with_rrl(zdb_t *db, dns_message_t *mesg)
 {
-    ya_result rrl = zdb_query_and_update_with_rrl(db, mesg, message_get_pool_buffer(mesg), rrl_process);
-   
-#if DNSCORE_HAS_TSIG_SUPPORT
-    if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
-    {
-        tsig_sign_answer(mesg);
-    }
+#if DNSCORE_HAS_QUERY_US_DEBUG
+    int64_t ts_start = timeus();
 #endif
-    
-    return rrl;
+    zdb_query_to_wire_context_t context;
+    zdb_query_to_wire_context_init(&context, mesg);
+    zdb_query_to_wire(db, &context);
+    ya_result ret = rrl_process(mesg, &context);
+    zdb_query_to_wire_finalize(&context);
+#if DNSCORE_HAS_QUERY_US_DEBUG
+    int64_t ts_stop = timeus();
+    dns_message_log_query_us(mesg, ts_start, ts_stop);
+#endif
+    return ret;
 }
 #endif
 
-ya_result       database_apply_nsec3paramqueued(zdb_zone *zone, zdb_packed_ttlrdata *rrset, u8 lock_owner);
-ya_result       database_update(zdb *database, message_data *mesg);
-
-ya_result       database_print_zones(zone_desc_s *, char *);
-ya_result       database_shutdown(zdb *);
+ya_result database_apply_nsec3paramqueued(zdb_zone_t *zone, zdb_resource_record_set_t *rrset, uint8_t lock_owner);
+ya_result database_update(zdb_t *database, dns_message_t *mesg);
+ya_result database_print_zones(zone_desc_t *, char *);
+ya_result database_shutdown(zdb_t *);
 
 /* Slave only */
-ya_result       database_zone_refresh_maintenance_wih_zone(zdb_zone* zone, u32 next_alarm_epoch);
-ya_result       database_zone_refresh_maintenance(zdb *database, const u8 *origin, u32 next_alarm_epoch);
+ya_result database_zone_refresh_maintenance_wih_zone(zdb_zone_t *zone, uint32_t next_alarm_epoch);
+ya_result database_zone_refresh_maintenance(zdb_t *database, const uint8_t *origin, uint32_t next_alarm_epoch);
 
-bool            database_are_all_zones_stored_to_disk();
-void            database_wait_all_zones_stored_to_disk();
-void            database_disable_all_zone_store_to_disk();
-ya_result       database_store_all_zones_to_disk();
+bool      database_are_all_zones_stored_to_disk();
+void      database_wait_all_zones_stored_to_disk();
+void      database_disable_all_zone_store_to_disk();
+ya_result database_store_all_zones_to_disk();
 
 #ifdef __cplusplus
 }

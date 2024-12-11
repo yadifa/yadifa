@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,27 +28,25 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "dnscore/concat_input_stream.h"
 #include "dnscore/zalloc.h"
 
-#define CONCAT_INPUT_STREAM_TAG 0x53495441434e4f43 /* CONCATIS */
+#define CONCAT_INPUT_STREAM_TAG      0x53495441434e4f43 /* CONCATIS */
 #define CONCAT_INPUT_STREAM_NODE_TAG 0x5349444e54434e43 /* CNCTNDIS */
 
 typedef struct concat_input_stream_data_node concat_input_stream_data_node;
@@ -56,38 +54,37 @@ typedef struct concat_input_stream_data_node concat_input_stream_data_node;
 struct concat_input_stream_data_node
 {
     struct concat_input_stream_data_node *next;
-    input_stream filtered;
+    input_stream_t                        filtered;
 };
 typedef struct concat_input_stream_data concat_input_stream_data;
 
 struct concat_input_stream_data
 {
-    concat_input_stream_data_node* current;
-    concat_input_stream_data_node** lastlink;
+    concat_input_stream_data_node  *current;
+    concat_input_stream_data_node **lastlink;
 };
 
-static ya_result
-concat_read(input_stream* stream, void* buffer_, u32 len)
+static ya_result concat_read(input_stream_t *stream, void *buffer_, uint32_t len)
 {
-    concat_input_stream_data *data = (concat_input_stream_data*)stream->data;
-    u8 *buffer = (u8*)buffer_;
-    
-    ya_result total = 0;
-    ya_result return_value = SUCCESS;
-    
+    concat_input_stream_data *data = (concat_input_stream_data *)stream->data;
+    uint8_t                  *buffer = (uint8_t *)buffer_;
+
+    ya_result                 total = 0;
+    ya_result                 return_value = SUCCESS;
+
     while(len > 0)
-    {   
+    {
         if(data->current == NULL)
         {
             return_value = SUCCESS;
             break;
         }
-        
+
         if(FAIL(return_value = input_stream_read(&data->current->filtered, &buffer[total], len)))
         {
             break;
         }
-        
+
         if(return_value == 0) /* EOF */
         {
             concat_input_stream_data_node *next = data->current->next;
@@ -106,20 +103,19 @@ concat_read(input_stream* stream, void* buffer_, u32 len)
         total += return_value;
         len -= return_value;
     }
-    
+
     if((total == 0) && FAIL(return_value))
     {
         total = return_value;
     }
-    
+
     return total;
 }
 
-static void
-concat_close(input_stream* stream)
+static void concat_close(input_stream_t *stream)
 {
-    concat_input_stream_data* data = (concat_input_stream_data*)stream->data;
-    
+    concat_input_stream_data *data = (concat_input_stream_data *)stream->data;
+
     while(data->current != NULL)
     {
         input_stream_close(&data->current->filtered);
@@ -127,20 +123,19 @@ concat_close(input_stream* stream)
         ZFREE(data->current, concat_input_stream_data_node);
         data->current = next;
     }
-    
+
     ZFREE(data, concat_input_stream_data);
 
     input_stream_set_void(stream);
 }
 
-static ya_result
-concat_skip(input_stream* stream, u32 len)
+static ya_result concat_skip(input_stream_t *stream, uint32_t len)
 {
-    concat_input_stream_data *data = (concat_input_stream_data*)stream->data;
-    
-    ya_result total = 0;
-    ya_result return_value = SUCCESS;
-    
+    concat_input_stream_data *data = (concat_input_stream_data *)stream->data;
+
+    ya_result                 total = 0;
+    ya_result                 return_value = SUCCESS;
+
     while(len > 0)
     {
         if(data->current == NULL)
@@ -148,21 +143,23 @@ concat_skip(input_stream* stream, u32 len)
             return_value = -1;
             break;
         }
-        
-        if(FAIL(return_value = input_stream_skip(&data->current->filtered, len)))
+
+        return_value = input_stream_skip(&data->current->filtered, len);
+
+        if(return_value <= 0)
         {
-            if(return_value == -1)
+            if(return_value == 0)
             {
                 concat_input_stream_data_node *next = data->current->next;
                 input_stream_close(&data->current->filtered);
                 ZFREE(data->current, concat_input_stream_data_node);
                 data->current = next;
-                
+
                 if(data->current == NULL)
                 {
                     data->lastlink = &data->current;
                 }
-                
+
                 continue;
             }
 
@@ -172,31 +169,25 @@ concat_skip(input_stream* stream, u32 len)
         total += return_value;
         len -= return_value;
     }
-    
+
     if((total == 0) && FAIL(return_value))
     {
         total = return_value;
     }
-    
+
     return total;
 }
 
-static const input_stream_vtbl concat_input_stream_vtbl =
-{
-    concat_read,
-    concat_skip,
-    concat_close,
-    "concat_input_stream"
-};
+static const input_stream_vtbl concat_input_stream_vtbl = {concat_read, concat_skip, concat_close, "concat_input_stream"};
 
 /**
- * 
+ *
  * @param cis
  */
-    
-void concat_input_stream_init(input_stream *cis)
+
+void concat_input_stream_init(input_stream_t *cis)
 {
-    concat_input_stream_data* data;
+    concat_input_stream_data *data;
 
     ZALLOC_OBJECT_OR_DIE(data, concat_input_stream_data, CONCAT_INPUT_STREAM_TAG);
     data->current = NULL;
@@ -207,17 +198,17 @@ void concat_input_stream_init(input_stream *cis)
 }
 
 /**
- * 
+ *
  * @param cis
  * @param added_stream
  */
 
-void concat_input_stream_add(input_stream *cis, input_stream *added_stream)
+void concat_input_stream_add(input_stream_t *cis, input_stream_t *added_stream)
 {
-    concat_input_stream_data* data = (concat_input_stream_data*)cis->data;
+    concat_input_stream_data      *data = (concat_input_stream_data *)cis->data;
     concat_input_stream_data_node *node;
-    
-    ZALLOC_OBJECT_OR_DIE( node, concat_input_stream_data_node, CONCAT_INPUT_STREAM_NODE_TAG);
+
+    ZALLOC_OBJECT_OR_DIE(node, concat_input_stream_data_node, CONCAT_INPUT_STREAM_NODE_TAG);
     node->filtered.data = added_stream->data;
     node->filtered.vtbl = added_stream->vtbl;
     node->next = NULL;
@@ -227,8 +218,4 @@ void concat_input_stream_add(input_stream *cis, input_stream *added_stream)
     data->lastlink = &node->next;
 }
 
-
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

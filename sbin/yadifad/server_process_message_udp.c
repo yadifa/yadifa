@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
+ *----------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------
  *
- */
-
 // keep this order -->
+ *
+ *----------------------------------------------------------------------------*/
 
-#include "server-config.h"
+#include "server_config.h"
 
 #include <dnscore/logger.h>
 #include <dnscore/thread.h>
@@ -42,40 +44,38 @@
 #include "process_class_ch.h"
 #include "dynupdate_query_service.h"
 #include "notify.h"
-#if DNSCORE_HAS_CTRL
+#if HAS_CTRL
 #include "ctrl_notify.h"
 #endif
 #include "log_query.h"
 #include "log_statistics.h"
+#include "server_process_message_common.h"
 
-static zdb *database = NULL;
+static zdb_t *database = NULL;
 
-void server_process_message_udp_set_database(zdb *db)
+void          server_process_message_udp_set_database(zdb_t *db) { database = db; }
+
+int           server_process_message_udp(network_thread_context_base_t *ctx, dns_message_t *mesg)
 {
-    database = db;
-}
-
-int
-server_process_message_udp(network_thread_context_base_t *ctx, message_data *mesg)
-{
-    server_statistics_t * const local_statistics = ctx->statisticsp;
+    server_statistics_t *const local_statistics = ctx->statisticsp;
     local_statistics->udp_input_count++;
+    int       fd = ctx->sockfd;
+
     ya_result ret;
-    int fd = ctx->sockfd;
 
 #if DEBUG
     log_debug("server_process_message_udp(%i, %i)", ctx->idx, fd);
 #endif
 
-    switch(message_get_opcode(mesg))
+    switch(dns_message_get_opcode(mesg))
     {
         case OPCODE_QUERY:
         {
-            if(ISOK(ret = message_process_query(mesg)))
+            if(ISOK(ret = dns_message_process_query(mesg)))
             {
-                message_edns0_clear_undefined_flags(mesg);
+                dns_message_edns0_clear_undefined_flags(mesg);
 
-                switch(message_get_query_class(mesg))
+                switch(dns_message_get_query_class(mesg))
                 {
                     case CLASS_IN:
                     {
@@ -83,15 +83,15 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
                         local_statistics->udp_queries_count++;
 
-                        switch(message_get_query_type(mesg))
+                        switch(dns_message_get_query_type(mesg))
                         {
                             default:
                             {
 #if HAS_RRL_SUPPORT
                                 ya_result rrl = database_query_with_rrl(database, mesg);
 
-                                local_statistics->udp_referrals_count += message_get_referral(mesg);
-                                local_statistics->udp_fp[message_get_status(mesg)]++;
+                                local_statistics->udp_referrals_count += dns_message_get_referral(mesg);
+                                local_statistics->udp_fp[dns_message_get_status(mesg)]++;
 
                                 switch(rrl)
                                 {
@@ -114,23 +114,23 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 #else
                                 database_query(database, mesg);
 
-                                local_statistics->udp_referrals_count += message_get_referral(mesg);
-                                local_statistics->udp_fp[message_get_status(mesg)]++;
+                                local_statistics->udp_referrals_count += dns_message_get_referral(mesg);
+                                local_statistics->udp_fp[dns_message_get_status(mesg)]++;
 #endif
                                 break;
                             }
                             case TYPE_IXFR: // reply with a truncate to force a TCP query
                             {
-                                message_set_truncated_answer(mesg);
-                                message_set_query_answer_authority_additional_counts_ne(mesg, 0, 0, 0, 0);
-                                message_set_size(mesg, DNS_HEADER_LENGTH);
+                                dns_message_set_truncated_answer(mesg);
+                                dns_message_set_query_answer_authority_additional_counts_ne(mesg, 0, 0, 0, 0);
+                                dns_message_set_size(mesg, DNS_HEADER_LENGTH);
                                 local_statistics->udp_fp[FP_IXFR_UDP]++;
                                 break;
                             }
                             case TYPE_AXFR:
                             case TYPE_OPT:
                             {
-                                message_make_error(mesg, FP_INCORR_PROTO);
+                                dns_message_make_error(mesg, FP_INCORR_PROTO);
                                 local_statistics->udp_fp[FP_INCORR_PROTO]++;
                                 break;
                             }
@@ -141,15 +141,15 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                     case CLASS_CH:
                     {
                         class_ch_process(mesg); // thread-safe
-                        local_statistics->udp_fp[message_get_status(mesg)]++;
+                        local_statistics->udp_fp[dns_message_get_status(mesg)]++;
                         break;
                     } // query class CH
                     default:
                     {
-                        message_set_status(mesg, FP_NOT_SUPP_CLASS);
-                        message_transform_to_error(mesg);
+                        dns_message_set_status(mesg, FP_NOT_SUPP_CLASS);
+                        dns_message_transform_to_error(mesg);
 #if DNSCORE_HAS_TSIG_SUPPORT
-                        if(message_has_tsig(mesg))  /* NOTE: the TSIG information is in mesg */
+                        if(dns_message_has_tsig(mesg)) /* NOTE: the TSIG information is in mesg */
                         {
                             tsig_sign_answer(mesg);
                         }
@@ -161,143 +161,22 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
             } // if message process succeeded else ...
             else // an error occurred : no query to be done at all
             {
-                if(message_get_query_count_ne(mesg) == NETWORK_ONE_16)
-                {
-                    const u8 *canonized_fqdn = message_get_canonised_fqdn(mesg);
+                server_process_message_query_log_error(mesg, ret);
 
-                    if((ret != TSIG_BADTIME) && (ret != TSIG_BADSIG)) // BADKEY doesn't set the time nor the name
-                    {
-                        if(dnsname_verify_charspace(canonized_fqdn))
-                        {
-                            log_notice("query (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       canonized_fqdn,
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg));
-                        }
-                        else
-                        {
-                            log_notice("query (%04hx) [%02x|%02x] <INVALID> %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg));
-                        }
-                    }
-                    else
-                    {
-                        s64 epoch = message_tsig_get_epoch(mesg);
-                        s64 fudge = message_tsig_get_fudge(mesg);
-
-                        if(dnsname_verify_charspace(canonized_fqdn))
-                        {
-                            if(message_has_tsig(mesg))
-                            {
-                                log_notice("query (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           canonized_fqdn,
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg),
-                                           message_tsig_get_name(mesg),
-                                           epoch,
-                                           epoch,
-                                           fudge);
-                            }
-                            else
-                            {
-                                log_notice("query (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           canonized_fqdn,
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg));
-                            }
-                        }
-                        else
-                        {
-                            if(message_has_tsig(mesg))
-                            {
-                                log_notice("query (%04hx) [%02x|%02x] <INVALID> %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg),
-                                           message_tsig_get_name(mesg),
-                                           epoch,
-                                           epoch,
-                                           fudge);
-                            }
-                            else
-                            {
-                                log_notice("query (%04hx) [%02x|%02x] <INVALID> %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg));
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    log_notice("query (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu : %r (%r) (%{sockaddrip}) size=%hu",
-                               ntohs(message_get_id(mesg)),
-                               message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                               message_get_query_count(mesg), // QC
-                               message_get_answer_count(mesg), // AC
-                               message_get_authority_count(mesg), // NS
-                               message_get_additional_count(mesg), // AR
-                               RCODE_ERROR_CODE(message_get_status(mesg)),
-                               ret,
-                               message_get_sender_sa(mesg),
-                               message_get_size_u16(mesg));
-                }
-
-                local_statistics->udp_fp[message_get_status(mesg)]++;
-
-                if((ret == UNPROCESSABLE_MESSAGE) && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
-                {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
-                }
+                local_statistics->udp_fp[dns_message_get_status(mesg)]++;
 
                 /*
                  * If not FE, or if we answer FE
                  *
                  * ... && (message_is_query(mesg) ??? and if there the query number is > 0 ???
                  */
-                if( (ret != INVALID_MESSAGE) && ((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
+                if((ret != INVALID_MESSAGE) && ((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
-                    message_edns0_clear_undefined_flags(mesg);
+                    dns_message_edns0_clear_undefined_flags(mesg);
 
-                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
                     {
-                        message_transform_to_error(mesg);
+                        dns_message_transform_to_error(mesg);
                     }
                 }
                 else
@@ -311,11 +190,11 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
         } // case query
         case OPCODE_NOTIFY:
         {
-            if(ISOK(ret = message_process(mesg)))
+            if(ISOK(ret = dns_message_process(mesg)))
             {
-                message_edns0_clear_undefined_flags(mesg);
+                dns_message_edns0_clear_undefined_flags(mesg);
 
-                switch(message_get_query_class(mesg))
+                switch(dns_message_get_query_class(mesg))
                 {
                     case CLASS_IN:
                     {
@@ -323,32 +202,26 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
                         local_statistics->udp_notify_input_count++;
 
-                        log_info("notify (%04hx) %{dnsname} (%{sockaddr})",
-                                 ntohs(message_get_id(mesg)),
-                                 message_get_canonised_fqdn(mesg),
-                                 message_get_sender_sa(mesg));
+                        log_info("notify (%04hx) %{dnsname} (%{sockaddr})", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_sender_sa(mesg));
 
-                        bool answer = message_isanswer(mesg);
+                        bool answer = dns_message_is_answer(mesg);
 
                         return_value = notify_process(mesg); // thread-safe
 
-                        local_statistics->udp_fp[message_get_status(mesg)]++;
+                        local_statistics->udp_fp[dns_message_get_status(mesg)]++;
 
                         if(FAIL(return_value))
                         {
-                            log_err("notify (%04hx) %{dnsname} failed : %r",
-                                    ntohs(message_get_id(mesg)),
-                                    message_get_canonised_fqdn(mesg),
-                                    return_value);
+                            log_err("notify (%04hx) %{dnsname} failed : %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), return_value);
 
                             if(answer)
                             {
                                 return SUCCESS_DROPPED;
                             }
 
-                            if(!message_has_tsig(mesg))
+                            if(!dns_message_has_tsig(mesg))
                             {
-                                message_transform_to_error(mesg);
+                                dns_message_transform_to_error(mesg);
                             }
                             break;
                         }
@@ -365,10 +238,12 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                     default:
                     {
                         log_warn("notify [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
-                                 ntohs(message_get_id(mesg)),
-                                 message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
-                                 message_get_sender_sa(mesg));
-                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
+                                 ntohs(dns_message_get_id(mesg)),
+                                 dns_message_get_canonised_fqdn(mesg),
+                                 dns_message_get_query_type_ptr(mesg),
+                                 dns_message_get_query_class_ptr(mesg),
+                                 dns_message_get_sender_sa(mesg));
+                        dns_message_make_error(mesg, FP_NOT_SUPP_CLASS);
                         local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
                         break;
                     }
@@ -376,109 +251,22 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
             } // if message process succeeded
             else // an error occurred : no query to be done at all
             {
-                if(message_get_query_count_ne(mesg) == NETWORK_ONE_16)
-                {
-                    const u8 *canonized_fqdn = message_get_canonised_fqdn(mesg);
+                server_process_message_notify_log_error(mesg, ret);
 
-                    if(canonized_fqdn != NULL)
-                    {
-                        if((ret != TSIG_BADTIME) && (ret != TSIG_BADSIG)) // BADKEY doesn't set the time nor the name
-                        {
-                            log_notice("notify (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       canonized_fqdn,
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg));
-                        }
-                        else
-                        {
-                            s64 epoch = message_tsig_get_epoch(mesg);
-                            s64 fudge = message_tsig_get_fudge(mesg);
-
-                            if(message_has_tsig(mesg))
-                            {
-                                log_notice("notify (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           canonized_fqdn,
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg),
-                                           message_tsig_get_name(mesg),
-                                           epoch,
-                                           epoch,
-                                           fudge);
-                            }
-                            else
-                            {
-                                log_notice("notify (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           canonized_fqdn,
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        log_notice("notify (%04hx) [%02x|%02x] ? %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                   ntohs(message_get_id(mesg)),
-                                   message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                   RCODE_ERROR_CODE(message_get_status(mesg)),
-                                   message_get_query_type_ptr(mesg),
-                                   message_get_query_class_ptr(mesg),
-                                   ret,
-                                   message_get_sender_sa(mesg),
-                                   message_get_size_u16(mesg));
-                    }
-                }
-                else
-                {
-                    log_notice("notify (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu : %r (%r) (%{sockaddrip}) size=%hu",
-                               ntohs(message_get_id(mesg)),
-                               message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                               message_get_query_count(mesg), // QC
-                               message_get_answer_count(mesg), // AC
-                               message_get_authority_count(mesg), // NS
-                               message_get_additional_count(mesg), // AR
-                               RCODE_ERROR_CODE(message_get_status(mesg)),
-                               ret,
-                               message_get_sender_sa(mesg),
-                               message_get_size_u16(mesg));
-                }
-
-                local_statistics->udp_fp[message_get_status(mesg)]++;
-
-                if(ret == UNPROCESSABLE_MESSAGE && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
-                {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
-                }
+                local_statistics->udp_fp[dns_message_get_status(mesg)]++;
 
                 /*
                  * If not FE, or if we answer FE
                  *
                  * ... && (message_is_query(mesg) ??? and if there the query number is > 0 ???
                  */
-                if( (ret != INVALID_MESSAGE) && ((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
+                if((ret != INVALID_MESSAGE) && ((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
-                    message_edns0_clear_undefined_flags(mesg);
+                    dns_message_edns0_clear_undefined_flags(mesg);
 
-                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
                     {
-                        message_transform_to_error(mesg);
+                        dns_message_transform_to_error(mesg);
                     }
                 }
                 else
@@ -492,15 +280,15 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
         case OPCODE_UPDATE:
         {
-            if(ISOK(ret = message_process(mesg)))
+            if(ISOK(ret = dns_message_process(mesg)))
             {
-                message_edns0_clear_undefined_flags(mesg);
+                dns_message_edns0_clear_undefined_flags(mesg);
 
-                switch(message_get_query_class(mesg))
+                switch(dns_message_get_query_class(mesg))
                 {
                     case CLASS_IN:
                     {
-#if HAS_DYNUPDATE_SUPPORT
+#if ZDB_HAS_PRIMARY_SUPPORT && ZDB_HAS_DYNUPDATE_SUPPORT
                         /**
                          * @note It's the responsibility of the called function (or one of its callees) to ensure
                          *       this does not take much time and thus to trigger a background task with the
@@ -510,20 +298,25 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                         local_statistics->udp_updates_count++;
                         if(ISOK(dynupdate_query_service_enqueue(database, mesg, fd)))
                         {
-                            return SUCCESS_DROPPED; // NOT break; the processing will be handled in another thread
+                            return SUCCESS_DROPPED; // NOT break;
                         }
                         else
                         {
-                            log_warn("update [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : cannot enqueue the update message",
-                                     ntohs(message_get_id(mesg)),
-                                     message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
-                                     message_get_sender_sa(mesg));
-                            message_make_error(mesg, FP_RCODE_SERVFAIL);
+                            log_warn(
+                                "update [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : cannot enqueue the "
+                                "update message",
+                                ntohs(dns_message_get_id(mesg)),
+                                dns_message_get_canonised_fqdn(mesg),
+                                dns_message_get_query_type_ptr(mesg),
+                                dns_message_get_query_class_ptr(mesg),
+                                dns_message_get_sender_sa(mesg));
+                            dns_message_make_error(mesg, FP_RCODE_SERVFAIL);
                             local_statistics->udp_fp[FP_RCODE_SERVFAIL]++;
-                            return SUCCESS;         // needs to be >= 0: the server will send the SERVFAIL message
+                            return SUCCESS; // needs to be >= 0: the server will send the SERVFAIL message
                         }
 #else
-                        message_make_error(mesg, FP_FEATURE_DISABLED);
+                        dns_message_set_status(mesg, FP_FEATURE_DISABLED);
+                        dns_message_transform_to_error(mesg);
                         local_statistics->udp_fp[FP_FEATURE_DISABLED]++;
                         break;
 #endif
@@ -532,10 +325,12 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                     default:
                     {
                         log_warn("update [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
-                                 ntohs(message_get_id(mesg)),
-                                 message_get_canonised_fqdn(mesg), message_get_query_type_ptr(mesg), message_get_query_class_ptr(mesg),
-                                 message_get_sender_sa(mesg));
-                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
+                                 ntohs(dns_message_get_id(mesg)),
+                                 dns_message_get_canonised_fqdn(mesg),
+                                 dns_message_get_query_type_ptr(mesg),
+                                 dns_message_get_query_class_ptr(mesg),
+                                 dns_message_get_sender_sa(mesg));
+                        dns_message_make_error(mesg, FP_NOT_SUPP_CLASS);
                         local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
                         break;
                     }
@@ -543,95 +338,13 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
             } // if message process succeeded
             else // an error occurred : no query to be done at all
             {
-                if(message_get_query_count_ne(mesg) == NETWORK_ONE_16)
-                {
-                    const u8 *canonized_fqdn = message_get_canonised_fqdn(mesg);
+                server_process_message_update_log_error(mesg, ret);
 
-                    if(canonized_fqdn != NULL)
-                    {
-                        if((ret != TSIG_BADTIME) && (ret != TSIG_BADSIG)) // BADKEY doesn't set the time nor the name
-                        {
-                            log_notice("update (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                       ntohs(message_get_id(mesg)),
-                                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                       canonized_fqdn,
-                                       message_get_query_type_ptr(mesg),
-                                       message_get_query_class_ptr(mesg),
-                                       RCODE_ERROR_CODE(message_get_status(mesg)),
-                                       ret,
-                                       message_get_sender_sa(mesg),
-                                       message_get_size_u16(mesg));
-                        }
-                        else
-                        {
-                            s64 epoch = message_tsig_get_epoch(mesg);
-                            s64 fudge = message_tsig_get_fudge(mesg);
-
-                            if(message_has_tsig(mesg))
-                            {
-                                log_notice("update (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu key=%{dnsname} epoch=%lli (%T) +-%llis",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           canonized_fqdn,
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg),
-                                           message_tsig_get_name(mesg),
-                                           epoch,
-                                           epoch,
-                                           fudge);
-                            }
-                            else
-                            {
-                                log_notice("update (%04hx) [%02x|%02x] %{dnsname} %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                           ntohs(message_get_id(mesg)),
-                                           message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                           canonized_fqdn,
-                                           message_get_query_type_ptr(mesg),
-                                           message_get_query_class_ptr(mesg),
-                                           RCODE_ERROR_CODE(message_get_status(mesg)),
-                                           ret,
-                                           message_get_sender_sa(mesg),
-                                           message_get_size_u16(mesg));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        log_notice("update (%04hx) [%02x|%02x] ? %{dnstype} %{dnsclass} : %r (%r) (%{sockaddrip}) size=%hu",
-                                   ntohs(message_get_id(mesg)),
-                                   message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                                   RCODE_ERROR_CODE(message_get_status(mesg)),
-                                   message_get_query_type_ptr(mesg),
-                                   message_get_query_class_ptr(mesg),
-                                   ret,
-                                   message_get_sender_sa(mesg),
-                                   message_get_size_u16(mesg));
-                    }
-                }
-                else
-                {
-                    log_notice("update (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu : %r (%r) (%{sockaddrip}) size=%hu",
-                               ntohs(message_get_id(mesg)),
-                               message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                               message_get_query_count(mesg), // QC
-                               message_get_answer_count(mesg), // AC
-                               message_get_authority_count(mesg), // NS
-                               message_get_additional_count(mesg), // AR
-                               RCODE_ERROR_CODE(message_get_status(mesg)),
-                               ret,
-                               message_get_sender_sa(mesg),
-                               message_get_size_u16(mesg));
-                }
-
-                local_statistics->udp_fp[message_get_status(mesg)]++;
+                local_statistics->udp_fp[dns_message_get_status(mesg)]++;
 
                 if((ret == UNPROCESSABLE_MESSAGE) && (g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE))
                 {
-                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
+                    log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, dns_message_get_buffer(mesg), dns_message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
                 }
 
                 /*
@@ -639,13 +352,13 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
                  *
                  * ... && (message_is_query(mesg) ??? and if there the query number is > 0 ???
                  */
-                if( (ret != INVALID_MESSAGE) && ((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
+                if((ret != INVALID_MESSAGE) && ((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
                 {
-                    message_edns0_clear_undefined_flags(mesg);
+                    dns_message_edns0_clear_undefined_flags(mesg);
 
-                    if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
                     {
-                        message_transform_to_error(mesg);
+                        dns_message_transform_to_error(mesg);
                     }
                 }
                 else
@@ -656,8 +369,84 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
             }
             break;
         } // case update
+#if DNSCORE_HAS_CTRL_DYNAMIC_PROVISIONING
+        case OPCODE_CTRL:
+        {
+            if(ISOK(ret = message_process(mesg)))
+            {
+                message_edns0_clear_undefined_flags(mesg);
 
-        case (15<<OPCODE_SHIFT):
+                switch(message_get_query_class(mesg))
+                {
+                    case CLASS_CTRL:
+                    {
+                        if((message_get_opcode(mesg) == OPCODE_NOTIFY) && ((g_config->server_flags & SERVER_FL_DYNAMIC_PROVISIONING) != 0))
+                        {
+                            ya_result return_value;
+
+                            local_statistics->udp_notify_input_count++;
+
+                            log_info("notify (%04hx) %{dnsname} (%{sockaddr})", ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), message_get_sender_sa(mesg));
+
+                            // remember if it's a query or an answer
+
+                            bool answer = message_is_answer(mesg);
+                            return_value = notify_process(mesg); // thread-safe
+
+                            local_statistics->udp_fp[message_get_status(mesg)]++;
+
+                            if(FAIL(return_value))
+                            {
+                                log_err("notify (%04hx) %{dnsname} failed : %r", ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg), return_value);
+
+                                if(answer)
+                                {
+                                    return;
+                                }
+
+                                message_transform_to_error(mesg);
+#if DNSCORE_HAS_TSIG_SUPPORT
+                                if(message_has_tsig(mesg)) /* NOTE: the TSIG information is in mesg */
+                                {
+                                    tsig_sign_answer(mesg);
+                                }
+#endif
+                                break;
+                            }
+                            else
+                            {
+                                if(answer)
+                                {
+                                    return;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            log_warn("query (%04hx) unhandled opcode %i (%{sockaddr}) for ", ntohs(message_get_id(mesg)), message_get_opcode(mesg) >> OPCODE_SHIFT, message_get_sender_sa(mesg));
+                        }
+
+                        break;
+                    }
+                    default:
+                    {
+                        log_warn("ctrl [%04hx] %{dnsname} %{dnstype} %{dnsclass} (%{sockaddrip}) : unsupported class",
+                                 ntohs(message_get_id(mesg)),
+                                 message_get_canonised_fqdn(mesg),
+                                 message_get_query_type_ptr(mesg),
+                                 message_get_query_class_ptr(mesg),
+                                 message_get_sender_sa(mesg));
+                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
+                        local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
+                        break;
+                    }
+                } // ctrl class
+            } // if message process succeeded
+
+            break;
+        } // case CTRL
+#endif // HAS_CTRL_DYNAMIC_PROVISIONING
+        case(15 << OPCODE_SHIFT):
         {
             if(service_should_reconfigure_or_stop(ctx->worker) || (ctx->must_stop)) // will fallthrough on purpose
             {
@@ -668,25 +457,26 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
         default:
         {
             log_notice("opcode-%i (%04hx) [%02x|%02x] QC=%hu AN=%hu NS=%hu AR=%hu (%{sockaddrip}) size=%hu",
-                       (u32)(message_get_opcode(mesg) >> OPCODE_SHIFT),
-                       ntohs(message_get_id(mesg)),
-                       message_get_flags_hi(mesg),message_get_flags_lo(mesg),
-                       message_get_query_count(mesg), // QC
-                       message_get_answer_count(mesg), // AC
-                       message_get_authority_count(mesg), // NS
-                       message_get_additional_count(mesg), // AR
-                       message_get_sender_sa(mesg),
-                       message_get_size_u16(mesg));
+                       (uint32_t)(dns_message_get_opcode(mesg) >> OPCODE_SHIFT),
+                       ntohs(dns_message_get_id(mesg)),
+                       dns_message_get_flags_hi(mesg),
+                       dns_message_get_flags_lo(mesg),
+                       dns_message_get_query_count(mesg),      // QC
+                       dns_message_get_answer_count(mesg),     // AC
+                       dns_message_get_authority_count(mesg),  // NS
+                       dns_message_get_additional_count(mesg), // AR
+                       dns_message_get_sender_sa(mesg),
+                       dns_message_get_size_u16(mesg));
 
-            message_process_lenient(mesg);
+            dns_message_process_lenient(mesg);
 
-            if(message_get_status(mesg) == RCODE_OK) // else a TSIG may have some complain
+            if(dns_message_get_status(mesg) == RCODE_OK) // else a TSIG may have some complain
             {
-                message_set_status(mesg, FP_RCODE_NOTIMP);
-                message_update_answer_status(mesg);
+                dns_message_set_status(mesg, FP_RCODE_NOTIMP);
+                dns_message_update_answer_status(mesg);
 
 #if DNSCORE_HAS_TSIG_SUPPORT
-                if(message_has_tsig(mesg))
+                if(dns_message_has_tsig(mesg))
                 {
                     tsig_sign_answer(mesg);
                 }
@@ -702,15 +492,15 @@ server_process_message_udp(network_thread_context_base_t *ctx, message_data *mes
 
             if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
             {
-                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, message_get_buffer(mesg), message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
+                log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, dns_message_get_buffer(mesg), dns_message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
             }
 
-            if((message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
+            if((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
             {
-                if(!message_has_tsig(mesg) && (message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
                 {
-                    message_edns0_clear_undefined_flags(mesg);
-                    message_transform_to_error(mesg);
+                    dns_message_edns0_clear_undefined_flags(mesg);
+                    dns_message_transform_to_error(mesg);
                 }
             }
             else

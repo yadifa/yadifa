@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,35 +28,34 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
-
-/** @defgroup 
- *  @ingroup 
- *  @brief 
- *
- *  
- *
- * @{
- *
  *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup
+ * @brief
+ *
+ *
+ *
+ * @{
+ *----------------------------------------------------------------------------*/
+
+#include "dnscore/dnscore_config.h"
 #include <unistd.h>
 #include <sys/wait.h>
 #include "dnscore/process.h"
 #include "dnscore/thread_pool.h"
+#include "dnscore/thread.h"
 
 /*------------------------------------------------------------------------------
  * GLOBAL VARIABLES */
 
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 #if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-void debug_malloc_mutex_lock();     // Internal use only
-void debug_malloc_mutex_unlock();   // Internal use only
+void debug_malloc_mutex_lock();   // Internal use only
+void debug_malloc_mutex_unlock(); // Internal use only
 #endif
 
 /*------------------------------------------------------------------------------
@@ -67,8 +66,11 @@ void debug_malloc_mutex_unlock();   // Internal use only
 
 pid_t g_pid = -1;
 
-pid_t
-fork_ex()
+#if __windows__
+pid_t fork();
+#endif
+
+pid_t fork_ex()
 {
 #if __unix__
     logger_flush();
@@ -76,29 +78,19 @@ fork_ex()
     service_stop_all();
     thread_pool_stop_all();
 
-#if MUTEX_CONTENTION_MONITOR
-    mutex_contention_monitor_stop();
-#endif
-
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-    // ensure this mutex isn't locked while we are forking
-    debug_malloc_mutex_lock();
-#endif
+    // there should be no running thread
+    if(g_thread_starting + g_thread_running != 0)
+    {
+        osformatln(termerr, "fork_ex() will fork while thread are still running! (starting: %i, running: %i)", g_thread_starting, g_thread_running);
+        flusherr();
+    }
 
     pid_t pid = fork();
-
-#if DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
-    debug_malloc_mutex_unlock();
-#endif
 
     if(pid == 0)
     {
         g_pid = getpid();
     }
-
-#if MUTEX_CONTENTION_MONITOR
-    mutex_contention_monitor_start();
-#endif
 
     thread_pool_start_all();
     service_start_all();
@@ -106,21 +98,20 @@ fork_ex()
 
     return pid;
 #else
-    return -1;
+    return fork(); // will fail with ENOSYS
 #endif
 }
 
-int
-waitpid_ex(pid_t pid, int *wstatus, int options)
+int waitpid_ex(pid_t pid, int *wstatus, int options)
 {
     int ret;
 
 #if __unix__
-    
+
     while((ret = waitpid(pid, wstatus, options)) < 0)
     {
         int err = errno;
-        
+
         if(err == EINTR)
         {
             continue;
@@ -130,11 +121,22 @@ waitpid_ex(pid_t pid, int *wstatus, int options)
             return -1;
         }
     }
-    
-    return ret;
 #else
-    WaitForSingleObject(pid, INFINITE);
+    HANDLE handle = OpenProcess(SYNCHRONIZE, false, pid);
+    if(handle)
+    {
+        DWORD exit_code;
+        WaitForSingleObject(handle, INFINITE);
+        GetExitCodeProcess(handle, &exit_code);
+        CloseHandle(handle);
+        ret = (int)(exit_code & 255);
+    }
+    else
+    {
+        ret = ERROR;
+    }
 #endif
+    return ret;
 }
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,9 +28,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef POOL_H
 #define POOL_H
@@ -41,35 +39,38 @@
 struct pool_s;
 
 typedef void *pool_allocate_callback(void *args);
-typedef void pool_reset_callback(void *ptr, void *args);
-typedef void pool_free_callback(void *ptr, void* args);            // for destruction
+typedef void  pool_reset_callback(void *ptr, void *args);
+typedef void  pool_free_callback(void *ptr, void *args); // for destruction
 
 struct pool_s
 {
-    ptr_vector pool;
+    mutex_t                 mtx;
+    cond_t                  cond;
+    ptr_vector_t            pool;
     pool_allocate_callback *allocate_method;
-    pool_free_callback *free_method;
-    pool_reset_callback *reset_method;
-    mutex_t mtx;
-    void *allocate_args;
-    volatile u64 allocated_count;
-    volatile u64 released_count;
-    const char* name;
-    s32 max_size;       // do not retain more than this, stored as "max_size - 1"
-    volatile s32 current_count;
-    volatile s32 peak_count;
-    
-    struct pool_s *next;
-    bool hard_limit;
-    bool maxed;
+    pool_free_callback     *free_method;
+    pool_reset_callback    *reset_method;
+    void                   *allocate_args;
+    atomic_uint64_t         allocated_count;
+    atomic_uint64_t         released_count;
+    const char             *name;
+    int32_t                 max_size; // do not retain more than this, stored as "max_size - 1"
+    atomic_int              current_count;
+    atomic_int              peak_count;
+    atomic_int              wait_count;
+
+    struct pool_s          *next; // used to keep track of all the memory pools
+    bool                    hard_limit;
+    bool                    maxed;
 };
 
-typedef struct pool_s pool_s;
+typedef struct pool_s pool_t;
+typedef pool_t        pool_s; // for compatibility
 
 struct logger_handle;
 
 /**
- * 
+ *
  * @param pool
  * @param allocate
  * @param free
@@ -78,19 +79,60 @@ struct logger_handle;
  * @param name
  */
 
-void pool_init_ex(pool_s *pool, pool_allocate_callback *allocate, pool_free_callback *free, pool_reset_callback *reset, void *allocate_args, const char* name);
-void pool_init(pool_s *pool, pool_allocate_callback *allocate, pool_free_callback *free, void *allocate_args, const char* name);
-void pool_finalize(pool_s *pool);
+void pool_init_ex(pool_t *pool, pool_allocate_callback *allocate, pool_free_callback *free, pool_reset_callback *reset, void *allocate_args, const char *name);
+void pool_init(pool_t *pool, pool_allocate_callback *allocate, pool_free_callback *free, void *allocate_args, const char *name);
 
-void pool_log_stats(pool_s *pool);
-void pool_log_all_stats();
+/**
+ * Destroys the pool.
+ * Before calling it, all pool users need to have been stopped and memory should have been released.
+ */
 
-void pool_log_stats_ex(pool_s *pool, struct logger_handle* handle, u32 level);
-void pool_log_all_stats_ex(struct logger_handle* handle, u32 level);
+void  pool_finalize(pool_t *pool);
 
-void *pool_alloc(pool_s *pool);
-void pool_release(pool_s *pool, void *p);
+void  pool_log_stats(pool_t *pool);
+void  pool_log_all_stats();
 
-void pool_set_size(pool_s *pool, s32 max_size);
+void  pool_log_stats_ex(pool_t *pool, struct logger_handle_s *handle, uint32_t level);
+void  pool_log_all_stats_ex(struct logger_handle_s *handle, uint32_t level);
+
+void *pool_alloc(pool_t *pool);
+
+/**
+ * Blocs while the maximum number of allocations has been reached.
+ * Does NOT guarantee the next allocation will succeed. (race condition)
+ *
+ * It's unlikely to be the function to use as it does not check for any side shutdown state.
+ */
+
+void pool_wait(pool_t *pool);
+
+/**
+ * Blocs while the maximum number of allocations has been reached or until the time in us as elapsed.
+ * Does NOT guarantee the next allocation will succeed. (race condition)
+ *
+ * Allows to poll for shutdown states at interval.
+ */
+
+void pool_timedwait(pool_t *pool, int64_t timeoutus);
+
+/**
+ * Allocates an item but always work in hard-limit mode.
+ * It will only return after allocating the item.
+ */
+
+void *pool_alloc_wait(pool_t *pool);
+
+/**
+ * Allocates an item but always work in hard-limit mode.
+ * It will only return after allocating the item or the timeout has elapsed (then it's a NULL).
+ */
+
+void   *pool_alloc_wait_timeout(pool_t *pool, int64_t timeoutus);
+
+void    pool_release(pool_t *pool, void *p);
+
+void    pool_set_size(pool_t *pool, int32_t max_size);
+
+int32_t pool_get_allocated(pool_t *pool);
 
 #endif

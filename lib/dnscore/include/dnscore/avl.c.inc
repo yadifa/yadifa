@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup collections Generic collections functions
- *  @ingroup dnscore
- *  @brief AVL structure and functions
+/**-----------------------------------------------------------------------------
+ * @defgroup collections Generic collections functions
+ * @ingroup dnscore
+ * @brief AVL structure and functions
  *
  *  AVL structure and functions
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-/* Optimization that have an effect on some avl depths */
+/*------------------------------------------------------------------------------
+ *
+ Optimization that have an effect on some avl depths
+ *
+ *----------------------------------------------------------------------------*/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -54,11 +57,13 @@
 void logger_flush();
 
 #ifndef DUMPER_FUNCTION
-#define DUMPER_FUNCTION(...) formatln(__VA_ARGS__);flushout()
+#define DUMPER_FUNCTION(...)                                                                                                                                                                                                                   \
+    formatln(__VA_ARGS__);                                                                                                                                                                                                                     \
+    flushout()
 #endif
 
 #if defined(DEBUG_DUMP)
-#define DUMP(...) DUMPER_FUNCTION(__VA_ARGS__)
+#define DUMP(...)      DUMPER_FUNCTION(__VA_ARGS__)
 #define DUMP_NODE(...) AVL_DUMP_NODE(__VA_ARGS__)
 #else
 #define DUMP(...)
@@ -80,11 +85,11 @@ void logger_flush();
 #endif
 
 #ifndef AVL_REFERENCE_IS_POINTER
-#define AVL_REFERENCE_IS_POINTER TRUE
+#define AVL_REFERENCE_IS_POINTER true
 #endif
 
 #ifndef AVL_REFERENCE_IS_CONST
-#define AVL_REFERENCE_IS_CONST FALSE
+#define AVL_REFERENCE_IS_CONST false
 #endif
 
 #if AVL_REFERENCE_IS_POINTER
@@ -93,6 +98,10 @@ void logger_flush();
 #else
 #undef AVL_REFERENCE_MODIFIER
 #define AVL_REFERENCE_MODIFIER
+#endif
+
+#ifndef AVL_NODE_IS_MAP
+#define AVL_NODE_IS_MAP 1
 #endif
 
 #if AVL_REFERENCE_IS_CONST
@@ -105,70 +114,67 @@ void logger_flush();
 #define AVL_REFERENCE_CONST const
 #endif
 
-#define TOOLEFT    (-2)
-#define LEFT       (-1)
-#define MIDDLE      0
-#define RIGHT       1
-#define TOORIGHT    2
+#define TOOLEFT   (-2)
+#define LEFT      (-1)
+#define MIDDLE    0
+#define RIGHT     1
+#define TOORIGHT  2
 
-#define DIR_LEFT    0
-#define DIR_RIGHT   1
-#define DIR_CRASH   127
+#define DIR_LEFT  0
+#define DIR_RIGHT 1
+#define DIR_CRASH 127
 
-static s8 DIR_TO_AVL_BALANCE_[2] = {LEFT, RIGHT};
+static int8_t DIR_TO_AVL_BALANCE_[2] = {LEFT, RIGHT};
 #define DIR_TO_AVL_BALANCE(dir) DIR_TO_AVL_BALANCE_[(dir)]
 
-static s8 AVL_BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DIR_RIGHT};
-#define AVL_BALANCE_TO_DIR(bal) AVL_BALANCE_TO_DIR_[(bal)-TOOLEFT]
+static int8_t AVL_BALANCE_TO_DIR_[5] = {DIR_LEFT, DIR_LEFT, DIR_CRASH, DIR_RIGHT, DIR_RIGHT};
+#define AVL_BALANCE_TO_DIR(bal)  AVL_BALANCE_TO_DIR_[(bal) - TOOLEFT]
 
-#define NODE_AVL_BALANCED(node) (AVL_BALANCE(node)==MIDDLE)
+#define NODE_AVL_BALANCED(node)  (AVL_BALANCE(node) == MIDDLE)
 
-#define MUST_REAVL_BALANCE(node) ((AVL_BALANCE(node)<LEFT)||(AVL_BALANCE(node)>RIGHT))
+#define MUST_REAVL_BALANCE(node) ((AVL_BALANCE(node) < LEFT) || (AVL_BALANCE(node) > RIGHT))
 
-#if (defined(AVL_PARENT) && DEBUG)
+#if(defined(AVL_PARENT) && DEBUG)
 
-#define ASSERT_CHECK_CHILD_PARENT_LINK(node)                    \
-    if(node!=NULL)                                              \
-    {                                                           \
-        AVL_NODE_TYPE *parent__ = AVL_PARENT(node);             \
-        if(parent__ != NULL)                                    \
-        {                                                       \
-            AVL_NODE_TYPE *l__ = AVL_LEFT_CHILD(parent__);      \
-            AVL_NODE_TYPE *r__ = AVL_RIGHT_CHILD(parent__);     \
-            if(!(l__==(node) ||                                 \
-                 r__==(node))	)                               \
-                {                                               \
-                    DUMP("parent->node link broken");           \
-                    DUMP("\tparent=(%p, " AVL_REFERENCE_FORMAT_STRING")",parent__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(parent__))); \
-                    if(l__ != NULL)                                                                                                 \
-                    {                                                                                                               \
-                        DUMP("\t\tparent.lt=(%p, " AVL_REFERENCE_FORMAT_STRING")",l__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(l__)));   \
-                    }                                                                                                               \
-                    if(r__ != NULL)                                                                                                 \
-                    {                                                                                                               \
-                        DUMP("\t\tparent.rt=(%p, " AVL_REFERENCE_FORMAT_STRING")",r__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(r__)));   \
-                    }                                                                                                               \
-                    DUMP("\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));            \
-                    DUMP_NODE(parent__);                        \
-                    DUMP_NODE(node);                            \
-                    logger_flush();                             \
-                    flushout();                                 \
-                    flusherr();                                 \
-                    puts("assertion failed on a " TOSTRING(AVL_NODE_TYPE));fflush(NULL);      \
-                    abort();                                    \
-                }                                               \
-        }                                                       \
+#define ASSERT_CHECK_CHILD_PARENT_LINK(node)                                                                                                                                                                                                   \
+    if(node != NULL)                                                                                                                                                                                                                           \
+    {                                                                                                                                                                                                                                          \
+        AVL_NODE_TYPE *parent__ = AVL_PARENT(node);                                                                                                                                                                                            \
+        if(parent__ != NULL)                                                                                                                                                                                                                   \
+        {                                                                                                                                                                                                                                      \
+            AVL_NODE_TYPE *l__ = AVL_LEFT_CHILD(parent__);                                                                                                                                                                                     \
+            AVL_NODE_TYPE *r__ = AVL_RIGHT_CHILD(parent__);                                                                                                                                                                                    \
+            if(!(l__ == (node) || r__ == (node)))                                                                                                                                                                                              \
+            {                                                                                                                                                                                                                                  \
+                DUMP("parent->node link broken");                                                                                                                                                                                              \
+                DUMP("\tparent=(%p, " AVL_REFERENCE_FORMAT_STRING ")", parent__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(parent__)));                                                                                                               \
+                if(l__ != NULL)                                                                                                                                                                                                                \
+                {                                                                                                                                                                                                                              \
+                    DUMP("\t\tparent.lt=(%p, " AVL_REFERENCE_FORMAT_STRING ")", l__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(l__)));                                                                                                                \
+                }                                                                                                                                                                                                                              \
+                if(r__ != NULL)                                                                                                                                                                                                                \
+                {                                                                                                                                                                                                                              \
+                    DUMP("\t\tparent.rt=(%p, " AVL_REFERENCE_FORMAT_STRING ")", r__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(r__)));                                                                                                                \
+                }                                                                                                                                                                                                                              \
+                DUMP("\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING ")", node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));                                                                                                                         \
+                DUMP_NODE(parent__);                                                                                                                                                                                                           \
+                DUMP_NODE(node);                                                                                                                                                                                                               \
+                logger_flush();                                                                                                                                                                                                                \
+                flushout();                                                                                                                                                                                                                    \
+                flusherr();                                                                                                                                                                                                                    \
+                puts("assertion failed on a " TOSTRING(AVL_NODE_TYPE));                                                                                                                                                                        \
+                fflush(NULL);                                                                                                                                                                                                                  \
+                abort();                                                                                                                                                                                                                       \
+            }                                                                                                                                                                                                                                  \
+        }                                                                                                                                                                                                                                      \
     }
 #else
-
 #define ASSERT_CHECK_CHILD_PARENT_LINK(node)
-
 #endif
 
-static AVL_NODE_TYPE*
-avl_node_single_rotation2(AVL_NODE_TYPE *node)
+static AVL_NODE_TYPE *avl_node_single_rotation2(AVL_NODE_TYPE *node)
 {
-    AVL_NODE_TYPE* save;
+    AVL_NODE_TYPE *save;
 
     assert(node != NULL);
 
@@ -223,10 +229,9 @@ avl_node_single_rotation2(AVL_NODE_TYPE *node)
     return save;
 }
 
-static AVL_NODE_TYPE*
-avl_node_double_rotation2(AVL_NODE_TYPE *node)
+static AVL_NODE_TYPE *avl_node_double_rotation2(AVL_NODE_TYPE *node)
 {
-    AVL_NODE_TYPE* save;
+    AVL_NODE_TYPE *save;
 
     assert(node != NULL);
 
@@ -333,8 +338,7 @@ avl_node_double_rotation2(AVL_NODE_TYPE *node)
     return save;
 }
 
-static AVL_NODE_TYPE*
-avl_create_node(AVL_REFERENCE_TYPE hash)
+static AVL_NODE_TYPE *avl_create_node(AVL_REFERENCE_TYPE hash)
 {
     AVL_NODE_TYPE *node;
 
@@ -359,11 +363,7 @@ avl_create_node(AVL_REFERENCE_TYPE hash)
  *
  */
 
-void
-AVL_PREFIXED(init)(AVL_TREE_TYPE* tree)
-{
-    AVL_TREE_ROOT(tree) = NULL;
-}
+void AVL_PREFIXED(init)(AVL_TREE_TYPE *tree) { AVL_TREE_ROOT(tree) = NULL; }
 
 /** @brief Find a node in the tree
  *
@@ -375,12 +375,11 @@ AVL_PREFIXED(init)(AVL_TREE_TYPE* tree)
  *  @return A pointer to the node or NULL if there is no such node.
  */
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(find)(AVL_CONST_TREE_TYPE *tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
-    const AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    const AVL_NODE_TYPE                      *node = AVL_TREE_ROOT(tree);
     AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
 
     /* This is one of the parts I could try to optimize
@@ -398,19 +397,19 @@ AVL_PREFIXED(find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
 #if !AVL_TERNARYCMP
         if(AVL_ISEQUAL(h, obj_hash))
         {
-            return (AVL_NODE_TYPE*)node;
+            return (AVL_NODE_TYPE *)node;
         }
 
-        node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h)&1);
+        node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h) & 1);
 #else
         int cmp = AVL_COMPARE(h, obj_hash);
 
         if(cmp == 0)
         {
-            return (AVL_NODE_TYPE*)node;
+            return (AVL_NODE_TYPE *)node;
         }
 
-        node = AVL_CHILD(node, (cmp<0)&1);
+        node = AVL_CHILD(node, (cmp < 0) & 1);
 #endif
     }
 
@@ -442,18 +441,17 @@ AVL_PREFIXED(find)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_
  *
  */
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE *tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
-    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    AVL_NODE_TYPE                            *node = AVL_TREE_ROOT(tree);
     AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
 
     // the stack is used to find parents
 
 #if !AVL_HAS_PARENT_POINTER
-    int stack_size = 0;
+    int            stack_size = 0;
     AVL_NODE_TYPE *stack[48];
     stack[0] = NULL;
 #else
@@ -477,22 +475,21 @@ AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
 #if !AVL_TERNARYCMP
             if(AVL_ISEQUAL(h, obj_hash))
             {
-                return (AVL_NODE_TYPE*)node;
+                return (AVL_NODE_TYPE *)node;
             }
 
-            node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h)&1);
+            node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h) & 1);
 #else
             int cmp = AVL_COMPARE(h, obj_hash);
 
             if(cmp == 0)
             {
-                return (AVL_NODE_TYPE*)node;
+                return (AVL_NODE_TYPE *)node;
             }
 
-            node = AVL_CHILD(node, (cmp < 0)&1);
+            node = AVL_CHILD(node, (cmp < 0) & 1);
 #endif
-        }
-        while(node != NULL);
+        } while(node != NULL);
 
         // the node was not found, now, using the stack, find the next node from the key
 
@@ -525,7 +522,7 @@ AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
 
         if(cmp >= 0)
         {
-            return (AVL_NODE_TYPE*)node;
+            return (AVL_NODE_TYPE *)node;
         }
 #endif
 
@@ -545,7 +542,7 @@ AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
                 }
                 else
                 {
-                    return (AVL_NODE_TYPE*)right_node;
+                    return (AVL_NODE_TYPE *)right_node;
                 }
             }
         }
@@ -559,7 +556,7 @@ AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
 #if !AVL_HAS_PARENT_POINTER
                 if(stack_size == 0)
                 {
-                    return (AVL_NODE_TYPE*)NULL;
+                    return (AVL_NODE_TYPE *)NULL;
                 }
 
                 const AVL_NODE_TYPE *parent_node = stack[--stack_size];
@@ -567,17 +564,17 @@ AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
                 const AVL_NODE_TYPE *parent_node = AVL_PARENT(node);
                 if(parent_node == NULL)
                 {
-                    return (AVL_NODE_TYPE*)NULL;
+                    return (AVL_NODE_TYPE *)NULL;
                 }
 #endif
                 // if the node is the left child of the parent, then return the parent
 
                 if(node == AVL_CHILD(parent_node, DIR_LEFT))
                 {
-                    return (AVL_NODE_TYPE*)parent_node;
+                    return (AVL_NODE_TYPE *)parent_node;
                 }
 
-                node = (AVL_NODE_TYPE*)parent_node;
+                node = (AVL_NODE_TYPE *)parent_node;
             }
         }
     }
@@ -597,18 +594,17 @@ AVL_PREFIXED(find_key_or_next)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
  *  @return A pointer to the node, or if it does not exists the node after it, or NULL if there is no such node.
  */
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE *tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
-    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    AVL_NODE_TYPE                            *node = AVL_TREE_ROOT(tree);
     AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
 
     // the stack is used to find parents
 
 #if !AVL_HAS_PARENT_POINTER
-    int stack_size = 0;
+    int            stack_size = 0;
     AVL_NODE_TYPE *stack[48];
     stack[0] = NULL;
 #else
@@ -632,22 +628,21 @@ AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
 #if !AVL_TERNARYCMP
             if(AVL_ISEQUAL(h, obj_hash))
             {
-                return (AVL_NODE_TYPE*)node;
+                return (AVL_NODE_TYPE *)node;
             }
 
-            node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h)&1);
+            node = AVL_CHILD(node, AVL_ISBIGGER(obj_hash, h) & 1);
 #else
             int cmp = AVL_COMPARE(h, obj_hash);
 
             if(cmp == 0)
             {
-                return (AVL_NODE_TYPE*)node;
+                return (AVL_NODE_TYPE *)node;
             }
 
-            node = AVL_CHILD(node, (cmp < 0)&1);
+            node = AVL_CHILD(node, (cmp < 0) & 1);
 #endif
-        }
-        while(node != NULL);
+        } while(node != NULL);
 
         // the node was not found, now, using the stack, find the next node from the key
 
@@ -680,7 +675,7 @@ AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
 
         if(cmp >= 0)
         {
-            return (AVL_NODE_TYPE*)node;
+            return (AVL_NODE_TYPE *)node;
         }
 #endif
 
@@ -700,7 +695,7 @@ AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
                 }
                 else
                 {
-                    return (AVL_NODE_TYPE*)left_node;
+                    return (AVL_NODE_TYPE *)left_node;
                 }
             }
         }
@@ -714,7 +709,7 @@ AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
 #if !AVL_HAS_PARENT_POINTER
                 if(stack_size == 0)
                 {
-                    return (AVL_NODE_TYPE*)NULL;
+                    return (AVL_NODE_TYPE *)NULL;
                 }
 
                 const AVL_NODE_TYPE *parent_node = stack[--stack_size];
@@ -722,17 +717,17 @@ AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
                 const AVL_NODE_TYPE *parent_node = AVL_PARENT(node);
                 if(parent_node == NULL)
                 {
-                    return (AVL_NODE_TYPE*)NULL;
+                    return (AVL_NODE_TYPE *)NULL;
                 }
 #endif
                 // if the node is the right child of the parent, then return the parent
 
                 if(node == AVL_CHILD(parent_node, DIR_RIGHT))
                 {
-                    return (AVL_NODE_TYPE*)parent_node;
+                    return (AVL_NODE_TYPE *)parent_node;
                 }
 
-                node = (AVL_NODE_TYPE*)parent_node;
+                node = (AVL_NODE_TYPE *)parent_node;
             }
         }
     }
@@ -760,14 +755,11 @@ AVL_PREFIXED(find_key_or_prev)(AVL_CONST_TREE_TYPE* tree, AVL_REFERENCE_CONST AV
  *  @return The node associated to the hash
  */
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
+AVL_NODE_TYPE *AVL_PREFIXED(insert)(AVL_TREE_TYPE *tree, AVL_REFERENCE_TYPE obj_hash)
 {
     assert(tree != NULL);
 
-    DUMP("avl_insert(%p, " AVL_REFERENCE_FORMAT_STRING
-         ") ------------------------------",
-         tree, AVL_REFERENCE_FORMAT(obj_hash));
+    DUMP("avl_insert(%p, " AVL_REFERENCE_FORMAT_STRING ") ------------------------------", tree, AVL_REFERENCE_FORMAT(obj_hash));
 
     if(AVL_TREE_ROOT(tree) == NULL)
     {
@@ -780,14 +772,14 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
         return AVL_TREE_ROOT(tree);
     }
 
-    AVL_NODE_TYPE * nodes[AVL_MAX_DEPTH];
-    s8 balances[AVL_MAX_DEPTH];
-    s8 dirs[AVL_MAX_DEPTH];
+    AVL_NODE_TYPE     *nodes[AVL_DEPTH_MAX];
+    int8_t             balances[AVL_DEPTH_MAX];
+    int8_t             dirs[AVL_DEPTH_MAX];
 
-    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    AVL_NODE_TYPE     *node = AVL_TREE_ROOT(tree);
     AVL_REFERENCE_TYPE node_hash;
-    int level = 0;
-    s8 dir = MIDDLE;
+    int                level = 0;
+    int8_t             dir = MIDDLE;
 
 #if !AVL_TERNARYCMP
     while((node != NULL) && !AVL_ISEQUAL(obj_hash, (node_hash = AVL_REFERENCE(node))))
@@ -796,7 +788,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
         balances[level] = AVL_BALANCE(node);
 
         /* DIR_LEFT = 0, DIR_RIGHT = 1 */
-        dir = AVL_ISBIGGER(obj_hash, node_hash)&1;
+        dir = AVL_ISBIGGER(obj_hash, node_hash) & 1;
 
         ASSERT_CHECK_CHILD_PARENT_LINK(node);
 
@@ -821,7 +813,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 
         /* DIR_LEFT = 0, DIR_RIGHT = 1 */
 
-        dir = (cmp > 0)&1;
+        dir = (cmp > 0) & 1;
 
         ASSERT_CHECK_CHILD_PARENT_LINK(node);
 
@@ -850,7 +842,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 
     /* the parent is node */
 
-    AVL_NODE_TYPE* ret = avl_create_node(obj_hash);
+    AVL_NODE_TYPE *ret = avl_create_node(obj_hash);
     AVL_CHILD(node, dir) = ret;
 
 #ifdef AVL_PARENT
@@ -879,7 +871,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
         DUMP("Parent was not  balanced, now it is");
     }
 
-    AVL_NODE_TYPE* parent;
+    AVL_NODE_TYPE *parent;
 
     /* Now I have to update the balance up to the root (if needed ...)
      * node is m_nodes[level]
@@ -892,7 +884,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
         DUMP("\tUpdating balance at %i", level);
 
         if(AVL_BALANCE(node) == balances[level]) /* balance of the node */
-        { /* this branch will exit */
+        {                                        /* this branch will exit */
             /* The node's balance has not been changed */
 
             ASSERT_CHECK_CHILD_PARENT_LINK(ret);
@@ -902,8 +894,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
 
         /* The node's balance has been changed */
 
-        DUMP("\t\tBalance of " AVL_REFERENCE_FORMAT_STRING " was %i, now it is %i",
-             AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), balances[level], AVL_BALANCE(node));
+        DUMP("\t\tBalance of " AVL_REFERENCE_FORMAT_STRING " was %i, now it is %i", AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), balances[level], AVL_BALANCE(node));
 
         if(AVL_BALANCE(node) == MIDDLE) /* this branch will exit */
         {
@@ -978,10 +969,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
             }
             else /* root */
             {
-                DUMP("Root changing from " AVL_REFERENCE_FORMAT_STRING
-                     " to " AVL_REFERENCE_FORMAT_STRING "",
-                     AVL_REFERENCE_FORMAT(AVL_REFERENCE(AVL_TREE_ROOT(tree))),
-                     AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
+                DUMP("Root changing from " AVL_REFERENCE_FORMAT_STRING " to " AVL_REFERENCE_FORMAT_STRING "", AVL_REFERENCE_FORMAT(AVL_REFERENCE(AVL_TREE_ROOT(tree))), AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
 
                 AVL_TREE_ROOT(tree) = node;
             }
@@ -1020,8 +1008,7 @@ AVL_PREFIXED(insert)(AVL_TREE_TYPE* tree, AVL_REFERENCE_TYPE obj_hash)
  *  @return The node associated to the hash, NULL if it did not exist.
  */
 
-void
-AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+void AVL_PREFIXED(delete)(AVL_TREE_TYPE *tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     DUMP("avl_delete(%p, " AVL_REFERENCE_FORMAT_STRING ") ------------------------------", tree, AVL_REFERENCE_FORMAT(obj_hash));
 
@@ -1034,20 +1021,20 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         return;
     }
 
-    AVL_NODE_TYPE *nodes[AVL_MAX_DEPTH];
-    s8 balances[AVL_MAX_DEPTH];
-    s8 dirs[AVL_MAX_DEPTH];
+    AVL_NODE_TYPE *nodes[AVL_DEPTH_MAX];
+    int8_t         balances[AVL_DEPTH_MAX];
+    int8_t         dirs[AVL_DEPTH_MAX];
 
 #if DEBUG
-    memset(&nodes, 0xf0, sizeof(AVL_NODE_TYPE*) * AVL_MAX_DEPTH);
-    memset(&balances, 0xfb, AVL_MAX_DEPTH);
-    memset(&dirs, 0xfd, AVL_MAX_DEPTH);
+    memset(&nodes, 0xf0, sizeof(AVL_NODE_TYPE *) * AVL_DEPTH_MAX);
+    memset(&balances, 0xfb, AVL_DEPTH_MAX);
+    memset(&dirs, 0xfd, AVL_DEPTH_MAX);
 #endif
 
-    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+    AVL_NODE_TYPE     *node = AVL_TREE_ROOT(tree);
     AVL_REFERENCE_TYPE node_hash;
-    int level = 0;
-    s8 dir = MIDDLE;
+    int                level = 0;
+    int8_t             dir = MIDDLE;
 
     /* look for the node to delete, keep the path */
 
@@ -1058,7 +1045,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         balances[level] = AVL_BALANCE(node);
 
         /* DIR_LEFT = 0, DIR_RIGHT = 1 */
-        dir = AVL_ISBIGGER(obj_hash, node_hash)&1;
+        dir = AVL_ISBIGGER(obj_hash, node_hash) & 1;
         node = AVL_CHILD(node, dir);
 
         dirs[level++] = dir;
@@ -1080,7 +1067,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
 
         /* DIR_LEFT = 0, DIR_RIGHT = 1 */
 
-        dir = (cmp > 0)&1;
+        dir = (cmp > 0) & 1;
         node = AVL_CHILD(node, dir);
 
         dirs[level++] = dir;
@@ -1089,7 +1076,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
 
     DUMP("Level = %i", level);
 
-    assert(level < AVL_MAX_DEPTH);
+    assert(level < AVL_DEPTH_MAX);
 
     if(node == NULL)
     {
@@ -1100,7 +1087,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         return;
     }
 
-    DUMP("[%2i] Victim is "AVL_REFERENCE_FORMAT_STRING, level, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
+    DUMP("[%2i] Victim is " AVL_REFERENCE_FORMAT_STRING, level, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
 
     /* keep a pointer to the parent->child pointer */
 
@@ -1108,7 +1095,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
 
     if(level > 0)
     {
-        victim_parent_link = &(AVL_CHILD(nodes[level - 1],dirs[level - 1]));
+        victim_parent_link = &(AVL_CHILD(nodes[level - 1], dirs[level - 1]));
     }
 
     nodes[level] = node;
@@ -1118,14 +1105,14 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
     /* Remove "node" from the parent */
     /* Keep the pointer for the find & destroy operation */
 
-    AVL_NODE_TYPE* victim = node;
+    AVL_NODE_TYPE *victim = node;
 
 #ifdef AVL_NODE_DELETE_CALLBACK
     AVL_NODE_DELETE_CALLBACK(victim);
 #endif
 
-    AVL_NODE_TYPE* victim_left = AVL_LEFT_CHILD(node);
-    AVL_NODE_TYPE* victim_right = AVL_RIGHT_CHILD(node);
+    AVL_NODE_TYPE *victim_left = AVL_LEFT_CHILD(node);
+    AVL_NODE_TYPE *victim_right = AVL_RIGHT_CHILD(node);
 
     /** We have found the victim node.  From here 3 cases can be found
      *
@@ -1174,18 +1161,17 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
          * Given that we are in a (L-R) case, it's the last one in the chain L->R*
          */
 
-        s32 victim_level = level - 1;
+        int32_t victim_level = level - 1;
 
         dirs[victim_level] = DIR_LEFT;
 
-        DUMP("[%2i] From "AVL_REFERENCE_FORMAT_STRING ", going LEFT", level-1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(victim)));
-        DUMP("\tUpdating balance at %i", level-1);
-        DUMP("\t\tBalance of " AVL_REFERENCE_FORMAT_STRING " was %i, now it is %i",
-             AVL_REFERENCE_FORMAT(AVL_REFERENCE(victim)), balances[level-1], AVL_BALANCE(victim));
+        DUMP("[%2i] From " AVL_REFERENCE_FORMAT_STRING ", going LEFT", level - 1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(victim)));
+        DUMP("\tUpdating balance at %i", level - 1);
+        DUMP("\t\tBalance of " AVL_REFERENCE_FORMAT_STRING " was %i, now it is %i", AVL_REFERENCE_FORMAT(AVL_REFERENCE(victim)), balances[level - 1], AVL_BALANCE(victim));
 
-        AVL_NODE_TYPE* beforesuccessor = victim; /* actually it's "victim" here */
-        AVL_NODE_TYPE* successor = victim_left;
-        AVL_NODE_TYPE* tmp_node;
+        AVL_NODE_TYPE *beforesuccessor = victim; /* actually it's "victim" here */
+        AVL_NODE_TYPE *successor = victim_left;
+        AVL_NODE_TYPE *tmp_node;
 
         nodes[level] = successor;
         balances[level] = AVL_BALANCE(successor);
@@ -1195,29 +1181,27 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         {
             beforesuccessor = successor;
 
-            DUMP("[%2i] From " AVL_REFERENCE_FORMAT_STRING ", going RIGHT", level-1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(successor)));
-            
+            DUMP("[%2i] From " AVL_REFERENCE_FORMAT_STRING ", going RIGHT", level - 1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(successor)));
+
             successor = tmp_node;
             nodes[level] = successor;
 
             DUMP("\tUpdating balance at %i", level);
-            DUMP("\t\tBalance of " AVL_REFERENCE_FORMAT_STRING " was %i, now it is %i",
-                AVL_REFERENCE_FORMAT(AVL_REFERENCE(successor)), balances[level], AVL_BALANCE(successor));
+            DUMP("\t\tBalance of " AVL_REFERENCE_FORMAT_STRING " was %i, now it is %i", AVL_REFERENCE_FORMAT(AVL_REFERENCE(successor)), balances[level], AVL_BALANCE(successor));
 
             balances[level] = AVL_BALANCE(successor);
             dirs[level++] = DIR_RIGHT;
         }
 
-        assert(level < AVL_MAX_DEPTH);
+        assert(level < AVL_DEPTH_MAX);
 
         /* successor has at most one left AVL_CHILD */
 
-        DUMP("[%2i] Replacement "AVL_REFERENCE_FORMAT_STRING, level-1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(successor)));
+        DUMP("[%2i] Replacement " AVL_REFERENCE_FORMAT_STRING, level - 1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(successor)));
 
         /* Method 2 uses 3 moves, method 1 uses 10 */
 
-#if 1
-        /* 
+        /*
          * Move the parent of victim must point to successor
          * The parent of successor must point to nothing.
          */
@@ -1243,7 +1227,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
                 AVL_PARENT(AVL_LEFT_CHILD(successor)) = beforesuccessor;
             }
 #endif
-            
+
             AVL_LEFT_CHILD(successor) = victim_left;
 #ifdef AVL_PARENT
             AVL_PARENT(victim_left) = successor;
@@ -1260,35 +1244,6 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         }
 
         AVL_FREE_NODE(victim);
-
-        
-#else
-        /*
-         *  Overwrite node successor into victim,
-         *  then delete successor, since its content is safe
-         *
-         *  This special case does not work if the node is linked by a third party
-         *  so I disabled it to avoid misuses.
-         */
-
-        AVL_COPY_PAYLOAD(victim, successor);
-
-        if(beforesuccessor != victim)
-        {
-            AVL_RIGHT_CHILD(beforesuccessor) = AVL_LEFT_CHILD(successor);
-            AVL_BALANCE(beforesuccessor)--;
-        }
-        else
-        {
-            AVL_LEFT_CHILD(beforesuccessor) = AVL_LEFT_CHILD(successor);
-            AVL_BALANCE(beforesuccessor)++;
-        }
-
-        AVL_FREE_NODE(successor);
-
-        level -= 2;
-#endif
-
         /*nodes[level] = successor;*/
 
     } /* Case #3 done */
@@ -1300,11 +1255,11 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
 
         if(level > 1)
         {
-            AVL_NODE_TYPE* victim_parent = nodes[level - 2];
+            AVL_NODE_TYPE *victim_parent = nodes[level - 2];
 
             /* ONE or BOTH are NULL, this is the best alternative to an if/elseif/else */
 
-            AVL_CHILD(victim_parent, dir) = (AVL_NODE_TYPE*)((intptr)victim_left | (intptr)victim_right);
+            AVL_CHILD(victim_parent, dir) = (AVL_NODE_TYPE *)((intptr_t)victim_left | (intptr_t)victim_right);
 
 #ifdef AVL_PARENT
             if(victim_left != NULL)
@@ -1328,7 +1283,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         {
 
             /* ONE or BOTH are NULL, this is the best alternative to the if/elseif/else above */
-            AVL_TREE_ROOT(tree) = (AVL_NODE_TYPE*)((intptr)victim_left | (intptr)victim_right);
+            AVL_TREE_ROOT(tree) = (AVL_NODE_TYPE *)((intptr_t)victim_left | (intptr_t)victim_right);
 #ifdef AVL_PARENT
             if(victim_left != NULL)
             {
@@ -1389,7 +1344,12 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
             if(level >= 0)
             {
                 DUMP("\t[%2i] " AVL_REFERENCE_FORMAT_STRING " balance changed for MIDDLE (%i) Fixing [%i] parent balance of %i (%i)",
-                     level + 1, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), balances[level + 1], level, DIR_TO_AVL_BALANCE(dirs[level]), dirs[level]);
+                     level + 1,
+                     AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)),
+                     balances[level + 1],
+                     level,
+                     DIR_TO_AVL_BALANCE(dirs[level]),
+                     dirs[level]);
 
                 node = nodes[level];
                 AVL_BALANCE(node) -= DIR_TO_AVL_BALANCE(dirs[level]);
@@ -1422,15 +1382,15 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
 
         AVL_BALANCE(node) >>= 1;
 
-        AVL_NODE_TYPE* child = AVL_CHILD(node, AVL_BALANCE_TO_DIR(AVL_BALANCE(node)));
-        s8 parent_balance = AVL_BALANCE(node);
-        s8 child_balance = AVL_BALANCE(child);
+        AVL_NODE_TYPE *child = AVL_CHILD(node, AVL_BALANCE_TO_DIR(AVL_BALANCE(node)));
+        int8_t         parent_balance = AVL_BALANCE(node);
+        int8_t         child_balance = AVL_BALANCE(child);
 
         if(child_balance == MIDDLE) /* patched single rotation */
         {
             DUMP("Single Rotation (delete)");
 
-            AVL_NODE_TYPE* newroot;
+            AVL_NODE_TYPE *newroot;
 
             newroot = avl_node_single_rotation2(node);
 
@@ -1460,10 +1420,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         {
             /* root */
 
-            DUMP("Root changing from " AVL_REFERENCE_FORMAT_STRING " to "
-                 AVL_REFERENCE_FORMAT_STRING "",
-                 AVL_REFERENCE_FORMAT(AVL_REFERENCE(AVL_TREE_ROOT(tree))),
-                 AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
+            DUMP("Root changing from " AVL_REFERENCE_FORMAT_STRING " to " AVL_REFERENCE_FORMAT_STRING "", AVL_REFERENCE_FORMAT(AVL_REFERENCE(AVL_TREE_ROOT(tree))), AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
 
             AVL_TREE_ROOT(tree) = node;
             break;
@@ -1483,7 +1440,7 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
         /* I'll process the same level again */
 
         AVL_CHILD(nodes[level - 1], dirs[level - 1]) = node;
-        //AVL_CHILD(nodes[level], dirs[level]) = node;
+        // AVL_CHILD(nodes[level], dirs[level]) = node;
 
         ASSERT_CHECK_CHILD_PARENT_LINK(node);
 
@@ -1493,22 +1450,21 @@ AVL_PREFIXED(delete)(AVL_TREE_TYPE* tree, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE
     DUMP("avl_delete done level=%i", level);
 }
 
-static void
-avl_destroy_(AVL_NODE_TYPE *node)
+static void avl_finalise_(AVL_NODE_TYPE *node)
 {
 #ifdef AVL_NODE_DELETE_CALLBACK
     AVL_NODE_DELETE_CALLBACK(node);
 #endif
 
-    AVL_NODE_TYPE* AVL_CHILD = AVL_LEFT_CHILD(node);
+    AVL_NODE_TYPE *AVL_CHILD = AVL_LEFT_CHILD(node);
     if(AVL_CHILD != NULL)
     {
-        avl_destroy_(AVL_CHILD);
+        avl_finalise_(AVL_CHILD);
     }
     AVL_CHILD = AVL_RIGHT_CHILD(node);
     if(AVL_CHILD != NULL)
     {
-        avl_destroy_(AVL_CHILD);
+        avl_finalise_(AVL_CHILD);
     }
 
     AVL_FREE_NODE(node);
@@ -1521,19 +1477,17 @@ avl_destroy_(AVL_NODE_TYPE *node)
  *  @param[in] tree the tree to empty
  */
 
-void
-AVL_PREFIXED(destroy)(AVL_TREE_TYPE* tree)
+void AVL_PREFIXED(finalise)(AVL_TREE_TYPE *tree)
 {
     if(AVL_TREE_ROOT(tree) != NULL)
     {
 
-        avl_destroy_(AVL_TREE_ROOT(tree));
+        avl_finalise_(AVL_TREE_ROOT(tree));
         AVL_TREE_ROOT(tree) = NULL;
     }
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(node_last)(AVL_NODE_TYPE *node)
+AVL_NODE_TYPE *AVL_PREFIXED(node_last)(AVL_NODE_TYPE *node)
 {
     if(node == NULL)
     {
@@ -1555,8 +1509,7 @@ AVL_PREFIXED(node_last)(AVL_NODE_TYPE *node)
 
 /* Iterators -> */
 
-void
-AVL_PREFIXED(iterator_init)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator*) iter)
+void AVL_PREFIXED(iterator_init)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator_t *) iter)
 {
     /* Do we have a tree to iterate ? */
 
@@ -1566,13 +1519,12 @@ AVL_PREFIXED(iterator_init)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator*) i
 
     while(node != NULL)
     {
-        iter->stack[++iter->stack_pointer] = (AVL_NODE_TYPE*)node;
+        iter->stack[++iter->stack_pointer] = (AVL_NODE_TYPE *)node;
         node = AVL_LEFT_CHILD(node);
     }
 }
 
-void
-AVL_PREFIXED(iterator_init_from)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator*) iter, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
+void AVL_PREFIXED(iterator_init_from)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterator_t *) iter, AVL_REFERENCE_CONST AVL_REFERENCE_TYPE obj_hash)
 {
     // Do we have a tree to iterate ?
 
@@ -1582,7 +1534,7 @@ AVL_PREFIXED(iterator_init_from)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterato
     {
         // Let's stack the path left path
 
-        AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+        AVL_NODE_TYPE                            *node = AVL_TREE_ROOT(tree);
         AVL_REFERENCE_MODIFIER AVL_REFERENCE_TYPE h;
 
         while(node != NULL)
@@ -1628,23 +1580,18 @@ AVL_PREFIXED(iterator_init_from)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(iterato
     }
 }
 
-bool
-AVL_PREFIXED(iterator_hasnext)(AVL_PREFIXED(iterator*) iter)
-{
-    return iter->stack_pointer >= 0;
-}
+bool           AVL_PREFIXED(iterator_hasnext)(AVL_PREFIXED(iterator_t *) iter) { return iter->stack_pointer >= 0; }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(iterator_next_node)(AVL_PREFIXED(iterator*) iter)
+AVL_NODE_TYPE *AVL_PREFIXED(iterator_next_node)(AVL_PREFIXED(iterator_t *) iter)
 {
     assert(iter->stack_pointer >= 0);
 
     AVL_NODE_TYPE *node = iter->stack[iter->stack_pointer];
-    AVL_NODE_TYPE* current = node;
+    AVL_NODE_TYPE *current = node;
 
     /* we got the data, now let's ready the next node */
 
-    AVL_NODE_TYPE* tmp;
+    AVL_NODE_TYPE *tmp;
 
     /* let's branch right if possible */
 
@@ -1655,7 +1602,8 @@ AVL_PREFIXED(iterator_next_node)(AVL_PREFIXED(iterator*) iter)
         node = tmp;
         while((tmp = AVL_LEFT_CHILD(node)) != NULL)
         {
-            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on collections of tens of billions of items */
+            iter->stack[++iter->stack_pointer] = tmp; /* PUSH @note edf 20180102 -- overflow is unlikely: the depth of the stack allows iteration on
+                                                         collections of tens of billions of items */
             node = tmp;
         }
 
@@ -1669,18 +1617,17 @@ AVL_PREFIXED(iterator_next_node)(AVL_PREFIXED(iterator*) iter)
 
 /* <- Iterators */
 
-static void
-avl_callback_and_destroy_(AVL_NODE_TYPE *node, void (*callback)(AVL_NODE_TYPE *))
+static void avl_callback_and_finalise_(AVL_NODE_TYPE *node, void (*callback)(AVL_NODE_TYPE *))
 {
-    AVL_NODE_TYPE* AVL_CHILD = AVL_LEFT_CHILD(node);
+    AVL_NODE_TYPE *AVL_CHILD = AVL_LEFT_CHILD(node);
     if(AVL_CHILD != NULL)
     {
-        avl_callback_and_destroy_(AVL_CHILD, callback);
+        avl_callback_and_finalise_(AVL_CHILD, callback);
     }
     AVL_CHILD = AVL_RIGHT_CHILD(node);
     if(AVL_CHILD != NULL)
     {
-        avl_callback_and_destroy_(AVL_CHILD, callback);
+        avl_callback_and_finalise_(AVL_CHILD, callback);
     }
 
     callback(node);
@@ -1698,23 +1645,21 @@ avl_callback_and_destroy_(AVL_NODE_TYPE *node, void (*callback)(AVL_NODE_TYPE *)
  *  @param[in] tree the tree to empty
  */
 
-void
-AVL_PREFIXED(callback_and_destroy)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE *))
+void AVL_PREFIXED(callback_and_finalise)(AVL_TREE_TYPE *tree, void (*callback)(AVL_NODE_TYPE *))
 {
     if(AVL_TREE_ROOT(tree) != NULL)
     {
-        avl_callback_and_destroy_(AVL_TREE_ROOT(tree), callback);
+        avl_callback_and_finalise_(AVL_TREE_ROOT(tree), callback);
         AVL_TREE_ROOT(tree) = NULL;
     }
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(get_first)(AVL_CONST_TREE_TYPE* tree)
+AVL_NODE_TYPE *AVL_PREFIXED(get_first)(AVL_CONST_TREE_TYPE *tree)
 {
     assert(tree != NULL);
 
     AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
-    
+
     if(node != NULL)
     {
         while(node->children.lr.left != NULL)
@@ -1722,16 +1667,32 @@ AVL_PREFIXED(get_first)(AVL_CONST_TREE_TYPE* tree)
             node = node->children.lr.left;
         }
     }
-    
+
+    return node;
+}
+
+AVL_NODE_TYPE *AVL_PREFIXED(get_last)(AVL_CONST_TREE_TYPE *tree)
+{
+    assert(tree != NULL);
+
+    AVL_NODE_TYPE *node = AVL_TREE_ROOT(tree);
+
+    if(node != NULL)
+    {
+        while(node->children.lr.right != NULL)
+        {
+            node = node->children.lr.right;
+        }
+    }
+
     return node;
 }
 
 #ifdef AVL_PARENT
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(node_next)(const AVL_NODE_TYPE *node)
+AVL_NODE_TYPE *AVL_PREFIXED(node_next)(const AVL_NODE_TYPE *node)
 {
-    AVL_NODE_TYPE* next;
+    AVL_NODE_TYPE *next;
 
     next = AVL_RIGHT_CHILD(node);
 
@@ -1774,10 +1735,9 @@ AVL_PREFIXED(node_next)(const AVL_NODE_TYPE *node)
     return next;
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(node_prev)(const AVL_NODE_TYPE *node)
+AVL_NODE_TYPE *AVL_PREFIXED(node_prev)(const AVL_NODE_TYPE *node)
 {
-    AVL_NODE_TYPE* prev;
+    AVL_NODE_TYPE *prev;
 
     prev = AVL_LEFT_CHILD(node);
 
@@ -1799,7 +1759,6 @@ AVL_PREFIXED(node_prev)(const AVL_NODE_TYPE *node)
     {
         /* Leaf */
 
-
         for(;;)
         {
             prev = AVL_PARENT(node);
@@ -1816,17 +1775,15 @@ AVL_PREFIXED(node_prev)(const AVL_NODE_TYPE *node)
 
             node = prev;
         }
-
     }
 
     return prev;
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(node_mod_next)(const AVL_NODE_TYPE *node)
+AVL_NODE_TYPE *AVL_PREFIXED(node_mod_next)(const AVL_NODE_TYPE *node)
 {
-    AVL_NODE_TYPE* next;
-    
+    AVL_NODE_TYPE *next;
+
     next = AVL_RIGHT_CHILD(node);
 
     if(next != NULL)
@@ -1872,7 +1829,7 @@ AVL_PREFIXED(node_mod_next)(const AVL_NODE_TYPE *node)
              * or ourself.
              */
 
-            next = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
+            next = (AVL_NODE_TYPE *)node; // node is not the starting point anymore, so casting to not-const is ok
 
             while(AVL_LEFT_CHILD(next) != NULL)
             {
@@ -1884,11 +1841,10 @@ AVL_PREFIXED(node_mod_next)(const AVL_NODE_TYPE *node)
     return next;
 }
 
-AVL_NODE_TYPE*
-AVL_PREFIXED(node_mod_prev)(const AVL_NODE_TYPE *node)
+AVL_NODE_TYPE *AVL_PREFIXED(node_mod_prev)(const AVL_NODE_TYPE *node)
 {
-    AVL_NODE_TYPE* prev;
-    
+    AVL_NODE_TYPE *prev;
+
     prev = AVL_LEFT_CHILD(node);
 
     if(prev != NULL)
@@ -1934,7 +1890,7 @@ AVL_PREFIXED(node_mod_prev)(const AVL_NODE_TYPE *node)
              * or ourself.
              */
 
-            prev = (AVL_NODE_TYPE*)node; // node is not the starting point anymore, so casting to not-const is ok
+            prev = (AVL_NODE_TYPE *)node; // node is not the starting point anymore, so casting to not-const is ok
 
             while(AVL_RIGHT_CHILD(prev) != NULL)
             {
@@ -1948,11 +1904,9 @@ AVL_PREFIXED(node_mod_prev)(const AVL_NODE_TYPE *node)
 
 #endif // AVL_PARENT
 
-static int
-AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth);
+static int AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth);
 
-static int
-AVL_PREFIXED(check_node)(AVL_NODE_TYPE *node, int depth)
+static int AVL_PREFIXED(check_node)(AVL_NODE_TYPE *node, int depth)
 {
 #if AVL_HAS_PARENT_POINTER == 1
     if(AVL_PARENT(node) == NULL)
@@ -1960,7 +1914,7 @@ AVL_PREFIXED(check_node)(AVL_NODE_TYPE *node, int depth)
         /* oops */
         DUMP("avl_check_node: expected a parent");
         logger_flush();
-        DUMP("avl_check_node:\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
+        DUMP("avl_check_node:\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING ")", node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
         logger_flush();
         return -depth;
     }
@@ -1973,32 +1927,28 @@ AVL_PREFIXED(check_node)(AVL_NODE_TYPE *node, int depth)
 
             AVL_NODE_TYPE *l__ = AVL_LEFT_CHILD(parent__);
 
-
             AVL_NODE_TYPE *r__ = AVL_RIGHT_CHILD(parent__);
 
-
-
-            if(!(l__==(node) ||
-                 r__==(node))	)
+            if(!(l__ == (node) || r__ == (node)))
+            {
+                DUMP("avl_check_node: parent->node link broken");
+                DUMP("avl_check_node:\tparent=(%p, " AVL_REFERENCE_FORMAT_STRING ")", parent__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(parent__)));
+                if(l__ != NULL)
                 {
-                    DUMP("avl_check_node: parent->node link broken");
-                    DUMP("avl_check_node:\tparent=(%p, " AVL_REFERENCE_FORMAT_STRING")",parent__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(parent__)));
-                    if(l__ != NULL)
-                    {
-                        DUMP("avl_check_node:\t\tparent.lt=(%p, " AVL_REFERENCE_FORMAT_STRING")",l__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(l__)));
-                    }
-                    if(r__ != NULL)
-                    {
-                        DUMP("avl_check_node:\t\tparent.rt=(%p, " AVL_REFERENCE_FORMAT_STRING")",r__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(r__)));
-                    }
-                    DUMP("avl_check_node:\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
-                    DUMP_NODE(parent__);
-                    DUMP_NODE(node);
-                    logger_flush();
-                    flushout();
-                    flusherr();
-                    return -depth;
+                    DUMP("avl_check_node:\t\tparent.lt=(%p, " AVL_REFERENCE_FORMAT_STRING ")", l__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(l__)));
                 }
+                if(r__ != NULL)
+                {
+                    DUMP("avl_check_node:\t\tparent.rt=(%p, " AVL_REFERENCE_FORMAT_STRING ")", r__, AVL_REFERENCE_FORMAT(AVL_REFERENCE(r__)));
+                }
+                DUMP("avl_check_node:\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING ")", node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
+                DUMP_NODE(parent__);
+                DUMP_NODE(node);
+                logger_flush();
+                flushout();
+                flusherr();
+                return -depth;
+            }
         }
     }
 #endif
@@ -2006,11 +1956,10 @@ AVL_PREFIXED(check_node)(AVL_NODE_TYPE *node, int depth)
     return AVL_PREFIXED(check_common)(node, depth);
 }
 
-static int
-AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth)
+static int AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth)
 {
-    int ld = depth;
-    int rd = depth;
+    int            ld = depth;
+    int            rd = depth;
 
     AVL_NODE_TYPE *lc = AVL_LEFT_CHILD(node);
     AVL_NODE_TYPE *rc = AVL_RIGHT_CHILD(node);
@@ -2030,18 +1979,15 @@ AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth)
         }
     }
 
-    s8 b = AVL_BALANCE(node);
+    int8_t b = AVL_BALANCE(node);
 
-    if( ((ld == rd) && (b != MIDDLE)) ||
-        ((ld >  rd) && (b != LEFT))   ||
-        ((ld <  rd) && (b != RIGHT))  ||
-        (abs(ld - rd) > 1)            )
+    if(((ld == rd) && (b != MIDDLE)) || ((ld > rd) && (b != LEFT)) || ((ld < rd) && (b != RIGHT)) || (abs(ld - rd) > 1))
     {
         /* oops */
 
         DUMP("avl_check_common: invalid balancing |%d - %d| = %i (b = %i)", ld, rd, rd - ld, b);
         logger_flush();
-        DUMP("avl_check_node:\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING")",node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
+        DUMP("avl_check_node:\tnode=(%p, " AVL_REFERENCE_FORMAT_STRING ")", node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)));
         logger_flush();
 
         return -depth;
@@ -2050,10 +1996,10 @@ AVL_PREFIXED(check_common)(AVL_NODE_TYPE *node, int depth)
     return MAX(ld, rd);
 }
 
-void AVL_PREFIXED(forall)(AVL_CONST_TREE_TYPE* tree, AVL_PREFIXED(forall_callback) *callback, void *callback_args)
+void AVL_PREFIXED(forall)(AVL_CONST_TREE_TYPE *tree, AVL_PREFIXED(forall_callback) * callback, void *callback_args)
 {
 #if AVL_HAS_PARENT_POINTER
-    
+
     AVL_NODE_TYPE *node = AVL_PREFIXED(get_first)(tree);
     while(node != NULL)
     {
@@ -2061,11 +2007,11 @@ void AVL_PREFIXED(forall)(AVL_CONST_TREE_TYPE* tree, AVL_PREFIXED(forall_callbac
         {
             return;
         }
-        
+
         node = AVL_PREFIXED(node_next)(node);
     }
 #else
-    AVL_PREFIXED(iterator) iter;
+    AVL_PREFIXED(iterator_t) iter;
     AVL_PREFIXED(iterator_init)(tree, &iter);
     while(AVL_PREFIXED(iterator_hasnext)(&iter))
     {
@@ -2078,33 +2024,31 @@ void AVL_PREFIXED(forall)(AVL_CONST_TREE_TYPE* tree, AVL_PREFIXED(forall_callbac
 #endif
 }
 
-int
-AVL_PREFIXED(check_tree)(AVL_TREE_TYPE* tree)
+int AVL_PREFIXED(check_tree)(AVL_TREE_TYPE *tree)
 {
     if(AVL_TREE_ROOT(tree) == NULL)
     {
         return 0;
     }
-    
+
 #if AVL_HAS_PARENT_POINTER == 1
     if(AVL_PARENT(AVL_TREE_ROOT(tree)) != NULL)
     {
         /* oops */
         DUMP("avl_check: didn't expected a parent");
         logger_flush();
-        DUMP("avl_check:\troot=(%p, " AVL_REFERENCE_FORMAT_STRING")",AVL_TREE_ROOT(tree), AVL_REFERENCE_FORMAT(AVL_REFERENCE(AVL_TREE_ROOT(tree))));
+        DUMP("avl_check:\troot=(%p, " AVL_REFERENCE_FORMAT_STRING ")", AVL_TREE_ROOT(tree), AVL_REFERENCE_FORMAT(AVL_REFERENCE(AVL_TREE_ROOT(tree))));
         logger_flush();
         return -1;
     }
 #endif
-    
+
     int depth = AVL_PREFIXED(check_common)(AVL_TREE_ROOT(tree), 0);
 
     return depth;
 }
 
-static void
-AVL_PREFIXED(dump_node)(AVL_NODE_TYPE *node, int level, char c)
+static void AVL_PREFIXED(dump_node)(AVL_NODE_TYPE *node, int level, char c)
 {
 #if defined(DEBUG_DUMP)
     char b;
@@ -2132,18 +2076,18 @@ AVL_PREFIXED(dump_node)(AVL_NODE_TYPE *node, int level, char c)
     }
 
 #if AVL_HAS_PARENT_POINTER == 1
-    DUMP("[%2i]%S %c@%p='" AVL_REFERENCE_FORMAT_STRING"' %c (%p,%p) <- %p", level, level, c, node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), b, AVL_LEFT_CHILD(node), AVL_RIGHT_CHILD(node), AVL_PARENT(node));
+    DUMP("[%2i]%S %c@%p='" AVL_REFERENCE_FORMAT_STRING "' %c (%p,%p) <- %p", level, level, c, node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), b, AVL_LEFT_CHILD(node), AVL_RIGHT_CHILD(node), AVL_PARENT(node));
 #else
-    DUMP("[%2i]%S %c@%p='" AVL_REFERENCE_FORMAT_STRING"' %c (%p,%p)", level, level, c, node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), b, AVL_LEFT_CHILD(node), AVL_RIGHT_CHILD(node));
+    DUMP("[%2i]%S %c@%p='" AVL_REFERENCE_FORMAT_STRING "' %c (%p,%p)", level, level, c, node, AVL_REFERENCE_FORMAT(AVL_REFERENCE(node)), b, AVL_LEFT_CHILD(node), AVL_RIGHT_CHILD(node));
 #endif
-    
+
     if(AVL_LEFT_CHILD(node) != NULL)
     {
-        AVL_PREFIXED(dump_node)(AVL_LEFT_CHILD(node), level +1, 'l');
+        AVL_PREFIXED(dump_node)(AVL_LEFT_CHILD(node), level + 1, 'l');
     }
     if(AVL_RIGHT_CHILD(node) != NULL)
     {
-        AVL_PREFIXED(dump_node)(AVL_RIGHT_CHILD(node), level +1, 'r');
+        AVL_PREFIXED(dump_node)(AVL_RIGHT_CHILD(node), level + 1, 'r');
     }
 #else
     (void)node;
@@ -2152,11 +2096,6 @@ AVL_PREFIXED(dump_node)(AVL_NODE_TYPE *node, int level, char c)
 #endif
 }
 
-void
-AVL_PREFIXED(dump)(AVL_TREE_TYPE *tree)
-{
-    AVL_PREFIXED(dump_node)(AVL_TREE_ROOT(tree), 0, 'r');
-}
-
+void AVL_PREFIXED(dump)(AVL_TREE_TYPE *tree) { AVL_PREFIXED(dump_node)(AVL_TREE_ROOT(tree), 0, 'r'); }
 
 /** @} */

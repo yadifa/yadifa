@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,28 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
 #include <dnscore/digest.h>
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include "dnscore/digest.h"
 #include "dnscore/bytearray_output_stream.h"
 
-static s32 digest_rawdata_update(digest_s* ctx, const void* buffer, u32 size)
-{
-    return output_stream_write(&ctx->ctx.rawdata.baos, buffer, size) - 1;
-}
+static int32_t digest_rawdata_update(digest_t *ctx, const void *buffer, uint32_t size) { return output_stream_write(&ctx->ctx.rawdata.baos, buffer, size) - 1; }
 
-static s32 digest_rawdata_final(digest_s* ctx)
+static int32_t digest_rawdata_final(digest_t *ctx)
 {
     (void)ctx;
     return SUCCESS;
 }
 
-static ya_result digest_rawdata_final_copy_bytes(digest_s* ctx, void *output, u32 output_size)
+static ya_result digest_rawdata_final_copy_bytes(digest_t *ctx, void *output, uint32_t output_size)
 {
-    u32 size = bytearray_output_stream_size(&ctx->ctx.rawdata.baos);
+    uint32_t size = bytearray_output_stream_size(&ctx->ctx.rawdata.baos);
     if(size <= output_size)
     {
         memcpy(output, bytearray_output_stream_buffer(&ctx->ctx.rawdata.baos), size);
-        return SUCCESS;
+        return size;
     }
     else
     {
@@ -62,19 +57,19 @@ static ya_result digest_rawdata_final_copy_bytes(digest_s* ctx, void *output, u3
     }
 }
 
-static s32 digest_rawdata_get_size(digest_s* ctx)
+static int32_t digest_rawdata_get_size(digest_t *ctx)
 {
-    s32 ret = (s32)bytearray_output_stream_size(&ctx->ctx.rawdata.baos);
+    int32_t ret = (int32_t)bytearray_output_stream_size(&ctx->ctx.rawdata.baos);
     return ret;
 }
 
-static s32 digest_rawdata_get_digest(struct digest_s* ctx, void** p)
+static int32_t digest_rawdata_get_digest(digest_t *ctx, void **p)
 {
     *p = bytearray_output_stream_buffer(&ctx->ctx.rawdata.baos);
-    return SUCCESS;
+    return bytearray_output_stream_size(&ctx->ctx.rawdata.baos);
 }
 
-static void digest_rawdata_finalise(struct digest_s* ctx)
+static void digest_rawdata_finalise(digest_t *ctx)
 {
 #if DEBUG
     memset(bytearray_output_stream_buffer(&ctx->ctx.rawdata.baos), 0xee, bytearray_output_stream_size(&ctx->ctx.rawdata.baos));
@@ -82,23 +77,11 @@ static void digest_rawdata_finalise(struct digest_s* ctx)
     output_stream_close(&ctx->ctx.rawdata.baos);
 }
 
-static const struct digest_vtbl rawdata_vtbl =
-{
-    digest_rawdata_update,
-    digest_rawdata_final,
-    digest_rawdata_final_copy_bytes,
-    digest_rawdata_get_size,
-    digest_rawdata_get_digest,
-    digest_rawdata_finalise,
-    "RAWDATA"
-};
+static const struct digest_vtbl rawdata_vtbl = {digest_rawdata_update, digest_rawdata_final, digest_rawdata_final_copy_bytes, digest_rawdata_get_size, digest_rawdata_get_digest, digest_rawdata_finalise, "RAWDATA"};
 
-void
-digest_rawdata_init(digest_s *ctx)
+void                            digest_rawdata_init(digest_t *ctx)
 {
     ctx->vtbl = &rawdata_vtbl;
-    //bytearray_output_stream_init(&ctx->ctx.rawdata, NULL, 0);
-    bytearray_output_stream_init_ex_static(&ctx->ctx.rawdata.baos,
-            ctx->ctx.rawdata.data, sizeof(ctx->ctx.rawdata.data), BYTEARRAY_DYNAMIC,
-            &ctx->ctx.rawdata.baos_ctx);
+    // bytearray_output_stream_init(&ctx->ctx.rawdata, NULL, 0);
+    bytearray_output_stream_init_ex_static(&ctx->ctx.rawdata.baos, ctx->ctx.rawdata.data, sizeof(ctx->ctx.rawdata.data), BYTEARRAY_DYNAMIC, &ctx->ctx.rawdata.baos_ctx);
 }

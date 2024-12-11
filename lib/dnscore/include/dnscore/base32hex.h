@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,48 +28,46 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/**
- *  @defgroup base Base conversion functions
- *  @ingroup dnscore
- *  @brief Base 32 hex codec
+/**-----------------------------------------------------------------------------
+ * @defgroup base Base conversion functions
+ * @ingroup dnscore
+ * @brief Base 32 hex codec
  *
  * Base 32-hex codec functions
- * 
- * @{
  *
+ * @{
  *----------------------------------------------------------------------------*/
 #ifndef _BASE32HEX_H
-#define	_BASE32HEX_H
+#define _BASE32HEX_H
 
 #include <dnscore/sys_types.h>
 #include <dnscore/output_stream.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-#define BASE32HEX_DECODED_CHUNK 5
-#define BASE32HEX_ENCODED_CHUNK 8
+#define BASE32HEX_DECODED_CHUNK          5
+#define BASE32HEX_ENCODED_CHUNK          8
 
-#define BASE32HEX_ENCODED_LEN(bin_size_) ((((bin_size_)+(BASE32HEX_DECODED_CHUNK-1))/BASE32HEX_DECODED_CHUNK)*BASE32HEX_ENCODED_CHUNK)
-#define BASE32HEX_DECODED_LEN(b32_size_) ((((b32_size_)/BASE32HEX_ENCODED_CHUNK))*BASE32HEX_DECODED_CHUNK)
+#define BASE32HEX_ENCODED_LEN(bin_size_) ((((bin_size_) + (BASE32HEX_DECODED_CHUNK - 1)) / BASE32HEX_DECODED_CHUNK) * BASE32HEX_ENCODED_CHUNK)
+#define BASE32HEX_DECODED_LEN(b32_size_) ((((b32_size_) / BASE32HEX_ENCODED_CHUNK)) * BASE32HEX_DECODED_CHUNK)
 
 /**
  * Encodes bytes into lower case base32hex
  * The output size must be at least size_in * 8/5
- * 
+ *
  * @param buffer_in     bytes to convert
  * @param size_in       number of bytes
  * @param buffer_out    output buffer of a size >= size_in * 8/5
- * 
+ *
  * @return output size
  */
-    
-u32 base32hex_lc_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
+
+uint32_t base32hex_encode_lc(const void *buffer_in, uint32_t size_in, char *buffer_out);
 
 /**
  * Encodes bytes into base32hex
@@ -82,37 +80,37 @@ u32 base32hex_lc_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
  * @return output size
  */
 
-u32 base32hex_encode(const u8* buffer_in,u32 size_in,char* buffer_out);
+uint32_t base32hex_encode(const void *buffer_in, uint32_t size_in, char *buffer_out);
 
 /**
  * encodes the buffer into base32hex to the output stream
- * 
+ *
  * @param os        output stream
  * @param buffer_in buffer to encode
  * @param size_in   size of the buffer
- * 
+ *
  * @return bytes written
  */
 
-ya_result output_stream_write_base32hex(output_stream *os, const u8 *buffer_in, u32 size_in);
+ya_result output_stream_write_base32hex(output_stream_t *os, const void *buffer_in, uint32_t size_in);
 
 /**
  * Decodes base32hex into bytes
  * The output size must be at least size_in * 5/8
- * 
+ *
  * @param buffer_in     base32hex text
  * @param size_in       number of chars
  * @param buffer_out    output buffer of a size >= size_in * 5/8
- * 
+ *
  * @return output size
  */
 
-ya_result base32hex_decode(const char *buffer_in, u32 size_in, u8 *buffer_out);
+ya_result base32hex_decode(const char *buffer_in, uint32_t size_in, uint8_t *buffer_out);
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _BASE32_H */
+#endif /* _BASE32_H */
 
 /** @} */

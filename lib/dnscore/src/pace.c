@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,36 +28,33 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <unistd.h>
 
 #include "dnscore/logger.h"
 #include "dnscore/pace.h"
 
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
-#define PACE_DUMP 0
+#define PACE_DUMP         0
 
-#define PACE_MODE_SMOOTH 0
-#define PACE_MODE_HARD   1
+#define PACE_MODE_SMOOTH  0
+#define PACE_MODE_HARD    1
 
-#define PACE_MODE PACE_MODE_HARD
+#define PACE_MODE         PACE_MODE_HARD
 
-void
-pace_init(pace_s *pace, u64 min_us, u64 max_us, const char *name)
+void pace_init(pace_t *pace, uint64_t min_us, uint64_t max_us, const char *name)
 {
     if(min_us > max_us)
     {
-        u64 tmp = max_us;
+        uint64_t tmp = max_us;
         max_us = min_us;
         min_us = tmp;
     }
-    
+
     pace->min_us = min_us;
     pace->max_us = max_us;
 #if PACE_MODE == PACE_MODE_SMOOTH
@@ -66,7 +63,7 @@ pace_init(pace_s *pace, u64 min_us, u64 max_us, const char *name)
     pace->current_us = min_us;
 #endif
     pace->counter = 0;
-    
+
     pace->name = name;
 }
 
@@ -74,23 +71,22 @@ pace_init(pace_s *pace, u64 min_us, u64 max_us, const char *name)
  * Will pause for a while
  */
 
-void
-pace_wait(pace_s *pace)
+void pace_wait(pace_t *pace)
 {
-    u64 start = timeus();
-    
+    uint64_t start = timeus();
+
     if((pace->counter > 0) && ((pace->counter & 3) != 0))
     {
 #if defined(PACE_DUMP) && (PACE_DUMP > 0)
-        u64 current = pace->current_us;
+        uint64_t current = pace->current_us;
 #endif
         pace->current_us <<= 1;
-        
+
         if(pace->current_us == 0)
         {
             pace->current_us = 1;
         }
-        
+
         if(pace->current_us > pace->max_us)
         {
             pace->current_us = pace->max_us;
@@ -106,51 +102,48 @@ pace_wait(pace_s *pace)
     else
     {
         pace->wait_start = start;
-        
+
 #if defined(PACE_DUMP) && (PACE_DUMP > 0)
         log_debug("pace: '%s' waiting for %lluµs (#%llu)", pace->name, pace->current_us, pace->counter);
 #endif
     }
-    
+
     pace->counter++;
-        
-    u64 elapsed = 0;
-    u64 current = pace->current_us;
+
+    uint64_t elapsed = 0;
+    uint64_t current = pace->current_us;
     do
     {
-         if(elapsed > current)
-         {
-             log_err("pace_wait: impossible! elapsed = %llu > %llu", elapsed, current);
-             break;
-         }
-        
+        if(elapsed > current)
+        {
+            log_err("pace_wait: impossible! elapsed = %llu > %llu", elapsed, current);
+            break;
+        }
+
         usleep(current - elapsed);
-        u64 now = timeus();
-        
+        uint64_t now = timeus();
+
         if(now < start)
         {
-            log_err("pace_wait: now=%llu < start=%llu (%llu)", now, start, start-now);
+            log_err("pace_wait: now=%llu < start=%llu (%llu)", now, start, start - now);
             break;
         }
         elapsed = now - start;
-    }
-    while(elapsed < current);
+    } while(elapsed < current);
 }
 
 /**
  * Will update the pace taking the fact that now we have work to do
  */
 
-void
-pace_work(pace_s *pace)
-{    
+void pace_work(pace_t *pace)
+{
     pace->wait_end = timeus();
-    
+
 #if defined(PACE_DUMP) && (PACE_DUMP > 0)
-    log_debug("pace: '%s' working after %lluµs (%lluµs #%llu)",
-            pace->name, pace->wait_end - pace->wait_start, pace->current_us, pace->counter);
+    log_debug("pace: '%s' working after %lluµs (%lluµs #%llu)", pace->name, pace->wait_end - pace->wait_start, pace->current_us, pace->counter);
 #endif
-    
+
     pace->counter = 0;
 #if PACE_MODE == PACE_MODE_SMOOTH
     pace->current_us >>= 1;

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #ifndef _DNSNAME_SET_H
-#define	_DNSNAME_SET_H
+#define _DNSNAME_SET_H
 
 #include <dnscore/sys_types.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -61,12 +59,12 @@ typedef struct dnsname_node dnsname_node;
 
 struct dnsname_children
 {
-    struct dnsname_node* left;
-    struct dnsname_node* right;
+    struct dnsname_node *left;
+    struct dnsname_node *right;
 };
 
 /*
- * An union to have access to the children with direct or indexed access
+ * A union to have access to the children with direct or indexed access
  */
 
 typedef union dnsname_children_union dnsname_children_union;
@@ -74,7 +72,7 @@ typedef union dnsname_children_union dnsname_children_union;
 union dnsname_children_union
 {
     struct dnsname_children lr;
-    struct dnsname_node * child[2];
+    struct dnsname_node    *child[2];
 };
 
 /*
@@ -85,14 +83,14 @@ union dnsname_children_union
 struct dnsname_node
 {
     union dnsname_children_union children;
-    const u8* key;
+    const uint8_t               *key;
 };
 
 typedef struct dnsname_set dnsname_set;
 
 struct dnsname_set
 {
-    dnsname_node pool[DNSNAME_SET_MEMORY_POOL_SIZE];
+    dnsname_node  pool[DNSNAME_SET_MEMORY_POOL_SIZE];
     dnsname_node *next_free;
     dnsname_node *head;
 };
@@ -101,36 +99,36 @@ typedef struct dnsname_set_iterator dnsname_set_iterator;
 
 struct dnsname_set_iterator
 {
-    dnsname_node* next;
-    dnsname_node* limit;
+    dnsname_node *next;
+    dnsname_node *limit;
 };
 
-static inline void dnsname_set_init(dnsname_set* set)
+static inline void dnsname_set_init(dnsname_set *set)
 {
     set->next_free = set->pool;
     set->head = NULL;
 }
 
-static inline bool dnsname_set_insert(dnsname_set* set, const u8 *name)
+static inline bool dnsname_set_insert(dnsname_set *set, const uint8_t *name)
 {
     if(set->next_free >= &set->pool[DNSNAME_SET_MEMORY_POOL_SIZE])
     {
-        return FALSE;
+        return false;
     }
-    
-    dnsname_node** nodep;
-    dnsname_node* node;
+
+    dnsname_node **nodep;
+    dnsname_node  *node;
 
     nodep = &set->head;
     node = *nodep;
-    
+
     while(node != NULL)
     {
         int cmp = dnsname_compare(name, node->key);
-        
+
         if(cmp == 0)
         {
-            return TRUE;
+            return true;
         }
 
         nodep = &node->children.child[(cmp > 0) & 1];
@@ -142,35 +140,25 @@ static inline bool dnsname_set_insert(dnsname_set* set, const u8 *name)
 
     node->children.lr.left = NULL;
     node->children.lr.right = NULL;
-    node->key = (u8*)name;
-    
-    return TRUE;
+    node->key = (uint8_t *)name;
+
+    return true;
 }
 
-static inline void dnsname_set_iterator_init(dnsname_set* set, dnsname_set_iterator* iter)
+static inline void dnsname_set_iterator_init(dnsname_set *set, dnsname_set_iterator *iter)
 {
     iter->next = set->pool;
     iter->limit = set->next_free;
 }
 
-static inline bool dnsname_set_iterator_hasnext(dnsname_set_iterator* iter)
-{
-    return iter->next < iter->limit;
-}
+static inline bool          dnsname_set_iterator_hasnext(dnsname_set_iterator *iter) { return iter->next < iter->limit; }
 
-static inline dnsname_node* dnsname_set_iterator_next_node(dnsname_set_iterator* iter)
-{
-    return iter->next++;
-}
+static inline dnsname_node *dnsname_set_iterator_next_node(dnsname_set_iterator *iter) { return iter->next++; }
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _DNSNAME_SET_H */
+#endif /* _DNSNAME_SET_H */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-
-

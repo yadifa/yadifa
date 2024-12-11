@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,24 +28,28 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnsdb
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnsdb
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 #ifndef _DNSRDATA_H
-#define	_DNSRDATA_H
+#define _DNSRDATA_H
+
+#error "This file is now obsolete."
 
 #include <dnsdb/zdb_types.h>
 
-#ifdef	__cplusplus
-extern "C" {
+#ifdef __cplusplus
+extern "C"
+{
 #endif
+
+#if OBSOLETE
 
 /*
  * I need:
@@ -57,206 +61,195 @@ extern "C" {
 typedef struct dnskey_rdata dnskey_rdata;
 struct dnskey_rdata
 {
-    u16 flags;
-    u8 protocol;
-    u8 algorithm;
-    u8* public_key;
+    uint16_t flags;
+    uint8_t  protocol;
+    uint8_t  algorithm;
+    uint8_t *public_key;
 };
 
-void rdata_to_dnskey(u8* rdata,struct dnskey_rdata* dnskey);
+void rdata_to_dnskey(uint8_t *rdata, struct dnskey_rdata *dnskey);
 
 struct rrsig_rdata
 {
-    u16 type_covered;
-    u8 algorithm;
-    u8 labels;
-    u32 original_ttl;
-    u32 signature_expiration;
-    u32 signature_inception;
-    u8* signer_name;
-    u8* signature;
+    uint16_t type_covered;
+    uint8_t  algorithm;
+    uint8_t  labels;
+    uint32_t original_ttl;
+    uint32_t signature_expiration;
+    uint32_t signature_inception;
+    uint8_t *signer_name;
+    uint8_t *signature;
 };
 
-void rdata_to_rrsig(u8* rdata,struct rrsig_rdata* rrsig);
+void rdata_to_rrsig(uint8_t *rdata, struct rrsig_rdata *rrsig);
 
-typedef struct soa_rdata soa_rdata;
+#endif
 
-struct soa_rdata
-{
-    const u8* mname;
-    const u8* rname;
-    u32 serial;
-    u32 refresh;
-    u32 retry;
-    u32 expire;
-    u32 minimum;    /* TTL / NTTL */
-};
+#if OBSOLETE
 
 /* rfc3845 */
 
 typedef struct
 {
-    u8 window_number;
-    u8 bitmap_length;
-    u8* bitmap;             /* NOT A NAME */
+    uint8_t  window_number;
+    uint8_t  bitmap_length;
+    uint8_t *bitmap; /* NOT A NAME */
 } nsec_rdata_typebitmap;
 
 /* rfc3845 */
 
 struct nsec_rdata
 {
-    u8* domain_name;
-    nsec_rdata_typebitmap* type_bitmap;
+    uint8_t               *domain_name;
+    nsec_rdata_typebitmap *type_bitmap;
 };
 
 struct ns_rdata
 {
-    u8* name;
+    uint8_t *name;
 };
 
 struct cname_rdata
 {
-    u8* name;
+    uint8_t *name;
 };
 
 struct dname_rdata
 {
-    u8* name;
+    uint8_t *name;
 };
 
 struct ptr_rdata
 {
-    u8* name;
+    uint8_t *name;
 };
 
 struct mb_rdata
 {
-    u8* madname;
+    uint8_t *madname;
 };
 
 struct md_rdata
 {
-    u8* madname;
+    uint8_t *madname;
 };
 
 struct mf_rdata
 {
-    u8* madname;
+    uint8_t *madname;
 };
 
 struct mg_rdata
 {
-    u8* madname;
+    uint8_t *madname;
 };
 
 struct mr_rdata
 {
-    u8* newname;
+    uint8_t *newname;
 };
 
 struct mx_rdata
 {
-    u16 preference;
-    u8* exchange;
+    uint16_t preference;
+    uint8_t *exchange;
 };
 
 struct hinfo_rdata
 {
-    u8* cpu;
-    u8* os;
+    uint8_t *cpu;
+    uint8_t *os;
 };
 
 struct minfo_rdata
 {
-    u8* rmailbx;
-    u8* emailbx;
+    uint8_t *rmailbx;
+    uint8_t *emailbx;
 };
 
 /* rfc2782 */
 
 struct srv_rdata
 {
-    u16 priority;
-    u16 weight;
-    u16 port;
-    u8* domain_name;
+    uint16_t priority;
+    uint16_t weight;
+    uint16_t port;
+    uint8_t *domain_name;
 };
 
 /* rfc2874 */
 
 struct a6_rdata
 {
-    u8  prefix_length;
-    u16 address_suffix;
-    u8* prefix_name;
+    uint8_t  prefix_length;
+    uint16_t address_suffix;
+    uint8_t *prefix_name;
 };
 
-typedef u64 u48;
+typedef uint64_t u48;
 
 /* rfc2535 */
 
 struct sig_rdata
 {
-    u16 type_covered;
-    u8 algorithm;
-    u8 labels;
-    u32 original_ttl;
-    u32 signature_expiration;
-    u32 signature_inception;
-    u16 key_tag;
-    u8* signer_name;
-    u8* signature;          /* NOT A NAME */
+    uint16_t type_covered;
+    uint8_t  algorithm;
+    uint8_t  labels;
+    uint32_t original_ttl;
+    uint32_t signature_expiration;
+    uint32_t signature_inception;
+    uint16_t key_tag;
+    uint8_t *signer_name;
+    uint8_t *signature; /* NOT A NAME */
 };
 
 /* rfc2845 */
 
 struct tsig_rdata
 {
-    u8* domain_name;
-    u48 time_signed;
-    u16 fudge;
-    u16 mac_size;
-    u8* mac;
-    u16 original_id;
-    u16 error;
-    u16 other_len;
-    u8* other_data;
+    uint8_t *domain_name;
+    u48      time_signed;
+    uint16_t fudge;
+    uint16_t mac_size;
+    uint8_t *mac;
+    uint16_t original_id;
+    uint16_t error;
+    uint16_t other_len;
+    uint8_t *other_data;
 };
 
 /* No need to canonize */
 
 struct txt_rdata
 {
-    char* txt;
+    char *txt;
 };
 
 struct a_rdata
 {
-    u32 address;
+    uint32_t address;
 };
 
 /** rfc1886 */
 
 struct aaaa_rdata
 {
-    u16 address[8];
+    uint16_t address[8];
 };
 
 struct wks_rdata
 {
-    u32 address;
-    u8 protocol;
-    u8* bitmap; /* NOT A NAME */
+    uint32_t address;
+    uint8_t  protocol;
+    uint8_t *bitmap; /* NOT A NAME */
 };
 
-#ifdef	__cplusplus
+#endif
+
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _DNSRECORDS_H */
-
-    /*    ------------------------------------------------------------    */
+#endif /* _DNSRECORDS_H */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,16 +28,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup yadifa
- *  @ingroup ###
- *  @brief
- */
+/**-----------------------------------------------------------------------------
+ * @defgroup yadifa
+ * @ingroup ###
+ * @brief
+ *----------------------------------------------------------------------------*/
 
-#include "client-config.h"
+#include "client_config.h"
 
 #define KEYGEN_C_
 
@@ -47,23 +46,21 @@
 #include <sys/time.h>
 
 #include <dnscore/config_settings.h>
-#include <dnscore/config-cmdline.h>
+#include <dnscore/config_cmdline.h>
 #include <dnscore/cmdline.h>
-
-
 
 #include <dnscore/dnskey.h>
 #include <dnscore/rfc.h>
 
-#include <dnslg/config-resolver.h>
+#include <dnslg/config_resolver.h>
 #include <dnscore/timems.h>
 #include <dnscore/format.h>
 #include <dnscore/parsing.h>
 
-#include "common-config.h"
+#include "common_config.h"
 #include "module.h"
 
-//#include "query-result.h"
+// #include "query_result.h"
 
 /*----------------------------------------------------------------------------*/
 #pragma mark DEFINES
@@ -80,70 +77,67 @@
 
 #define KEYGEN_SECTION_NAME "keygen"
 
-#define KEYS_PATH_DEFAULT LOCALSTATEDIR "/zones/keys/"
+#define KEYS_PATH_DEFAULT   LOCALSTATEDIR "/zones/keys/"
 
 static yadifa_keygen_settings_s g_keygen_settings;
 
 #define CONFIG_TYPE yadifa_keygen_settings_s
 CONFIG_BEGIN(keygen_settings_desc)
 
-//CONFIG_STRING(       config_file,             ""                                                       )
-CONFIG_STRING(       keys_path,           KEYS_PATH_DEFAULT                                                       )
-CONFIG_STRING(       random_device_file,      ""                                                       )
-CONFIG_FQDN(         origin,                  NULL                                                       )
+// CONFIG_STRING(       config_file,             ""                                                       )
+CONFIG_STRING(keys_path, KEYS_PATH_DEFAULT)
+CONFIG_STRING(random_device_file, "")
+CONFIG_FQDN(origin, NULL)
 
-CONFIG_STRING(       key_flag,                ""                                                       )
-CONFIG_STRING(       algorithm,               "0"                                                      )
+CONFIG_STRING(key_flag, "")
+CONFIG_STRING(algorithm, "0")
 
-CONFIG_STRING(       publication_date_text,   ""                                                       )
-CONFIG_STRING(       activation_date_text,    ""                                                       )
-CONFIG_STRING(       revocation_date_text,    ""                                                       )
-CONFIG_STRING(       inactivation_date_text,  ""                                                       )
-CONFIG_STRING(       deletion_date_text,      ""                                                       )
+CONFIG_STRING(publication_date_text, "")
+CONFIG_STRING(activation_date_text, "")
+CONFIG_STRING(revocation_date_text, "")
+CONFIG_STRING(inactivation_date_text, "")
+CONFIG_STRING(deletion_date_text, "")
 
-CONFIG_U32(          ttl,                     "86400"                                                    )
-CONFIG_U32(          key_size,                "0"                                                        )
-CONFIG_U32(          digest,                  "0"                                                        )
-//CONFIG_U32(          interval,                0                                                        )
-CONFIG_U32(          verbosity_level,         "0"                                                        )
+CONFIG_U32(ttl, "86400")
+CONFIG_U32(key_size, "0")
+CONFIG_U32(digest, "0")
+// CONFIG_U32(          interval,                0                                                        )
+CONFIG_U32(verbosity_level, "0")
 
-CONFIG_BOOL(         generate_key_only,       "off"                                                    )
-CONFIG_BOOL(         backward_compatible_key, "off"                                                    )
-CONFIG_BOOL(         successor_key,           "off"                                                    )
-CONFIG_BOOL(         nsec3_capable,           "off"                                                    )
-
-
+CONFIG_BOOL(generate_key_only, "off")
+CONFIG_BOOL(backward_compatible_key, "off")
+CONFIG_BOOL(successor_key, "off")
+CONFIG_BOOL(nsec3_capable, "off")
 
 CONFIG_END(keygen_settings_desc)
 #undef CONFIG_TYPE
 
 /// use global resolver and general command line settings
-//extern config_resolver_settings_s g_resolver_settings;
+// extern config_resolver_settings_s g_resolver_settings;
 
-static ya_result
-keygen_print_algorithm_help(const struct cmdline_desc_s *desc, output_stream *os)
+static ya_result keygen_print_algorithm_help(const struct cmdline_desc_s *desc, output_stream_t *os)
 {
     (void)desc;
 
-    u8  count = dnskey_supported_algorithm_count();
+    uint8_t count = dnskey_supported_algorithm_count();
 
     if(count == 0)
     {
         return FEATURE_NOT_SUPPORTED;
     }
 
-    const int width_max = 80-32;
+    const int                width_max = 80 - 32;
 
-    int width = 0;
-    u8 i = 0;
-    const dnskey_features *f = dnskey_supported_algorithm_by_index(i);
+    int                      width = 0;
+    uint8_t                  i = 0;
+    const dnskey_features_t *f = dnskey_supported_algorithm_by_index(i);
 
-    const char **np = f->names;
+    const char             **np = f->names;
 
     osprint_char_times(os, ' ', 32);
 
     width += osprint(os, *np);
-    bool separate = TRUE;
+    bool separate = true;
     ++np;
 
     for(;;)
@@ -155,7 +149,7 @@ keygen_print_algorithm_help(const struct cmdline_desc_s *desc, output_stream *os
             if(separate)
             {
                 width += osprint(os, " | ");
-                separate = FALSE;
+                separate = false;
             }
 
             osprintln(os, "");
@@ -167,11 +161,11 @@ keygen_print_algorithm_help(const struct cmdline_desc_s *desc, output_stream *os
             if(separate)
             {
                 width += osprint(os, " | ");
-                //separate = FALSE;
+                // separate = false;
             }
 
             width += osprint(os, *np);
-            separate = TRUE;
+            separate = true;
             ++np;
         }
         else
@@ -191,17 +185,16 @@ keygen_print_algorithm_help(const struct cmdline_desc_s *desc, output_stream *os
     return SUCCESS;
 }
 
-static ya_result
-keygen_print_keysize_help(const struct cmdline_desc_s *desc, output_stream *os)
+static ya_result keygen_print_keysize_help(const struct cmdline_desc_s *desc, output_stream_t *os)
 {
     (void)desc;
 
-    u8  count = dnskey_supported_algorithm_count();
+    uint8_t count = dnskey_supported_algorithm_count();
 
-    for(u8 i = 0; i < count; ++i)
+    for(uint_fast8_t i = 0; i < count; ++i)
     {
-        const dnskey_features *f = dnskey_supported_algorithm_by_index(i);
-        const char **np = f->names;
+        const dnskey_features_t *f = dnskey_supported_algorithm_by_index(i);
+        const char             **np = f->names;
 
         if(*np != NULL)
         {
@@ -234,8 +227,7 @@ keygen_print_keysize_help(const struct cmdline_desc_s *desc, output_stream *os)
 // ***** module command line struct
 // ********************************************************************************
 
-static ya_result
-keygen_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_name, void *callback_owned)
+static ya_result keygen_cmdline_filter_callback(const struct cmdline_desc_s *desc, const char *arg_name, void *callback_owned)
 {
     void *arg = CMDLINE_CALLBACK_ARG_GET(desc);
     (void)arg;
@@ -260,34 +252,36 @@ CMDLINE_IMSG("options:", "")
 CMDLINE_INDENT(4)
 // main
 // CMDLINE_OPT(      "config",                  'c', "config_file"                )
-CMDLINE_SECTION(  KEYGEN_SECTION_NAME)
-CMDLINE_OPT(      "keys-path",           'K', "keys_path"              )
+CMDLINE_SECTION(KEYGEN_SECTION_NAME)
+CMDLINE_OPT("keys-path", 'K', "keys_path")
 CMDLINE_HELP("<directory>", "write keys into directory")
 /*
 CMDLINE_OPT(      "random_device_file",      'r', "random_device_file"         )
 CMDLINE_HELP("","")
 */
 
-CMDLINE_OPT("origin",                   'o', "origin"                      )
-CMDLINE_HELP("<domain>","the domain name") // why qname ?,
+CMDLINE_OPT("origin", 'o', "origin")
+CMDLINE_HELP("<domain>", "the domain name") // why qname ?,
 
-CMDLINE_OPT(      "algorithm",               'a', "algorithm"                  )
-CMDLINE_HELP("<algorithm>","one of the supported key algorithms")
+CMDLINE_OPT("algorithm", 'a', "algorithm")
+CMDLINE_HELP("<algorithm>", "one of the supported key algorithms:")
+CMDLINE_BLANK()
 CMDLINE_CALLBACK(keygen_print_algorithm_help, NULL)
-CMDLINE_OPT(      "key-flag",                'f', "key_flag"                   )
+CMDLINE_OPT("key-flag", 'f', "key_flag")
 CMDLINE_HELP("KSK", "flag(s) to apply to the key")
-CMDLINE_OPT(      "publication-date",        'P', "publication_date_text"      )
-CMDLINE_HELP("date/[+-]offset/none","set key publication date (default: now)")
-CMDLINE_OPT(      "activation-date",         'A', "activation_date_text"       )
-CMDLINE_HELP("date/[+-]offset/none","set key activation date (default: now)")
-CMDLINE_OPT(      "revocation-date",         'R', "revocation_date_text"       )
-CMDLINE_HELP("date/[+-]offset/none","set key revocation date")
-CMDLINE_OPT(      "inactivation-date",       'I', "inactivation_date_text"     )
-CMDLINE_HELP("date/[+-]offset/none","set key inactivation date")
-CMDLINE_OPT(      "deletion-date",           'D', "deletion_date_text"         )
-CMDLINE_HELP("date/[+-]offset/none","set key inactivation date")
-CMDLINE_OPT(      "key-size",                'b', "key_size"                   )
-CMDLINE_HELP("<key size in bits>","key size in bits, when applicable")
+CMDLINE_OPT("publication-date", 'P', "publication_date_text")
+CMDLINE_HELP("date/[+-]offset/none", "set key publication date (default: now)")
+CMDLINE_OPT("activation-date", 'A', "activation_date_text")
+CMDLINE_HELP("date/[+-]offset/none", "set key activation date (default: now)")
+CMDLINE_OPT("revocation-date", 'R', "revocation_date_text")
+CMDLINE_HELP("date/[+-]offset/none", "set key revocation date")
+CMDLINE_OPT("inactivation-date", 'I', "inactivation_date_text")
+CMDLINE_HELP("date/[+-]offset/none", "set key inactivation date")
+CMDLINE_OPT("deletion-date", 'D', "deletion_date_text")
+CMDLINE_HELP("date/[+-]offset/none", "set key inactivation date")
+CMDLINE_OPT("key-size", 'b', "key_size")
+CMDLINE_HELP("<key size in bits>", "key size in bits, when applicable")
+CMDLINE_BLANK()
 CMDLINE_CALLBACK(keygen_print_keysize_help, NULL)
 /*
 CMDLINE_OPT(      "digest",                  'd', "digest"                     )
@@ -296,8 +290,8 @@ CMDLINE_HELP("","")
 CMDLINE_OPT(      "interval",                'i', "interval"                   )
 CMDLINE_HELP("","")
 */
-CMDLINE_OPT(      "ttl",                     'L', "ttl"                        )
-CMDLINE_HELP("<TTL>","key TTL")
+CMDLINE_OPT("ttl", 'L', "ttl")
+CMDLINE_HELP("<TTL>", "key TTL")
 /*
 CMDLINE_OPT(      "verbosity_level",         'v', "verbosity_level"            )
 CMDLINE_HELP("","")
@@ -311,17 +305,15 @@ CMDLINE_HELP("","")
 CMDLINE_BOOL(     "successor_key",           'S', "successor_key"              )
 CMDLINE_HELP("","")
 */
-CMDLINE_BOOL(     "nsec3-capable",           '3', "nsec3_capable"              )
-CMDLINE_HELP("","use NSEC3-capable algorithm")
-
+CMDLINE_BOOL("nsec3-capable", '3', "nsec3_capable")
+CMDLINE_HELP("", "use NSEC3-capable algorithm")
 
 // command line
 CMDLINE_VERSION_HELP(keygen_cmdline)
 
 CMDLINE_END(keygen_cmdline)
 
-void
-keygen_config_print()
+void keygen_config_print()
 {
     config_print(termout);
 
@@ -356,8 +348,7 @@ keygen_config_print()
 // ***** module initializer
 // ********************************************************************************
 
-static ya_result
-keygen_init(const module_s *m)
+static ya_result keygen_init(const module_s *m)
 {
     (void)m;
 
@@ -368,8 +359,7 @@ keygen_init(const module_s *m)
 // ***** module finaliser
 // ********************************************************************************
 
-static ya_result
-keygen_finalize(const module_s *m)
+static ya_result keygen_finalize(const module_s *m)
 {
     (void)m;
     return SUCCESS;
@@ -379,10 +369,9 @@ keygen_finalize(const module_s *m)
 // ***** module register
 // ********************************************************************************
 
-static int
-keygen_config_register(int priority)
+static int keygen_config_register(int priority)
 {
-    ya_result                                                    return_code;
+    ya_result return_code;
 
     /*    ------------------------------------------------------------    */
 
@@ -400,11 +389,10 @@ keygen_config_register(int priority)
 // ***** module setup
 // ********************************************************************************
 
-static int
-keygen_setup(const module_s *m)
+static int keygen_setup(const module_s *m)
 {
     (void)m;
-    ya_result  ret = SUCCESS;
+    ya_result ret = SUCCESS;
 
     /*
      * I expect parameters are meant to be checked here
@@ -422,12 +410,11 @@ keygen_setup(const module_s *m)
 // ***** module run
 // ********************************************************************************
 
-static ya_result
-keygen_run(const module_s *m)
+static ya_result keygen_run(const module_s *m)
 {
     (void)m;
 
-    ya_result                                                    return_code;
+    ya_result return_code;
 
     /*    ------------------------------------------------------------    */
 
@@ -438,7 +425,7 @@ keygen_run(const module_s *m)
     if((g_keygen_settings.keys_path == NULL) || (strcmp(g_keygen_settings.keys_path, "") == 0))
     {
         // change directory to 'current working directory'
-        if (getcwd(keys_path_buffer, sizeof(keys_path_buffer)) == NULL)
+        if(getcwd(keys_path_buffer, sizeof(keys_path_buffer)) == NULL)
         {
             perror("getcwd() error");
 
@@ -453,18 +440,18 @@ keygen_run(const module_s *m)
     }
 
     // 2. set 'algorithm'
-    u8 algorithm;
+    uint8_t algorithm;
     if(strlen(g_keygen_settings.algorithm) != 0)
     {
         if(FAIL(return_code = dns_encryption_algorithm_from_case_name(g_keygen_settings.algorithm, &algorithm)))
         {
             // if the algorithm hasn't been set and the origin is "help", then print the help
 
-            u8 algorithm_value_source = config_value_get_source(KEYGEN_SECTION_NAME, "algorithm");
+            uint8_t algorithm_value_source = config_value_get_source(KEYGEN_SECTION_NAME, "algorithm");
 
             if(algorithm_value_source <= CONFIG_SOURCE_DEFAULT) // if the value of the algorithm hasn't been set
             {
-                if(dnsname_equals(g_keygen_settings.origin, (const u8 *)"\004help")) // if the origin is "help"
+                if(dnsname_equals(g_keygen_settings.origin, (const uint8_t *)"\004help")) // if the origin is "help"
                 {
                     return_code = YADIFA_MODULE_HELP_REQUESTED; // help expected?
                 }
@@ -483,7 +470,8 @@ keygen_run(const module_s *m)
 
         if(g_keygen_settings.nsec3_capable)
         {
-            // if an algorithm that doesn't support NSEC3 is used, convert it (or complain and stop?) or give up if it's not possible
+            // if an algorithm that doesn't support NSEC3 is used, convert it (or complain and stop?) or give up if it's
+            // not possible
 
             if(algorithm < DNSKEY_ALGORITHM_RSASHA256_NSEC3)
             {
@@ -513,7 +501,7 @@ keygen_run(const module_s *m)
         }
     }
 
-    const dnskey_features *algorithm_features = dnskey_supported_algorithm(algorithm);
+    const dnskey_features_t *algorithm_features = dnskey_supported_algorithm(algorithm);
 
     if((algorithm_features == NULL) || (algorithm_features->names == NULL))
     {
@@ -521,7 +509,7 @@ keygen_run(const module_s *m)
     }
 
     // 3. set 'key_flags'
-    u16 key_flag;
+    uint16_t key_flag;
     if((strcmp(g_keygen_settings.key_flag, "KSK") == 0))
     {
         key_flag = DNSKEY_FLAGS_KSK;
@@ -542,7 +530,7 @@ keygen_run(const module_s *m)
     }
 
     // 4. set 'key_size'
-    u16 key_size;
+    uint16_t key_size;
     if(g_keygen_settings.key_size == 0)
     {
         if(key_flag == DNSKEY_FLAGS_KSK)
@@ -560,7 +548,7 @@ keygen_run(const module_s *m)
     }
     else
     {
-        key_size = (u16)g_keygen_settings.key_size;
+        key_size = (uint16_t)g_keygen_settings.key_size;
     }
 
     if((key_size < algorithm_features->size_bits_min) || (key_size > algorithm_features->size_bits_max))
@@ -597,10 +585,10 @@ keygen_run(const module_s *m)
     }
 
     // 6. generate the key
-    dnssec_key *generated_key = NULL;
+    dnskey_t *generated_key = NULL;
 
-    char domain_text[256];
-    dnsname_to_cstr(domain_text, g_keygen_settings.origin);
+    char      domain_text[256];
+    cstr_init_with_dnsname(domain_text, g_keygen_settings.origin);
 
     return_code = dnskey_newinstance(key_size, algorithm, key_flag, domain_text, &generated_key);
 
@@ -616,7 +604,7 @@ keygen_run(const module_s *m)
 
     if((g_keygen_settings.publication_date_text != NULL) && (strlen(g_keygen_settings.publication_date_text) > 0))
     {
-        s64 epochus = timeus_from_smarttime(g_keygen_settings.publication_date_text);
+        int64_t epochus = timeus_from_smarttime(g_keygen_settings.publication_date_text);
         if(epochus >= 0)
         {
             dnskey_set_publish_epoch(generated_key, epochus / ONE_SECOND_US);
@@ -630,7 +618,7 @@ keygen_run(const module_s *m)
 
     if((g_keygen_settings.activation_date_text != NULL) && (strlen(g_keygen_settings.activation_date_text) > 0))
     {
-        s64 epochus = timeus_from_smarttime(g_keygen_settings.activation_date_text);
+        int64_t epochus = timeus_from_smarttime(g_keygen_settings.activation_date_text);
         if(epochus >= 0)
         {
             dnskey_set_activate_epoch(generated_key, epochus / ONE_SECOND_US);
@@ -644,7 +632,7 @@ keygen_run(const module_s *m)
 
     if((g_keygen_settings.inactivation_date_text != NULL) && (strlen(g_keygen_settings.inactivation_date_text) > 0))
     {
-        s64 epochus = timeus_from_smarttime(g_keygen_settings.inactivation_date_text);
+        int64_t epochus = timeus_from_smarttime(g_keygen_settings.inactivation_date_text);
         if(epochus >= 0)
         {
             dnskey_set_inactive_epoch(generated_key, epochus / ONE_SECOND_US);
@@ -658,7 +646,7 @@ keygen_run(const module_s *m)
 
     if((g_keygen_settings.deletion_date_text != NULL) && (strlen(g_keygen_settings.deletion_date_text) > 0))
     {
-        s64 epochus = timeus_from_smarttime(g_keygen_settings.deletion_date_text);
+        int64_t epochus = timeus_from_smarttime(g_keygen_settings.deletion_date_text);
         if(epochus >= 0)
         {
             dnskey_set_delete_epoch(generated_key, epochus / ONE_SECOND_US);
@@ -695,10 +683,7 @@ keygen_run(const module_s *m)
     {
         // 9. print both key file names on stdout
         char filename[PATH_MAX];
-        snformat(filename, sizeof(filename), "K%{dnsname}+%03d+%05d",
-                  generated_key->owner_name,
-                  generated_key->algorithm,
-                  dnskey_get_tag(generated_key));
+        snformat(filename, sizeof(filename), "K%{dnsname}+%03d+%05d", generated_key->owner_name, generated_key->algorithm, dnskey_get_tag(generated_key));
         formatln("%s", filename);
     }
 
@@ -709,22 +694,21 @@ keygen_run(const module_s *m)
 // ***** module virtual table
 // ********************************************************************************
 
-const module_s keygen_program =
-{
-    keygen_init,                       // module initializer
-    keygen_finalize,                   // module finalizer
-    keygen_config_register,            // module register
-    keygen_setup,                      // module setup
-    keygen_run,                        // module run
+const module_s keygen_program = {
+    keygen_init,            // module initializer
+    keygen_finalize,        // module finalizer
+    keygen_config_register, // module register
+    keygen_setup,           // module setup
+    keygen_run,             // module run
     module_default_cmdline_help_print,
 
-    keygen_cmdline,                    // module command line struct
-    NULL,                           // module command line callback
-    NULL,                           // module filter arguments
+    keygen_cmdline, // module command line struct
+    NULL,           // module command line callback
+    NULL,           // module filter arguments
 
-    "key generator",                // module public name
-    "ykeygen",                      // module command (name as executable match)
-    "keygen",                       // module parameter (name as first parameter aka command name)
-    /*keygen_cmdline_help*/ NULL,               // module text to be printed upon help request
-    ".yadifa.rc"                    // module rc file (ie: ".module.rc"
+    "key generator",              // module public name
+    "ykeygen",                    // module command (name as executable match)
+    "keygen",                     // module parameter (name as first parameter aka command name)
+    /*keygen_cmdline_help*/ NULL, // module text to be printed upon help request
+    ".yadifa.rc"                  // module rc file (ie: ".module.rc"
 };

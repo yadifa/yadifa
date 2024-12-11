@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup ### #######
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup ### #######
+ * @ingroup dnscore
+ * @brief
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -47,9 +46,9 @@
 #include <fcntl.h>
 #include <dirent.h>
 
-#include "dnsdb/dnsdb-config.h"
+#include "dnsdb/dnsdb_config.h"
 
-#include <dnscore/packet_reader.h>
+#include <dnscore/dns_packet_reader.h>
 #include <dnscore/format.h>
 #include <dnscore/file_input_stream.h>
 #include <dnscore/file_output_stream.h>
@@ -58,10 +57,10 @@
 #include <dnscore/xfr_input_stream.h>
 #include <dnscore/logger.h>
 
-#include "dnsdb/zdb-zone-path-provider.h"
+#include "dnsdb/zdb_zone_path_provider.h"
 #include "dnsdb/xfr_copy.h"
 
-#ifndef WIN32
+#if __unix__
 /* it depends if host is DARWIN or LINUX */
 #if HAVE_SYS_SYSLIMITS_H
 #include <sys/syslimits.h>
@@ -70,11 +69,11 @@
 #endif /* HAVE_SYS_SYSLIMITS_H */
 #endif
 
-extern logger_handle* g_database_logger;
+extern logger_handle_t *g_database_logger;
 #define MODULE_MSG_HANDLE g_database_logger
 
-static ya_result
-xfr_copy_create_file(output_stream *xfrs, char *file_path, u32 file_path_len, const char* data_path, const u8 *origin, bool data_path_is_target) // should be temp
+static ya_result xfr_copy_create_file(output_stream_t *xfrs, char *file_path, uint32_t file_path_len, const char *data_path, const uint8_t *origin,
+                                      bool data_path_is_target) // should be temp
 {
     ya_result ret;
 
@@ -84,10 +83,7 @@ xfr_copy_create_file(output_stream *xfrs, char *file_path, u32 file_path_len, co
 
     if(!data_path_is_target)
     {
-        if(ISOK(ret = zdb_zone_path_get_provider()(
-            origin,
-            file_path, file_path_len,
-            ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_RNDSUFFIX|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
+        if(ISOK(ret = zdb_zone_path_get_provider()(origin, file_path, file_path_len, ZDB_ZONE_PATH_PROVIDER_AXFR_FILE | ZDB_ZONE_PATH_PROVIDER_RNDSUFFIX | ZDB_ZONE_PATH_PROVIDER_MKDIR)))
         {
             if(ISOK(ret = file_output_stream_create(xfrs, file_path, 0644)))
             {
@@ -104,7 +100,6 @@ xfr_copy_create_file(output_stream *xfrs, char *file_path, u32 file_path_len, co
         ret = file_output_stream_create_excl(xfrs, data_path, 0644);
     }
 
-
     /*
      * Do NOT use buffers yet.
      */
@@ -112,16 +107,12 @@ xfr_copy_create_file(output_stream *xfrs, char *file_path, u32 file_path_len, co
     return ret;
 }
 
-ya_result
-xfr_delete_axfr(const u8 *origin)
+ya_result xfr_delete_axfr(const uint8_t *origin)
 {
     ya_result ret;
-    char file_path[PATH_MAX];
-    
-    if(ISOK(ret = zdb_zone_path_get_provider()(
-        origin, 
-        file_path, sizeof(file_path),
-        ZDB_ZONE_PATH_PROVIDER_AXFR_FILE)))
+    char      file_path[PATH_MAX];
+
+    if(ISOK(ret = zdb_zone_path_get_provider()(origin, file_path, sizeof(file_path), ZDB_ZONE_PATH_PROVIDER_AXFR_FILE)))
     {
         if(unlink(file_path) < 0) // VS false positive: reaching this point, file_path is initialized (by contract)
         {
@@ -140,19 +131,18 @@ xfr_delete_axfr(const u8 *origin)
     return ret;
 }
 
-ya_result
-xfr_copy(input_stream *xis, const char *base_data_path, bool base_data_path_is_target)
+ya_result xfr_copy(input_stream_t *xis, const char *base_data_path, bool base_data_path_is_target)
 {
-    output_stream xos;
-    ya_result ret;
-    char tmp_file_path[PATH_MAX];
-    char file_path[PATH_MAX];
-    u8 buffer[1024];
-    
+    output_stream_t xos;
+    ya_result       ret;
+    char            tmp_file_path[PATH_MAX];
+    char            file_path[PATH_MAX];
+    uint8_t         buffer[1024];
+
     if(ISOK(ret = xfr_copy_create_file(&xos, tmp_file_path, sizeof(tmp_file_path), base_data_path, xfr_input_stream_get_origin(xis), base_data_path_is_target)))
     {
         buffer_output_stream_init(&xos, &xos, 4096);
-        
+
         for(;;)
         {
             if(dnscore_shuttingdown())
@@ -160,33 +150,31 @@ xfr_copy(input_stream *xis, const char *base_data_path, bool base_data_path_is_t
                 ret = STOPPED_BY_APPLICATION_SHUTDOWN;
                 break;
             }
-            
+
             ret = input_stream_read(xis, buffer, sizeof(buffer));
 
             if(ret <= 0)
             {
                 break;
             }
-            
+
             output_stream_write(&xos, buffer, ret);
         }
-        
+
         output_stream_close(&xos);
-        
+
         if(ISOK(ret))
         {
-            u16 xfr_type = xfr_input_stream_get_type(xis);
-            
-            //u32 last_serial = xfr_input_stream_get_serial(xis);
+            uint16_t xfr_type = xfr_input_stream_get_type(xis);
+
+            // uint32_t last_serial = xfr_input_stream_get_serial(xis);
 
             if(!base_data_path_is_target)
             {
-                if(ISOK(ret = zdb_zone_path_get_provider()(
-                    xfr_input_stream_get_origin(xis),
-                    file_path, sizeof(file_path),
-                    ZDB_ZONE_PATH_PROVIDER_AXFR_FILE|ZDB_ZONE_PATH_PROVIDER_MKDIR)))
+                if(ISOK(ret = zdb_zone_path_get_provider()(xfr_input_stream_get_origin(xis), file_path, sizeof(file_path), ZDB_ZONE_PATH_PROVIDER_AXFR_FILE | ZDB_ZONE_PATH_PROVIDER_MKDIR)))
                 {
-                    unlink(file_path); // VS false positive: reaching this point, file_path is initialized to an ASCIIZ (by contract)
+                    unlink(file_path); // VS false positive: reaching this point, file_path is initialized to an ASCIIZ
+                                       // (by contract)
 
                     if(rename(tmp_file_path, file_path) < 0)
                     {
@@ -209,9 +197,8 @@ xfr_copy(input_stream *xis, const char *base_data_path, bool base_data_path_is_t
             unlink(tmp_file_path);
         }
     }
-    
+
     return ret;
 }
-
 
 /** @} */

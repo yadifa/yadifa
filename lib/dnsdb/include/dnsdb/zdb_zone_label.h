@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbzone Zone related functions
- *  @ingroup dnsdb
- *  @brief Internal functions for the database: zoned resource records label.
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbzone Zone related functions
+ * @ingroup dnsdb
+ * @brief Internal functions for the database: zoned resource records label.
  *
  *  Internal functions for the database: zoned resource records label.
  *
@@ -46,39 +45,34 @@
  *  They should only be used as the top holding structure of the database
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 
 #ifndef _ZONE_LABEL_H
-#define	_ZONE_LABEL_H
+#define _ZONE_LABEL_H
 
 #include <dnsdb/zdb_types.h>
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#define ZDB_ZONELABEL_TAG 0x4c424c4e5a42445a     /* "ZDBZNLBL" */
-
-#if 0 /* fix */
-#else
+#define ZDB_ZONELABEL_TAG                 0x4c424c4e5a42445a /* "ZDBZNLBL" */
 
 /**
- * @brief TRUE if the zone_label contains information (records, zone or a set of labels), else FALSE
+ * @brief true if the zone_label contains information (records, zone or a set of labels), else false
  */
 
 /* 2 USES */
-#define ZONE_LABEL_RELEVANT(zone_label) ((zone_label)->zone!=NULL||dictionary_notempty(&(zone_label)->sub))
+#define ZONE_LABEL_RELEVANT(zone_label)   ((zone_label)->zone != NULL || dictionary_notempty(&(zone_label)->sub))
 
 /**
- * @brief FALSE if the zone_label contains information (records, zone or a set of labels), else TRUE
+ * @brief false if the zone_label contains information (records, zone or a set of labels), else true
  */
 
 /* 4 USES */
-#define ZONE_LABEL_IRRELEVANT(zone_label) ((zone_label)->zone==NULL&&dictionary_isempty(&(zone_label)->sub))
+#define ZONE_LABEL_IRRELEVANT(zone_label) ((zone_label)->zone == NULL && dictionary_isempty(&(zone_label)->sub))
 
-#endif
-    
 /**
  * @brief Search for the label of a zone in the database
  *
@@ -92,13 +86,13 @@ extern "C"
  */
 
 /* 3 USES */
-zdb_zone_label* zdb_zone_label_find(zdb* db, const dnsname_vector* name);
+zdb_zone_label_t *zdb_zone_label_find(zdb_t *db, const dnsname_vector_t *name);
 
-zdb_zone_label* zdb_zone_label_find_from_name(zdb* db, const char* name);
-zdb_zone_label* zdb_zone_label_find_from_dnsname(zdb* db, const u8* dns_name);
-zdb_zone_label* zdb_zone_label_find_from_dnsname_nolock(zdb* db, const u8* dns_name);
-zdb_zone_label* zdb_zone_label_find_nolock(zdb *db, const dnsname_vector* origin);
-zdb_zone_label* zdb_zone_label_add_nolock(zdb *db, const dnsname_vector* origin);
+zdb_zone_label_t *zdb_zone_label_find_from_name(zdb_t *db, const char *name);
+zdb_zone_label_t *zdb_zone_label_find_from_dnsname(zdb_t *db, const uint8_t *dns_name);
+zdb_zone_label_t *zdb_zone_label_find_from_dnsname_nolock(zdb_t *db, const uint8_t *dns_name);
+zdb_zone_label_t *zdb_zone_label_find_nolock(zdb_t *db, const dnsname_vector_t *origin);
+zdb_zone_label_t *zdb_zone_label_add_nolock(zdb_t *db, const dnsname_vector_t *origin);
 
 /**
  * @brief Destroys a label and its collections.
@@ -111,7 +105,7 @@ zdb_zone_label* zdb_zone_label_add_nolock(zdb *db, const dnsname_vector* origin)
  */
 
 /* 1 USE */
-void zdb_zone_label_destroy(zdb_zone_label **zone_labelp);
+void zdb_zone_label_destroy(zdb_zone_label_t **zone_labelp);
 
 /**
  * @brief Gets pointers to all the zone labels along the path of a name.
@@ -126,9 +120,7 @@ void zdb_zone_label_destroy(zdb_zone_label **zone_labelp);
  */
 
 /* 1 USE */
-s32 zdb_zone_label_match(zdb* db, const dnsname_vector *name, zdb_zone_label_pointer_array zone_label_vector);
-
-
+int32_t zdb_zone_label_match(zdb_t *db, const dnsname_vector_t *name, zdb_zone_label_pointer_array zone_label_vector);
 
 /**
  * @brief Destroys a zone label and all its collections
@@ -142,8 +134,7 @@ s32 zdb_zone_label_match(zdb* db, const dnsname_vector *name, zdb_zone_label_poi
  */
 
 /* 2 USES */
-ya_result zdb_zone_label_delete(zdb* db, dnsname_vector* name);
-
+ya_result zdb_zone_label_delete(zdb_t *db, dnsname_vector_t *name);
 
 #if DEBUG
 
@@ -151,15 +142,15 @@ ya_result zdb_zone_label_delete(zdb* db, dnsname_vector* name);
  * DEBUG: prints the label content
  */
 
-void zdb_zone_label_print_indented(zdb_zone_label* zone_label, output_stream *os, int indent);
-void zdb_zone_label_print(zdb_zone_label* zone_label, output_stream *os);
+void zdb_zone_label_print_indented(zdb_zone_label_t *zone_label, output_stream_t *os, int indent);
+void zdb_zone_label_print(zdb_zone_label_t *zone_label, output_stream_t *os);
 
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _ZONE_LABEL_H */
+#endif /* _ZONE_LABEL_H */
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,22 +28,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
-
-/** @defgroup OSX portability
- *  @ingroup dnscore
- *  @brief
- *
- * @{
- *
  *----------------------------------------------------------------------------*/
 
-// CentOS 5.9 requires this to have PTHREAD_MUTEX_RECURSIVE
-#define  _GNU_SOURCE 1
+/**-----------------------------------------------------------------------------
+ * @defgroup OSX portability
+ * @ingroup dnscore
+ * @brief
+ *
+ * @{
+ *----------------------------------------------------------------------------*/
 
-#include "dnscore/dnscore-config.h"
+#define _GNU_SOURCE 1
+
+#include "dnscore/dnscore_config.h"
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -55,18 +52,18 @@
 
 typedef clock_id_t clockid_t;
 
-int clock_gettime(clockid_t clk_id, struct timespec *tp)
+int                clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
     (void)clk_id;
-    
-    clock_serv_t cclock;
+
+    clock_serv_t    cclock;
     mach_timespec_t mts;
     host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
     clock_get_time(cclock, &mts);
     mach_port_deallocate(mach_task_self(), cclock);
     tp->tv_sec = mts.tv_sec;
     tp->tv_nsec = mts.tv_nsec;
-    
+
     return 0;
 }
 

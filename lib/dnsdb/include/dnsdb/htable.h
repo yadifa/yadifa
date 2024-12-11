@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup dnsdbcollection Collections used by the database
- *  @ingroup dnsdb
- *  @brief Hash-Table structure and functions.
+/**-----------------------------------------------------------------------------
+ * @defgroup dnsdbcollection Collections used by the database
+ * @ingroup dnsdb
+ * @brief Hash-Table structure and functions.
  *
  *  Implementation of the Hash-Table structure and functions.
  *  It can be configured to be thread-safe. (4 modes)
@@ -44,13 +43,13 @@
  *  Mutex support has been removed the 2009/02/24.
  *
  * @{
- */
+ *----------------------------------------------------------------------------*/
 #ifndef _HTABLE_H
-#define	_HTABLE_H
+#define _HTABLE_H
 
 #define HTABLE_USE_MERSENE
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 extern "C"
 {
 #endif
@@ -59,7 +58,7 @@ extern "C"
 
 typedef struct
 {
-    void* data; /* 4 or 8 bytes (32 or 64 bits systems)         */
+    void *data; /* 4 or 8 bytes (32 or 64 bits systems)         */
 } htable_entry; /* => 12 or 16 bytes (32 or 64 bits systems)    */
 
 /** @brief Allocates an hash table of the pre-defined size
@@ -69,7 +68,7 @@ typedef struct
  *  @return A pointer to the htable or NULL if an error occurred
  */
 
-htable_entry* htable_alloc();
+htable_entry *htable_alloc();
 
 /** @brief Frees an htable
  *
@@ -79,23 +78,23 @@ htable_entry* htable_alloc();
  *
  */
 
-void htable_free(htable_entry* table);
+void htable_free(htable_entry *table);
 
 #if defined(HTABLE_USE_MERSENE)
 
-#define NOHASHTBL 0
-#define MERSENE_1 3
-#define MERSENE_2 7
-#define MERSENE_3 31
-#define MERSENE_4 127
-#define MERSENE_5 8191
-#define MERSENE_6 131071
-#define MERSENE_7 524287
-#define MERSENE_8 2147483647    /* This is, of course, not an option */
+#define NOHASHTBL               0
+#define MERSENE_1               3
+#define MERSENE_2               7
+#define MERSENE_3               31
+#define MERSENE_4               127
+#define MERSENE_5               8191
+#define MERSENE_6               131071
+#define MERSENE_7               524287
+#define MERSENE_8               2147483647 /* This is, of course, not an option */
 
 /* Given the statistics, MERSENE_7 is by far the best choice */
 
-#define DEFAULT_HTABLE_SIZE (MERSENE_7+1)
+#define DEFAULT_HTABLE_SIZE     (MERSENE_7 + 1)
 
 /** @brief Retrieve the htable entry for a given hash
  *
@@ -107,7 +106,7 @@ void htable_free(htable_entry* table);
  *
  */
 
-#define htable_get(table,hash) ((table)[(hash)&(DEFAULT_HTABLE_SIZE-1)])
+#define htable_get(table, hash) ((table)[(hash) & (DEFAULT_HTABLE_SIZE - 1)])
 
 #else /* MODULO */
 
@@ -125,17 +124,14 @@ void htable_free(htable_entry* table);
  *
  */
 
-#define htable_get(table,hash) ((table)[(hash)%DEFAULT_HTABLE_SIZE])
+#define htable_get(table, hash) ((table)[(hash) % DEFAULT_HTABLE_SIZE])
 
 #endif
 
-#ifdef	__cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif	/* _HTABLE_H */
+#endif /* _HTABLE_H */
 
 /** @} */
-
-/*----------------------------------------------------------------------------*/
-

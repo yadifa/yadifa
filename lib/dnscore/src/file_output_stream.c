@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,20 +28,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup streaming Streams
- *  @ingroup dnscore
- *  @brief
+/**-----------------------------------------------------------------------------
+ * @defgroup streaming Streams
+ * @ingroup dnscore
+ * @brief
  *
  *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
-#include "dnscore/dnscore-config.h"
+#include "dnscore/dnscore_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -53,20 +51,19 @@
 #include "dnscore/fdtools.h"
 #include "dnscore/error_state.h"
 
-extern logger_handle *g_system_logger;
+extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
 
 extern error_state_t nospace_error_state;
 
-#define FILE_OUTPUT_STREAM_FD_GET(stream___) ((int)(intptr_t)((stream___)->data))
-#define FILE_OUTPUT_STREAM_FD_SET(stream___,fd___) (stream___)->data = (void*)(intptr_t)fd___;
+#define FILE_OUTPUT_STREAM_FD_GET(stream___)        ((int)(intptr_t)((stream___)->data))
+#define FILE_OUTPUT_STREAM_FD_SET(stream___, fd___) (stream___)->data = (void *)(intptr_t)fd___;
 
-static ya_result
-file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
+static ya_result file_output_stream_write(output_stream_t *stream_, const uint8_t *buffer, uint32_t len)
 {
-    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
+    int            fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
 
-    const u8* start = buffer;
+    const uint8_t *start = buffer;
 
     while(len > 0)
     {
@@ -80,14 +77,14 @@ file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
             {
                 continue;
             }
-            
+
             if(err == EAGAIN)
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
                 int oldflags = fcntl(fd, F_GETFL, 0);
                 if(oldflags < 0)
                 {
-                     return MAKE_ERRNO_ERROR(err);
+                    return MAKE_ERRNO_ERROR(err);
                 }
 #endif
                 continue;
@@ -98,18 +95,17 @@ file_output_stream_write(output_stream* stream_, const u8* buffer, u32 len)
         }
 
         buffer += ret;
-        len -= (u32)ret;
+        len -= (uint32_t)ret;
     }
 
     return (ya_result)(buffer - start);
 }
 
-static ya_result
-file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
+static ya_result file_output_stream_writefully(output_stream_t *stream_, const uint8_t *buffer, uint32_t len)
 {
-    const u8* start = buffer;
-    bool nospace = FALSE;
-    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
+    const uint8_t *start = buffer;
+    bool           nospace = false;
+    int            fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
 
     while(len > 0)
     {
@@ -123,19 +119,19 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
             {
                 continue;
             }
-            
+
             if(err == EAGAIN)
             {
 #if __FreeBSD__ || __OpenBSD__ || __APPLE__
                 int oldflags = fcntl(fd, F_GETFL, 0);
                 if(oldflags < 0)
                 {
-                     return MAKE_ERRNO_ERROR(err);
+                    return MAKE_ERRNO_ERROR(err);
                 }
 #endif
                 continue;
             }
-            
+
             if(err == ENOSPC)
             {
                 // the disk is full : wait a bit, hope the admin catches it, try again later
@@ -143,8 +139,8 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
                 {
                     log_err("filesystem full for stream");
                 }
-                nospace = TRUE;
-                sleep((rand()&7) + 1);
+                nospace = true;
+                sleep((rand() & 7) + 1);
                 continue;
             }
 
@@ -153,7 +149,7 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
         }
 
         buffer += ret;
-        len -= (u32)ret;
+        len -= (uint32_t)ret;
     }
 
     if(nospace)
@@ -164,8 +160,7 @@ file_output_stream_writefully(output_stream* stream_, const u8* buffer, u32 len)
     return (ya_result)(buffer - start);
 }
 
-static ya_result
-file_output_stream_flush(output_stream* stream_)
+static ya_result file_output_stream_flush(output_stream_t *stream_)
 {
     int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
 
@@ -177,14 +172,13 @@ file_output_stream_flush(output_stream* stream_)
     return ERRNO_ERROR;
 }
 
-static void
-file_output_stream_close(output_stream* stream_)
+static void file_output_stream_close(output_stream_t *stream_)
 {
     int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
-    
+
     /* don't, it's only for a test that I did this assert((fd < 0)||(fd >2)); */
-    
-    if(fd != -1)   /* harmless close but still ... */
+
+    if(fd != -1) /* harmless close but still ... */
     {
         close_ex(fd);
     }
@@ -192,82 +186,108 @@ file_output_stream_close(output_stream* stream_)
     output_stream_set_void(stream_);
 }
 
-static void
-file_output_stream_noclose(output_stream* stream_)
-{
-    output_stream_set_void(stream_);
-}
+static void                     file_output_stream_noclose(output_stream_t *stream_) { output_stream_set_void(stream_); }
 
-static const output_stream_vtbl file_output_stream_noclose_vtbl ={
+static const output_stream_vtbl file_output_stream_noclose_vtbl = {
     file_output_stream_write,
     file_output_stream_flush,
     file_output_stream_noclose,
     "file_output_stream-noclose",
 };
 
-static const output_stream_vtbl file_output_stream_vtbl ={
+static const output_stream_vtbl file_output_stream_vtbl = {
     file_output_stream_write,
     file_output_stream_flush,
     file_output_stream_close,
     "file_output_stream",
 };
 
-static const output_stream_vtbl file_full_output_stream_vtbl ={
+static const output_stream_vtbl file_full_output_stream_noclose_vtbl = {
+    file_output_stream_writefully,
+    file_output_stream_flush,
+    file_output_stream_noclose,
+    "file_output_stream-full-noclose",
+};
+
+static const output_stream_vtbl file_full_output_stream_vtbl = {
     file_output_stream_writefully,
     file_output_stream_flush,
     file_output_stream_close,
-    "file_output_stream",
+    "file_output_stream-full",
 };
 
-ya_result
-file_output_stream_open(output_stream* stream, const char* filename)
+ya_result file_output_stream_open(output_stream_t *stream, const char *filename)
 {
     ya_result ret;
-    ret = file_output_stream_open_ex(stream, filename, O_RDWR|O_CLOEXEC, 0600);
+    ret = file_output_stream_open_ex(stream, filename, O_RDWR | O_CLOEXEC, 0600);
     return ret;
 }
 
-ya_result
-file_output_stream_create(output_stream* stream, const char* filename, mode_t mode)
+ya_result file_output_stream_create(output_stream_t *stream, const char *filename, mode_t mode)
 {
     ya_result ret;
     ret = file_output_stream_open_ex(stream, filename, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, mode);
     return ret;
 }
 
-ya_result
-file_output_stream_create_excl(output_stream* stream, const char* filename, mode_t mode)
+ya_result file_output_stream_create_excl(output_stream_t *stream, const char *filename, mode_t mode)
 {
     ya_result ret;
     ret = file_output_stream_open_ex(stream, filename, O_RDWR | O_CREAT | O_TRUNC | O_EXCL | O_CLOEXEC, mode);
     return ret;
 }
 
-ya_result
-file_output_stream_set_full_writes(output_stream* stream, bool full_writes)
+ya_result file_output_stream_set_full_writes(output_stream_t *stream_, bool full_writes)
 {
-    if(is_fd_output_stream(stream))
+    if(full_writes)
     {
-        if(full_writes)
+        if(stream_->vtbl == &file_output_stream_vtbl)
         {
-            stream->vtbl = &file_full_output_stream_vtbl;
+            stream_->vtbl = &file_full_output_stream_vtbl;
+            return SUCCESS;
+        }
+        if(stream_->vtbl == &file_output_stream_noclose_vtbl)
+        {
+            stream_->vtbl = &file_full_output_stream_noclose_vtbl;
+            return SUCCESS;
+        }
+
+        if((stream_->vtbl == &file_full_output_stream_vtbl) || (stream_->vtbl == &file_full_output_stream_noclose_vtbl))
+        {
+            return SUCCESS;
         }
         else
         {
-            stream->vtbl = &file_output_stream_vtbl;
+            return INVALID_STATE_ERROR;
         }
-        return SUCCESS;
     }
-    else
+    else // disable full writes
     {
-        return INVALID_STATE_ERROR;
+        if(stream_->vtbl == &file_full_output_stream_vtbl)
+        {
+            stream_->vtbl = &file_output_stream_vtbl;
+            return SUCCESS;
+        }
+        if(stream_->vtbl == &file_full_output_stream_noclose_vtbl)
+        {
+            stream_->vtbl = &file_output_stream_noclose_vtbl;
+            return SUCCESS;
+        }
+
+        if((stream_->vtbl == &file_output_stream_vtbl) || (stream_->vtbl == &file_output_stream_noclose_vtbl))
+        {
+            return SUCCESS;
+        }
+        else
+        {
+            return INVALID_STATE_ERROR;
+        }
     }
 }
 
-ya_result
-file_output_stream_open_ex(output_stream* stream_, const char* filename, int flags, mode_t mode)
+ya_result file_output_stream_open_ex(output_stream_t *stream_, const char *filename, int flags, mode_t mode)
 {
-    yassert(sizeof(void*) >= sizeof(int));
+    yassert(sizeof(void *) >= sizeof(int));
 
     int fd = open_create_ex(filename, flags, mode);
 
@@ -275,8 +295,8 @@ file_output_stream_open_ex(output_stream* stream_, const char* filename, int fla
     {
         return ERRNO_ERROR;
     }
-    
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+
+#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 
@@ -286,10 +306,9 @@ file_output_stream_open_ex(output_stream* stream_, const char* filename, int fla
     return SUCCESS;
 }
 
-ya_result
-file_output_stream_open_ex_nolog(output_stream* stream_, const char* filename, int flags, mode_t mode)
+ya_result file_output_stream_open_ex_nolog(output_stream_t *stream_, const char *filename, int flags, mode_t mode)
 {
-    yassert(sizeof(void*) >= sizeof(int));
+    yassert(sizeof(void *) >= sizeof(int));
 
     int fd = open_create_ex_nolog(filename, flags, mode);
 
@@ -297,8 +316,8 @@ file_output_stream_open_ex_nolog(output_stream* stream_, const char* filename, i
     {
         return ERRNO_ERROR;
     }
-    
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+
+#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 
@@ -308,14 +327,13 @@ file_output_stream_open_ex_nolog(output_stream* stream_, const char* filename, i
     return SUCCESS;
 }
 
-void
-file_output_stream_close_nolog(output_stream* stream_)
+void file_output_stream_close_nolog(output_stream_t *stream_)
 {
     int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
-    
+
     /* don't, it's only for a test that I did this assert((fd < 0)||(fd >2)); */
-    
-    if(fd != -1)   /* harmless close but still ... */
+
+    if(fd != -1) /* harmless close but still ... */
     {
         close_ex(fd);
     }
@@ -323,10 +341,9 @@ file_output_stream_close_nolog(output_stream* stream_)
     output_stream_set_void(stream_);
 }
 
-ya_result
-fd_output_stream_attach(output_stream* stream_, int fd)
+ya_result fd_output_stream_attach(output_stream_t *stream_, int fd)
 {
-    yassert(sizeof(void*) >= sizeof(int));
+    yassert(sizeof(void *) >= sizeof(int));
 
     FILE_OUTPUT_STREAM_FD_SET(stream_, fd);
     stream_->vtbl = &file_output_stream_vtbl;
@@ -334,10 +351,9 @@ fd_output_stream_attach(output_stream* stream_, int fd)
     return SUCCESS;
 }
 
-ya_result
-fd_output_stream_attach_noclose(output_stream* stream_, int fd)
+ya_result fd_output_stream_attach_noclose(output_stream_t *stream_, int fd)
 {
-    yassert(sizeof(void*) >= sizeof(int));
+    yassert(sizeof(void *) >= sizeof(int));
 
     FILE_OUTPUT_STREAM_FD_SET(stream_, fd);
     stream_->vtbl = &file_output_stream_noclose_vtbl;
@@ -345,31 +361,28 @@ fd_output_stream_attach_noclose(output_stream* stream_, int fd)
     return SUCCESS;
 }
 
-void
-fd_output_stream_detach(output_stream* stream_)
+bool fd_output_stream_is_noclose_instance(output_stream_t *os) { return (os != NULL) && (os->vtbl == &file_output_stream_noclose_vtbl); }
+
+void fd_output_stream_detach(output_stream_t *stream_)
 {
-    yassert(sizeof(void*) >= sizeof(int));
+    yassert(sizeof(void *) >= sizeof(int));
 
     FILE_OUTPUT_STREAM_FD_SET(stream_, -1);
 }
 
-ya_result
-fd_output_stream_get_filedescriptor(output_stream* stream)
+ya_result fd_output_stream_get_filedescriptor(output_stream_t *stream) { return FILE_OUTPUT_STREAM_FD_GET(stream); }
+
+bool      is_fd_output_stream(output_stream_t *stream_)
 {
-    return FILE_OUTPUT_STREAM_FD_GET(stream);
+    return (stream_ != NULL) &&
+           ((stream_->vtbl == &file_output_stream_vtbl) || (stream_->vtbl == &file_full_output_stream_vtbl) || (stream_->vtbl == &file_output_stream_noclose_vtbl) || (stream_->vtbl == &file_full_output_stream_noclose_vtbl));
 }
 
-bool
-is_fd_output_stream(output_stream* stream_)
+int64_t fd_output_stream_get_size(output_stream_t *stream_)
 {
-    return (stream_ != NULL) && ((stream_->vtbl == &file_output_stream_vtbl) || (stream_->vtbl == &file_full_output_stream_vtbl));
-}
-
-s64 fd_output_stream_get_size(output_stream* stream_)
-{
-    int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
+    int         fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
     struct stat s;
-    
+
     if(fstat(fd, &s) >= 0)
     {
         if(S_ISREG(s.st_mode))
@@ -377,13 +390,13 @@ s64 fd_output_stream_get_size(output_stream* stream_)
             return s.st_size;
         }
     }
-    
-    return (s64)ERRNO_ERROR;
+
+    return (int64_t)ERRNO_ERROR;
 }
 
-void file_output_steam_advise_sequential(output_stream* stream_)
+void file_output_steam_advise_sequential(output_stream_t *stream_)
 {
-#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     int fd = FILE_OUTPUT_STREAM_FD_GET(stream_);
     if(fd >= 0)
     {

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,31 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup server
- *  @ingroup yadifad
- *  @brief server
+/**-----------------------------------------------------------------------------
+ * @defgroup server
+ * @ingroup yadifad
+ * @brief server
  *
  *  Handles queries made in the CH class (ie: version.*)
  *
  * @{
- */
-/*----------------------------------------------------------------------------*/
+ *----------------------------------------------------------------------------*/
 
-#include "server-config.h"
+#include "server_config.h"
 
 #include <dnscore/file_output_stream.h>
 #include <dnscore/logger.h>
 #include <dnscore/rfc.h>
-#include <dnscore/ctrl-rfc.h>
+#include <dnscore/ctrl_rfc.h>
 #include <dnscore/threaded_queue.h>
 
 #include <dnsdb/zdb_zone.h>
 #include <dnscore/format.h>
-#include <dnscore/packet_writer.h>
+#include <dnscore/dns_packet_writer.h>
 
-extern logger_handle *g_server_logger;
+extern logger_handle_t *g_server_logger;
 #define MODULE_MSG_HANDLE g_server_logger
 
 #include "confs.h"
@@ -65,11 +63,8 @@ extern logger_handle *g_server_logger;
 #include "ctrl_query_axfr.h"
 #include "ctrl.h"
 
-#include "database-service.h"
+#include "database_service.h"
 
 #include "ctrl_zone.h"
-
-
-
 
 /** @} */

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2023, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *------------------------------------------------------------------------------
- *
- */
+ *----------------------------------------------------------------------------*/
 
-/** @defgroup 
- *  @ingroup dnscore
- *  @brief 
+/**-----------------------------------------------------------------------------
+ * @defgroup
+ * @ingroup dnscore
+ * @brief
  *
- *  
+ *
  *
  * @{
- *
  *----------------------------------------------------------------------------*/
 #pragma once
 
@@ -51,7 +49,7 @@
 
 #if !defined(CLOCK_REALTIME)
 typedef int clockid_t;
-int clock_gettime(clockid_t clk_id, struct timespec *tp);
+int         clock_gettime(clockid_t clk_id, struct timespec *tp);
 
 #define CLOCK_REALTIME 0
 
@@ -60,4 +58,3 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp);
 #endif
 
 /** @} */
-
