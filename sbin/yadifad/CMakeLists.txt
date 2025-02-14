@@ -96,6 +96,12 @@ set(YADIFAD_SOURCES ${YADIFAD_SOURCES}
     server_sm.c
     server_rw.c
 )
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "GNU")
+message("Hurd")
+set(YADIFAD_SOURCES ${YADIFAD_SOURCES}
+server_sm.c
+server_rw.c
+)
 else()
 message("UNIX variant")
 set(YADIFAD_SOURCES ${YADIFAD_SOURCES}

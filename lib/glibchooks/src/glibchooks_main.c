@@ -40,7 +40,7 @@
  * Note: release build doesn't work.
  */
 
-#if __linux__
+#if __linux__ || __gnu_hurd__
 #define HOOK_LIBC_START_MAIN 1 // hooking main doesn't work, this does
 #elif __FreeBSD__
 #define HOOK_LIBC_START_MAIN 0

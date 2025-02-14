@@ -139,6 +139,14 @@ struct pthead_create_wrapper_s
     void *function_args;
 };
 
+/**
+ * This wrapper allows to intercept thread creation.
+ * The goal is to update collections and statistics.
+ *
+ * @param args_
+ * @return
+ */
+
 static void *pthead_create_wrapper(void *args_)
 {
     ++g_thread_running;
@@ -159,6 +167,15 @@ static void *pthead_create_wrapper(void *args_)
     --g_thread_running;
     return thread_ret;
 }
+
+/**
+ * Creates a thread
+ *
+ * @param t will recieve the thread handle
+ * @param function_thread the function of the thread
+ * @param function_args arguments passed to the thread function
+ * @return an error code
+ */
 
 ya_result thread_create(thread_t *t, void *(*function_thread)(void *), void *function_args)
 {
@@ -181,6 +198,14 @@ ya_result thread_create(thread_t *t, void *(*function_thread)(void *), void *fun
     return ret;
 }
 
+/**
+ * Sends a signal to a thread
+ *
+ * @param t
+ * @param signo
+ * @return
+ */
+
 ya_result thread_kill(thread_t t, int signo)
 {
 #if __unix__
@@ -193,6 +218,61 @@ ya_result thread_kill(thread_t t, int signo)
 #else
     return ERROR;
 #endif
+}
+
+#if __APPLE__
+ya_result pthread_setaffinity_macos(pthread_t t, int cpu_index);
+#endif
+
+/**
+ *
+ * Attempts to hint the kernel about putting a thread on a core.
+ *
+ * @param t
+ * @param cpu_index
+ *
+ * @return an error code
+ */
+
+ya_result thread_setaffinity(thread_t t, int cpu_index)
+{
+    ya_result ret;
+#if __linux__ || __FreeBSD__
+    cpu_set_t mycpu;
+    CPU_ZERO(&mycpu);
+    CPU_SET(cpu_index, &mycpu);
+    int code = pthread_setaffinity_np(t, sizeof(cpu_set_t), &mycpu);
+    if(code == 0)
+    {
+        ret = SUCCESS;
+    }
+    else
+    {
+        ret = MAKE_ERRNO_ERROR(code);
+    }
+#elif __NetBSD__
+    cpuset_t *mycpu = cpuset_create();
+    if(mycpu != NULL)
+    {
+        cpuset_zero(mycpu);
+        cpuset_set((cpuid_t)affinity_with, mycpu);
+        int code;
+        if((code = pthread_setaffinity_np(t, cpuset_size(mycpu), mycpu)) == 0)
+        {
+            ret = SUCCESS;
+        }
+        else
+        {
+            ret = MAKE_ERRNO_ERROR(code)
+        }
+        cpuset_destroy(mycpu);
+    }
+#elif __APPLE__
+    ret = pthread_setaffinity_apple((pthread_t)t, cpu_index);
+#else
+    ret = FEATURE_NOT_IMPLEMENTED_ERROR;
+#endif
+    return ret;
 }
 
 /** @} */

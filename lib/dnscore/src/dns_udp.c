@@ -795,13 +795,6 @@ static void dns_udp_simple_message_answer_call_handlers_thread(void *arg)
         node = node->next;
     }
 
-#if DEBUG
-    if(smp_int_get(&simple_message->rc) > 1)
-    {
-        log_warn("receive: message RC is not 1 (%i)", smp_int_get(&simple_message->rc));
-    }
-#endif
-
     assert(smp_int_get(&simple_message->rc) > 0);
 
     // there is no need to retain, the reference from the collection has not been decreased yet
@@ -2329,13 +2322,6 @@ static int dns_udp_receive_process_service(struct service_worker_s *worker)
 
                     log_debug7("receive: message collection unlocked", my_socket);
 
-                    // RC is supposed to be 1
-#if DEBUG
-                    if(smp_int_get(&simple_message->rc) != 1)
-                    {
-                        log_warn("receive: message RC is not 1 (%i)", smp_int_get(&simple_message->rc));
-                    }
-#endif
                     simple_message->received_time_us = timeus();
                     int64_t dt = MAX(simple_message->received_time_us - simple_message->sent_time_us, 0);
                     double  dts = dt;
@@ -2562,7 +2548,10 @@ static int dns_udp_timeout_service(struct service_worker_s *worker)
             {
                 simple_message->received_time_us = U64_MAX;
 
-                yassert(now >= simple_message->sent_time_us);
+                if(now >= simple_message->sent_time_us)
+                {
+                    log_notice("dns-udp: system clock rolled backwards %llius (during receive)", simple_message->sent_time_us - now);
+                }
 
                 double dts = now - simple_message->sent_time_us;
                 dts /= ONE_SECOND_US_F;
@@ -2692,7 +2681,10 @@ void dns_udp_cancel_all_queries()
 
         simple_message->received_time_us = U64_MAX;
 
-        yassert(now >= simple_message->sent_time_us);
+        if(now >= simple_message->sent_time_us)
+        {
+            log_notice("dns-udp: system clock rolled backwards %llius (during cancel)", simple_message->sent_time_us - now);
+        }
 
         double dts = now - simple_message->sent_time_us;
         dts /= ONE_SECOND_US_F;
@@ -2852,14 +2844,6 @@ static int dns_udp_receive_service_hook(dns_simple_message_t *simple_message, dn
 
                 mutex_unlock(&message_collection_mtx);
 
-                // RC is supposed to be 1
-
-#if DEBUG
-                if(smp_int_get(&simple_message_cached->rc) != 1)
-                {
-                    log_warn("receive: message RC is not 1 (%i) (hook)", smp_int_get(&simple_message_cached->rc));
-                }
-#endif
                 simple_message_cached->received_time_us = timeus();
                 int64_t dt = MAX(simple_message_cached->received_time_us - simple_message_cached->sent_time_us, 0);
                 double  dts = dt;

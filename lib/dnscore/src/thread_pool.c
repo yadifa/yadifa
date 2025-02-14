@@ -114,10 +114,10 @@ typedef struct thread_descriptor_s thread_descriptor_t;
 /* The array of thread descriptors*/
 
 static thread_key_t  thread_pool_random_key = ~0;
-static thread_once_t thread_pool_random_key_once = PTHREAD_ONCE_INIT;
+static thread_once_t thread_pool_random_key_once = THREAD_ONCE_INIT;
 
 static thread_key_t  thread_pool_thread_index_key = ~0;
-static thread_once_t thread_pool_thread_index_key_once = PTHREAD_ONCE_INIT;
+static thread_once_t thread_pool_thread_index_key_once = THREAD_ONCE_INIT;
 
 static mutex_t       thread_pool_set_mutex = MUTEX_INITIALIZER;
 static u32_treemap_t thread_pool_set = U32_TREEMAP_EMPTY;
@@ -303,13 +303,33 @@ static void thread_pool_thread_index_init(void)
     }
 }
 
+/**
+ * Returns the current size of the thread pool
+ *
+ * @param tp the thread pool
+ *
+ * @return the current size of the thread pool
+ */
+
 int thread_pool_queue_size(thread_pool_s *tp)
 {
     int size = threaded_queue_size(&tp->queue);
     return size;
 }
 
-void     thread_pool_wait_queue_empty(struct thread_pool_s *tp) { threaded_queue_wait_empty(&tp->queue); }
+/**
+ * Waits until the thread pool queue is empty.
+ *
+ * @param tp the thread pool
+ */
+
+void thread_pool_wait_queue_empty(struct thread_pool_s *tp) { threaded_queue_wait_empty(&tp->queue); }
+
+/**
+ * Returns the index of the current thread in the thread-pool.
+ *
+ * @return the index of the current thread in the thread-pool.
+ */
 
 uint32_t thread_pool_thread_index_get()
 {
@@ -485,6 +505,13 @@ random_ctx_t thread_pool_get_random_ctx()
 }
 
 /**
+ * Sets-up a random context, which is automatically made already in a thread pool.
+ * Do nothing if the context already exists.
+ *
+ * You should probably not call this unless you create your own threads.
+ *
+ *
+ *
  * This MUST be called at the start or a thread that will, one way or another, use
  * the random function.  In doubt, do it.  So just do it.
  *
@@ -513,6 +540,12 @@ void thread_pool_setup_random_ctx()
         }
     }
 }
+
+/**
+ * Destroys the random context of a thread pool.
+ *
+ * You should probably not call this.
+ */
 
 void thread_pool_destroy_random_ctx()
 {
@@ -564,6 +597,15 @@ static thread_descriptor_t *thread_pool_create_thread(thread_pool_s *tp, int ind
 
     return td;
 }
+
+/**
+ * Initialises a thread pool
+ *
+ * @param thread_count number of threads in the pool (max 255)
+ * @param queue_size size of the task queue (when full, enqueue will block until not full)
+ * @param pool_name the friendly name of the thread pool
+ * @return
+ */
 
 struct thread_pool_s *thread_pool_init_ex(uint32_t thread_count, uint32_t queue_size, const char *pool_name)
 {
@@ -653,6 +695,14 @@ struct thread_pool_s *thread_pool_init_ex(uint32_t thread_count, uint32_t queue_
 
     return tp;
 }
+
+/**
+ * Initialises a thread pool
+ *
+ * @param thread_count number of threads in the pool (max 255)
+ * @param queue_size size of the task queue (when full, enqueue will block until not full)
+ * @return
+ */
 
 struct thread_pool_s *thread_pool_init(uint32_t thread_count, uint32_t queue_size)
 {
@@ -1205,6 +1255,10 @@ ya_result thread_pool_finalise(struct thread_pool_s *tp)
     return SUCCESS;
 }
 
+/**
+ * Call before (and after) a fork
+ */
+
 ya_result thread_pool_stop_all()
 {
     ya_result err = SUCCESS;
@@ -1233,6 +1287,10 @@ ya_result thread_pool_stop_all()
 
     return err;
 }
+
+/**
+ * Call (before and) after a fork
+ */
 
 ya_result thread_pool_start_all()
 {

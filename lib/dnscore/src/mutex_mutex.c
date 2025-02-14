@@ -154,15 +154,21 @@ int mutex_init_process_shared(mutex_t *mtx)
 
 void mutex_init(mutex_t *mtx)
 {
+    int err;
+
 #if DNSCORE_HAS_MUTEX_DEBUG_SUPPORT
 #if DNSCORE_MUTEX_CONTENTION_MONITOR
     mutex_contention_object_create(mtx, false);
 #endif
 #endif
+#ifdef PTHREAD_PRIO_NONE
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_NONE);
-    int err = pthread_mutex_init(mutex_pthread_mutex_get(mtx), &attr);
+    err = pthread_mutex_init(mutex_pthread_mutex_get(mtx), &attr);
+#else
+    err = pthread_mutex_init(mutex_pthread_mutex_get(mtx), NULL);
+#endif
 
 #if DNSCORE_HAS_MUTEX_NOLOCK_CHECK
     mtx->_owner = NULL;

@@ -194,6 +194,12 @@ static void send_receive_message(dns_message_t *msg_out, dns_message_t *msg_in)
     bytearray_output_stream_init(&os, NULL, 65536);
     ssize_t mesg_query_send_tcp_size = dns_message_write_tcp(msg_out, &os); // scan-build false positive, msg_out has been instantiated by the caller
 
+    if(FAIL(mesg_query_send_tcp_size))
+    {
+        yatest_err("ERROR: %s: failed to send query: %08x", fqdn_text, (int)mesg_query_send_tcp_size);
+        exit(1);
+    }
+
     bytearray_input_stream_init(&is, bytearray_output_stream_buffer(&os), mesg_query_send_tcp_size + 2, false);
     ssize_t mesg_query_recv_tcp_size = dns_message_read_tcp(msg_in, &is);
     if(FAIL(mesg_query_recv_tcp_size))

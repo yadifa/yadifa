@@ -352,21 +352,28 @@ static void zalloc_lines(uint32_t page_index)
             DIE(ZALLOC_ERROR_MMAPFAILED);
         }
 
+
+        /*
+         * @note 20250114 edf -- Apparently, advising NOHUGEPAGE triggers EINVAL on ARM
+         */
+#if !defined(__ARM_ARCH)
+
 #ifdef MADV_NOHUGEPAGE
         if(madvise(map_pointer, size, MADV_NOHUGEPAGE) < 0)
         {
             int err = errno;
             if(err != EINVAL)
             {
-                osformatln(termerr, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
+                fprintf(stderr, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %08x", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
             }
 #if DEBUG
             else
             {
-                osformatln(termout, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %r", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
+                fprintf(stderr, "zalloc_lines(%u,%u) madvise(%p,%x,%i) failed with %08x", size, chunk_size, map_pointer, size, MADV_NOHUGEPAGE, ERRNO_ERROR);
             }
 #endif
         }
+#endif
 #endif
         /*
          * current issue: the new memory allocation does not take advantage of the lazy mechanism

@@ -60,18 +60,12 @@
 
 #include "server_config.h"
 
-#if __unix__
+#if __unix__ || __APPLE__
 #ifndef __USE_GNU
 #define __USE_GNU 1
 #endif
 #define _GNU_SOURCE 1
 #include <sched.h>
-#endif
-
-#if defined __FreeBSD__
-#include <sys/param.h>
-#include <sys/cpuset.h>
-typedef cpuset_t cpu_set_t;
 #endif
 
 // <-- keep this order
@@ -211,7 +205,6 @@ static void                    server_sm_thread_context_init(network_thread_cont
 
 static void server_sm_set_cpu_affinity(int index)
 {
-#if HAS_PTHREAD_SETAFFINITY_NP
     int cpu_count = sys_get_cpu_count();
     if(cpu_count < 0)
     {
@@ -223,32 +216,7 @@ static void server_sm_set_cpu_affinity(int index)
     affinity_with %= cpu_count;
     log_info("server-sm: worker setting affinity with virtual cpu %i", affinity_with);
 
-#if __NetBSD__
-    cpuset_t *mycpu = cpuset_create();
-    if(mycpu != NULL)
-    {
-        cpuset_zero(mycpu);
-        cpuset_set((cpuid_t)affinity_with, mycpu);
-        if(pthread_setaffinity_np(thread_self(), cpuset_size(mycpu), mycpu) != 0)
-        {
-#pragma message("TODO: report errors") // NetBSD
-        }
-        cpuset_destroy(mycpu);
-    }
-    else
-    {
-    }
-#elif __windows__
-#pragma message("TODO: implement") // windows
-#else
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(affinity_with, &mycpu);
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
-#else
-    (void)index;
-#endif
+    thread_setaffinity(thread_self(), affinity_with);
 }
 
 static int server_sm_udp_worker_thread(struct service_worker_s *worker)

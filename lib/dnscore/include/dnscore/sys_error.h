@@ -128,6 +128,7 @@ bool dnscore_monitored_fail(ya_result ret);
 
 #define ERRNO_ERROR            ((int32_t)(ERRNO_ERROR_BASE + errno))
 #define MAKE_ERRNO_ERROR(err_) ((int32_t)(ERRNO_ERROR_BASE + (err_)))
+#define ERRNO_ERROR_GET_ERRNO(err_) ((err_)&0xffff)
 
 #define EXITFAIL(x)                                                                                                                                                                                                                            \
     if((x) < 0)                                                                                                                                                                                                                                \

@@ -403,6 +403,9 @@ ya_result axfr_query_ex(const host_address_t *servers, const uint8_t *origin, ui
         else
         {
             log_warn("axfr: %{dnsname}: AXFR query to %{hostaddr} failed: %r", origin, servers, ret);
+
+            output_stream_close(&os);
+            output_stream_close(&is);
         }
     }
     else

@@ -61,13 +61,29 @@ extern "C"
 
 void buffer_input_stream_init(input_stream_t *stream, input_stream_t *filtered_in, int buffer_size);
 
-/*
+/**
  * Function specific to the buffer_input_stream_t to read a line up to the '\n'
  */
 
 ya_result       buffer_input_stream_read_line(input_stream_t *stream, char *buffer, uint32_t len);
 
+/**
+ * Returns a pointer to the filtered stream inside the buffer input stream.
+ *
+ * @param bos
+ * @return
+ */
+
 input_stream_t *buffer_input_stream_get_filtered(input_stream_t *bis);
+
+/**
+ * Detaches the filtered input stream, sends a copy back.
+ *
+ * @param bos
+ * @return
+ */
+
+input_stream_t buffer_input_stream_detach(input_stream_t *bos);
 
 /**
  * Rewinds the input stream back of a given number of bytes

@@ -1085,14 +1085,6 @@ void config_section_struct_free(const config_section_descriptor_t *section_descr
 ya_result config_item_index_get(const config_table_descriptor_item_t *table, const char *name);
 
 /**
- * Prints the config to the output stream
- *
- * @param os the output stream
- */
-
-void config_print(output_stream_t *os);
-
-/**
  * Call the postproces callback on the registered tables
  */
 
@@ -1108,6 +1100,13 @@ ya_result config_finalize();
 // helpers
 
 typedef void *config_section_struct_collection_get_next_method(void *previous_data_struct);
+
+/**
+ * Prints all the configuration sections with the key and values to the output stream.
+ *
+ * @param os
+ */
+void config_print(output_stream_t *os);
 
 /**
  *

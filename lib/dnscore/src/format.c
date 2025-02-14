@@ -100,6 +100,7 @@
 #define SENTINEL                   '%'
 #define NULL_STRING_SUBSTITUTE     "(NULL)"
 #define NULL_STRING_SUBSTITUTE_LEN (sizeof(NULL_STRING_SUBSTITUTE) - 1)
+#define SIZE_OF_INT64_TEXT_BUFFER  (sizeof(int64_t) * 2)
 
 #define CHR0                       '\0'
 
@@ -246,10 +247,11 @@ static const format_handler_descriptor_t *format_get_format_handler(const char *
 
 static void dummy_format_handler_method(const void *val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *reserved_for_method_parameters)
 {
+    (void)padding;
+    (void)pad_char;
+    (void)left_justified;
     (void)reserved_for_method_parameters;
-
-    intptr_t ival = (intptr_t)val;
-    format_hex_u64_lo(ival, stream, padding, pad_char, left_justified);
+    format_hex_ptr_lo(val, stream);
 }
 
 static format_handler_descriptor_t dummy_format_handler_descriptor = {"Unsupported", 11, dummy_format_handler_method};
@@ -427,9 +429,43 @@ static void format_signed(const char *input, size_t size, output_stream_t *strea
     /* Done */
 }
 
-static void format_hex_u64_common(const char *hexa_table, uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
+/**
+ * Prints all the nibbles of a pointer (lowercase)
+ */
+
+void format_hex_ptr_lo(const void* val_ptr, output_stream_t *stream)
 {
     char  tmp[__SIZEOF_POINTER__ * 2];
+    char *next = &tmp[0];
+    intptr_t val = (intptr_t)val_ptr;
+    for(int i = (__SIZEOF_POINTER__ * 8) - 4; i >= 0; i -= 4)
+    {
+        *next = __hexa__[(val >> i) & 0x0f];
+        ++next;
+    }
+    output_stream_write(stream, tmp, sizeof(tmp));
+}
+
+/**
+ * Prints all the nibbles of a pointer (uppercase)
+ */
+
+void format_hex_ptr_hi(const void* val_ptr, output_stream_t *stream)
+{
+    char  tmp[__SIZEOF_POINTER__ * 2];
+    char *next = &tmp[0];
+    intptr_t val = (intptr_t)val_ptr;
+    for(int i = (__SIZEOF_POINTER__ * 8) - 4; i >= 0; i -= 4)
+    {
+        *next = __HEXA__[(val >> i) & 0x0f];
+        ++next;
+    }
+    output_stream_write(stream, tmp, sizeof(tmp));
+}
+
+static void format_hex_u64_common(const char *hexa_table, uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified)
+{
+    char  tmp[SIZE_OF_INT64_TEXT_BUFFER];
     char *next = &tmp[sizeof(tmp)];
 
     do
@@ -496,9 +532,21 @@ void format_dec_s64(int64_t val, output_stream_t *stream, int32_t padding, char 
     format_signed(next, &tmp[sizeof(tmp)] - next, stream, padding, pad_char, left_justified, sign);
 }
 
-void        format_hex_u64_lo(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified) { format_hex_u64_common(__hexa__, val, stream, padding, pad_char, left_justified); }
+/**
+ * Formats an unsigned 64 bits in lower-case
+ */
 
-void        format_hex_u64_hi(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified) { format_hex_u64_common(__HEXA__, val, stream, padding, pad_char, left_justified); }
+void format_hex_u64_lo(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified) { format_hex_u64_common(__hexa__, val, stream, padding, pad_char, left_justified); }
+
+/**
+ * Formats an unsigned 64 bits in upper-case
+ */
+
+void format_hex_u64_hi(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified) { format_hex_u64_common(__HEXA__, val, stream, padding, pad_char, left_justified); }
+
+/**
+ * Writes the format of a double
+ */
 
 static void format_double_make_format(char *p, int32_t padding, int32_t float_padding, char pad_char, bool left_justified, bool long_double)
 {
@@ -903,7 +951,7 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
 
                         case sizeof(uint64_t):
                         {
-                            val = va_arg(args, u64);
+                            val = va_arg(args, uint64_t);
                             break;
                         }
                         default:
@@ -926,7 +974,7 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
                 case 'P':
                 {
 
-                    intptr_t val = va_arg(args, intptr_t);
+                    void* val = va_arg(args, void*);
 
 #if HAS_DLADDR_SUPPORT
                     Dl_info info;
@@ -949,15 +997,13 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
                         }
                     }
 #endif
-
-                    format_hex_u64_hi(val, &os, __SIZEOF_POINTER__ * 2, '0', false);
+                    format_hex_ptr_hi(val, &os);
                     break;
                 }
                 case 'p':
                 {
-                    intptr_t val = va_arg(args, intptr_t);
-
-                    format_hex_u64_hi(val, &os, __SIZEOF_POINTER__ * 2, '0', false);
+                    void *val = va_arg(args, void*);
+                    format_hex_ptr_hi(val, &os);
                     break;
                 }
                 case 'f':
@@ -1076,14 +1122,15 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
                         case 0:
                         {
                             int64_t val = (int64_t)va_arg(args, uint32_t);
-                            localepoch_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
+
+                            localepoch_format_handler_method((void *)&val, &os, 0, 0, false, NULL);
                             break;
                         }
 
                         case 1:
                         {
                             int64_t val = (int64_t)va_arg(args, int64_t);
-                            localdatetime_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
+                            localdatetime_format_handler_method((void *)&val, &os, 0, 0, false, NULL);
                             break;
                         }
 
@@ -1091,7 +1138,7 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
                         {
 
                             int64_t val = (int64_t)va_arg(args, int64_t);
-                            localdatetimeus_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
+                            localdatetimeus_format_handler_method((void *)&val, &os, 0, 0, false, NULL);
                             break;
                         }
                         default:
@@ -1110,14 +1157,14 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
                         case 0:
                         {
                             int64_t val = (int64_t)va_arg(args, uint32_t);
-                            epoch_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
+                            epoch_format_handler_method((void *)&val, &os, 0, 0, false, NULL);
                             break;
                         }
 
                         case 1:
                         {
                             int64_t val = (int64_t)va_arg(args, int64_t);
-                            datetime_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
+                            datetime_format_handler_method((void *)&val, &os, 0, 0, false, NULL);
                             break;
                         }
 
@@ -1125,7 +1172,7 @@ ya_result vosformat(output_stream_t *os_, const char *fmt, va_list args)
                         {
 
                             int64_t val = (int64_t)va_arg(args, int64_t);
-                            datetimeus_format_handler_method((void *)(intptr_t)val, &os, 0, 0, false, NULL);
+                            datetimeus_format_handler_method((void *)&val, &os, 0, 0, false, NULL);
                             break;
                         }
                         default:
@@ -1329,7 +1376,7 @@ ya_result debug_osformatln(output_stream_t *stream, const char *fmt, ...)
 {
     int64_t now = timeus();
     mutex_lock(&debug_osformat_mtx);
-    localdatetimeus_format_handler_method((void *)(intptr_t)now, stream, 0, 0, false, NULL);
+    localdatetimeus_format_handler_method(&now, stream, 0, 0, false, NULL);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
     format_dec_u64(getpid(), stream, 0, 0, false);
     output_stream_write(stream, STRSEPARATOR, sizeof(STRSEPARATOR));
@@ -1348,7 +1395,7 @@ ya_result debug_println(const char *text)
 {
     int64_t now = timeus();
     mutex_lock(&debug_osformat_mtx);
-    localdatetimeus_format_handler_method((void *)(intptr_t)now, termout, 0, 0, false, NULL);
+    localdatetimeus_format_handler_method(&now, termout, 0, 0, false, NULL);
     output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
     format_dec_u64(getpid(), termout, 0, 0, false);
     output_stream_write(termout, STRSEPARATOR, sizeof(STRSEPARATOR));
@@ -2693,8 +2740,8 @@ ya_result osprint_rdata(output_stream_t *os, uint16_t type, const uint8_t *rdata
             uint64_t epoch = time_hi;
             epoch <<= 32;
             epoch |= time_lo;
-
-            osformat(os, " %u %hu %hu", epoch, fudge, mac_size);
+            /// @note 20250115 edf -- there appear to be some discrepancy between va_arg promoting to int and these shorts not being stored as int ...
+            osformat(os, " %u %hu %hu", (int)epoch, (int)fudge, (int)mac_size);
 
             if(mac_size > 0)
             {
@@ -3024,7 +3071,7 @@ void      osprint_dump_with_base(output_stream_t *os, const void *data_pointer_,
 
         if(address)
         {
-            format_hex_u64_hi((intptr_t)data_pointer, os, __SIZEOF_POINTER__ * 2, '0', false);
+            format_hex_u64_hi((intptr_t)data_pointer, os, SIZE_OF_INT64_TEXT_BUFFER, '0', false);
             output_stream_write(os, (const uint8_t *)" | ", 3);
         }
 
@@ -3082,15 +3129,16 @@ void      osprint_dump_with_base(output_stream_t *os, const void *data_pointer_,
 
             for(i = 0; i < dump_size; i++)
             {
-                char c = *data++;
-
+                static const int8_t space_plus_one = (int8_t)(' ' + 1);
+                uint8_t uc = (uint8_t)*data++;
+                int8_t c = (int8_t)(uc + 1);
                 // c < ' ' && c > 126 => c + 1 < ' ' + 1
-                if((char)(c + 1) < (char)(' ' + 1))
+                if(c < space_plus_one)
                 {
-                    c = '.';
+                    uc = '.';
                 }
 
-                output_stream_write_u8(os, (uint8_t)c);
+                output_stream_write_u8(os, (uint8_t)uc);
             }
         }
 

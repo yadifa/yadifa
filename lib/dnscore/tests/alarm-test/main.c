@@ -73,7 +73,7 @@ static ya_result             alarm_test_callback(void *myargs_, bool cancel)
     alarm_test_t *myargs = (alarm_test_t *)myargs_;
     time_t        now = time(NULL);
     time_t        real_delay = now - myargs->now;
-    yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08llx, position=%" PRIi64 ", cancel=%i",
+    yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08" PRIx64 ", position=%" PRIi64 ", cancel=%i",
                myargs->now,
                myargs->delay,
                real_delay,
@@ -157,10 +157,10 @@ static ya_result alarm_rearm_callback(void *myargs_, bool cancel)
     alarm_rearm_t *myargs = (alarm_rearm_t *)myargs_;
     time_t         now = time(NULL);
     time_t         real_delay = now - myargs->now;
-    yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08llx, count=%" PRIi64 ", limit=%" PRIi64 ", cancel=%i",
-               myargs->now,
-               myargs->delay,
-               real_delay,
+    yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08" PRIx64 ", count=%" PRIi64 ", limit=%" PRIi64 ", cancel=%i",
+               (int64_t)myargs->now,
+               (int64_t)myargs->delay,
+               (int64_t)real_delay,
                *myargs->counterp,
                *myargs->maskp,
                myargs->count,
@@ -252,10 +252,10 @@ static ya_result alarm_slow_callback(void *myargs_, bool cancel)
     alarm_test_t *myargs = (alarm_test_t *)myargs_;
     time_t        now = time(NULL);
     time_t        real_delay = now - myargs->now;
-    yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08llx, position=%" PRIi64 ", cancel=%i",
-               myargs->now,
-               myargs->delay,
-               real_delay,
+    yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08" PRIx64 ", position=%" PRIi64 ", cancel=%i",
+               (int64_t)myargs->now,
+               (int64_t)myargs->delay,
+               (int64_t)real_delay,
                *myargs->counterp,
                *myargs->maskp,
                myargs->position,
@@ -681,10 +681,13 @@ static int alarm_dup_test()
 // because in the current implementation the alarm handle name has to be a constant in a fixed place in memory.
 static uint8_t alarm_cleanup_test_name[ALARM_HANDLE_COUNT][32];
 
-static int     alarm_cleanup_test()
+volatile uint64_t alarm_cleanup_test_counter = 0;
+volatile uint64_t alarm_cleanup_test_mask = 0;
+
+// alarm_cleanup_test
+
+static int alarm_cleanup_test()
 {
-    volatile uint64_t counter = 0;
-    volatile uint64_t mask = 0;
     dnscore_init();
     alarm_t aha[ALARM_HANDLE_COUNT];
     for(int alarm_handle_index = 0; alarm_handle_index < ALARM_HANDLE_COUNT; ++alarm_handle_index)
@@ -704,8 +707,8 @@ static int     alarm_cleanup_test()
             alarm_rearm_t *myargs = (alarm_rearm_t*)malloc(sizeof(alarm_rearm_t));
             myargs->now = now;
             myargs->delay = delay;
-            myargs->counterp = &counter;
-            myargs->maskp = &mask;
+            myargs->counterp = &alarm_cleanup_test_counter;
+            myargs->maskp = &alarm_cleanup_test_mask;
             myargs->count = 0;
             myargs->limit = ALARM_REARM_LIMIT;
             alarm_event_node_t *event = alarm_event_new( // zone refresh
@@ -723,8 +726,8 @@ static int     alarm_cleanup_test()
             alarm_test_t *myargs = (alarm_test_t *)malloc(sizeof(alarm_test_t));
             myargs->now = now + delay;
             myargs->delay = delay;
-            myargs->counterp = &counter;
-            myargs->maskp = &mask;
+            myargs->counterp = &alarm_cleanup_test_counter;
+            myargs->maskp = &alarm_cleanup_test_mask;
             myargs->position = 0;
             myargs->replace_mode = -1;
             alarm_event_node_t *event = alarm_event_new( // zone refresh
@@ -742,8 +745,8 @@ static int     alarm_cleanup_test()
             alarm_test_t *myargs = (alarm_test_t *)malloc(sizeof(alarm_test_t));
             myargs->now = now + delay * 86400;
             myargs->delay = delay;
-            myargs->counterp = &counter;
-            myargs->maskp = &mask;
+            myargs->counterp = &alarm_cleanup_test_counter;
+            myargs->maskp = &alarm_cleanup_test_mask;
             myargs->position = 0;
             myargs->replace_mode = -1;
             alarm_event_node_t *event = alarm_event_new( // zone refresh
@@ -759,7 +762,7 @@ static int     alarm_cleanup_test()
 
     while(time(NULL) < now + 5)
     {
-        if(counter == ALARM_TEST_COUNT * ALARM_HANDLE_COUNT)
+        if(alarm_cleanup_test_counter == ALARM_TEST_COUNT * ALARM_HANDLE_COUNT)
         {
             break;
         }

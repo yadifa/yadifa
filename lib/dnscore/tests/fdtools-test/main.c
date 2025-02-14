@@ -2415,7 +2415,7 @@ static void readdir_hook(readdir_function_args_t *args)
     {
         strcpy(dir->entry.d_name, dir->names[dir->index]);
         dir->entry.d_ino = dir->index * 7777;
-        dir->entry.d_off = dir->index;
+        //dir->entry.d_off = dir->index; // not portable, and never used in the source
         dir->entry.d_reclen = 0;
         dir->entry.d_type = ((dir->entry.d_name[0] != 'd') && (dir->entry.d_name[0] != '.')) ? DT_REG : DT_DIR;
         args->mask = 0x07;
@@ -2553,6 +2553,7 @@ static int  success_test() { return 0; }
 
 static void rmdir_ex_test_mkdir(const char *path)
 {
+    yatest_log("rmdir_ex_test_mkdir(%s)", path);
     if(mkdir(path, 0750) < 0)
     {
         perror(path);
@@ -2563,6 +2564,7 @@ static void rmdir_ex_test_mkdir(const char *path)
 static void rmdir_ex_test_touch(const char *path)
 {
     int fd;
+    yatest_log("rmdir_ex_test_touch(%s)", path);
     if((fd = open("/tmp/fdtools-test/rmdir_ex-test/f0", O_RDWR | O_CREAT, 0640)) < 0)
     {
         perror(path);
@@ -2574,9 +2576,24 @@ static void rmdir_ex_test_touch(const char *path)
 static int rmdir_ex_test()
 {
     ya_result ret;
-
-    rmdir_ex("/tmp/fdtools-test", true);
-
+#ifdef __USE_FILE_OFFSET64
+    yatest_log("__USE_FILE_OFFSET64 is defined");
+#else
+    yatest_log("__USE_FILE_OFFSET64 is not defined");
+#endif
+    yatest_log("cleaning-up");
+    ret = rmdir_ex("/tmp/fdtools-test", true);
+    if(ret != 0)
+    {
+        yatest_log("rmdir_ex(/tmp/fdtools-test) = %08x = %s", ret, error_gettext(ret));
+        if(ret == MAKE_ERRNO_ERROR(EMFILE))
+        {
+            for(int i = 0; i < 60; ++i)
+            {
+                sleep(1);
+            }
+        }
+    }
     rmdir_ex_test_mkdir("/tmp/fdtools-test");
     rmdir_ex_test_mkdir("/tmp/fdtools-test/rmdir_ex-test");
     rmdir_ex_test_mkdir("/tmp/fdtools-test/rmdir_ex-test/a");

@@ -68,13 +68,22 @@ static int osformat_test()
         "ffffffff;hx: 0 ffff;hhx: 0 ff;\n"
         "-11X: <          0><   FFFFFFFF>;11X: <0          ><FFFFFFFF   >;llX: 0 FFFFFFFFFFFFFFFF;lX: 0 FFFFFFFF;X: 0 "
         "FFFFFFFF;hX: 0 FFFF;hhX: 0 FF;\n"
+#if __SIZEOF_POINTER__ == 8
         "P: 0000000000000000;\n"
         "p: 0000000000000000;\n"
+#else
+        "P: 00000000;\n"
+        "p: 00000000;\n"
+#endif
         "f: 3.141500; Lf: 3.141500;11.8f:  3.14150000; L11.8f:  3.14150000;\n"
         "s: <Hello World >< Hello World> Hello World;\n"
         "c: .;\n"
         "{dnstype}: ANY;\n"
-        "{undefined}: 123456789abcdef;\n"
+#if __SIZEOF_POINTER__ == 8
+        "{undefined}: 0123456789abcdef;\n"
+#else
+        "{undefined}: 89abcdef;\n"
+#endif
         "t: <\t\t>;\n"
         "S: <  >;\n"
         "T: 2038-01-19 04:14:07;lT: 2038-01-19 04:14:07;llT: 2038-01-19 04:14:07.000000;\n"
@@ -519,8 +528,13 @@ static int format_grow_hash_table_test()
         char txt[64];
         memset(txt, 0, sizeof(txt));
         snprintf(tmp, sizeof(tmp), "%%{fmt%i}", i);
+#if __SIZEOF_POINTER__ == 8
         snformat(txt, sizeof(txt), tmp, (void *)(uintptr_t)18446744073709551615ULL);
         const char *expected = "51615590737044764481";
+#else
+        snformat(txt, sizeof(txt), tmp, (void *)(uintptr_t)4294967295UL);
+        const char *expected = "5927694924";
+#endif
         if(strcmp(txt, expected) != 0)
         {
             yatest_err("formatting failed with '%s' ('%s' != '%s')", tmp, txt, expected);
@@ -807,7 +821,7 @@ struct osprint_rdata_test_entry_s
     int           error;
 };
 
-static struct osprint_rdata_test_entry_s osprint_rdata_test_entries[] = {
+static const struct osprint_rdata_test_entry_s osprint_rdata_test_entries[] = {
     {TYPE_A, {1, 2, 3, 4}, 4, "1.2.3.4", 0},
     {TYPE_A, {}, 5, "", INCORRECT_RDATA},
     {TYPE_AAAA, {0x26, 0x06, 0x47, 0x00, 0x30, 0x32, 0, 0, 0, 0, 0, 0, 0x68, 0x15, 0x29, 0xb8}, 16, "2606:4700:3032::6815:29b8", 0},
@@ -923,7 +937,7 @@ static struct osprint_rdata_test_entry_s osprint_rdata_test_entries[] = {
     //{TYPE_, {}, 0, "", 0},
     {0, {}, 0, NULL, 0}};
 
-static struct osprint_rdata_test_entry_s osprint_rdata_escaped_test_entries[] = {
+static const struct osprint_rdata_test_entry_s osprint_rdata_escaped_test_entries[] = {
     {TYPE_MX, {0x00, 0x0a, 4, 'm', 'a', 'i', 'l', 6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0}, 18, "10 mail.yadifa.eu.", 0},
     {TYPE_TALINK, {3, 'n', 's', '1', 6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0, 3, 'n', 's', '2', 6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0}, 30, "ns1.yadifa.eu. ns2.yadifa.eu.", 0},
     {TYPE_SOA, {3, 'n', 's', '1', 0, 4, 'm', 'a', '.', 'l', 0, 0, 0, 0, 1, 0, 0, 14, 16, 0, 0, 7, 8, 0, 54, 238, 128, 0, 0, 2, 88}, 31, "ns1. ma\\.l. 1 3600 1800 3600000 600", 0},
@@ -941,7 +955,7 @@ static struct osprint_rdata_test_entry_s osprint_rdata_escaped_test_entries[] = 
     {TYPE_SRV, {12, 34, 56, 78, 1, 80, 3, 'w', 'w', 'w', 6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0}, 21, "8716 20024 20481 www.yadifa.eu.", 0},
     {0, {}, 0, NULL, 0}};
 
-static int rdata_printer_test(struct osprint_rdata_test_entry_s *entries, ya_result (*rdata_printer)(output_stream_t *, uint16_t, const uint8_t *, uint16_t))
+static int rdata_printer_test(const struct osprint_rdata_test_entry_s *entries, ya_result (*rdata_printer)(output_stream_t *, uint16_t, const uint8_t *, uint16_t))
 {
     int ret;
     init();
@@ -964,14 +978,14 @@ static int rdata_printer_test(struct osprint_rdata_test_entry_s *entries, ya_res
         {
             if(entries[i].error == 0)
             {
-                yatest_err("osprint_rdata DNS type %i failed with %08x = %s", ntohs(entries[i].rtype), ret, error_gettext(ret));
+                yatest_err("[%3i] osprint_rdata DNS type %i failed with %08x = %s", i, ntohs(entries[i].rtype), ret, error_gettext(ret));
                 return 1;
             }
             else
             {
                 if(ret != entries[i].error)
                 {
-                    yatest_err("osprint_rdata DNS type %i failed with %08x = %s, expected to fail with %08x = %s", ntohs(entries[i].rtype), ret, error_gettext(ret), entries[i].error, error_gettext(entries[i].error));
+                    yatest_err("[%3i] osprint_rdata DNS type %i failed with %08x = %s, expected to fail with %08x = %s", i, ntohs(entries[i].rtype), ret, error_gettext(ret), entries[i].error, error_gettext(entries[i].error));
                     return 1;
                 }
                 else
@@ -987,7 +1001,7 @@ static int rdata_printer_test(struct osprint_rdata_test_entry_s *entries, ya_res
         size_t      expected_output_size = strlen(expected_output) + 1;
         if((bytearray_output_stream_size(&baos) != expected_output_size) || (memcmp(expected_output, bytearray_output_stream_buffer(&baos), expected_output_size) != 0))
         {
-            yatest_err("output content doesn't match expectations: (sizes: %i vs %i)", bytearray_output_stream_size(&baos), expected_output_size);
+            yatest_err("output content [%3i] doesn't match expectations: (sizes: %i vs %i)", i, bytearray_output_stream_size(&baos), expected_output_size);
             yatest_err("got:");
             yatest_hexdump_err(bytearray_output_stream_buffer(&baos), bytearray_output_stream_buffer(&baos) + bytearray_output_stream_size(&baos));
             yatest_err("expected:");

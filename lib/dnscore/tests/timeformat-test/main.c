@@ -38,8 +38,8 @@
 #include <dnscore/bytearray_output_stream.h>
 
 static output_stream_t os;
-static int64_t         epoch_us = 1719393018LL * ONE_SECOND_US + 314159;
-static time_t          epoch_time = 1719393018;
+static const int64_t         epoch_us = 1719393018LL * ONE_SECOND_US + 314159;
+static const time_t          epoch_time = 1719393018;
 
 static void            init()
 {
@@ -58,10 +58,11 @@ static void            init()
 
 static void finalise() { dnscore_finalize(); }
 
-static int  datetimeus_test()
+static int datetimeus_test()
 {
     init();
-    osformat(&os, "%{dtus}", epoch_us);
+    yatest_log("sizeof(time_t)=%i sizeof(epoch_us)=%i, epoch_us=%" PRIi64, (int)sizeof(time_t), (int)sizeof(epoch_us), epoch_us);
+    osformat(&os, "%{dtus}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 09:10:18.314159Z";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -77,7 +78,7 @@ static int  datetimeus_test()
 static int datetimeustms_test()
 {
     init();
-    osformat(&os, "%{dtustms}", epoch_us);
+    osformat(&os, "%{dtustms}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26T09:10:18.314Z";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -93,7 +94,7 @@ static int datetimeustms_test()
 static int localdatetimeus_test()
 {
     init();
-    osformat(&os, "%{ldtus}", epoch_us);
+    osformat(&os, "%{ldtus}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 08:10:18.314159";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -109,7 +110,7 @@ static int localdatetimeus_test()
 static int datetimems_test()
 {
     init();
-    osformat(&os, "%{dtms}", epoch_us);
+    osformat(&os, "%{dtms}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 09:10:18.314";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -125,7 +126,7 @@ static int datetimems_test()
 static int datetime_test()
 {
     init();
-    osformat(&os, "%{dts}", epoch_us);
+    osformat(&os, "%{dts}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 09:10:18";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -141,7 +142,7 @@ static int datetime_test()
 static int localdatetime_test()
 {
     init();
-    osformat(&os, "%{ldts}", epoch_us);
+    osformat(&os, "%{ldts}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 08:10:18";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -157,7 +158,7 @@ static int localdatetime_test()
 static int date_test()
 {
     init();
-    osformat(&os, "%{date}", epoch_us);
+    osformat(&os, "%{date}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -173,7 +174,7 @@ static int date_test()
 static int time_test()
 {
     init();
-    osformat(&os, "%{time}", epoch_us);
+    osformat(&os, "%{time}", &epoch_us);
     output_stream_write_u8(&os, 0);
     const char *expected = "09:10:18";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -189,7 +190,7 @@ static int time_test()
 static int epoch_test()
 {
     init();
-    osformat(&os, "%{epoch}", epoch_time);
+    osformat(&os, "%{epoch}", &epoch_time);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 09:10:18Z";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -205,7 +206,7 @@ static int epoch_test()
 static int epochtms_test()
 {
     init();
-    osformat(&os, "%{epochtms}", epoch_time);
+    osformat(&os, "%{epochtms}", &epoch_time);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26T09:10:18.000Z";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -221,7 +222,7 @@ static int epochtms_test()
 static int localepoch_test()
 {
     init();
-    osformat(&os, "%{lepoch}", epoch_time);
+    osformat(&os, "%{lepoch}", &epoch_time);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 08:10:18";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -237,7 +238,7 @@ static int localepoch_test()
 static int epochz_test()
 {
     init();
-    osformat(&os, "%{epochz}", epoch_time);
+    osformat(&os, "%{epochz}", &epoch_time);
     output_stream_write_u8(&os, 0);
     const char *expected = "2024-06-26 09:10:18";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));
@@ -253,7 +254,7 @@ static int epochz_test()
 static int packedepoch_test()
 {
     init();
-    osformat(&os, "%{packedepoch}", epoch_time);
+    osformat(&os, "%{packedepoch}", &epoch_time);
     output_stream_write_u8(&os, 0);
     const char *expected = "20240626091018";
     yatest_log("Expected '%s' got '%s'", expected, bytearray_output_stream_buffer(&os));

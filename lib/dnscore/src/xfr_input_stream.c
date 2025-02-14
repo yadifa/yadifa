@@ -1247,9 +1247,7 @@ ya_result xfr_input_stream_init_with_query_and_timeout(input_stream_t *filtering
     {
         input_stream_close(&is);
         output_stream_close(&os);
-
         dns_message_delete(mesg);
-
         return ret;
     }
 
@@ -1264,9 +1262,7 @@ ya_result xfr_input_stream_init_with_query_and_timeout(input_stream_t *filtering
     {
         input_stream_close(&is);
         output_stream_close(&os);
-
         dns_message_delete(mesg);
-
         return ret;
     }
 

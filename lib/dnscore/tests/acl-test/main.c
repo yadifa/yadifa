@@ -901,6 +901,8 @@ static int acl_message_check_against_combos(output_stream_t *os, access_control_
                     break;
                 }
                 default:
+                    name = "?";
+                    ret = -1;
                     yatest_err("bug in acl_message_check_against_combos: wrong mode %i", mode);
                     break;
             }

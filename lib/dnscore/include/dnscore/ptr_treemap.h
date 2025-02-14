@@ -115,10 +115,8 @@ struct ptr_treemap_node_s
         void    *value; /* ie: label linked to the nsec3 item */
         intptr_t value_intptr;
         void (*void_function_void)();
-#if __SIZEOF_POINTER__ == 8
-        int64_t  value_s64;
+        int64_t  value_s64;	// the 64 bit fields are used in two places
         uint64_t value_u64;
-#endif
         int32_t  value_s32;
         uint32_t value_u32;
     };

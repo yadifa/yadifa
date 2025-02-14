@@ -93,32 +93,32 @@ void packedepoch_format_handler_method(const void *restrict val, output_stream_t
  *
  */
 
-#define DATETIMEUS_DEF2(variable, realvariable) format_writer_t variable##_format_writer = {datetimeus_format_handler_method, (void *)(intptr_t)realvariable}
-#define DATETIMEUS_DEF(variable)                format_writer_t variable##_format_writer = {datetimeus_format_handler_method, (void *)(intptr_t)variable}
+#define DATETIMEUS_DEF2(variable, realvariable) format_writer_t variable##_format_writer = {datetimeus_format_handler_method, (void *)&realvariable}
+#define DATETIMEUS_DEF(variable)                format_writer_t variable##_format_writer = {datetimeus_format_handler_method, (void *)&variable}
 #define DATETIMEUS_REF(variable)                &variable##_format_writer
 
-#define DATETIMEMS_DEF2(variable, realvariable) format_writer_t variable##_format_writer = {datetimems_format_handler_method, (void *)(intptr_t)realvariable}
-#define DATETIMEMS_DEF(variable)                format_writer_t variable##_format_writer = {datetimems_format_handler_method, (void *)(intptr_t)variable}
+#define DATETIMEMS_DEF2(variable, realvariable) format_writer_t variable##_format_writer = {datetimems_format_handler_method, (void *)&realvariable}
+#define DATETIMEMS_DEF(variable)                format_writer_t variable##_format_writer = {datetimems_format_handler_method, (void *)&variable}
 #define DATETIMEMS_REF(variable)                &variable##_format_writer
 
-#define DATETIME_DEF2(variable, realvariable)   format_writer_t variable##_format_writer = {datetime_format_handler_method, (void *)(intptr_t)realvariable}
-#define DATETIME_DEF(variable)                  format_writer_t variable##_format_writer = {datetime_format_handler_method, (void *)(intptr_t)variable}
+#define DATETIME_DEF2(variable, realvariable)   format_writer_t variable##_format_writer = {datetime_format_handler_method, (void *)&realvariable}
+#define DATETIME_DEF(variable)                  format_writer_t variable##_format_writer = {datetime_format_handler_method, (void *)&variable}
 #define DATETIME_REF(variable)                  &variable##_format_writer
 
-#define DATE_DEF2(variable, realvariable)       format_writer_t variable##_format_writer = {date_format_handler_method, (void *)(intptr_t)realvariable}
-#define DATE_DEF(variable)                      format_writer_t variable##_format_writer = {date_format_handler_method, (void *)(intptr_t)variable}
+#define DATE_DEF2(variable, realvariable)       format_writer_t variable##_format_writer = {date_format_handler_method, (void *)&realvariable}
+#define DATE_DEF(variable)                      format_writer_t variable##_format_writer = {date_format_handler_method, (void *)&variable}
 #define DATE_REF(variable)                      &variable##_format_writer
 
-#define TIME_DEF2(variable, realvariable)       format_writer_t variable##_format_writer = {time_format_handler_method, (void *)(intptr_t)realvariable}
-#define TIME_DEF(variable)                      format_writer_t variable##_format_writer = {time_format_handler_method, (void *)(intptr_t)variable}
+#define TIME_DEF2(variable, realvariable)       format_writer_t variable##_format_writer = {time_format_handler_method, (void *)&realvariable}
+#define TIME_DEF(variable)                      format_writer_t variable##_format_writer = {time_format_handler_method, (void *)&variable}
 #define TIME_REF(variable)                      &variable##_format_writer
 
-#define EPOCH_DEF2(variable, realvariable)      format_writer_t variable##_format_writer = {epoch_format_handler_method, (void *)(intptr_t)realvariable}
-#define EPOCH_DEF(variable)                     format_writer_t variable##_format_writer = {epoch_format_handler_method, (void *)(intptr_t)variable}
+#define EPOCH_DEF2(variable, realvariable)      format_writer_t variable##_format_writer = {epoch_format_handler_method, (void *)&realvariable}
+#define EPOCH_DEF(variable)                     format_writer_t variable##_format_writer = {epoch_format_handler_method, (void *)&variable}
 #define EPOCH_REF(variable)                     &variable##_format_writer
 
-#define EPOCHZ_DEF2(variable, realvariable)     format_writer_t variable##_format_writer = {epochz_format_handler_method, (void *)(intptr_t)realvariable}
-#define EPOCHZ_DEF(variable)                    format_writer_t variable##_format_writer = {epochz_format_handler_method, (void *)(intptr_t)variable}
+#define EPOCHZ_DEF2(variable, realvariable)     format_writer_t variable##_format_writer = {epochz_format_handler_method, (void *)&realvariable}
+#define EPOCHZ_DEF(variable)                    format_writer_t variable##_format_writer = {epochz_format_handler_method, (void *)&variable}
 #define EPOCHZ_REF(variable)                    &variable##_format_writer
 
 void timeformat_class_init();

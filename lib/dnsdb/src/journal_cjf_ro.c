@@ -847,7 +847,7 @@ static ya_result journal_cjf_ro_input_stream_read(input_stream_t *stream, void *
             }
         }
 
-        n = MIN(n, data->available);
+        n = MIN(n, (intptr_t)data->available);
 
         if(FAIL(ret = file_pool_readfully(data->file, buffer, n)))
         {

@@ -261,11 +261,103 @@ static int json_set_get_test()
         yatest_err("a[0] is not true");
         return 1;
     }
+
+    ya_result ret;
+    bool bool_value = false;
+
+    if(FAIL(ret = json_boolean_get_bool(json_array_get(a, 0), &bool_value)))
+    {
+        yatest_err("a[0] could not be read as a bool: %08x", ret);
+        return 1;
+    }
+
+    if(!bool_value)
+    {
+        yatest_err("a[0] could not be read as true");
+        return 1;
+    }
+
     if(json_number_as_s64(json_array_get(a, 1)) != 1)
     {
         yatest_err("a[1] is not 1");
         return 1;
     }
+
+    double double_value = 0.0;
+
+    if(FAIL(ret = json_number_get_double(json_array_get(a, 1), &double_value)))
+    {
+        yatest_err("a[1] could not be read as a double: %08x", ret);
+        return 1;
+    }
+
+    if(double_value != 1.0)
+    {
+        yatest_err("a[1] could not be read as 1.0");
+        return 1;
+    }
+
+    int64_t s64_value = 0;
+
+    if(FAIL(ret = json_number_get_s64(json_array_get(a, 1), &s64_value)))
+    {
+        yatest_err("a[1] could not be read as an int64_t: %08x", ret);
+        return 1;
+    }
+
+    if(s64_value != 1)
+    {
+        yatest_err("a[1] could not be read as 1 (64 bits)");
+        return 1;
+    }
+
+    int32_t s32_value = 0;
+
+    if(FAIL(ret = json_number_get_s32(json_array_get(a, 1), &s32_value)))
+    {
+        yatest_err("a[1] could not be read as an int32_t: %08x", ret);
+        return 1;
+    }
+
+    if(s32_value != 1)
+    {
+        yatest_err("a[1] could not be read as 1 (32 bits)");
+        return 1;
+    }
+
+    json_t da = json_array_new_instance();
+    for(int i = 0; i <= 4; ++i)
+    {
+        json_array_add_number(da, (double)i);
+    }
+
+    double double_array[8] = {7, 7, 7, 7, 7, 7, 7, 7};
+
+    int double_array_size = json_array_size(da);
+
+    if(double_array_size > (int)(sizeof(double_array)/sizeof(double_array[0])))
+    {
+        yatest_err("double_array size is too small for this test (test bug)");
+        return 1;
+    }
+
+    ret = json_number_get_double_array(da, double_array, double_array_size);
+
+    if(FAIL(ret))
+    {
+        yatest_err("da could not be read as an array of double: %08x", ret);
+        return 1;
+    }
+
+    for(int i = 0; i <= 4; ++i)
+    {
+        if(double_array[i] != (double)i)
+        {
+            yatest_err("da[%i] value differs from expectations: %f != %f", double_array[i], (double)i);
+            return 1;
+        }
+    }
+
     if(strcmp(json_string_get(json_array_get(a, 2)), "one") != 0)
     {
         yatest_err("a[2] is not \"one\"");

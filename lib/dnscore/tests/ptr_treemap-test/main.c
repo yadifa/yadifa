@@ -36,6 +36,14 @@
 #include <dnscore/host_address.h>
 #include <dnscore/ptr_treemap.h>
 
+#define FIBONACCI_INT64_MAX 92
+#define FIBONACCI_INT32_MAX 46
+#if __SIZEOF_POINTER__ == 8
+#define FIBONACCI_PTR_MAX FIBONACCI_INT64_MAX
+#else
+#define FIBONACCI_PTR_MAX FIBONACCI_INT32_MAX
+#endif
+
 static char  tmp_text_buffer[256];
 
 static void *ptr_key_generator(int64_t value) { return (void *)(intptr_t)value; }
@@ -49,7 +57,7 @@ static char *ptr_key_to_text(void *key)
 static void *asciizp_key_generator(int64_t value)
 {
     char tmp[24];
-    snprintf(tmp, sizeof(tmp), "K%019li", value);
+    snprintf(tmp, sizeof(tmp), "K%019" PRIi64, value);
     return yatest_strdup(tmp);
 }
 
@@ -69,7 +77,7 @@ static char *asciizp_key_to_text(void *key)
 static void *dnsname_key_generator(int64_t value)
 {
     char tmp[24];
-    int  n = snprintf(tmp + 1, sizeof(tmp) - 1, "K%019li", value);
+    int  n = snprintf(tmp + 1, sizeof(tmp) - 1, "K%019" PRIi64, value);
     tmp[0] = n;
     return dnsname_dup((uint8_t *)tmp);
 }
@@ -122,8 +130,6 @@ static char *socketaddress_key_to_text(void *key)
     return tmp_text_buffer;
 }
 
-#define FIBONACCI_INT64_MAX 92
-
 static int64_t fibonacci(int64_t value)
 {
     if(value < 2)
@@ -133,15 +139,15 @@ static int64_t fibonacci(int64_t value)
     static int64_t *fibonacci_memorised = NULL;
     if(fibonacci_memorised == NULL)
     {
-        fibonacci_memorised = yatest_malloc((FIBONACCI_INT64_MAX + 1) * sizeof(int64_t));
+        fibonacci_memorised = yatest_malloc((FIBONACCI_PTR_MAX + 1) * sizeof(int64_t));
         fibonacci_memorised[0] = 0;
         fibonacci_memorised[1] = 1;
-        for(int64_t i = 2; i <= FIBONACCI_INT64_MAX; ++i)
+        for(int64_t i = 2; i <= FIBONACCI_PTR_MAX; ++i)
         {
             fibonacci_memorised[i] = fibonacci_memorised[i - 1] + fibonacci_memorised[i - 2];
         }
     }
-    if(value < FIBONACCI_INT64_MAX)
+    if(value < FIBONACCI_PTR_MAX)
     {
         return fibonacci_memorised[value];
     }
@@ -159,7 +165,7 @@ static int add_del_test_common(ptr_treemap_node_compare_t *comparator, void *(*k
     tree.root = NULL;
     tree.compare = comparator;
 
-    for(int64_t i = 2; i <= FIBONACCI_INT64_MAX; ++i)
+    for(int64_t i = 2; i <= FIBONACCI_PTR_MAX; ++i)
     {
         char *key = key_generator(fibonacci(i));
         yatest_log("inserting key: %s (%lli)", key_to_text(key), i);
@@ -194,7 +200,7 @@ static int add_del_test_common(ptr_treemap_node_compare_t *comparator, void *(*k
         }
     }
 
-    for(int64_t i = 2; i <= FIBONACCI_INT64_MAX; ++i)
+    for(int64_t i = 2; i <= FIBONACCI_PTR_MAX; ++i)
     {
         char *key = key_generator(fibonacci(i));
         yatest_log("finding key: %s", key_to_text(key));

@@ -912,7 +912,7 @@ static inline void dns_message_set_edns0(dns_message_t *mesg, bool enabled)
 
 static inline void dns_message_edns0_set(dns_message_t *mesg) { mesg->_opt |= MESSAGE_OPT_EDNS0; }
 
-static inline void dns_message_edns0_clear(dns_message_t *mesg) { mesg->_opt &= ~MESSAGE_OPT_EDNS0; }
+static inline void dns_message_edns0_clear(dns_message_t *mesg) { mesg->_opt &= ~(MESSAGE_OPT_EDNS0|MESSAGE_OPT_NSID|MESSAGE_OPT_COOKIE); }
 
 static inline bool dns_message_has_edns0(const dns_message_t *mesg) { return mesg->_opt & MESSAGE_OPT_EDNS0; }
 

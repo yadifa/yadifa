@@ -34,9 +34,12 @@
 #include <dnscore/dnscore.h>
 #include <dnscore/process.h>
 
+#include "dnscore/logger.h"
+
 static int fork_wait_test()
 {
     dnscore_init();
+    logger_start();
     pid_t pid = fork_ex();
     if(pid != 0)
     {
@@ -51,6 +54,7 @@ static int fork_wait_test()
         yatest_sleep(5);
         yatest_log("fork ending");
     }
+    logger_stop();
     dnscore_finalize();
     return 0;
 }

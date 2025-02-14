@@ -9,7 +9,7 @@
 #include <dnscore/bytearray_input_stream.h>
 #include <dnscore/output_stream.h>
 #include <signal.h>
-
+/*
 union yatest_lo32hi32_u
 {
     struct
@@ -22,6 +22,23 @@ union yatest_lo32hi32_u
 };
 
 typedef union yatest_lo32hi32_u yatest_lo32hi32_t;
+*/
+union yatest_stream_data_u
+{
+    uint64_t as_u64;
+    struct
+    {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        uint32_t lo;
+        uint32_t hi;
+#else
+        uint32_t hi;
+        uint32_t lo;
+#endif
+    } as_u32;
+};
+
+typedef union yatest_stream_data_u yatest_stream_data_t;
 
 // note: there is always a LF after a '.'
 static const char yatest_lorem_ipsum[] =
@@ -38,15 +55,14 @@ static const char yatest_lorem_ipsum[] =
 
 static ya_result yatest_random_input_stream_read(input_stream_t *stream, void *buffer_, uint32_t len)
 {
-    uint8_t          *buffer = (uint8_t *)buffer_;
-    yatest_lo32hi32_t size_next;
-    size_next.value_ptr = stream->data;
-    uint32_t size = size_next.lo_u32;
+    uint8_t *buffer = (uint8_t *)buffer_;
+    yatest_stream_data_t *data = stream->data;
+    uint32_t size = data->as_u32.lo;
     if(size == 0)
     {
         return 0;
     }
-    uint32_t next = size_next.hi_u32;
+    uint32_t next = data->as_u32.hi;
     if(len > size)
     {
         len = size;
@@ -57,22 +73,20 @@ static ya_result yatest_random_input_stream_read(input_stream_t *stream, void *b
         buffer[i] = (unsigned int)(next / 65536) % 32768;
     }
     size -= len;
-    size_next.lo_u32 = size;
-    size_next.hi_u32 = next;
-    stream->data = size_next.value_ptr;
+    data->as_u32.lo = size;
+    data->as_u32.hi = next;
     return len;
 }
 
 static ya_result yatest_random_input_stream_skip(input_stream_t *stream, uint32_t len)
 {
-    yatest_lo32hi32_t size_next;
-    size_next.value_ptr = stream->data;
-    uint32_t size = size_next.lo_u32;
+    yatest_stream_data_t *data = stream->data;
+    uint32_t size = data->as_u32.lo;
     if(size == 0)
     {
         return 0;
     }
-    uint32_t next = size_next.hi_u32;
+    uint32_t next = data->as_u32.hi;
     if(len > size)
     {
         len = size;
@@ -82,26 +96,32 @@ static ya_result yatest_random_input_stream_skip(input_stream_t *stream, uint32_
         next = next * 1103515245 + 12345;
     }
     size -= len;
-    size_next.lo_u32 = size;
-    size_next.hi_u32 = next;
-    stream->data = size_next.value_ptr;
+    data->as_u32.lo = size;
+    data->as_u32.hi = next;
     return len;
 }
 
 static void yatest_random_input_stream_close(input_stream_t *stream)
 {
+    free(stream->data);
     stream->data = NULL;
     stream->vtbl = NULL;
 }
 
 static const input_stream_vtbl yatest_random_input_stream_vtbl = {yatest_random_input_stream_read, yatest_random_input_stream_skip, yatest_random_input_stream_close, "random_input_stream"};
 
-void                           yatest_random_input_stream_init(input_stream_t *stream, uint32_t size)
+void yatest_random_input_stream_init(input_stream_t *stream, uint32_t size)
 {
-    yatest_lo32hi32_t size_next;
-    size_next.lo_u32 = size;
-    size_next.hi_u32 = 0; // seed
-    stream->data = size_next.value_ptr;
+    yatest_stream_data_t *data = (yatest_stream_data_t*)malloc(sizeof(yatest_stream_data_t));
+    if(data == NULL)
+    {
+        yatest_err("failed to allocate data");
+        exit(1);
+    }
+
+    data->as_u32.lo = size;
+    data->as_u32.hi = 0; // seed
+    stream->data = data;
     stream->vtbl = &yatest_random_input_stream_vtbl;
 }
 
@@ -114,7 +134,7 @@ static ya_result yatest_loremipsum_input_stream_read(input_stream_t *stream, voi
     {
         return 0;
     }
-    if(len > size)
+    if((intptr_t)len > size)
     {
         len = size;
     }
@@ -135,7 +155,7 @@ static ya_result yatest_loremipsum_input_stream_skip(input_stream_t *stream, uin
     {
         return 0;
     }
-    if(len > size)
+    if((intptr_t)len > size)
     {
         len = size;
     }
@@ -152,7 +172,11 @@ static void yatest_loremipsum_input_stream_close(input_stream_t *stream)
 
 static const input_stream_vtbl yatest_loremipsum_input_stream_vtbl = {yatest_loremipsum_input_stream_read, yatest_loremipsum_input_stream_skip, yatest_loremipsum_input_stream_close, "loremipsum_input_stream"};
 
-void                           yatest_loremipsum_input_stream_init(input_stream_t *stream)
+/**
+ * Initialises a loremipsum_input_stream
+ */
+
+void yatest_loremipsum_input_stream_init(input_stream_t *stream)
 {
     stream->data = NULL;
     stream->vtbl = &yatest_loremipsum_input_stream_vtbl;
@@ -161,10 +185,9 @@ void                           yatest_loremipsum_input_stream_init(input_stream_
 static ya_result yatest_error_input_stream_read(input_stream_t *stream, void *buffer_, uint32_t len)
 {
     uint8_t          *buffer = (uint8_t *)buffer_;
-    yatest_lo32hi32_t size_next;
-    size_next.value_ptr = stream->data;
-    uint32_t countdown = size_next.lo_u32;
-    uint32_t error = size_next.hi_u32;
+    yatest_stream_data_t *data = stream->data;
+    uint32_t countdown = data->as_u32.lo;
+    uint32_t error = data->as_u32.hi;
     if(countdown == 0)
     {
         return (ya_result)error;
@@ -178,17 +201,15 @@ static ya_result yatest_error_input_stream_read(input_stream_t *stream, void *bu
         buffer[i] = 1;
     }
     countdown -= len;
-    size_next.lo_u32 = countdown;
-    stream->data = size_next.value_ptr;
+    data->as_u32.lo = countdown;
     return len;
 }
 
 static ya_result yatest_error_input_stream_skip(input_stream_t *stream, uint32_t len)
 {
-    yatest_lo32hi32_t size_next;
-    size_next.value_ptr = stream->data;
-    uint32_t countdown = size_next.lo_u32;
-    uint32_t error = size_next.hi_u32;
+    yatest_stream_data_t *data = stream->data;
+    uint32_t countdown = data->as_u32.lo;
+    uint32_t error = data->as_u32.hi;
     if(countdown == 0)
     {
         return (ya_result)error;
@@ -198,35 +219,39 @@ static ya_result yatest_error_input_stream_skip(input_stream_t *stream, uint32_t
         len = countdown;
     }
     countdown -= len;
-    size_next.lo_u32 = countdown;
-    stream->data = size_next.value_ptr;
+    data->as_u32.lo = countdown;
     return len;
 }
 
 static void yatest_error_input_stream_close(input_stream_t *stream)
 {
+    free(stream->data);
     stream->data = NULL;
     stream->vtbl = NULL;
 }
 
 static const input_stream_vtbl yatest_error_input_stream_vtbl = {yatest_error_input_stream_read, yatest_error_input_stream_skip, yatest_error_input_stream_close, "error_input_stream"};
 
-void                           yatest_error_input_stream_init(input_stream_t *stream, uint32_t countdown, uint32_t error_code)
+void yatest_error_input_stream_init(input_stream_t *stream, uint32_t countdown, uint32_t error_code)
 {
-    yatest_lo32hi32_t size_next;
-    size_next.lo_u32 = countdown;
-    size_next.hi_u32 = error_code;
-    stream->data = size_next.value_ptr;
+    yatest_stream_data_t *data = (yatest_stream_data_t*)malloc(sizeof(yatest_stream_data_t));
+    if(data == NULL)
+    {
+        yatest_err("failed to allocate data");
+        exit(1);
+    }
+    data->as_u32.lo = countdown;
+    data->as_u32.hi = error_code;
+    stream->data = data;
     stream->vtbl = &yatest_error_input_stream_vtbl;
 }
 
 static ya_result yatest_error_output_stream_write(output_stream_t *stream, const uint8_t *buffer_, uint32_t len)
 {
     (void)buffer_;
-    yatest_lo32hi32_t size_next;
-    size_next.value_ptr = stream->data;
-    uint32_t countdown = size_next.lo_u32;
-    uint32_t error = size_next.hi_u32;
+    yatest_stream_data_t *data = stream->data;
+    uint32_t countdown = data->as_u32.lo;
+    uint32_t error = data->as_u32.hi;
     if(countdown == 0)
     {
         return (ya_result)error;
@@ -236,17 +261,15 @@ static ya_result yatest_error_output_stream_write(output_stream_t *stream, const
         len = countdown;
     }
     countdown -= len;
-    size_next.lo_u32 = countdown;
-    stream->data = size_next.value_ptr;
+    data->as_u32.lo = countdown;
     return len;
 }
 
 static ya_result yatest_error_output_stream_flush(output_stream_t *stream)
 {
-    yatest_lo32hi32_t size_next;
-    size_next.value_ptr = stream->data;
-    uint32_t countdown = size_next.lo_u32;
-    uint32_t error = size_next.hi_u32;
+    yatest_stream_data_t *data = stream->data;
+    uint32_t countdown = data->as_u32.lo;
+    uint32_t error = data->as_u32.hi;
     if(countdown == 0)
     {
         return (ya_result)error;
@@ -257,18 +280,29 @@ static ya_result yatest_error_output_stream_flush(output_stream_t *stream)
 
 static void yatest_error_output_stream_close(output_stream_t *stream)
 {
+    free(stream->data);
     stream->data = NULL;
     stream->vtbl = NULL;
 }
 
 static const output_stream_vtbl yatest_error_output_stream_vtbl = {yatest_error_output_stream_write, yatest_error_output_stream_flush, yatest_error_output_stream_close, "error_input_stream"};
 
-void                            yatest_error_output_stream_init(output_stream_t *stream, uint32_t countdown, uint32_t error_code)
+/**
+ * Initialises the stream ...
+ * This doesn't work on 32 bits machines.
+ */
+
+void yatest_error_output_stream_init(output_stream_t *stream, uint32_t countdown, uint32_t error_code)
 {
-    yatest_lo32hi32_t size_next;
-    size_next.lo_u32 = countdown;
-    size_next.hi_u32 = error_code;
-    stream->data = size_next.value_ptr;
+    yatest_stream_data_t *data = (yatest_stream_data_t*)malloc(sizeof(yatest_stream_data_t));
+    if(data == NULL)
+    {
+        yatest_err("failed to allocate data");
+        exit(1);
+    }
+    data->as_u32.lo = countdown;
+    data->as_u32.hi = error_code;
+    stream->data = data;
     stream->vtbl = &yatest_error_output_stream_vtbl;
 }
 
@@ -403,13 +437,13 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
 
 typedef int yatest_output_stream_factory(output_stream_t *os, uint32_t *in_out_size);
 
+typedef int yatest_output_stream_close_readback(output_stream_t *os, void **bufferp, size_t *buffer_sizep);
+
 /**
  * Returns the content of the output stream as an allocated buffer
  */
 
-typedef int yatest_output_stream_close_readback(output_stream_t *os, void **bufferp, size_t *buffer_sizep);
-
-int         yatest_output_stream_write_consistency_test(yatest_output_stream_factory *factory, yatest_output_stream_close_readback *readback, uint32_t size, uint32_t small_write, uint32_t big_write, uint32_t increment, char *name)
+int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *factory, yatest_output_stream_close_readback *readback, uint32_t size, uint32_t small_write, uint32_t big_write, uint32_t increment, char *name)
 {
     int             ret;
     input_stream_t  ris;

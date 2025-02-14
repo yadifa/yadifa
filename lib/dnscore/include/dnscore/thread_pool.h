@@ -300,7 +300,16 @@ random_ctx_t thread_pool_get_random_ctx();
  * Sets-up a random context, which is automatically made already in a thread pool.
  * Do nothing if the context already exists.
  *
- * You should probably not call this.
+ * You should probably not call this unless you create your own threads.
+ *
+ *
+ *
+ * This MUST be called at the start or a thread that will, one way or another, use
+ * the random function.  In doubt, do it.  So just do it.
+ *
+ * @note: It's automatically done for all threads from the pool.
+ * @note: It's made on the core alarm function (the one also responsible for
+ *        flushing & cie)
  */
 
 void thread_pool_setup_random_ctx();
@@ -349,10 +358,16 @@ void thread_pool_wait_queue_empty(struct thread_pool_s *tp);
 
 uint32_t thread_pool_thread_index_get();
 
-/// Call before and after a fork
+/**
+ * Call before (and after) a fork
+ */
+
 ya_result thread_pool_stop_all();
 
-/// Call (before and) after a fork
+/**
+ * Call (before and) after a fork
+ */
+
 ya_result thread_pool_start_all();
 
 #ifdef __cplusplus

@@ -109,6 +109,7 @@ static int message_test_with_size_recv(int fin, int size)
     int64_t        latency_max = S64_MIN;
     int64_t        latency_total = 0;
     int64_t        latency_count = 0;
+    int64_t        delta;
 
     struct msg_str message_in;
 
@@ -185,7 +186,8 @@ static int message_test_with_size_recv(int fin, int size)
     }
 
 message_test_with_size_recv_end:
-    int64_t delta = MAX(now - start, 1LL);
+
+    delta = MAX(now - start, 1LL);
     if(latency_count < 1)
     {
         latency_count = 1;
@@ -203,6 +205,7 @@ static int message_test_with_size_recv2(int fin, int size)
     int64_t latency_max = S64_MIN;
     int64_t latency_total = 0;
     int64_t latency_count = 0;
+    int64_t delta;
 
     println("message_test_with_size_recv2");
 
@@ -343,7 +346,7 @@ static int message_test_with_size_recv2(int fin, int size)
 
 named_pipe_test_with_size_recv2_end:
 
-    int64_t delta = MIN(now - start, 1LL);
+    delta = MIN(now - start, 1LL);
     if(latency_count < 1)
     {
         latency_count = 1;

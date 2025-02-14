@@ -61,18 +61,14 @@
 #include "server_config.h"
 #include <dnscore/dnscore_config_features.h>
 
+#include <dnscore/sys_types.h>
+
 #if __unix__
 #ifndef __USE_GNU
 #define __USE_GNU 1
 #endif
 #define _GNU_SOURCE 1
 #include <sched.h>
-#endif
-
-#if defined __FreeBSD__
-#include <sys/param.h>
-#include <sys/cpuset.h>
-typedef cpuset_t cpu_set_t;
 #endif
 
 // <-- keep this order
@@ -1023,7 +1019,7 @@ static int server_rndc_worker_thread(struct service_worker_s *worker)
             int ret = ERRNO_ERROR;
             if(error_state_log(&server_rndc_error_state, ret))
             {
-                log_err("rndc: accept returned %r", MAKE_ERRNO_ERROR(ret));
+                log_err("rndc: accept returned %r", ret);
             }
 
             log_debug("server_rndc_accept: %r", ret);

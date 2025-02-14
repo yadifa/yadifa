@@ -619,7 +619,7 @@ int accept_ex(int sockfd, struct sockaddr *address, socklen_t *address_lenp)
                 return -1;
             }
 
-            int err = errno;
+            int err = ERRNO_ERROR_GET_ERRNO(clientfd);
             switch(err)
             {
                 case EINTR:

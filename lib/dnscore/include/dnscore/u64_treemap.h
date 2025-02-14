@@ -92,10 +92,8 @@ struct u64_treemap_node_s
         void    *value; /* 1 ptr */
         intptr_t value_intptr;
         void (*void_function_void)();
-#if __SIZEOF_POINTER__ == 8
         int64_t  value_s64;
         uint64_t value_u64;
-#endif
         int32_t  value_s32;
         uint32_t value_u32;
     };

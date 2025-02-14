@@ -32,6 +32,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <dnscore/sys_types.h>
 #include "yadifad.h"
 #if __windows__
 #include <dnscore/system_service.h>

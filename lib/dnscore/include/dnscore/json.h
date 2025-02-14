@@ -84,11 +84,21 @@ enum json_type     json_type_get(const json_t j);
 
 bool               json_boolean_get(const json_t j);
 
+ya_result          json_boolean_get_bool(const json_t j, bool *value);
+
 void               json_boolean_set(json_t j, bool value);
 
 double             json_number_as_double(const json_t j);
 
 int64_t            json_number_as_s64(const json_t j);
+
+ya_result          json_number_get_double(const json_t j, double *value);
+
+ya_result          json_number_get_s64(const json_t j, int64_t *value);
+
+ya_result          json_number_get_s32(const json_t j, int32_t *value);
+
+ya_result          json_number_get_double_array(const json_t j, double *array, size_t length);
 
 void               json_number_set_double(json_t j, double value);
 
@@ -100,34 +110,34 @@ size_t             json_string_size_get(const json_t j);
 
 void               json_string_set(json_t j, const uint8_t *text);
 
-json_t             json_array_get(json_t j, size_t index);
+json_t             json_array_get(const json_t j, size_t index);
 
 int32_t            json_array_size(json_t j);
 
 void               json_array_add(json_t j, json_t item);
 
-static inline void json_array_add_boolean(const json_t j, bool value)
+static inline void json_array_add_boolean(json_t j, bool value)
 {
     json_t boolean = json_boolean_new_instance();
     json_boolean_set(boolean, value);
     json_array_add(j, boolean);
 }
 
-static inline void json_array_add_number(const json_t j, double value)
+static inline void json_array_add_number(json_t j, double value)
 {
     json_t number = json_number_new_instance();
     json_number_set_double(number, value);
     json_array_add(j, number);
 }
 
-static inline void json_array_add_string(const json_t j, const uint8_t *text)
+static inline void json_array_add_string(json_t j, const uint8_t *text)
 {
     json_t string = json_string_new_instance();
     json_string_set(string, text);
     json_array_add(j, string);
 }
 
-json_t             json_object_get(json_t j, const char *name);
+json_t             json_object_get(const json_t j, const char *name);
 
 void               json_object_add(json_t j, const uint8_t *key, json_t item);
 

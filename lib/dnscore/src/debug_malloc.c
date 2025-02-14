@@ -69,7 +69,9 @@
 #include <dnscore/shared_heap.h>
 #include <dnscore/debug_config.h>
 #include <pthread.h>
+#if !defined(__APPLE__)
 #include <threads.h>
+#endif
 
 #endif
 

@@ -1046,7 +1046,7 @@ ya_result http_write_chunk(output_stream_t *os, const void *data, size_t size)
 {
     ya_result ret;
 
-    if(ISOK(ret = osformat(os, "%llx\r\n", size)))
+    if(ISOK(ret = osformat(os, "%llx\r\n", (int64_t)size)))
     {
         if(size > 0)
         {

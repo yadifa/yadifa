@@ -118,7 +118,13 @@
 
 #elif defined __APPLE__
 #include <machine/endian.h>
-
+#ifndef __unix__
+#define __unix__ 1
+#endif
+#include <libkern/OSByteOrder.h>
+#define bswap_16(x) OSSwapInt16(x)
+#define bswap_32(x) OSSwapInt32(x)
+#define bswap_64(x) OSSwapInt64(x)
 #ifndef __BYTE_ORDER
 #if defined(BYTE_ORDER)
 #define __BIG_ENDIAN    BIG_ENDIAN
@@ -240,6 +246,7 @@ typedef unsigned int mode_t;
 #define VERSION_2_6_4 0x020600400000LL
 #define VERSION_2_6_5 0x020600500000LL
 #define VERSION_3_0_0 0x030000000000LL
+#define VERSION_3_0_1 0x030001000000LL
 
 #include <dnscore/dnscore_config_features.h>
 #include <dnscore/sys_error.h>

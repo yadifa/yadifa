@@ -32,6 +32,8 @@
 
 #include "yatest.h"
 #include "dnscore/logger.h"
+#include "dnscore/sys_get_cpu_count.h"
+
 #include <dnscore/dnscore.h>
 #include <dnscore/thread.h>
 #include <dnscore/thread_pool.h>
@@ -58,8 +60,16 @@ static void                      *thread_main(void *args)
 
 static int thread_test()
 {
-    int      ret;
+    int ret;
+    int cpu_count = sys_get_cpu_count();
+
     thread_t tids[THREAD_COUNT];
+
+    if(cpu_count < 0)
+    {
+        cpu_count = 1;
+    }
+
     for(int i = 0; i < THREAD_COUNT; ++i)
     {
         thread_t id;
@@ -75,6 +85,7 @@ static int thread_test()
             }
             exit(1);
         }
+
         tids[i] = id;
         if(i < THREAD_COUNT / 2)
         {
@@ -84,7 +95,12 @@ static int thread_test()
         {
             thread_set_name("test", i * 65536, THREAD_COUNT * 65536);
         }
+
+        yatest_log("thread_setaffinity(%i)", i % cpu_count);
+        ret = thread_setaffinity(id, i % cpu_count);
+        yatest_log("thread_setaffinity returned %08x", ret);
     }
+
     yatest_log("waiting count = %i = %i", count, THREAD_COUNT);
 
     for(int i = 0; (i < 60) && (count < THREAD_COUNT); ++i)

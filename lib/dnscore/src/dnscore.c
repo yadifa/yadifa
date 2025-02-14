@@ -287,14 +287,14 @@ static void dnscore_arch_checkup()
 
     if(sizeof(struct s10bp_s) != 10)
     {
-        fprintf(stderr, "struct s10bp_s: the compiler gives size %lu for an expected size of 10", sizeof(struct s10bp_s));
+        fprintf(stderr, "struct s10bp_s: the compiler gives size %i for an expected size of 10", (int)sizeof(struct s10bp_s));
         fflush(NULL);
         DIE(ERROR);
     }
 
     if(offsetof(struct s10b_s, b) != 2)
     {
-        fprintf(stderr, "struct s10b_s: the offset of field b isn't 2 as expected but %lu", offsetof(struct s10b_s, b));
+        fprintf(stderr, "struct s10b_s: the offset of field b isn't 2 as expected but %i", (int)offsetof(struct s10b_s, b));
         fflush(NULL);
         DIE(ERROR);
     }
@@ -308,7 +308,7 @@ static void dnscore_arch_checkup()
 
     if(sizeof(struct s12b_s) != 12)
     {
-        fprintf(stderr, "struct s12b_s: the compiler gives size %lu for an expected size of 12", sizeof(struct s12b_s));
+        fprintf(stderr, "struct s12b_s: the compiler gives size %i for an expected size of 12", (int)sizeof(struct s12b_s));
         fflush(NULL);
         DIE(ERROR);
     }

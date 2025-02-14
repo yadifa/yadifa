@@ -64,7 +64,8 @@ if(CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
                 include_directories("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-migrator/sdk/MacOSX.sdk/usr/include/")
         endif()
 
-	set(OPENSSL_ADDITIONAL_PATH "/usr/local/Cellar/openssl@1.1/1.1.1g")
+	#set(OPENSSL_ADDITIONAL_PATH "/usr/local/Cellar/openssl@1.1/1.1.1g")
+	set(OPENSSL_ADDITIONAL_PATH "/opt/homebrew/Cellar/openssl\@3/3.4.0")
 
 endif()
 

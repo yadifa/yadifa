@@ -162,25 +162,54 @@ void log_msghdr(logger_handle_t *hndl, uint32_t level, struct msghdr *hdr)
 }
 #endif
 
+void ttylog_handle_dbg(logger_handle_t *handle, const char *format, ...)
+{
+    va_list args;
+
+    if(logger_is_running())
+    {
+        if(handle != NULL)
+        {
+            va_start(args, format);
+            logger_handle_vmsg(handle, MSG_DEBUG, format, args);
+            va_end(args);
+            logger_flush();
+        }
+    }
+    // else
+    {
+        flushout();
+        osprint(termout, "dbg: ");
+        va_start(args, format);
+        vosformat(termout, format, args);
+        va_end(args);
+        osprintln(termout, "");
+        flusherr();
+    }
+}
+
 void ttylog_handle_out(logger_handle_t *handle, const char *format, ...)
 {
     va_list args;
 
     if(logger_is_running())
     {
-        va_start(args, format);
-        logger_handle_vmsg(handle, MSG_INFO, format, args);
-        va_end(args);
-        logger_flush();
+        if(handle != NULL)
+        {
+            va_start(args, format);
+            logger_handle_vmsg(handle, MSG_INFO, format, args);
+            va_end(args);
+            logger_flush();
+        }
     }
     // else
     {
         flushout();
-        osprint(termerr, "info: ");
+        osprint(termout, "info: ");
         va_start(args, format);
-        vosformat(termerr, format, args);
+        vosformat(termout, format, args);
         va_end(args);
-        osprintln(termerr, "");
+        osprintln(termout, "");
         flusherr();
     }
 }
@@ -191,19 +220,22 @@ void ttylog_handle_notice(logger_handle_t *handle, const char *format, ...)
 
     if(logger_is_running())
     {
-        va_start(args, format);
-        logger_handle_vmsg(handle, MSG_NOTICE, format, args);
-        va_end(args);
-        logger_flush();
+        if(handle != NULL)
+        {
+            va_start(args, format);
+            logger_handle_vmsg(handle, MSG_NOTICE, format, args);
+            va_end(args);
+            logger_flush();
+        }
     }
     // else
     {
         flushout();
-        osprint(termerr, "notice: ");
+        osprint(termout, "notice: ");
         va_start(args, format);
-        vosformat(termerr, format, args);
+        vosformat(termout, format, args);
         va_end(args);
-        osprintln(termerr, "");
+        osprintln(termout, "");
         flusherr();
     }
 }
@@ -214,10 +246,13 @@ void ttylog_handle_warn(logger_handle_t *handle, const char *format, ...)
 
     if(logger_is_running())
     {
-        va_start(args, format);
-        logger_handle_vmsg(handle, MSG_WARNING, format, args);
-        va_end(args);
-        logger_flush();
+        if(handle != NULL)
+        {
+            va_start(args, format);
+            logger_handle_vmsg(handle, MSG_WARNING, format, args);
+            va_end(args);
+            logger_flush();
+        }
     }
     // else
     {
@@ -237,10 +272,13 @@ void ttylog_handle_err(logger_handle_t *handle, const char *format, ...)
 
     if(logger_is_running())
     {
-        va_start(args, format);
-        logger_handle_vmsg(handle, MSG_ERR, format, args);
-        va_end(args);
-        logger_flush();
+        if(handle != NULL)
+        {
+            va_start(args, format);
+            logger_handle_vmsg(handle, MSG_ERR, format, args);
+            va_end(args);
+            logger_flush();
+        }
     }
     // else
     {

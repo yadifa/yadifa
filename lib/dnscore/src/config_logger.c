@@ -190,7 +190,9 @@ static const value_name_table_t logger_debuglevels[] = {{1 << MSG_EMERG, "emerg"
                                                         {1 << MSG_ALERT, "alert"},
                                                         {1 << MSG_CRIT, "crit"},
                                                         {1 << MSG_ERR, "err"},
+                                                        {1 << MSG_ERR, "error"},
                                                         {1 << MSG_WARNING, "warning"},
+                                                        {1 << MSG_WARNING, "warn"},
                                                         {1 << MSG_NOTICE, "notice"},
                                                         {1 << MSG_INFO, "info"},
                                                         {1 << MSG_DEBUG, "debug"},
@@ -204,6 +206,8 @@ static const value_name_table_t logger_debuglevels[] = {{1 << MSG_EMERG, "emerg"
                                                         {(1 << (MSG_ALL + 1)) - 1, "all"},
                                                         {(1 << (MSG_ALL + 1)) - 1, "*"},
                                                         {(1 << MSG_EMERG) | (1 << MSG_ALERT) | (1 << MSG_CRIT) | (1 << MSG_ERR) | (1 << MSG_WARNING) | (1 << MSG_NOTICE) | (1 << MSG_INFO), "prod"},
+                                                        {(1 << MSG_EMERG) | (1 << MSG_ALERT) | (1 << MSG_CRIT) | (1 << MSG_ERR) | (1 << MSG_WARNING) | (1 << MSG_NOTICE), "light"},
+                                                        {(1 << MSG_EMERG) | (1 << MSG_ALERT) | (1 << MSG_CRIT) | (1 << MSG_ERR) | (1 << MSG_WARNING) | (1 << MSG_NOTICE), "lite"},
                                                         {0, NULL}};
 
 static const char               DEFAULT_PATH[] = "";

@@ -198,6 +198,7 @@ set(LIBRARY_SOURCES
     ${LIBRARY_SOURCE_PATH}/tcp_manager_channel_ssl_context.c
     ${LIBRARY_SOURCE_PATH}/thread_pool.c
     ${LIBRARY_SOURCE_PATH}/thread.c
+    ${LIBRARY_SOURCE_PATH}/thread_setaffinity_macos.c
     ${LIBRARY_SOURCE_PATH}/thread_tag.c
     ${LIBRARY_SOURCE_PATH}/threaded_qsl_cw.c
     ${LIBRARY_SOURCE_PATH}/threaded_dll_cw.c
@@ -414,7 +415,6 @@ set(LIBRARY_HEADERS
 #    ${LIBRARY_HEADER_PATH}/tcp_server.h
     ${LIBRARY_HEADER_PATH}/thread_pool.h
     ${LIBRARY_HEADER_PATH}/thread.h
-    ${LIBRARY_HEADER_PATH}/thread_tag.h
     ${LIBRARY_HEADER_PATH}/threaded_qsl_cw.h
     ${LIBRARY_HEADER_PATH}/threaded_dll_cw.h
     ${LIBRARY_HEADER_PATH}/threaded_nbrb.h

@@ -62,7 +62,6 @@
 #include "dnscore/zalloc.h"
 #include "dnscore/process.h"
 #include "dnscore/mutex.h"
-#include "dnscore/thread_tag.h"
 
 /* 0 = nothing, 1 = warns and worse, 2 = info and worse, 3 = debug and worse */
 #define VERBOSE_THREAD_LOG          0
@@ -106,7 +105,7 @@ static const char                 thread_tag_unknown[THREAD_TAG_SIZE] = {'-', '-
 #if __SIZEOF_POINTER__ == 8
 static thread_tag_entry_t thread_tag_entry[THREAD_TAG_HASH_SIZE] = {{0, {0, 0, 0, 0, 0, 0, 0, 0}, 0, 0}};
 #else
-static thread_tag_entry_s thread_tag_entry[THREAD_TAG_HASH_SIZE] = {{0, {0, 0, 0, 0, 0, 0, 0, 0}, 0}};
+static thread_tag_entry_t thread_tag_entry[THREAD_TAG_HASH_SIZE] = {{0, {0, 0, 0, 0, 0, 0, 0, 0}, 0}};
 #endif
 static mutex_t thread_tag_mtx = MUTEX_INITIALIZER;
 
@@ -114,12 +113,19 @@ static int     thread_id_key(thread_t id_)
 {
     intptr_t     id = (intptr_t)id_;
     unsigned int key = (uint32_t)id;
-    if(sizeof(id) == 8)
-    {
-        key ^= (uint32_t)(id >> 32);
-    }
+#if __SIZEOF_POINTER__ >= 8
+    key ^= (uint32_t)(id >> 32);
+#endif
     return key % THREAD_TAG_HASH_PRIME;
 }
+
+/**
+ * Get the tag associated to that pid+thread
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
 
 const char *thread_get_tag_with_pid_and_tid(pid_t pid_, thread_t tid_)
 {
@@ -156,6 +162,14 @@ const char *thread_get_tag_with_pid_and_tid(pid_t pid_, thread_t tid_)
     // return thread_tag_unknown;
 }
 
+/**
+ * Copies the tag associated to that pid+thread into the given buffer
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
+
 char *thread_copy_tag_with_pid_and_tid(pid_t pid, thread_t tid, char *out_9_bytes)
 {
     memcpy(out_9_bytes, thread_get_tag_with_pid_and_tid(pid, tid), 9);
@@ -166,6 +180,14 @@ char *thread_copy_tag_with_pid_and_tid(pid_t pid, thread_t tid, char *out_9_byte
 #if DEBUG_THREAD_TAG_COLLISIONS
 static int thread_set_tag_with_pid_and_tid_collisions = 0;
 #endif
+
+/**
+ * Sets the tag of a pid+thread
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
 
 void thread_set_tag_with_pid_and_tid(pid_t pid_, thread_t tid_, const char *tag8chars)
 {
@@ -232,6 +254,14 @@ void thread_set_tag_with_pid_and_tid(pid_t pid_, thread_t tid_, const char *tag8
     }
 }
 
+/**
+ * Clears the tag of a pid+thread
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
+
 void thread_clear_tag_with_pid_and_tid(pid_t pid_, thread_t tid_)
 {
     intptr_t pid = (intptr_t)pid_;
@@ -266,6 +296,10 @@ void thread_clear_tag_with_pid_and_tid(pid_t pid_, thread_t tid_)
     }
 }
 
+/**
+ * Logs all the pid/thread tags in the system logger.
+ */
+
 void thread_tag_log_tags()
 {
     for(int_fast32_t key = 0; key < THREAD_TAG_HASH_SIZE; ++key)
@@ -286,6 +320,10 @@ void thread_tag_log_tags()
     }
 }
 
+/**
+ * Applies the defined tags once more.
+ */
+
 void thread_tag_push_tags()
 {
     for(int_fast32_t key = 0; key < THREAD_TAG_HASH_SIZE; ++key)
@@ -304,17 +342,21 @@ void thread_tag_push_tags()
                              thread_tag_entry[key].tag[5],
                              thread_tag_entry[key].tag[6],
                              thread_tag_entry[key].tag[7]);
-            /*
-            log_debug("thread-tag: pushing id=%p tag=%c%c%c%c%c%c%c%c",
-                     thread_tag_entry[key].thread_id,
-                     thread_tag_entry[key].tag[0],thread_tag_entry[key].tag[1],thread_tag_entry[key].tag[2],thread_tag_entry[key].tag[3],
-                     thread_tag_entry[key].tag[4],thread_tag_entry[key].tag[5],thread_tag_entry[key].tag[6],thread_tag_entry[key].tag[7]);
-            */
 #endif
             logger_handle_set_thread_tag_with_pid_and_tid(getpid(), thread_tag_entry[key].thread_id, thread_tag_entry[key].tag);
         }
     }
 }
+
+/**
+ *
+ * Makes a tag based on a prefix, an index and a maximum value for that index
+ *
+ * @param prefix
+ * @param index
+ * @param count
+ * @param service_tag
+ */
 
 void thread_make_tag(const char *prefix, uint32_t index, uint32_t count, char *out_service_tag)
 {

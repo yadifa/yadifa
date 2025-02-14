@@ -210,7 +210,6 @@ pkginclude_HEADERS = \
     $(I)/tcp_manager2.h \
 	$(I)/thread_pool.h \
 	$(I)/thread.h \
-	$(I)/thread_tag.h \
 	$(I)/threaded_qsl_cw.h \
 	$(I)/threaded_dll_cw.h \
 	$(I)/threaded_nbrb.h \
@@ -376,6 +375,7 @@ libdnscore_la_SOURCES = \
 	src/tcp_manager2.c \
 	src/thread_pool.c \
 	src/thread.c \
+	src/thread_setaffinity_macos.c \
 	src/thread_tag.c \
 	src/threaded_qsl_cw.c \
 	src/threaded_dll_cw.c \

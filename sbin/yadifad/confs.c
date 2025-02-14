@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <limits.h>
+#include "dnscore/sys_types.h"
 
 #if __unix__
 #include <pwd.h>

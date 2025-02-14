@@ -2232,31 +2232,31 @@ ya_result dnskey_store_private_key_to_stream(dnskey_t *key, output_stream_t *os)
 
     if(key->epoch_created != 0)
     {
-        epoch.value = (void *)(intptr_t)key->epoch_created;
+        epoch.value = &key->epoch_created;
         osformatln(os, "Created: %w", &epoch);
     }
 
     if(key->epoch_publish != 0)
     {
-        epoch.value = (void *)(intptr_t)key->epoch_publish;
+        epoch.value = &key->epoch_publish;
         osformatln(os, "Publish: %w", &epoch);
     }
 
     if(key->epoch_activate != 0)
     {
-        epoch.value = (void *)(intptr_t)key->epoch_activate;
+        epoch.value = &key->epoch_activate;
         osformatln(os, "Activate: %w", &epoch);
     }
 
     if(key->epoch_inactive != 0)
     {
-        epoch.value = (void *)(intptr_t)key->epoch_inactive;
+        epoch.value = &key->epoch_inactive;
         osformatln(os, "Inactive: %w", &epoch);
     }
 
     if(key->epoch_delete != 0)
     {
-        epoch.value = (void *)(intptr_t)key->epoch_delete;
+        epoch.value = &key->epoch_delete;
         osformatln(os, "Delete: %w", &epoch);
     }
 

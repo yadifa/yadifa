@@ -36,7 +36,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/CheckCHeaders.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/CheckCompilerFlags.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/EURidToolbox.cmake)
 
-read_version("3.0.0")
+read_version("3.0.1")
 
 project(yadifa VERSION ${VERSION_TEXT} LANGUAGES C)
 
@@ -105,8 +105,8 @@ set(YATEST_INCLUDE_DIRECTORY "${CMAKE_SOURCE_DIR}/tests")
 # settings from subdirectories - START
 
 set(PACKAGE "yadifa")
-set(PACKAGE_VERSION "3.0.0")
-set(VERSION "3.0.0")
+set(PACKAGE_VERSION "3.0.1")
+set(VERSION "3.0.1")
 set(PACKAGE_STRING "${PACKAGE} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "bugreport@yadifa.eu")
 
@@ -202,7 +202,9 @@ option_set(TOOLS "Enable the tools" ON)
 
 option_set(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option_set(BUILD_STATIC_LIBS "Build static libraries" OFF)
-option_set(WITH_COVERAGE "Builds with -fprofile-arcs and -ftest-coverage" OFF)
+option_set(WITH_COVERAGE "Build with -fprofile-arcs and -ftest-coverage" OFF)
+
+option_set(TIME64 "Build with _TIME_BITS=64" OFF)
 
 kvstatus("OQS support" "${HAS_OQS_SUPPORT}")
 if(${HAS_OQS_SUPPORT})
@@ -367,6 +369,9 @@ add_compile_options(-Wextra)
 add_compile_options(-Wno-strict-prototypes)
 add_compile_options(-Wno-address-of-packed-member)
 add_compile_options(-fno-strict-aliasing)
+if(TIME64)
+add_compile_options(-D_TIME_BITS=64)
+endif()
 
 if(WITH_COVERAGE)
 kvstatus("coverage" "enabled")

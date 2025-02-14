@@ -30,6 +30,17 @@
 #
 ################################################################################
 
+20250214:
+    YADIFA 3.0.1
+
+    Fixes builds on 32 bits architectures.
+
+    Fixes an issue that would occur on ARM architectures.
+
+    Fixes 64 bits time handling.
+        Adds TIME64 support to CMake (-DTIME64:BOOL=ON adds _TIME_BITS=64 to the defines)
+    
+
 20241211:
     YADIFA 3.0.0
 

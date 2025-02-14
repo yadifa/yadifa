@@ -356,7 +356,12 @@ static void filedescriptor_hooks_init()
     glibc_fcntl = function_hook("fcntl");
     glibc_opendir = function_hook("opendir");
     glibc_fdopendir = function_hook("fdopendir");
+    // @note 20250116 edf -- took me a while to track that one, I expect similar issues may exist
+#if (__SIZEOF_SIZE_T__ == 4) && (_FILE_OFFSET_BITS == 64)
+    glibc_readdir = function_hook("readdir64");
+#else
     glibc_readdir = function_hook("readdir");
+#endif
     glibc_closedir = function_hook("closedir");
     glibc_access = function_hook("access");
 }

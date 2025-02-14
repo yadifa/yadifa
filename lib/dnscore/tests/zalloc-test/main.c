@@ -43,7 +43,7 @@ static int zalloc_test()
 
     int64_t **allocated = yatest_malloc((THREE_POOLS_SIZE / 8) * sizeof(int64_t *));
 
-    for(int64_t size = 8; size <= 4096 + 8; size += 8)
+    for(int64_t size = 8; size <= 2048 + 8; size += 8)
     {
         yatest_log("size %lli", size);
 
@@ -119,7 +119,7 @@ static int zalloc_unaligned_test()
 
     int64_t **allocated = yatest_malloc((THREE_POOLS_SIZE / 8) * sizeof(int64_t *));
 
-    for(int64_t size = 8; size <= 4096 + 8; size += 8)
+    for(int64_t size = 8; size <= 2048 + 8; size += 8)
     {
         yatest_log("size %lli", size);
 

@@ -1,7 +1,8 @@
 #pragma once
-
+#define _GNU_SOURCE 1
 #include "yatest.h"
 #include <dnscore/network.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -308,7 +309,8 @@ int yatest_serversocket_accept(int server_socket, yatest_serverclient_t *client)
     }
     else
     {
-        yatest_err("yatest_serversocket_accept(%i) accept failed with %s", server_socket, strerror(errno));
+        int err = ERRNO_ERROR_GET_ERRNO(ret);
+        yatest_err("yatest_serversocket_accept(%i) accept failed with %s", server_socket, strerror(err));
     }
     return ret;
 }

@@ -634,7 +634,7 @@ void dnssec_keystore_delete_key(dnskey_t *key)
     domain = dnssec_keystore_get_domain(&g_keystore, fqdn);
     cstr_init_with_dnsname(clean_origin, fqdn);
 
-    format_writer_t epoch_writer = {packedepoch_format_handler_method, (void *)(intptr_t)key->epoch_created};
+    format_writer_t epoch_writer = {packedepoch_format_handler_method, &key->epoch_created};
 
     char            path[PATH_MAX];
     char            path_new[PATH_MAX];

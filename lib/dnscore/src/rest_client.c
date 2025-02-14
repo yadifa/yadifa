@@ -317,7 +317,11 @@ ya_result rest_query_uri(const char *uri_text, json_t *jsonp)
         host_address_t *ha;
         if((uri.port_text != NULL) && (strlen(uri.port_text) > 0))
         {
-            parse_u32_check_range_len_base10(uri.port_text, strlen(uri.port_text), &port, 1, 65535);
+            if(FAIL(ret = parse_u32_check_range_len_base10(uri.port_text, strlen(uri.port_text), &port, 1, 65535)))
+            {
+                uri_finalise(&uri);
+                return ret;
+            }
         }
         if((ha = host_address_new_instance_parse_port(uri.host_text, port)) != NULL)
         {
@@ -330,7 +334,7 @@ ya_result rest_query_uri(const char *uri_text, json_t *jsonp)
             {
                 if(!ptr_treemap_isempty(&uri.args))
                 {
-                    char                   arg_separator = '?';
+                    char arg_separator = '?';
 
                     ptr_treemap_iterator_t iter;
                     ptr_treemap_iterator_init(&uri.args, &iter);

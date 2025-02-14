@@ -69,6 +69,8 @@ extern atomic_int g_thread_starting;
 extern atomic_int g_thread_running;
 #endif
 
+#define THREAD_ONCE_INIT PTHREAD_ONCE_INIT
+
 typedef pthread_t      thread_t;
 typedef pthread_key_t  thread_key_t;
 typedef pthread_once_t thread_once_t;
@@ -83,24 +85,116 @@ typedef pthread_once_t thread_once_t;
 
 #define THREAD_TAG_SIZE 8 /** @note edf 20180118 -- please do not change this value */
 
+/**
+ * Get the tag associated to that pid+thread
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
+
 const char *thread_get_tag_with_pid_and_tid(pid_t pid, thread_t tid);
+
+/**
+ * Copies the tag associated to that pid+thread into the given buffer
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
+
 char       *thread_copy_tag_with_pid_and_tid(pid_t pid, thread_t tid, char *out_9_bytes);
+
+/**
+ * Sets the tag of a pid+thread
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
+
 void        thread_set_tag_with_pid_and_tid(pid_t pid, thread_t tid, const char *tag8chars);
+
+/**
+ * Clears the tag of a pid+thread
+ *
+ * @param pid
+ * @param tid
+ * @return
+ */
+
 void        thread_clear_tag_with_pid_and_tid(pid_t pid, thread_t tid);
 
-void        thread_make_tag(const char *prefix, uint32_t index, uint32_t count, char *service_tag);
+/**
+ * Applies the defined tags once more.
+ */
+
+void thread_tag_push_tags();
+
+/**
+ *
+ * Makes a tag based on a prefix, an index and a maximum value for that index
+ *
+ * @param prefix
+ * @param index
+ * @param count
+ * @param service_tag
+ */
+
+void thread_make_tag(const char *prefix, uint32_t index, uint32_t count, char *service_tag);
+
+/**
+ * Logs all the pid/thread tags in the system logger.
+ */
+
+void thread_tag_log_tags();
 
 #endif
 
-// system name (visible in top with threads enabled)
+/**
+ * Sets the name of the current thread.
+ *
+ * @param name
+ * @param index
+ * @param count
+ */
+void thread_set_name(const char *name, int index, int count);
 
-void                    thread_set_name(const char *name, int index, int count);
-
+/**
+ * Returns the current thread
+ *
+ * @return the current thread
+ */
 static inline thread_t  thread_self() { return pthread_self(); }
 
-ya_result               thread_create(thread_t *t, void *(*function_thread)(void *), void *function_args);
+/**
+ * Creates a thread
+ *
+ * @param t will recieve the thread handle
+ * @param function_thread the function of the thread
+ * @param function_args arguments passed to the thread function
+ * @return an error code
+ */
 
-ya_result               thread_kill(thread_t t, int signo);
+ya_result thread_create(thread_t *t, void *(*function_thread)(void *), void *function_args);
+
+/**
+ * Sends a signal to a thread
+ *
+ * @param t
+ * @param signo
+ * @return
+ */
+
+ya_result thread_kill(thread_t t, int signo);
+
+/**
+ * Waits until a thread terminates
+ *
+ * @param t
+ * @param thread_returnp
+ * @return
+ */
 
 static inline ya_result thread_join(thread_t t, void **thread_returnp)
 {
@@ -112,11 +206,24 @@ static inline ya_result thread_join(thread_t t, void **thread_returnp)
     return ret;
 }
 
+/**
+ * Terminates a thread.
+ *
+ * @param parm
+ */
 static _Noreturn inline void thread_exit(void *parm)
 {
     --g_thread_running;
     pthread_exit(parm);
 }
+
+/**
+ * Create a key for a thread
+ *
+ * @param k
+ * @param destructor
+ * @return
+ */
 
 static inline ya_result thread_key_create(thread_key_t *k, void (*destructor)(void *))
 {
@@ -129,6 +236,13 @@ static inline ya_result thread_key_create(thread_key_t *k, void (*destructor)(vo
     return ret;
 }
 
+/**
+ * Destroys a thread key
+ *
+ * @param k
+ * @return
+ */
+
 static inline ya_result thread_key_destroy(thread_key_t k)
 {
     int ret = pthread_key_delete(k);
@@ -138,6 +252,14 @@ static inline ya_result thread_key_destroy(thread_key_t k)
     }
     return ret;
 }
+
+/**
+ * Sets a value to a thread key
+ *
+ * @param k
+ * @param ptr
+ * @return
+ */
 
 static inline ya_result thread_key_set(thread_key_t k, const void *ptr)
 {
@@ -149,12 +271,26 @@ static inline ya_result thread_key_set(thread_key_t k, const void *ptr)
     return ret;
 }
 
+/**
+ * Gets the value of a thread key
+ *
+ * @param k
+ * @return
+ */
+
 static inline void *thread_key_get(thread_key_t k)
 {
     void *ret = pthread_getspecific(k);
     return ret;
 }
 
+/**
+ * Executes a function exactly once
+ *
+ * @param once needs to be intialised with THREAD_ONCE_INIT
+ * @param function
+ * @return
+ */
 static inline int thread_once(thread_once_t *once, void (*function)(void))
 {
     int ret = pthread_once(once, function);
@@ -164,6 +300,18 @@ static inline int thread_once(thread_once_t *once, void (*function)(void))
     }
     return ret;
 }
+
+/**
+ *
+ * Attempts to hint the kernel about putting a thread on a core.
+ *
+ * @param t
+ * @param cpu_index
+ *
+ * @return an error code
+ */
+
+ya_result thread_setaffinity(thread_t t, int cpu_index);
 
 #ifdef __cplusplus
 }

@@ -389,9 +389,28 @@ uint8_t dirent_get_type_from_fullpath(const char *fullpath);
 
 typedef ya_result readdir_callback(const char *basedir, const char *file, uint8_t filetype, void *args);
 
-ya_result         readdir_forall(const char *basedir, readdir_callback *func, void *args);
+/**
+ * Calls the callback for every entry from basedir
+ *
+ * @param basedir the base directory
+ * @param func the callback to call
+ * @param args the arg to give to the callback
+ *
+ * @return an error code
+ */
 
-ya_result         rmdir_ex(const char *directory, bool recursive);
+ya_result readdir_forall(const char *basedir, readdir_callback *func, void *args);
+
+/**
+ * Deletes a directory and, optionally, its content.
+ *
+ * @param directory the directory
+ * @param recursive recursively delete the content
+ *
+ * @return an error code
+ */
+
+ya_result rmdir_ex(const char *directory, bool recursive);
 
 #define ACCESS_CHECK_READ      R_OK
 #define ACCESS_CHECK_WRITE     W_OK

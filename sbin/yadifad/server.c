@@ -127,7 +127,6 @@ typedef struct tcp_thread_memory_s tcp_thread_memory_t;
 
 #endif
 
-static struct thread_pool_s *server_tcp_thread_pool = NULL;
 struct thread_pool_s        *server_disk_thread_pool = NULL;
 #if SERVER_TCP_USE_LAZY_MAPPING
 static tcp_thread_memory_t *tcp_thread_memory = NULL;
@@ -234,7 +233,7 @@ static ya_result server_notsupported_context_init(int workers_per_interface)
 #endif
 
 // #if !__unix__ || !(__linux__ && HAVE_SENDMMSG)
-#if !HAVE_SENDMMSG || __OpenBSD__
+#if !HAVE_SENDMMSG || __OpenBSD__ || __gnu_hurd__
 static ya_result server_dns_init_instance_not_implemented(network_server_t *server)
 {
     (void)server;
@@ -248,7 +247,7 @@ static server_init_instance_callback dns_udp_server_init_instance[] = {server_sm
 #else
                                                                        server_dns_init_instance_not_implemented,
 #endif
-#if HAVE_SENDMMSG && !__OpenBSD__
+#if HAVE_SENDMMSG && !__OpenBSD__ && !__gnu_hurd__
                                                                        server_mm_init_instance,
 #else
                                                                        server_dns_init_instance_not_implemented,
@@ -497,47 +496,7 @@ static int server_service_apply_configuration()
 
     if(ISOK(ret = server_network_init()))
     {
-        if((server_tcp_thread_pool != NULL) && (((int)thread_pool_get_size(server_tcp_thread_pool) != g_config->max_tcp_queries)))
-        {
-            // the thread-pool size is wrong
-            ya_result return_code;
-
-            server_process_tcp_finalize();
-
-            if(FAIL(return_code = thread_pool_resize(server_tcp_thread_pool, g_config->max_tcp_queries)))
-            {
-                return return_code;
-            }
-
-            server_process_tcp_init();
-
-            if(return_code != g_config->max_tcp_queries)
-            {
-                log_err("could not properly set the TCP handlers");
-                return INVALID_STATE_ERROR;
-            }
-        }
-
-        if((server_tcp_thread_pool == NULL) && (g_config->max_tcp_queries > 0))
-        {
-            uint32_t max_thread_pool_size = thread_pool_get_max_thread_per_pool_limit();
-            if(max_thread_pool_size < (uint32_t)g_config->max_tcp_queries)
-            {
-                log_warn("updating the maximum thread pool size to match the number of TCP queries (from %i to %i)", max_thread_pool_size, g_config->max_tcp_queries);
-                thread_pool_set_max_thread_per_pool_limit(g_config->max_tcp_queries);
-            }
-
-            server_tcp_thread_pool = thread_pool_init_ex(g_config->max_tcp_queries, g_config->max_tcp_queries * 2, "svrtcp");
-
-            if(server_tcp_thread_pool == NULL)
-            {
-                log_err("tcp thread pool init failed");
-
-                return THREAD_CREATION_ERROR;
-            }
-
-            server_process_tcp_init();
-        }
+        server_process_tcp_init();
 
         if(FAIL(axfr_process_init()))
         {
@@ -553,7 +512,9 @@ static int server_service_apply_configuration()
     return ret;
 }
 
-void        server_context_destroy();
+// declaration
+
+void server_context_destroy();
 
 static void server_service_deconfigure()
 {
@@ -566,14 +527,7 @@ static void server_service_deconfigure()
 
     server_context_close();
 
-    if((server_tcp_thread_pool != NULL) && (g_config->max_tcp_queries > 0))
-    {
-        log_info("destroying TCP pool");
-        thread_pool_destroy(server_tcp_thread_pool);
-        server_tcp_thread_pool = NULL;
-
-        server_process_tcp_finalize();
-    }
+    server_process_tcp_finalize();
 
     log_info("destroying disk pool");
     axfr_process_finalise();

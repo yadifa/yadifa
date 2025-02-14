@@ -432,7 +432,7 @@ finger_print zdb_query_to_wire(zdb_t *db, zdb_query_to_wire_context_t *context)
     }
 #endif
 
-    bool             dnssec = dns_message_has_edns0_dnssec(mesg);
+    bool dnssec = dns_message_has_edns0_dnssec(mesg);
 
     dnsname_vector_t name;
     DEBUG_RESET_dnsname(name);
@@ -580,7 +580,7 @@ finger_print zdb_query_to_wire(zdb_t *db, zdb_query_to_wire_context_t *context)
                 dns_message_set_answer(mesg);
                 dns_message_set_rcode(mesg, FP_INVALID_ZONE);
 #else
-                    dns_message_or_answer_rcode(mesg, FP_INVALID_ZONE);
+                dns_message_or_answer_rcode(mesg, FP_INVALID_ZONE);
 #endif
                 return FP_INVALID_ZONE;
             }

@@ -39,6 +39,7 @@
  *----------------------------------------------------------------------------*/
 
 #include "dnscore/dnscore_config.h"
+#include "dnscore/sys_types.h"
 #include <unistd.h>
 #include <strings.h>
 #include <sys/types.h>

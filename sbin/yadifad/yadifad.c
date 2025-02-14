@@ -48,6 +48,8 @@
 
 #include "server_config.h"
 
+#include <dnscore/sys_types.h>
+
 #include <sys/types.h>
 #include <sys/time.h>
 #if __unix__

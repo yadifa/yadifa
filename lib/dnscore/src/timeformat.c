@@ -75,7 +75,9 @@ static const char zeromssuffix[4] = {'.', '0', '0', '0'};
 /**
  *  dtus
  *
- *  @note 64 bits epoch written up to the us
+ *  @note GM 64 bits epoch written up to the us
+ *
+ *  e.g. 2024-06-26 09:10:18.314159Z
  */
 
 void datetimeus_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -84,7 +86,7 @@ void datetimeus_format_handler_method(const void *restrict val, output_stream_t 
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t  epoch_us = *(uint64_t*)val;
     time_t    epoch = (time_t)(epoch_us / 1000000);
     uint32_t  us = (uint32_t)(epoch_us % 1000000);
 
@@ -110,9 +112,11 @@ void datetimeus_format_handler_method(const void *restrict val, output_stream_t 
 static format_handler_descriptor_t datetimeus_format_handler_descriptor = {"dtus", 4, datetimeus_format_handler_method};
 
 /**
- *  dtus
+ *  dtusms
  *
- *  @note 64 bits epoch written up to the us
+ *  @note GM 64 bits epoch written up to the ms
+ *
+ *  e.g. 2024-06-26T09:10:18.314Z
  */
 
 void datetimeustms_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -121,7 +125,7 @@ void datetimeustms_format_handler_method(const void *restrict val, output_stream
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t  epoch_us = *(uint64_t*)val;
     time_t    epoch = (time_t)(epoch_us / 1000000);
     uint32_t  ms = (uint32_t)(epoch_us % 1000000) / 1000;
 
@@ -146,13 +150,21 @@ void datetimeustms_format_handler_method(const void *restrict val, output_stream
 
 static format_handler_descriptor_t datetimeustms_format_handler_descriptor = {"dtustms", 7, datetimeustms_format_handler_method};
 
-void                               localdatetimeus_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+/**
+ *  ldtus
+ *
+ *  @note local 64 bits epoch written up to the us
+ *
+ *  e.g. 2024-06-26 08:10:18.314159
+ */
+
+void localdatetimeus_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
     (void)padding;
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t  epoch_us = *(uint64_t*)val;
     time_t    epoch = (time_t)(epoch_us / 1000000);
     uint32_t  us = (uint32_t)(epoch_us % 1000000);
 
@@ -179,7 +191,9 @@ static format_handler_descriptor_t localdatetimeus_format_handler_descriptor = {
 /**
  *  dtms
  *
- *  @note 64 bits epoch written up to the ms
+ *  @note GM 64 bits epoch written up to the ms
+ *
+ *  e.g. 2024-06-26 09:10:18.314
  */
 
 void datetimems_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -188,7 +202,7 @@ void datetimems_format_handler_method(const void *restrict val, output_stream_t 
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t epoch_us = *(uint64_t*)val;
     time_t   epoch = (time_t)(epoch_us / 1000000);
     uint32_t ms = (uint32_t)(epoch_us % 1000000);
     ms /= 1000;
@@ -217,7 +231,9 @@ static format_handler_descriptor_t datetimems_format_handler_descriptor = {"dtms
 /**
  *  dts
  *
- *  @note 64 bits epoch written up to the s
+ *  @note GM 64 bits epoch written up to the s
+ *
+ *  e.g. 2024-06-26 09:10:18
  */
 
 void datetime_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -226,7 +242,7 @@ void datetime_format_handler_method(const void *restrict val, output_stream_t *s
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t epoch_us = *(uint64_t*)val;
     time_t    epoch = (time_t)(epoch_us / 1000000LL);
 
     struct tm t;
@@ -249,9 +265,9 @@ void datetime_format_handler_method(const void *restrict val, output_stream_t *s
 static format_handler_descriptor_t datetime_format_handler_descriptor = {"dts", 3, datetime_format_handler_method};
 
 /**
- *  dts
+ *  ldts
  *
- *  @note 64 bits epoch written up to the s
+ *  @note local 64 bits epoch written up to the s
  */
 
 void localdatetime_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -260,8 +276,8 @@ void localdatetime_format_handler_method(const void *restrict val, output_stream
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
-    time_t    epoch = (time_t)(epoch_us / 1000000);
+    uint64_t epoch_us = *(uint64_t*)val;
+    time_t   epoch = (time_t)(epoch_us / 1000000);
 
     struct tm t;
 
@@ -285,7 +301,9 @@ static format_handler_descriptor_t localdatetime_format_handler_descriptor = {"l
 /**
  *  date
  *
- *  @note 64 bits epoch written up to the day
+ *  @note GM 64 bits epoch written up to the day
+ *
+ *  e.g. 2024-06-26
  */
 
 void date_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -294,7 +312,7 @@ void date_format_handler_method(const void *restrict val, output_stream_t *strea
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t epoch_us = *(uint64_t*)val;
     time_t    epoch = (time_t)(epoch_us / 1000000);
 
     struct tm t;
@@ -313,7 +331,9 @@ static format_handler_descriptor_t date_format_handler_descriptor = {"date", 4, 
 /**
  *  time
  *
- *  @note 64 bits with only HH:MM:SS
+ *  @note GM 64 bits with only HH:MM:SS
+ *
+ *  e.g. 09:10:18
  */
 
 void time_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -322,7 +342,7 @@ void time_format_handler_method(const void *restrict val, output_stream_t *strea
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    uint64_t  epoch_us = (uint64_t)(intptr_t)val;
+    uint64_t  epoch_us = *(uint64_t*)val;
     time_t    epoch = (time_t)(epoch_us / 1000000);
 
     struct tm t;
@@ -341,7 +361,9 @@ static format_handler_descriptor_t time_format_handler_descriptor = {"time", 4, 
 /**
  *  epoch
  *
- *  @note 32 bits epoch written up to the s
+ *  @note GM 32 bits epoch written up to the s
+ *
+ *  e.g. 2024-06-26 09:10:18Z
  */
 
 void epoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -350,7 +372,7 @@ void epoch_format_handler_method(const void *restrict val, output_stream_t *stre
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    time_t    epoch = (time_t)(intptr_t)val;
+    time_t    epoch = *(time_t*)val;
     struct tm t;
     gmtime_r(&epoch, &t);
 
@@ -370,13 +392,21 @@ void epoch_format_handler_method(const void *restrict val, output_stream_t *stre
 
 static format_handler_descriptor_t epoch_format_handler_descriptor = {"epoch", 5, epoch_format_handler_method};
 
-void                               epochtms_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+/**
+ *  epochtms
+ *
+ *  @note GM 32 bits epoch written up to the ms (thus with ms set as 0)
+ *
+ *  e.g. 2024-06-26T09:10:18.000Z
+ */
+
+void epochtms_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
     (void)padding;
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    time_t    epoch = (time_t)(intptr_t)val;
+    time_t    epoch = *(time_t*)val;
     struct tm t;
     gmtime_r(&epoch, &t);
 
@@ -397,13 +427,21 @@ void                               epochtms_format_handler_method(const void *re
 
 static format_handler_descriptor_t epochtms_format_handler_descriptor = {"epochtms", 8, epochtms_format_handler_method};
 
-void                               localepoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
+/**
+ *  lepoch
+ *
+ *  @note local 32 bits epoch written up to the s
+ *
+ *  e.g. 2024-06-26 08:10:18
+ */
+
+void localepoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
 {
     (void)padding;
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    time_t    epoch = (time_t)(intptr_t)val;
+    time_t    epoch = *(time_t*)val;
     struct tm t;
     localtime_r(&epoch, &t);
 
@@ -423,9 +461,11 @@ void                               localepoch_format_handler_method(const void *
 static format_handler_descriptor_t localepoch_format_handler_descriptor = {"lepoch", 6, localepoch_format_handler_method};
 
 /**
- *  epoch where value 0 prints nothing
+ *  epochz where value 0 prints nothing
  *
- *  @note 32 bits epoch written up to the s
+ *  @note GM 32 bits epoch written up to the s
+ *
+ *  e.g. 2024-06-26 09:10:18
  */
 
 void epochz_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -434,7 +474,7 @@ void epochz_format_handler_method(const void *restrict val, output_stream_t *str
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    time_t epoch = (time_t)(intptr_t)val;
+    time_t epoch = *(time_t*)val;
 
     if(epoch != 0)
     {
@@ -467,9 +507,11 @@ void epochz_format_handler_method(const void *restrict val, output_stream_t *str
 static format_handler_descriptor_t epochz_format_handler_descriptor = {"epochz", 6, epochz_format_handler_method};
 
 /**
- *  epoch
+ *  packedepoch
  *
- *  @note 32 bits epoch written up to the s
+ *  @note GM 32 bits epoch written up to the s without any separator: YYYYmmSSHHMMSS
+ *
+ *  e.g. 20240626091018
  */
 
 void packedepoch_format_handler_method(const void *restrict val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified, void *restrict reserved_for_method_parameters)
@@ -478,7 +520,7 @@ void packedepoch_format_handler_method(const void *restrict val, output_stream_t
     (void)pad_char;
     (void)left_justified;
     (void)reserved_for_method_parameters;
-    time_t    epoch = (time_t)(intptr_t)val;
+    time_t    epoch = *(time_t*)val;
     struct tm t;
 
     gmtime_r(&epoch, &t);
@@ -496,7 +538,10 @@ static format_handler_descriptor_t packedepoch_format_handler_descriptor = {"pac
 
 static initialiser_state_t         timeformat_class_init_state = INITIALISE_STATE_INIT;
 
-void                               timeformat_class_init()
+/**
+ * Initialises the time formats
+ */
+void timeformat_class_init()
 {
     if(initialise_state_begin(&timeformat_class_init_state))
     {

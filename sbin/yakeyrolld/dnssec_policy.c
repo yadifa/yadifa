@@ -1307,17 +1307,17 @@ static bool dnssec_policy_key_roll_matches(const struct dnssec_policy_key_suite 
 
                         int64_t  pait = (key_inactive + margin) - key_activate;
                         int64_t  kait = key->epoch_inactive - key->epoch_activate;
-                        int64_t  dait = labs(pait - kait);
+                        int64_t  dait = llabs(pait - kait);
 
                         int64_t  pidt = key_delete - (key_inactive + margin);
                         int64_t  kidt = key->epoch_delete - key->epoch_inactive;
-                        int64_t  didt = labs(pidt - kidt);
+                        int64_t  didt = llabs(pidt - kidt);
 
-                        int64_t  dc = labs(key_created - key->epoch_created);
-                        int64_t  dp = labs(key_publish - key->epoch_publish);
-                        int64_t  da = labs(key_activate - key->epoch_activate);
-                        int64_t  di = labs((key_inactive + margin) - key->epoch_inactive);
-                        int64_t  dd = labs(key_delete - key->epoch_delete);
+                        int64_t  dc = llabs(key_created - key->epoch_created);
+                        int64_t  dp = llabs(key_publish - key->epoch_publish);
+                        int64_t  da = llabs(key_activate - key->epoch_activate);
+                        int64_t  di = (key_inactive + margin) - key->epoch_inactive; // unsigned
+                        int64_t  dd = llabs(key_delete - key->epoch_delete);
 
                         // bool match = (/*dc < KEY_POLICY_EPOCH_MATCH_MARGIN &&*/ dp < KEY_POLICY_EPOCH_MATCH_MARGIN &&
                         // da < KEY_POLICY_EPOCH_MATCH_MARGIN && di < KEY_POLICY_EPOCH_MATCH_MARGIN && dd <

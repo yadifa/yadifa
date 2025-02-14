@@ -43,6 +43,8 @@
 #include <dnscore/dnscore.h>
 #include <dnscore/logger.h>
 
+#define CHANNEL_OUTPUT_STTREAM_BUFFER_SIZE 0x1000000
+
 static logger_handle_t  *handle = LOGGER_HANDLE_SINK;
 static logger_channel_t *channel;
 // static logger_channel_t *bad_stream_channel;
@@ -162,8 +164,7 @@ static void init()
     signal(SIGPIPE, SIG_IGN);
 
     logger_handle_create("handle", &handle);
-
-    bytearray_output_stream_init(&channel_output_stream, NULL, 0x1000000);
+    bytearray_output_stream_init(&channel_output_stream, NULL, CHANNEL_OUTPUT_STTREAM_BUFFER_SIZE);
     output_stream_t os = channel_output_stream;
     channel = logger_channel_alloc();
     logger_channel_stream_open(&os, false, channel);
@@ -405,7 +406,8 @@ static int logger_handle_msg_text_ext_test()
     }
     logger_flush();
     output_stream_write_u8(&channel_output_stream, 0);
-    yatest_log("'%s'", bytearray_output_stream_buffer(&channel_output_stream));
+    uint8_t *text_buffer = bytearray_output_stream_buffer(&channel_output_stream);
+    yatest_log("'%s'", (char*)text_buffer);
     static const char expected_output[] =
         "| X | text-14\n"
         "| X | text-13\n"
@@ -604,6 +606,7 @@ static int log_msghdr_test()
     log_memdump_set_layout(3, 255);
     log_msghdr(handle, MSG_INFO, &hdr);
     logger_flush();
+    output_stream_write_u8(&channel_output_stream, 0);
     yatest_log("'%s'", bytearray_output_stream_buffer(&channel_output_stream));
     static const char expected_output[] =
         "| I | udp message header:\n"
@@ -688,6 +691,34 @@ static int big_log_test()
     return 0;
 }
 
+static int ttylog_handle_test()
+{
+    // ttylog_handle_out
+    init();
+    log_memdump_set_layout(3, 255);
+    ttylog_handle_dbg(handle, "dbg");
+    ttylog_handle_out(handle, "out");
+    ttylog_handle_notice(handle, "notice");
+    ttylog_handle_warn(handle, "warn");
+    ttylog_handle_err(handle, "err");
+    logger_flush();
+    output_stream_write_u8(&channel_output_stream, 0);
+    yatest_log("'%s'", bytearray_output_stream_buffer(&channel_output_stream));
+    static const char expected_output[] =
+        "| D | dbg\n"
+        "| I | out\n"
+        "| N | notice\n"
+        "| W | warn\n"
+        "| E | err\n";
+    if(!logger_output_matches((char *)bytearray_output_stream_buffer(&channel_output_stream), expected_output))
+    {
+        yatest_err("no match");
+        return 1;
+    }
+    finalise();
+    return 0;
+}
+
 YATEST_TABLE_BEGIN
 YATEST(logger_handle_msg_test)
 YATEST(logger_handle_msg_nocull_test)
@@ -699,4 +730,5 @@ YATEST(big_log_test)
 YATEST(log_memdump_ex_test)
 YATEST(log_memdump_test)
 YATEST(log_msghdr_test)
+YATEST(ttylog_handle_test)
 YATEST_TABLE_END

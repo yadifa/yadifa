@@ -563,7 +563,7 @@ static ya_result config_main_section_postprocess(struct config_section_descripto
     host_address_set_default_port_value(g_config->do_not_listen, ntohs(port));
     host_address_set_port_value(g_config->transfer_source, 0);
 
-    if((g_config->queries_log_type < LOG_QUERY_MODE_MIN_VALUE) || (g_config->queries_log_type > LOG_QUERY_MODE_MAX_VALUE))
+    if(g_config->queries_log_type > LOG_QUERY_MODE_MAX_VALUE)
     {
         ttylog_warn("config: main: queries-log-type outside of range [%i, %i], setting to 0", LOG_QUERY_MODE_MIN_VALUE, LOG_QUERY_MODE_MAX_VALUE);
     }

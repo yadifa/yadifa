@@ -71,12 +71,6 @@
 
 #endif
 
-#if defined __FreeBSD__
-#include <sys/param.h>
-#include <sys/cpuset.h>
-typedef cpuset_t cpu_set_t;
-#endif
-
 // <-- keep this order
 
 #include "server_context.h"
@@ -179,7 +173,7 @@ typedef struct server_process_tcp_thread_parm server_process_tcp_thread_parm;
 
 static struct thread_pool_s                  *server_tcp_thread_pool = NULL;
 
-static void                                   server_dns_tcp_thread_context_init(network_thread_context_t *ctx, struct service_worker_s *worker, uint16_t sockfd_idx)
+static void server_dns_tcp_thread_context_init(network_thread_context_t *ctx, struct service_worker_s *worker, uint16_t sockfd_idx)
 {
     assert(ctx != NULL);
 
@@ -200,7 +194,6 @@ static void                                   server_dns_tcp_thread_context_init
 
 static void server_dns_tcp_set_cpu_affinity(int index)
 {
-#if HAS_PTHREAD_SETAFFINITY_NP
     int cpu_count = sys_get_cpu_count();
     if(cpu_count < 0)
     {
@@ -212,32 +205,7 @@ static void server_dns_tcp_set_cpu_affinity(int index)
     affinity_with %= cpu_count;
     log_info("server-dns-tcp: worker setting affinity with virtual cpu %i", affinity_with);
 
-#if __NetBSD__
-    cpuset_t *mycpu = cpuset_create();
-    if(mycpu != NULL)
-    {
-        cpuset_zero(mycpu);
-        cpuset_set((cpuid_t)affinity_with, mycpu);
-        if(pthread_setaffinity_np(thread_self(), cpuset_size(mycpu), mycpu) != 0)
-        {
-#pragma message("TODO: report errors") // NetBSD
-        }
-        cpuset_destroy(mycpu);
-    }
-    else
-    {
-    }
-#elif __windows__
-#pragma message("TODO: implement") // windows
-#else
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(affinity_with, &mycpu);
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
-#else
-    (void)index;
-#endif
+    thread_setaffinity(thread_self(), affinity_with);
 }
 
 ya_result server_process_tcp_init()

@@ -274,6 +274,19 @@ void format_hex_u64_hi(uint64_t val, output_stream_t *stream, int32_t padding, c
 void format_oct_u64(uint64_t val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
 void format_asciiz(const char *val, output_stream_t *stream, int32_t padding, char pad_char, bool left_justified);
 
+
+/**
+ * Prints all the nibbles of a pointer (lowercase)
+ */
+
+void format_hex_ptr_lo(const void* val_ptr, output_stream_t *stream);
+
+/**
+ * Prints all the nibbles of a pointer (uppercase)
+ */
+
+void format_hex_ptr_hi(const void* val_ptr, output_stream_t *stream);
+
 /**/
 
 int       osprint_base16(output_stream_t *os, const uint8_t *rdata, uint32_t rdata_size);

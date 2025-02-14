@@ -65,6 +65,11 @@
 #include <sys/socket.h>
 #include "dnscore/server_setup.h"
 
+#ifndef MSG_WAITFORONE
+#pragma message("MSG_WAITFORONE not defined, this will probably not work.")
+#define MSG_WAITFORONE 0
+#endif
+
 #if __windows__
 #include <malloc.h>
 static inline void *aligned_alloc(size_t alignment, size_t size) { return _aligned_malloc(size, alignment); }
@@ -191,12 +196,7 @@ static void echo_server_retry_dbzonelock(int id, zone_t *zone)
     socketaddress_t sa;
     host_address2sockaddr(g_main_settings.listen, &sa);
 
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(id, &mycpu);
-#if __linux__
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
+    thread_setaffinity(thread_self(), id);
 
     int sockfd = -1;
 
@@ -268,6 +268,7 @@ static void echo_server_retry_dbzonelock(int id, zone_t *zone)
     while(!dnscore_shuttingdown())
     {
         int recvmmsg_ret = recvmmsg(sockfd, udp_packets, udp_packets_count, MSG_WAITFORONE, &recv_timeout);
+
         if(recvmmsg_ret > 0)
         {
             group_mutex_read_lock(&db_mtx);
@@ -362,12 +363,7 @@ static void echo_server_retry_zonelock(int id, zone_t *zone)
     socketaddress_t sa;
     host_address2sockaddr(g_main_settings.listen, &sa);
 
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(id, &mycpu);
-#if __linux__
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
+    thread_setaffinity(thread_self(), id);
 
     int sockfd = -1;
 
@@ -532,12 +528,7 @@ static void echo_server_retry(int id, zone_t *zone)
     socketaddress_t sa;
     host_address2sockaddr(g_main_settings.listen, &sa);
 
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(id, &mycpu);
-#if __linux__
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
+    thread_setaffinity(thread_self(), id);
 
     int sockfd = -1;
 
@@ -698,12 +689,7 @@ static void echo_server_onetry(int id, zone_t *zone)
     socketaddress_t sa;
     host_address2sockaddr(g_main_settings.listen, &sa);
 
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(id, &mycpu);
-#if __linux__
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
+    thread_setaffinity(thread_self(), id);
 
     int sockfd = -1;
 

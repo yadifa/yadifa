@@ -200,7 +200,7 @@ ya_result file_input_stream_open(input_stream_t *stream_, const char *filename)
 {
     int fd = open_ex(filename, O_RDONLY | O_CLOEXEC);
 
-#if(_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
+#if (_XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L) && !defined(__gnu__hurd__)
     if(fd >= 0)
     {
         posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);

@@ -62,7 +62,8 @@ struct pool_s
     struct pool_s          *next; // used to keep track of all the memory pools
     bool                    hard_limit;
     bool                    maxed;
-};
+}; // note: the alignment of ‘_Atomic long long unsigned int’ fields changed in GCC 11.1 => not an issue
+   //       as long as there are no cross-linking between pre and post GCC 11.1 binaries
 
 typedef struct pool_s pool_t;
 typedef pool_t        pool_s; // for compatibility

@@ -95,13 +95,9 @@
 #define LOGGER_HANDLE_TAG 0x4c444e48474f4c /* LOGHNDL */
 #define LOGCHAN_TAG       0x4e414843474f4c /* LOGCHAN */
 
-// If the logger thread queues a log message, and the log queue is full (ie: because the disk is full) a dead-lock may
+// If the logger thread queues a log message, and the log queue is full (ie: because the disk is full) a deadlock may
 // ensue. So queued-logging is to be avoided in the logger thread That being said, DEBUG_LOG_HANDLER and
 // DEBUG_LOG_MESSAGES may trigger this issue as it is a debug, dev-only, feature.
-
-#if DNSCORE_HAS_LOG_THREAD_TAG
-void thread_tag_push_tags();
-#endif
 
 #define DEBUG_LOG_HANDLER       0 // can be: 0 1 2, don't use for production
 #define DEBUG_LOG_MESSAGES      0
@@ -1327,10 +1323,12 @@ static void logger_service_sink_all_channels()
 
 void logger_handle_exit_level(uint32_t level)
 {
-    if(level <= MSG_CRIT)
+    if(level > MSG_CRIT)
     {
-        debug_osformatln(termerr, "message level too low: %u < %u", level, MSG_CRIT);
+#if DEBUG
+        debug_osformatln(termerr, "logger_handle_exit_level: level is too high: %u > %u (expects level: MSG_EMERG=0 or MSG_ALERT=1 or MSG_CRIT=2)", level, MSG_CRIT);
         flusherr();
+#endif
         return;
     }
 
@@ -1764,11 +1762,11 @@ static void *logger_dispatcher_thread(void *context)
                     struct tm t;
 #if SIZEOF_TIMEVAL <= 8
                     localtime_r(&message->text.tv.tv_sec, &t);
-                    osformat(&baos, "%04d-%02d-%02d %02d:%02d:%02d.%06d", t.tm_year + 1900U, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, message->text.tv.tv_usec);
+                    osformat(&baos, "%04d-%02d-%02d %02d:%02d:%02d.%06d", t.tm_year + 1900U, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int32_t)message->text.tv.tv_usec);
 #else
                     time_t tv_sec = message->text.timestamp / ONE_SECOND_US;
                     localtime_r(&tv_sec, &t);
-                    osformat(&baos, "%04d-%02d-%02d %02d:%02d:%02d.%06d", t.tm_year + 1900U, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, message->text.timestamp % ONE_SECOND_US);
+                    osformat(&baos, "%04d-%02d-%02d %02d:%02d:%02d.%06d", t.tm_year + 1900U, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int32_t)(message->text.timestamp % ONE_SECOND_US));
 #endif
 
                     baos_write(&baos, (const uint8_t *)COLUMN_SEPARATOR, COLUMN_SEPARATOR_SIZE);
@@ -1873,10 +1871,10 @@ static void *logger_dispatcher_thread(void *context)
                                                    sizeof(repeat_text),
 
 #if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
-                                                   "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | -------- | N | "
+                                                   "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %s | -------- | N | "
                                                    "last message repeated %d times",
 #elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
-                                                   "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | -------- | N | "
+                                                   "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | %08x | -------- | N | "
                                                    "last message repeated %d times",
 #elif DNSCORE_HAS_LOG_THREAD_TAG
                                                    "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | -------- | N | last "
@@ -1885,7 +1883,7 @@ static void *logger_dispatcher_thread(void *context)
                                                    "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | -------- | N | last "
                                                    "message repeated %d times",
 #elif HAS_LOG_PID
-                                                   "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | -------- | N | last "
+                                                   "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-6i | -------- | N | last "
                                                    "message repeated %d times",
 #else
                                                    "%04d-%02d-%02d %02d:%02d:%02d.%06d | -------- | N | last message "
@@ -1898,9 +1896,9 @@ static void *logger_dispatcher_thread(void *context)
                                                    t.tm_min,
                                                    t.tm_sec,
 #if SIZE_TIMEVAL <= 8
-                                                   message->text.tv.tv_usec
+                                                   (int32_t)message->text.tv.tv_usec
 #else
-                                                   message->text.timestamp % ONE_SECOND_US
+                                                   (int32_t)(message->text.timestamp % ONE_SECOND_US)
 #endif
                                                    ,
 #if DEBUG || HAS_LOG_PID
@@ -4098,7 +4096,7 @@ void logger_handle_msg_nocull(logger_handle_t *handle, uint32_t level, const cha
     }
 
 #ifdef NDEBUG
-    size_t sizeof_logger_message = sizeof(logger_message);
+    size_t sizeof_logger_message = sizeof(logger_message_t);
     size_t sizeof_logger_message_text_s = sizeof(struct logger_message_text_s);
     assert(sizeof_logger_message_text_s <= 64);
     assert(sizeof_logger_message <= 64);

@@ -165,10 +165,23 @@ json_t json_boolean_new_instance()
 
 enum json_type json_type_get(const json_t j) { return j->type; }
 
-bool           json_boolean_get(const json_t j)
+bool json_boolean_get(const json_t j)
 {
     yassert(j->type == JSON_BOOLEAN);
     return j->boolean.value;
+}
+
+ya_result json_boolean_get_bool(const json_t j, bool *value)
+{
+    if(j->type == JSON_BOOLEAN)
+    {
+        *value = j->boolean.value;
+        return SUCCESS;
+    }
+    else
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
 }
 
 void json_boolean_set(json_t j, bool value)
@@ -192,6 +205,101 @@ int64_t json_number_as_s64(const json_t j)
     ret = strtoll(j->number.value_text, NULL, 10);
     return ret;
 }
+
+ya_result json_number_get_double(const json_t j, double *value)
+{
+    if(j->type == JSON_NUMBER)
+    {
+        double parsed_value;
+        errno = 0;
+        parsed_value = strtod(j->number.value_text, NULL);
+        int err = errno;
+        if(err == 0)
+        {
+            *value = parsed_value;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(err);
+        }
+    }
+    else
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
+}
+
+ya_result json_number_get_s64(const json_t j, int64_t *value)
+{
+    if(j->type == JSON_NUMBER)
+    {
+        long long parsed_value;
+        parsed_value = strtoll(j->number.value_text, NULL, 10);
+        int err = errno;
+        if(err == 0)
+        {
+            *value = parsed_value;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(err);
+        }
+    }
+    else
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
+}
+
+ya_result json_number_get_s32(const json_t j, int32_t *value)
+{
+    if(j->type == JSON_NUMBER)
+    {
+        long parsed_value;
+        parsed_value = strtol(j->number.value_text, NULL, 10);
+        int err = errno;
+        if(err == 0)
+        {
+            *value = parsed_value;
+            return SUCCESS;
+        }
+        else
+        {
+            return MAKE_ERRNO_ERROR(err);
+        }
+    }
+    else
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
+}
+
+ya_result json_number_get_double_array(const json_t j, double *array, size_t length)
+{
+    if((j != NULL) && (json_type_get(j) == JSON_ARRAY))
+    {
+        for(size_t i = 0; i < length; ++i)
+        {
+            json_t value = json_array_get(j, i);
+
+            if(value == NULL)
+            {
+                return INVALID_STATE_ERROR;
+            }
+
+            ya_result ret = json_number_get_double(value, &array[i]);
+            if(FAIL(ret))
+            {
+                break;
+            }
+        }
+        return 0;
+    }
+    return INVALID_ARGUMENT_ERROR;
+}
+
 
 void json_number_set_double(json_t j, double value)
 {
@@ -258,7 +366,7 @@ void json_string_set_uchar_array(json_t j, uchar_t *text, size_t text_len)
     j->string.utf8_text_size = text_len;
 }
 
-json_t json_array_get(json_t j, size_t index)
+json_t json_array_get(const json_t j, size_t index)
 {
     yassert(j->type == JSON_ARRAY);
     if((int)index <= ptr_vector_last_index(&j->array.array))
@@ -284,7 +392,7 @@ void json_array_add(json_t j, json_t item)
     ptr_vector_append(&j->array.array, item);
 }
 
-json_t json_object_get(json_t j, const char *name)
+json_t json_object_get(const json_t j, const char *name)
 {
     yassert(j->type == JSON_OBJECT);
     ptr_treemap_node_t *node = ptr_treemap_find(&j->map.map, name);

@@ -48,7 +48,6 @@
 #define LOGGER_EARLY_CULL 1
 
 #include <dnscore/thread.h>
-#include <dnscore/thread_tag.h>
 #include <dnscore/ptr_vector.h>
 #include <dnscore/format.h>
 

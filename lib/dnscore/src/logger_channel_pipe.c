@@ -249,27 +249,25 @@ static ya_result logger_channel_pipe_reopen(logger_channel_t *chan)
 
     logger_channel_pipe_msg(chan,
                             LOG_NOTICE,
-
-#if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | I | reopening '%s'",
-#elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | I | reopening '%s'",
-#elif DNSCORE_HAS_LOG_THREAD_TAG
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | %8s | I | reopening '%s'",
-#elif HAS_LOG_THREAD_ID
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | I | reopening '%s'",
-#elif HAS_LOG_PID
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | I | reopening '%s'",
-#else
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopening '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | "
+#if DEBUG || HAS_LOG_PID
+                            "%-6i | "
 #endif
+#if DNSCORE_HAS_LOG_THREAD_TAG
+                            "%8s | "
+#else
+#if DEBUG || HAS_LOG_THREAD_ID
+                            "%08x | "
+#endif
+#endif
+                            "%8s | I | reopening '%s'",
                             t.tm_year + 1900,
                             t.tm_mon + 1,
                             t.tm_mday,
                             t.tm_hour,
                             t.tm_min,
                             t.tm_sec,
-                            tv.tv_usec, // t is initialized at line 338 (localtime_r)
+                            (int32_t)tv.tv_usec, // t is initialized at line 338 (localtime_r)
 #if DEBUG || HAS_LOG_PID
                             getpid(),
 #endif
@@ -299,27 +297,25 @@ static ya_result logger_channel_pipe_reopen(logger_channel_t *chan)
 
     logger_channel_pipe_msg(chan,
                             LOG_NOTICE,
-
-#if(DEBUG || HAS_LOG_PID) && DNSCORE_HAS_LOG_THREAD_TAG
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %s | %8s | I | reopened '%s'",
-#elif DEBUG || (HAS_LOG_PID && HAS_LOG_THREAD_ID)
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %08x | %8s | I | reopened '%s'",
-#elif DNSCORE_HAS_LOG_THREAD_TAG
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %s | %8s | I | reopened '%s'",
-#elif HAS_LOG_THREAD_ID
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %08x | %8s | I | reopened '%s'",
-#elif HAS_LOG_PID
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %-5i | %8s | I | reopened '%s'",
-#else
-                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | %8s | I | reopened '%s'",
+                            "%04d-%02d-%02d %02d:%02d:%02d.%06d | "
+#if DEBUG || HAS_LOG_PID
+                            "%-6i | "
 #endif
+#if DNSCORE_HAS_LOG_THREAD_TAG
+                            "%8s | "
+#else
+#if DEBUG || HAS_LOG_THREAD_ID
+                            "%08x | "
+#endif
+#endif
+                            "%8s | I | reopened '%s'",
                             t.tm_year + 1900,
                             t.tm_mon + 1,
                             t.tm_mday,
                             t.tm_hour,
                             t.tm_min,
                             t.tm_sec,
-                            tv.tv_usec,
+                            (int32_t)tv.tv_usec,
 #if DEBUG || HAS_LOG_PID
                             getpid(),
 #endif

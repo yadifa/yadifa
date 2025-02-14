@@ -37,6 +37,12 @@
 #include <dnscore/u64_treemap.h>
 
 #define FIBONACCI_INT64_MAX 92
+#define FIBONACCI_INT32_MAX 46
+#if __SIZEOF_POINTER__ == 8
+#define FIBONACCI_PTR_MAX FIBONACCI_INT64_MAX
+#else
+#define FIBONACCI_PTR_MAX FIBONACCI_INT32_MAX
+#endif
 
 static int64_t fibonacci(int64_t value)
 {
@@ -47,15 +53,15 @@ static int64_t fibonacci(int64_t value)
     static int64_t *fibonacci_memorised = NULL;
     if(fibonacci_memorised == NULL)
     {
-        fibonacci_memorised = yatest_malloc((FIBONACCI_INT64_MAX + 1) * sizeof(int64_t));
+        fibonacci_memorised = yatest_malloc((FIBONACCI_PTR_MAX + 1) * sizeof(int64_t));
         fibonacci_memorised[0] = 0;
         fibonacci_memorised[1] = 1;
-        for(int64_t i = 2; i <= FIBONACCI_INT64_MAX; ++i)
+        for(int64_t i = 2; i <= FIBONACCI_PTR_MAX; ++i)
         {
             fibonacci_memorised[i] = fibonacci_memorised[i - 1] + fibonacci_memorised[i - 2];
         }
     }
-    if(value < FIBONACCI_INT64_MAX)
+    if(value < FIBONACCI_PTR_MAX)
     {
         return fibonacci_memorised[value];
     }
@@ -71,7 +77,7 @@ static int add_del_test()
 
     u64_treemap_t tree = U64_TREEMAP_EMPTY;
 
-    for(int64_t i = 2; i <= FIBONACCI_INT64_MAX; ++i)
+    for(int64_t i = 2; i <= FIBONACCI_PTR_MAX; ++i)
     {
         uint64_t key = fibonacci(i);
         yatest_log("inserting key: %lli", key);
@@ -99,7 +105,7 @@ static int add_del_test()
         break;
     }
 
-    for(int64_t i = 2; i <= FIBONACCI_INT64_MAX; ++i)
+    for(int64_t i = 2; i <= FIBONACCI_PTR_MAX; ++i)
     {
         uint64_t key = fibonacci(i);
         yatest_log("finding key: %llu", key);

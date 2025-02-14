@@ -528,7 +528,7 @@ static ya_result input_stream_sink_skip(input_stream_t *stream, uint32_t byte_co
     return -1;
 }
 
-static void                    input_stream_sink_close(input_stream_t *stream) { (void)stream; }
+static void input_stream_sink_close(input_stream_t *stream) { (void)stream; }
 
 static const input_stream_vtbl sink_input_stream_vtbl = {
     input_stream_sink_read,

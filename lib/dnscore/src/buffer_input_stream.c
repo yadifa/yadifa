@@ -208,6 +208,10 @@ void buffer_input_stream_init(input_stream_t *stream, input_stream_t *filtered, 
     stream->vtbl = &buffer_input_stream_vtbl;
 }
 
+/**
+ * Function specific to the buffer_input_stream_t to read a line up to the '\n'
+ */
+
 ya_result buffer_input_stream_read_line(input_stream_t *stream, char *buffer, uint32_t len)
 {
     assert(stream->vtbl == &buffer_input_stream_vtbl);
@@ -299,11 +303,33 @@ ya_result buffer_input_stream_read_line(input_stream_t *stream, char *buffer, ui
     }
 }
 
+/**
+ * Returns a pointer to the filtered stream inside the buffer input stream.
+ *
+ * @param bos
+ * @return
+ */
+
 input_stream_t *buffer_input_stream_get_filtered(input_stream_t *bos)
 {
     buffer_input_stream_data *data = (buffer_input_stream_data *)bos->data;
 
     return &data->filtered;
+}
+
+/**
+ * Detaches the filtered input stream, sends a copy back.
+ *
+ * @param bos
+ * @return
+ */
+
+input_stream_t buffer_input_stream_detach(input_stream_t *bos)
+{
+    buffer_input_stream_data *data = (buffer_input_stream_data *)bos->data;
+    input_stream_t filtered = data->filtered;
+    input_stream_set_sink(&filtered);
+    return filtered;
 }
 
 /**

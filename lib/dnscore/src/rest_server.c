@@ -76,12 +76,19 @@ static struct thread_pool_s                *rest_server_answer_thread_pool = NUL
 static struct service_s                     rest_server_service = UNINITIALIZED_SERVICE;
 static rest_server_service_data_t          *rest_server_service_data = NULL;
 static int                                  rest_server_service_data_count = -1;
-static bool                                 rest_server_shutdown = false;
+static atomic_bool                          rest_server_shutdown = false;
 // static ptr_treemap_t rest_server_pages = PTR_TREEMAP_ASCIIZCASE_EMPTY;
 static rest_server_path_component_t rest_server_pages_root = {PTR_TREEMAP_ASCIIZCASE_EMPTY, NULL};
 static mutex_t                      rest_server_pages_mtx = MUTEX_INITIALIZER;
 
-static void                         rest_server_signal_handler(int signo, siginfo_t *info, void *context)
+/**
+ * Signal hanlder for the rest server
+ *
+ * @param signo
+ * @param info
+ * @param context
+ */
+static void  rest_server_signal_handler(int signo, siginfo_t *info, void *context)
 {
     (void)info;
     (void)context;
@@ -224,6 +231,7 @@ static ya_result rest_server_network_setup(rest_server_network_setup_args_t *arg
             for(int j = 0; j < i; ++j)
             {
                 close_ex(service_data[j].sockfd);
+                service_data[j].sockfd = -1;
             }
 
             free(service_data);
@@ -762,6 +770,10 @@ static void rest_server_service_answer(void *parm)
 
         if(ret < 0)
         {
+            if(ret == MAKE_ERRNO_ERROR(EAGAIN))
+            {
+                continue;
+            }
             // if the error is a timeout, retry a few times before giving up
             if(ret == MAKE_ERRNO_ERROR(ETIMEDOUT))
             {
@@ -968,11 +980,14 @@ static int rest_server_service_main(struct service_worker_s *worker)
 
         if(client_socket < 0)
         {
-            int err = errno;
-
-            if(!(err == EINTR || err == EAGAIN || err == EWOULDBLOCK || err == ETIMEDOUT))
+            if(service_should_run(worker) && !rest_server_shutdown)
             {
-                log_err("rest server: failure to accept a new connection: %r", MAKE_ERRNO_ERROR(err));
+                int err = ERRNO_ERROR_GET_ERRNO(client_socket);
+
+                if(!(err == EINTR || err == EAGAIN || err == EWOULDBLOCK || err == ETIMEDOUT))
+                {
+                    log_err("rest server: failure to accept a new connection: %r", MAKE_ERRNO_ERROR(err));
+                }
             }
 
             continue;
@@ -1034,6 +1049,7 @@ void rest_server_wait(rest_server_network_setup_args_t *args)
     for(int i = 0; i < rest_server_service_data_count; ++i)
     {
         close_ex(rest_server_service_data[i].sockfd);
+        rest_server_service_data[i].sockfd = -1;
     }
 
     log_info("server terminated");
@@ -1229,7 +1245,7 @@ bool rest_server_context_arg_get_int64(rest_server_context_t *ctx, int64_t *valu
     bool hasit = (value != NULL);
     if(hasit)
     {
-        hasit = sscanf(value, "%li", valuep) == 1;
+        hasit = sscanf(value, "%" PRIi64, valuep) == 1;
     }
     va_end(args);
     return hasit;
@@ -1309,7 +1325,7 @@ bool rest_server_context_path_arg_get_int64(rest_server_context_t *ctx, int64_t 
     char *text;
     if((ret = rest_server_context_path_arg_get(ctx, &text, name)))
     {
-        ret = sscanf(text, "%li", valuep) == 1;
+        ret = sscanf(text, "%" PRIi64, valuep) == 1;
     }
     return ret;
 }

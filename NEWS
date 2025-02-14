@@ -30,16 +30,13 @@
 #
 ################################################################################
 
-20241211:
-    YADIFA 3.0.0
+20250214:
+    YADIFA 3.0.1
 
+    Fixes builds on 32 bits architectures.
 
-    Adds support for the OpenSSL 3.x API
+    Fixes an issue that would occur on ARM architectures.
 
-    Adds the DNS-extension interface that allows an developer to create its own DNS types/class with some limitations
-
-    This version comes with the CMake build that we've been using internally along with unit tests.
-
-    Adds purely experimental support for post-quantum safe signatures. This feature requires libocs >= 0.11.0 and is an option for CMake builds.
-	On a CMake build, add -DOQS:BOOL=ON during configuration.
-	More details incoming about this.
+    Fixes 64 bits time handling.
+        Adds TIME64 support to CMake (-DTIME64:BOOL=ON adds _TIME_BITS=64 to the defines)
+    

@@ -2003,7 +2003,17 @@ uint8_t dirent_get_file_type(const char *folder, const char *name)
 
 static group_mutex_t readdir_mutex = GROUP_MUTEX_INITIALIZER;
 
-ya_result            readdir_forall(const char *basedir, readdir_callback *func, void *args)
+/**
+ * Calls the callback for every entry from basedir
+ *
+ * @param basedir the base directory
+ * @param func the callback to call
+ * @param args the arg to give to the callback
+ *
+ * @return an error code
+ */
+
+ya_result readdir_forall(const char *basedir, readdir_callback *func, void *args)
 {
     DIR      *dir;
     ya_result ret;
@@ -2030,7 +2040,6 @@ ya_result            readdir_forall(const char *basedir, readdir_callback *func,
     {
         group_mutex_lock(&readdir_mutex, GROUP_MUTEX_WRITE);
         struct dirent *tmp = readdir(dir);
-
         if(tmp == NULL)
         {
             group_mutex_unlock(&readdir_mutex, GROUP_MUTEX_WRITE);
@@ -2163,6 +2172,15 @@ static ya_result rmdir_ex_readdir(const char *basedir, const char *file, uint8_t
         }
     }
 }
+
+/**
+ * Deletes a directory and, optionally, its content.
+ *
+ * @param directory the directory
+ * @param recursive recursively delete the content
+ *
+ * @return an error code
+ */
 
 ya_result rmdir_ex(const char *directory, bool recursive)
 {

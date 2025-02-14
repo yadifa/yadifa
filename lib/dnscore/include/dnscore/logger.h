@@ -44,15 +44,27 @@
 
 #include <dnscore/logger_handle.h>
 
+void ttylog_handle_dbg(logger_handle_t *handle, const char *format, ...);
 void ttylog_handle_out(logger_handle_t *handle, const char *format, ...);
 void ttylog_handle_notice(logger_handle_t *handle, const char *format, ...);
 void ttylog_handle_warn(logger_handle_t *handle, const char *format, ...);
 void ttylog_handle_err(logger_handle_t *handle, const char *format, ...);
 
+#if defined(MODULE_MSG_HANDLE)
+#define ttylog_dbg(...)    ttylog_handle_dbg(MODULE_MSG_HANDLE, __VA_ARGS__)
 #define ttylog_out(...)    ttylog_handle_out(MODULE_MSG_HANDLE, __VA_ARGS__)
+#define ttylog_info(...)   ttylog_handle_out(MODULE_MSG_HANDLE, __VA_ARGS__)
 #define ttylog_notice(...) ttylog_handle_notice(MODULE_MSG_HANDLE, __VA_ARGS__)
 #define ttylog_warn(...)   ttylog_handle_warn(MODULE_MSG_HANDLE, __VA_ARGS__)
 #define ttylog_err(...)    ttylog_handle_err(MODULE_MSG_HANDLE, __VA_ARGS__)
+#else
+#define ttylog_dbg(...)    ttylog_handle_dbg(NULL, __VA_ARGS__)
+#define ttylog_out(...)    ttylog_handle_out(NULL, __VA_ARGS__)
+#define ttylog_info(...)   ttylog_handle_out(NULL, __VA_ARGS__)
+#define ttylog_notice(...) ttylog_handle_notice(NULL, __VA_ARGS__)
+#define ttylog_warn(...)   ttylog_handle_warn(NULL, __VA_ARGS__)
+#define ttylog_err(...)    ttylog_handle_err(NULL, __VA_ARGS__)
+#endif
 
 #endif /* _LOGGER_H */
 

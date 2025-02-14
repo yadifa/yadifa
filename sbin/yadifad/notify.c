@@ -1933,7 +1933,7 @@ static void notify_service_context_send_notifications(struct notify_service_cont
         ptr_treemap_node_t *notify_zone_node = ptr_treemap_iterator_next_node(&notifications_being_sent_iter);
         notify_message     *notifymsg = notify_zone_node->value;
 
-        if(notifymsg->payload.notify.epoch > now)
+        if(notifymsg->payload.notify.epoch > (uint64_t)now)
         {
 #if DEBUG
             log_debug(

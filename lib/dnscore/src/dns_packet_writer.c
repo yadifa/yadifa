@@ -92,7 +92,7 @@ ya_result dns_packet_writer_init(dns_packet_writer_t *pw, uint8_t *packet, uint3
 #if DEBUG
         fqdn += 1 + 2 + 2;
 
-        if(packet_offset < fqdn - packet)
+        if(packet_offset < (uint32_t)(fqdn - packet))
         {
             log_err("dns_packet_writer_init expected %u = %u", packet_offset, fqdn - packet);
         }

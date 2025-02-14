@@ -59,7 +59,13 @@ static void          alloc_hooks_init()
 
 static void alloc_hooks_print(FILE *f)
 {
-    fprintf(f, "malloc: count: total=%lu peak=%lu current=%lu memory: total=%lu peak=%lu current=%lu\n", malloc_count_total, malloc_count_peak, malloc_count_current, malloc_memory_total, malloc_memory_peak, malloc_memory_current);
+    fprintf(f, "malloc: count: total=%" PRIu64 " peak=%" PRIu64 " current=%" PRIu64 " memory: total=%" PRIu64 " peak=%" PRIu64 " current=%" PRIu64 "\n",
+            (uint64_t)malloc_count_total,
+            (uint64_t)malloc_count_peak,
+            (uint64_t)malloc_count_current,
+            (uint64_t)malloc_memory_total,
+            (uint64_t)malloc_memory_peak,
+            (uint64_t)malloc_memory_current);
 }
 
 INTERNAL hook_module_t alloc_module = {"alloc", NULL, alloc_hooks_init, alloc_hooks_print};
