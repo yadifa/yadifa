@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,15 @@
  *
  * @{
  *----------------------------------------------------------------------------*/
+
+/// @note _FILE_OFFSET_BITS triggers an issue in a test on some old architectures and 64 bits offset aren't required here.
+
+#ifdef _FILE_OFFSET_BITS
+#undef _FILE_OFFSET_BITS
+#endif
+#ifdef _TIME_BITS
+#undef _TIME_BITS
+#endif
 
 #include "dnscore/dnscore_config.h"
 

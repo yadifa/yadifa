@@ -1,6 +1,6 @@
 dnl ----------------------------------------------------------------------------
 dnl
-dnl Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@ dnl ====================================
 
 AC_PREREQ([2.69])
 AC_REVISION([$Revision$])
-define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(cat "${configure_base_path}VERSION") 11664)])
+define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(cat "${configure_base_path}VERSION") 11672)])
 
 AC_INIT([yadifa],YADIFA_VERSION,[info@yadifa.eu])
 
@@ -50,6 +50,7 @@ echo "-------------------"
 echo
 echo $0
 
+AC_CANONICAL_TARGET
 
 m4_include([m4/eurid.m4])
 m4_include([m4/yadifa.m4])
@@ -158,6 +159,7 @@ AC_PTHREAD_SETAFFINITY_NP_CHECK
 AC_GETTID_CHECK
 AC_TIMEGM_CHECK
 AC_MREMAP_CHECK
+AC_ATOMIC_LOAD_CHECK
 
 echo "mmsg results:"
 echo "have_sendmmsg='$have_sendmmsg'"

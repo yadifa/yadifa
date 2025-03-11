@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@
 include(CheckIncludeFile)
 include(TestBigEndian)
 include(CheckSymbolExists)
+include(CheckLibraryExists)
 
 function(StoreBooleanToCache VARNAME VARTEXT HELP)
     if(${${VARNAME}})
@@ -521,6 +522,18 @@ function(check_endianness)
         set(HAS_BIG_ENDIAN OFF CACHE BOOL "big endian")
         set(HAS_LITTLE_ENDIAN ON CACHE BOOL "little endian")
     endif()
+endfunction()
+
+function(check_atomic_load)
+message("Checking for the need of libatomic")
+set(LIBATOMIC_PROCESSOR_LIST "armel" "armv6l" "m68k" "powerpc" "sh4")
+message("Target processor is '${CMAKE_SYSTEM_PROCESSOR}'")
+if(${CMAKE_SYSTEM_PROCESSOR} IN_LIST LIBATOMIC_PROCESSOR_LIST)
+    message("This arch requires specific linking with libatomic")
+    link_libraries(atomic)
+else()
+    message("This arch does not require specific linking with libatomic")
+endif()
 endfunction()
 
 function(set_has BASENAME)

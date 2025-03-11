@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@
 #include <dnscore/ptr_treemap.h>
 #include <dnscore/input_stream.h>
 #include <dnscore/output_stream.h>
+#include <dnscore/ptr_vector.h>
 
 #define DNSCORE_REST_HAS_HTTPS 0
 
@@ -94,6 +95,7 @@ struct rest_server_context_s
     ptr_treemap_t                 page_args;
     ptr_treemap_t                 path_args;
     int64_t                       answer_start;
+    int                           http_answer_code;
 #if DNSCORE_REST_HAS_HTTPS
     SSL_CTX *sslctx;
     SSL     *sslsock;
@@ -103,6 +105,7 @@ struct rest_server_context_s
 typedef struct rest_server_context_s rest_server_context_t;
 
 typedef void(rest_server_page_t)(rest_server_context_t *);
+
 
 int       rest_server_setup(rest_server_network_setup_args_t *args);
 
@@ -114,15 +117,49 @@ void      rest_server_stop(rest_server_network_setup_args_t *args);
 
 ya_result rest_server_page_register(const char *name, rest_server_page_t *page);
 
+/**
+ * Appends all the unexpected parameters name into the given ptr_vector_t (va_list version)
+ * Names are not a copy.
+ * End the variadic with NULL
+ *
+ * @param ctx
+ * @param unexpected_vector
+ * @param args
+ * @return
+ */
+
+int rest_server_context_varg_get_unexpected_parameter_names(rest_server_context_t *ctx, ptr_vector_t *unexpected_vector, va_list args);
+
+/**
+ * Appends all the unexpected parameters name into the given ptr_vector_t
+ * Names are not a copy.
+ * End the variadic with NULL
+ *
+ * @param ctx
+ * @param unexpected_vector
+ * @param args
+ * @return
+ */
+
+int rest_server_context_get_unexpected_parameter_names(rest_server_context_t *ctx, ptr_vector_t *unexpected_vector, ...);
+
 bool      rest_server_context_arg_get(rest_server_context_t *ctx, char **text, const char *name_, ...);
+
+ya_result rest_server_context_arg_get_double_ex(rest_server_context_t *ctx, double *valuep, const char *name_, ...);
 
 bool      rest_server_context_arg_get_double(rest_server_context_t *ctx, double *valuep, const char *name_, ...);
 
+ya_result rest_server_context_arg_get_int_ex(rest_server_context_t *ctx, int *valuep, const char *name_, ...);
+
 bool      rest_server_context_arg_get_int(rest_server_context_t *ctx, int *value, const char *name_, ...);
+
+ya_result rest_server_context_arg_get_int64_ex(rest_server_context_t *ctx, int64_t *valuep, const char *name_, ...);
 
 bool      rest_server_context_arg_get_int64(rest_server_context_t *ctx, int64_t *value, const char *name_, ...);
 
 bool      rest_server_context_arg_get_u8(rest_server_context_t *ctx, uint8_t *valuep, const char *name_, ...);
+
+ya_result rest_server_context_arg_get_bool_ex(rest_server_context_t *ctx, bool *valuep, const char *name_, ...);
 
 bool      rest_server_context_arg_get_bool(rest_server_context_t *ctx, bool *value, const char *name_, ...);
 
@@ -141,3 +178,16 @@ bool      rest_server_context_path_arg_get_bool(rest_server_context_t *ctx, bool
 ya_result rest_server_write_http_header_and_body(rest_server_context_t *ctx, int code, const char *code_text, int buffer_size, const void *buffer);
 
 ya_result rest_server_write_http_header_and_print(rest_server_context_t *ctx, int code, const char *code_text, const char *fmt, ...);
+
+void      rest_server_context_set_answer_code(rest_server_context_t *ctx, int code);
+
+/**
+ * Sends the HTTP header with code and remembers the code sent for future logging
+ *
+ * @param ctx
+ * @param code
+ * @return
+ */
+
+ya_result rest_server_context_header_code(rest_server_context_t *ctx, int code);
+

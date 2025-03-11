@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -120,6 +120,20 @@ ya_result parse_u64_check_range_len_base16(const char *src, uint32_t src_len, ui
  */
 
 ya_result parse_pstring(char **srcp_in_out, size_t src_len, uint8_t *dst, size_t dst_len);
+
+/**
+ * Parse a boolean value.
+ *
+ * TRUE: yes, 1, enable, enabled, on, true
+ * FALSE: no, 0, disable, disabled, off, false
+ *
+ * @param src the asciiz text to parse
+ * @param dest a pointer that'll get the boolean value
+ *
+ * @return an error code
+ */
+
+ya_result parse_bool(const char *src, bool *dest);
 
 /** \brief Converts a string to an epoch
  *

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,9 +74,9 @@ static ya_result             alarm_test_callback(void *myargs_, bool cancel)
     time_t        now = time(NULL);
     time_t        real_delay = now - myargs->now;
     yatest_log("alarm: now=%" PRIi64 ", delay=%" PRIi64 ", real=%" PRIi64 ", *counterp=%" PRIi64 ", *maskp=%08" PRIx64 ", position=%" PRIi64 ", cancel=%i",
-               myargs->now,
-               myargs->delay,
-               real_delay,
+               (int64_t)myargs->now,
+               (int64_t)myargs->delay,
+               (int64_t)real_delay,
                *myargs->counterp,
                *myargs->maskp,
                myargs->position,
@@ -402,7 +402,7 @@ static int alarm_lock_test()
         alarm_event_node_t *event = alarm_get_first(ah);
         while(event != NULL)
         {
-            yatest_log("has event at %" PRIi64 ": %s", event->epoch, event->text);
+            yatest_log("has event at %" PRIu32 ": %s", event->epoch, event->text);
             event = event->time_next;
         }
         alarm_unlock();

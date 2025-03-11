@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -103,8 +103,6 @@ union config_section_struct_type_handler_as_voidp
 typedef union config_section_struct_type_handler_as_voidp config_section_struct_type_handler_as_voidp;
 
 static const char                                        *config_error_prefix = "config: ";
-
-static const value_name_table_t true_false_enum[] = {{1, "yes"}, {1, "1"}, {1, "enable"}, {1, "enabled"}, {1, "on"}, {1, "true"}, {0, "no"}, {0, "0"}, {0, "disable"}, {0, "disabled"}, {0, "off"}, {0, "false"}, {0, NULL}};
 
 static u32_treemap_t            section_descriptor_set = U32_TREEMAP_EMPTY;
 
@@ -312,17 +310,9 @@ ya_result config_set_bool(const char *value, bool *dest, const anytype notused)
 {
     (void)notused;
 
-    ya_result return_code;
-    uint32_t  integer_value;
-    bool      yes_or_no;
+    ya_result ret = parse_bool(value, dest);
 
-    if(ISOK(return_code = value_name_table_get_value_from_casename(true_false_enum, value, &integer_value)))
-    {
-        yes_or_no = (integer_value != 0);
-        *dest = yes_or_no;
-    }
-
-    return return_code;
+    return ret;
 }
 
 /** @brief  flag option value parser

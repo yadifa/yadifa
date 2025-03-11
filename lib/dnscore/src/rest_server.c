@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,9 +43,13 @@
 #include "dnscore/bytearray_output_stream.h"
 #include "dnscore/process.h"
 #include "dnscore/rest_server.h"
+
+#include "dnscore/parsing.h"
+#include "dnscore/ptr_treeset.h"
 #include "dnscore/uri.h"
 #include "dnscore/tools.h"
 #include "dnscore/signals.h"
+#include "dnscore/simple_http_server.h"
 
 extern logger_handle_t *g_rest_logger;
 #define MODULE_MSG_HANDLE                    g_rest_logger
@@ -432,6 +436,30 @@ void rest_server_context_init(rest_server_context_t *ctx)
     memset(ctx, 0, sizeof(rest_server_context_t));
     ctx->page_args.compare = ptr_treemap_asciizcasep_node_compare;
     ctx->path_args.compare = ptr_treemap_asciizcasep_node_compare;
+    ctx->http_answer_code = -1;
+}
+
+void rest_server_context_set_answer_code(rest_server_context_t *ctx, int code)
+{
+    ctx->http_answer_code = code;
+}
+
+/**
+ * Sends the HTTP header with code and remembers the code sent for future logging
+ *
+ * @param ctx
+ * @param code
+ * @return
+ */
+
+ya_result rest_server_context_header_code(rest_server_context_t *ctx, int code)
+{
+    ya_result ret;
+    if(ISOK(ret = http_header_code(&ctx->os, code)))
+    {
+        rest_server_context_set_answer_code(ctx, code);
+    }
+    return ret;
 }
 
 static ya_result rest_server_client_uri_callback(void *args, const char *name, const char *value)
@@ -553,6 +581,8 @@ static void rest_server_service_answer(void *parm)
         rest_server_service_client_free(client);
         return;
     }
+
+    const int64_t answer_begin = timeus();
 
     rest_server_context_t ctx;
     rest_server_context_init(&ctx);
@@ -948,6 +978,20 @@ static void rest_server_service_answer(void *parm)
         }
     }
 
+    const int64_t answer_end = timeus();
+
+    double dt = answer_end - answer_begin;
+    dt /= 1000000.0;
+
+    if(ctx.http_answer_code >= 0)
+    {
+        log_info("query from %{sockaddr}: answered with %i (%6.3f seconds)", &client->sa.sa, ctx.http_answer_code, dt);
+    }
+    else
+    {
+        log_info("query from %{sockaddr}: answered (%6.3f seconds)", &client->sa.sa, ctx.http_answer_code, dt);
+    }
+
     rest_server_context_finalise(&ctx);
     rest_server_service_client_free(client);
 }
@@ -965,6 +1009,8 @@ static int rest_server_service_main(struct service_worker_s *worker)
     const int                     client_line_size = 65536;
 
     rest_server_service_client_t *client = rest_server_service_client_new_instance(client_line_size);
+
+    service_set_servicing(worker);
 
     while(service_should_run(worker) && !rest_server_shutdown)
     {
@@ -1007,6 +1053,8 @@ static int rest_server_service_main(struct service_worker_s *worker)
             close_ex(client_socket);
         }
     }
+
+    service_set_stopping(worker);
 
     rest_server_service_client_free(client);
 
@@ -1191,6 +1239,74 @@ const char *rest_server_context_varg_get(rest_server_context_t *ctx, const char 
     return ret;
 }
 
+/**
+ * Appends all the unexpected parameters name into the given ptr_vector_t (va_list version)
+ * Names are not a copy.
+ * End the variadic with NULL
+ *
+ * @param ctx
+ * @param unexpected_vector
+ * @param args
+ * @return
+ */
+
+int rest_server_context_varg_get_unexpected_parameter_names(rest_server_context_t *ctx, ptr_vector_t *unexpected_vector, va_list args)
+{
+    // build a set of the allowed parameters
+
+    ptr_treeset_t allowed_set = PTR_TREESET_ASCIIZ_EMPTY;
+
+    for(;;)
+    {
+        char *arg = va_arg(args, char *);
+        if(arg == NULL)
+        {
+            break;
+        }
+        ptr_treeset_insert(&allowed_set, arg);
+    }
+
+    // for each parameter, if it's not in the allowed set, then append it to unexpected_vector
+
+    ptr_treemap_iterator_t iter;
+    ptr_treemap_iterator_init(&ctx->page_args, &iter);
+
+    int count = 0;
+
+    while(ptr_treemap_iterator_hasnext(&iter))
+    {
+        ptr_treemap_node_t *node = ptr_treemap_iterator_next_node(&iter);
+        char *name = node->key;
+        if(ptr_treeset_find(&allowed_set, name) == NULL)
+        {
+            ptr_vector_append(unexpected_vector, name);
+            ++count;
+        }
+    }
+
+    ptr_treeset_destroy(&allowed_set);
+    return count;
+}
+
+/**
+ * Appends all the unexpected parameters name into the given ptr_vector_t
+ * Names are not a copy.
+ * End the variadic with NULL
+ *
+ * @param ctx
+ * @param unexpected_vector
+ * @return
+ */
+
+int rest_server_context_get_unexpected_parameter_names(rest_server_context_t *ctx, ptr_vector_t *unexpected_vector, ...)
+{
+    va_list args;
+    va_start(args, unexpected_vector);
+    int count = rest_server_context_varg_get_unexpected_parameter_names(ctx, unexpected_vector, args);
+    va_end(args);
+    return count;
+}
+
 bool rest_server_context_arg_get(rest_server_context_t *ctx, char **text, const char *name_, ...)
 {
     const char *value;
@@ -1204,6 +1320,29 @@ bool rest_server_context_arg_get(rest_server_context_t *ctx, char **text, const 
     }
     va_end(args);
     return hasit;
+}
+
+ya_result rest_server_context_arg_get_double_ex(rest_server_context_t *ctx, double *valuep, const char *name_, ...)
+{
+    const char *value;
+    ya_result   ret;
+    va_list     args;
+    va_start(args, name_);
+    value = rest_server_context_varg_get(ctx, name_, args);
+    bool hasit = (value != NULL);
+    if(hasit)
+    {
+        if((ret = sscanf(value, "%lf", valuep)) != 1)
+        {
+            ret = PARSE_INVALID_ARGUMENT;
+        }
+    }
+    else
+    {
+        ret = 0;
+    }
+    va_end(args);
+    return ret;
 }
 
 bool rest_server_context_arg_get_double(rest_server_context_t *ctx, double *valuep, const char *name_, ...)
@@ -1221,6 +1360,29 @@ bool rest_server_context_arg_get_double(rest_server_context_t *ctx, double *valu
     return hasit;
 }
 
+ya_result rest_server_context_arg_get_int_ex(rest_server_context_t *ctx, int *valuep, const char *name_, ...)
+{
+    const char *value;
+    ya_result   ret;
+    va_list     args;
+    va_start(args, name_);
+    value = rest_server_context_varg_get(ctx, name_, args);
+    bool hasit = (value != NULL);
+    if(hasit)
+    {
+        if((ret = sscanf(value, "%i", valuep)) != 1)
+        {
+            ret = PARSE_INVALID_ARGUMENT;
+        }
+    }
+    else
+    {
+        ret = 0;
+    }
+    va_end(args);
+    return ret;
+}
+
 bool rest_server_context_arg_get_int(rest_server_context_t *ctx, int *valuep, const char *name_, ...)
 {
     const char *value;
@@ -1234,6 +1396,29 @@ bool rest_server_context_arg_get_int(rest_server_context_t *ctx, int *valuep, co
     }
     va_end(args);
     return hasit;
+}
+
+ya_result rest_server_context_arg_get_int64_ex(rest_server_context_t *ctx, int64_t *valuep, const char *name_, ...)
+{
+    const char *value;
+    ya_result   ret;
+    va_list     args;
+    va_start(args, name_);
+    value = rest_server_context_varg_get(ctx, name_, args);
+    bool hasit = (value != NULL);
+    if(hasit)
+    {
+        if((ret = sscanf(value, "%" PRIi64, valuep)) != 1)
+        {
+            ret = PARSE_INVALID_ARGUMENT;
+        }
+    }
+    else
+    {
+        ret = 0;
+    }
+    va_end(args);
+    return ret;
 }
 
 bool rest_server_context_arg_get_int64(rest_server_context_t *ctx, int64_t *valuep, const char *name_, ...)
@@ -1266,6 +1451,29 @@ bool rest_server_context_arg_get_u8(rest_server_context_t *ctx, uint8_t *valuep,
     return hasit;
 }
 
+ya_result rest_server_context_arg_get_bool_ex(rest_server_context_t *ctx, bool *valuep, const char *name_, ...)
+{
+    const char *value;
+    ya_result   ret;
+    va_list     args;
+    va_start(args, name_);
+    value = rest_server_context_varg_get(ctx, name_, args);
+    bool hasit = (value != NULL);
+    if(hasit)
+    {
+        if(FAIL(ret = parse_bool(value, valuep)))
+        {
+            return PARSE_INVALID_ARGUMENT;
+        }
+    }
+    else
+    {
+        ret = 0;
+    }
+    va_end(args);
+    return ret;
+}
+
 bool rest_server_context_arg_get_bool(rest_server_context_t *ctx, bool *valuep, const char *name_, ...)
 {
     const char *value;
@@ -1275,12 +1483,8 @@ bool rest_server_context_arg_get_bool(rest_server_context_t *ctx, bool *valuep, 
     bool hasit = (value != NULL);
     if(hasit)
     {
-        int tmp;
-        hasit = sscanf(value, "%i", &tmp) == 1;
-        if(hasit)
-        {
-            *valuep = tmp != 0;
-        }
+        ya_result ret = parse_bool(value, valuep);
+        hasit = ISOK(ret);
     }
     va_end(args);
     return hasit;
@@ -1347,12 +1551,7 @@ bool rest_server_context_path_arg_get_bool(rest_server_context_t *ctx, bool *val
     char *text;
     if((ret = rest_server_context_path_arg_get(ctx, &text, name)))
     {
-        int tmp;
-        ret = sscanf(text, "%i", &tmp) == 1;
-        if(ret)
-        {
-            *valuep = tmp != 0;
-        }
+        ret = parse_bool(text, valuep);
     }
     return ret;
 }
@@ -1388,6 +1587,8 @@ ya_result rest_server_write_http_header_and_body(rest_server_context_t *ctx, int
 
 ya_result rest_server_write_http_header_and_print(rest_server_context_t *ctx, int code, const char *code_text, const char *fmt, ...)
 {
+    rest_server_context_set_answer_code(ctx, code);
+
     osformat(&ctx->os,
              "HTTP/1.1 %d %s\r\n"
              "Content-Encoding: text/plain\r\n"

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -225,10 +225,11 @@ static void simple_text_page(rest_server_context_t *ctx)
     http_text = "It worked!";
 
     char   *v_text = "?";
-    double  v_double;
-    int     v_int;
-    uint8_t v_u8;
-    bool    v_bool;
+    double  v_double = -1;
+    int64_t v_int64 = 0x5a5a5a5a5a5a5a5a;
+    int     v_int = 0x5a5a5a5a;
+    uint8_t v_u8 = 0xa5;
+    bool    v_bool = false;
 
     if(rest_server_context_arg_get(ctx, &v_text, "s", "text", NULL))
     {
@@ -246,6 +247,15 @@ static void simple_text_page(rest_server_context_t *ctx)
         if(dt > 0.00001)
         {
             yatest_err("double value is wrong");
+            exit(1);
+        }
+    }
+    if(rest_server_context_arg_get_int64(ctx, &v_int64, "i64", "int64", NULL))
+    {
+        yatest_log("int=%i", v_int64);
+        if(v_int64 != 9123456789)
+        {
+            yatest_err("int value is wrong");
             exit(1);
         }
     }
@@ -275,6 +285,111 @@ static void simple_text_page(rest_server_context_t *ctx)
             yatest_err("bool value is wrong");
             exit(1);
         }
+    }
+
+    ya_result ret;
+
+    if(ISOK(ret = rest_server_context_arg_get_double_ex(ctx, &v_double, "f", "double", NULL)))
+    {
+        yatest_log("double=%f", v_double);
+        double dt = fabs(v_double - 1.234);
+        if(dt > 0.00001)
+        {
+            yatest_err("double value is wrong");
+            exit(1);
+        }
+    }
+    else
+    {
+        yatest_err("double value is wrong: %08x", ret);
+        exit(1);
+    }
+
+    if(ISOK(ret = rest_server_context_arg_get_int64_ex(ctx, &v_int64, "i64", "int64", NULL)))
+    {
+        yatest_log("int64=%" PRIi64, v_int64);
+        if(v_int64 != 9123456789)
+        {
+            yatest_err("int64 value is wrong");
+            exit(1);
+        }
+    }
+    else
+    {
+        yatest_err("int64 value is wrong: %08x", ret);
+        exit(1);
+    }
+
+    if(ISOK(ret = rest_server_context_arg_get_int_ex(ctx, &v_int, "i", "int", NULL)))
+    {
+        yatest_log("int=%i", v_int);
+        if(v_int != 1234)
+        {
+            yatest_err("int value is wrong");
+            exit(1);
+        }
+    }
+    else
+    {
+        yatest_err("int value is wrong: %08x", ret);
+        exit(1);
+    }
+
+    if(ISOK(ret = rest_server_context_arg_get_bool_ex(ctx, &v_bool, "b", "bool", NULL)))
+    {
+        yatest_log("bool=%i", v_bool);
+        if(!v_bool)
+        {
+            yatest_err("bool value is wrong");
+            exit(1);
+        }
+    }
+    else
+    {
+        yatest_err("bool value is wrong: %08x", ret);
+        exit(1);
+    }
+
+    // failures
+
+    if(FAIL(ret = rest_server_context_arg_get_double_ex(ctx, &v_double, "text", NULL)))
+    {
+        yatest_log("text as double rejected");
+    }
+    else
+    {
+        yatest_err("double should not have been parsed");
+        exit(1);
+    }
+
+    if(FAIL(ret = rest_server_context_arg_get_int64_ex(ctx, &v_int64, "text", NULL)))
+    {
+        yatest_log("text as int64 rejected");
+    }
+    else
+    {
+        yatest_err("int64 should not have been parsed");
+        exit(1);
+    }
+
+    if(FAIL(ret = rest_server_context_arg_get_int_ex(ctx, &v_int, "text", NULL)))
+    {
+        yatest_log("text as int rejected");
+    }
+    else
+    {
+        yatest_err("int should not have been parsed");
+        exit(1);
+    }
+
+    if(FAIL(ret = rest_server_context_arg_get_bool_ex(ctx, &v_bool, "text", NULL)))
+    {
+        yatest_log("text as bool rejected");
+    }
+    else
+    {
+        yatest_err("bool should not have been parsed");
+        exit(1);
     }
 
     rest_server_write_http_header_and_print(ctx,
@@ -407,7 +522,7 @@ static int simple_page_test()
 {
     init();
     rest_server_page_register("hi", simple_text_page);
-    rest_server_test_rest_query("GET", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1");
+    rest_server_test_rest_query("GET", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1&int64=9123456789");
     rest_server_page_register("hi", NULL);
     finalise();
     return 0;
@@ -418,7 +533,7 @@ static int simple_bin_page_test()
     int ret = 0;
     init();
     rest_server_page_register("hi", simple_bin_page);
-    rest_server_test_rest_query("GET", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1");
+    rest_server_test_rest_query("GET", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1&int64=9123456789");
     rest_server_page_register("hi", NULL);
     if(!simple_bin_page_ok)
     {
@@ -436,7 +551,7 @@ static int path_variable_bin_page_test()
     rest_server_page_register("//registry/$tld/domain/$domain", registry_domain_bin_page);
     rest_server_page_register("//service/1.0/health", health_bin_page);
     rest_server_page_register("//service/1.0/info", info_bin_page);
-    rest_server_test_rest_query("GET", "/registry/eu/domain/yadifa?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1");
+    rest_server_test_rest_query("GET", "/registry/eu/domain/yadifa?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1&int64=9123456789");
     rest_server_test_rest_query("GET", "service/1.0/health");
     rest_server_test_rest_query("GET", "service/1.0/info");
     rest_server_page_register("//registry/$tld/domain/$domain", NULL);
@@ -463,7 +578,7 @@ static int signal_test()
 {
     init();
     rest_server_page_register("hi", simple_text_page);
-    rest_server_test_rest_query("GET", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1");
+    rest_server_test_rest_query("GET", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1&int64=9123456789");
 
     kill(getpid(), SIGINT);
     yatest_sleep(1);
@@ -497,7 +612,7 @@ static int invalid_request_test()
 {
     init();
     rest_server_page_register("hi", simple_bin_page);
-    rest_server_test_rest_query("BROKEN", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1");
+    rest_server_test_rest_query("BROKEN", "hi?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1&int64=9123456789");
     rest_server_page_register("hi", NULL);
     finalise();
     return 0;
@@ -507,7 +622,7 @@ static int notfound_test()
 {
     init();
     rest_server_page_register("hi", simple_bin_page);
-    rest_server_test_rest_query("GET", "hello?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1");
+    rest_server_test_rest_query("GET", "hello?text=Hello%20World&double=1.234&int=1234&u8=255&bool=1&int64=9123456789");
     rest_server_page_register("hi", NULL);
     finalise();
     return 0;

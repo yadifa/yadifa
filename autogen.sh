@@ -1,7 +1,7 @@
 #!/bin/sh
 ################################################################################
 #
-# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without

@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without
@@ -98,7 +98,7 @@ elseif(WIN32)
     set(OPENSSL_FIND_CRYPTO "libcrypto.lib")
     set(OPENSSL_FIND_SSL "libssl.lib")
 else()
-    message(FATAL_ERROR "System is not supported")
+    message(FATAL_ERROR "System '${CMAKE_SYSTEM_NAME}' is not supported")
 endif()
 
 if(OPENSSL_DIRECTORY)

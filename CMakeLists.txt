@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/CheckCHeaders.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/CheckCompilerFlags.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/EURidToolbox.cmake)
 
-read_version("3.0.1")
+read_version("3.0.2")
 
 project(yadifa VERSION ${VERSION_TEXT} LANGUAGES C)
 
@@ -57,6 +57,8 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 #set(CMAKE_C_STANDARD 23)
+
+check_atomic_load()
 
 include(${CMAKE_SOURCE_DIR}/cmake/FindOpenSSL.cmake)
 
@@ -105,8 +107,8 @@ set(YATEST_INCLUDE_DIRECTORY "${CMAKE_SOURCE_DIR}/tests")
 # settings from subdirectories - START
 
 set(PACKAGE "yadifa")
-set(PACKAGE_VERSION "3.0.1")
-set(VERSION "3.0.1")
+set(PACKAGE_VERSION "3.0.2")
+set(VERSION "3.0.2")
 set(PACKAGE_STRING "${PACKAGE} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "bugreport@yadifa.eu")
 

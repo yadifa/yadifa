@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+# Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 # The YADIFA TM software product is provided under the BSD 3-clause license:
 #
 # Redistribution and use in source and binary forms, with or without
@@ -30,13 +30,8 @@
 #
 ################################################################################
 
-20250214:
-    YADIFA 3.0.1
+20250311:
+    YADIFA 3.0.2
 
-    Fixes builds on 32 bits architectures.
-
-    Fixes an issue that would occur on ARM architectures.
-
-    Fixes 64 bits time handling.
-        Adds TIME64 support to CMake (-DTIME64:BOOL=ON adds _TIME_BITS=64 to the defines)
+    Fixes builds for more architectures.
     

@@ -1,6 +1,6 @@
 /*------------------------------------------------------------------------------
  *
- * Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+ * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
  * The YADIFA TM software product is provided under the BSD 3-clause license:
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1803,6 +1803,8 @@ static int dns_udp_send_service(struct service_worker_s *worker)
 
     bool           threadpool_pacing = false;
 
+    service_set_servicing(worker);
+
     while(service_should_run(worker) /*|| !async_queue_empty(&dns_udp_send_handler_queue)*/)
     {
         // timeout high priority list.
@@ -2084,6 +2086,8 @@ static int dns_udp_receive_read_service(struct service_worker_s *worker)
 
     tcp_set_recvtimeout(my_socket, dns_udp_settings->timeout / ONE_SECOND_US, dns_udp_settings->timeout % ONE_SECOND_US);
 
+    service_set_servicing(worker);
+
     int64_t last_loop = timeus();
 
     while(service_should_run(worker))
@@ -2198,6 +2202,8 @@ static int dns_udp_receive_process_service(struct service_worker_s *worker)
 
         pool_timedwait(&dns_message_pool, ONE_SECOND_US); // better than sleep(1);
     }
+
+    service_set_servicing(worker);
 
     host_address_t sender_host_address;
 
@@ -2489,6 +2495,8 @@ static void dns_udp_timeout_service_cull(ptr_vector_t *todeletep)
 static int dns_udp_timeout_service(struct service_worker_s *worker)
 {
     log_debug("dns_udp_timeout_service started");
+
+    service_set_servicing(worker);
 
     ptr_vector_t todelete = PTR_VECTOR_EMPTY;
 

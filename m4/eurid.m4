@@ -1,6 +1,6 @@
 dnl ----------------------------------------------------------------------------
 dnl
-dnl Copyright (c) 2011-2024, EURid vzw. All rights reserved.
+dnl Copyright (c) 2011-2025, EURid vzw. All rights reserved.
 dnl The YADIFA TM software product is provided under the BSD 3-clause license:
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -640,7 +640,6 @@ AS_IF([test "x$host_cpu" = xx86_64],[
 		AC_DEFINE_UNQUOTED([HAS_CPU_AMDINTEL], [1], [i386, Athlon, Opteron, Core2, i3, i5, i7, ...])
 		AM_CONDITIONAL([HAS_CPU_AMDINTEL], [true])
 		AC_MSG_RESULT([AMD/Intel ($host)])
-		AS_IF([test "x$host" = "xx86_64-linux-gnux32"],,[CFLAGS3264=-m64])
 		CPU_UNKNOWN=0
 		cpu_intel_compatible=1
 ])
@@ -1239,6 +1238,31 @@ YA_TRY_LINK([#include<netdb.h>],[struct hostent *host = gethostbyname("www.yadif
                 exit 1;   
             ])
     ])
+])
+
+dnl ####################################################
+
+dnl atomic_load ... (some systems require libatomic)
+
+AC_DEFUN([AC_ATOMIC_LOAD_CHECK], [
+    echo "Checking if libatomic is required"
+
+    echo "Target processor is '$target_cpu'"
+
+    case "$target_cpu" in
+        armel|armv6l|m68k|powerpc|sh4)
+            echo "This arch requires specific linking with libatomic"
+            AC_SEARCH_LIBS([__atomic_load_4], [atomic]  , [
+                                echo "libatomic found"
+                                LDFLAGS="$LDFLAGS -latomic"
+                                ],[
+                                echo "libatomic not found"
+                                ])
+            ;;
+         *)
+            echo "This arch doesn't requires specific linking with libatomic"
+            ;;
+    esac
 ])
 
 dnl ####################################################
