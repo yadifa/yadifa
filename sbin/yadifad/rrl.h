@@ -60,6 +60,10 @@
 #define RRL_QUEUE_SIZE_MIN               0x00000400
 #define RRL_QUEUE_SIZE_MAX               0x01000000
 
+#define RRL_KEY_FLAG_IPV6                0x2000
+#define RRL_KEY_FLAG_ERROR               0x8000
+#define RRL_KEY_SIZE_MASK                0x01ff
+
 #define RRL_RESPONSES_PER_SECOND_DEFAULT 5     // MUST be stored in base 10
 #define RRL_ERRORS_PER_SECOND_DEFAULT    5     // MUST be stored in base 10
 #define RRL_WINDOW_DEFAULT               15    // MUST be stored in base 10

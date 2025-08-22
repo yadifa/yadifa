@@ -52,7 +52,6 @@
 #include <openssl/bn.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <openssl/engine.h>
 #include <openssl/core_names.h>
 #include "dnscore/openssl.h"
 #include "dnscore/dnskey.h"

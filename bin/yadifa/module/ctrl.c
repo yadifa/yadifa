@@ -91,8 +91,8 @@ static yadifa_ctrl_settings_t g_yadifa_ctrl_settings;
 #define CONFIG_TYPE yadifa_ctrl_settings_t
 CONFIG_BEGIN(yadifa_ctrl_settings_desc)
 CONFIG_HOST_LIST_EX(server, DEF_VAL_SERVER, CONFIG_HOST_LIST_FLAGS_DEFAULT, 1)
-CONFIG_DNS_CLASS(rclass, DEF_VAL_CLASS)
-CONFIG_DNS_TYPE(rtype, DEF_VAL_TYPE)
+CONFIG_DNS_CLASS(qclass, DEF_VAL_CLASS)
+CONFIG_DNS_TYPE(qtype, DEF_VAL_TYPE)
 CONFIG_U16(port, DEF_VAL_SERVERPORT)
 CONFIG_FQDN(qname, NULL)
 CONFIG_FQDN(tsig_key_name, "ctrl-key")
@@ -450,7 +450,7 @@ static ya_result ctrl_run()
 
     /* give ID from config or randomized */
     uint16_t id = dns_new_id();
-    uint16_t qtype = htons(g_yadifa_ctrl_settings.rtype);
+    uint16_t qtype = htons(g_yadifa_ctrl_settings.qtype);
     uint8_t *qname = g_yadifa_ctrl_settings.qname;
 
     uint16_t question_mode = 0;

@@ -51,7 +51,7 @@ uint16_t zdb_query_to_wire_append_ns_from_rrset(zdb_query_to_wire_context_t *con
  * 3 uses
  */
 
-uint16_t zdb_query_to_wire_append_authority(zdb_query_to_wire_context_t *context, const uint8_t *qname, const zdb_rr_label_find_ext_data *rr_label_info, bool dnssec);
+uint16_t zdb_query_to_wire_append_authority(zdb_query_to_wire_context_t *context, const uint8_t *qname, const zdb_rr_label_find_ext_data *rr_label_info, const zdb_zone_t *zone, bool dnssec);
 
 /**
  * @brief Appends all the IPs (A & AAAA) under a name on the given zone
@@ -68,4 +68,28 @@ uint16_t zdb_query_to_wire_append_authority(zdb_query_to_wire_context_t *context
 
 uint16_t zdb_query_to_wire_append_ips(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, const uint8_t *dns_name, bool dnssec);
 
+/**
+ * Adds the glues relevant to all FQDN found in the RDATAs of an NS rrset.
+ *
+ * @param context the query context
+ * @param zone the working zone
+ * @param ns_rrset the NS rrset
+ * @param dnssec add RRSIGs or not
+ *
+ * @return the number of records added
+ */
+
 uint16_t zdb_query_to_wire_append_glues_from_ns(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, const zdb_resource_record_set_t *ns_rrset, bool dnssec);
+
+/**
+ * Adds the glues relevant to all FQDN found in the RDATAs of an MX rrset.
+ *
+ * @param context the query context
+ * @param zone the working zone
+ * @param mx_rrset the MX rrset
+ * @param dnssec add RRSIGs or not
+ *
+ * @return the number of records added
+ */
+
+uint16_t zdb_query_to_wire_append_glues_from_mx(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, const zdb_resource_record_set_t *mx_rrset, bool dnssec);

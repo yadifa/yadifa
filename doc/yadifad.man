@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFAD" "8" "2025\-03\-11" "YADIFA " "YADIFA "
+.TH "YADIFAD" "8" "2025\-08\-21" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -314,7 +314,7 @@ SIGTERM
 .PP
 The yadifad.conf itself is mandatory, but can be empty. No options is needed for using yadifad DNS name server. 
 .PP
-The yadifad configuration options can be found in yadifad.conf.5 man page. A complete description is provided in the YADIFA 3.0.2 Reference Manual (YM24). 
+The yadifad configuration options can be found in yadifad.conf.5 man page. A complete description is provided in the YADIFA 3.0.3 Reference Manual (YM24). 
 .PP
 .SH FILES
 
@@ -355,7 +355,7 @@ file from the source code.
 .SH VERSION
 
 .PP
-Version: 3.0.2 of 2025\-03\-11. 
+Version: 3.0.3 of 2025\-08\-21. 
 .PP
 .SH MAILING LISTS
 

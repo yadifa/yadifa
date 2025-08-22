@@ -34,16 +34,14 @@
 #include "dnsdb/zdb_query_to_wire_append_type_rrsigs.h"
 #include "dnsdb/zdb_zone.h"
 
-/** @brief Appends the SOA negative ttl record
+/** @brief Appends the SOA record of the zone
  *
- * At the end
- *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * 3 uses
+ * @returns 1 (the number of records added)
  */
+
 uint16_t zdb_query_to_wire_append_soa(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone)
 {
     yassert(zone != NULL);
@@ -70,17 +68,12 @@ uint16_t zdb_query_to_wire_append_soa(zdb_query_to_wire_context_t *context, cons
     return 1;
 }
 
-/** @brief Appends the SOA negative ttl record and its signature
+/** @brief Appends the SOA record of the zone and its signature
  *
- * At the end
- *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * @returns the minimum TTL (OBSOLETE !)
- *
- * 3 uses
+ * @returns the number of records added
  */
 
 uint16_t zdb_query_to_wire_append_soa_rrsig(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone)
@@ -110,16 +103,16 @@ uint16_t zdb_query_to_wire_append_soa_rrsig(zdb_query_to_wire_context_t *context
     return count;
 }
 
-/** @brief Appends the SOA negative ttl record
+/** @brief Appends the SOA record of the zone
  *
- * At the end
+ * if the TTL is bigger than min TTL, then use min TTL
  *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * 3 uses
+ * @return 1 (the number of records added)
  */
+
 uint16_t zdb_query_to_wire_append_soa_nttl(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone)
 {
     yassert(zone != NULL);
@@ -153,17 +146,14 @@ uint16_t zdb_query_to_wire_append_soa_nttl(zdb_query_to_wire_context_t *context,
     return 1;
 }
 
-/** @brief Appends the SOA negative ttl record and its signature
+/** @brief Appends the SOA record of the zone and its signature
  *
- * At the end
+ * if the TTL is bigger than min TTL, then use min TTL
  *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * @returns the minimum TTL (OBSOLETE !)
- *
- * 3 uses
+ * @return the number of records added
  */
 
 uint16_t zdb_query_to_wire_append_soa_rrsig_nttl(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone)
@@ -172,9 +162,7 @@ uint16_t zdb_query_to_wire_append_soa_rrsig_nttl(zdb_query_to_wire_context_t *co
 
     zdb_resource_record_set_t        *soa_rrset = zdb_resource_record_sets_find(&zone->apex->resource_record_set, TYPE_SOA);
     const zdb_resource_record_data_t *soa_rr = zdb_resource_record_set_record_get_const(soa_rrset, 0);
-
-    int32_t                           soa_ttl;
-    soa_ttl = zdb_resource_record_set_ttl(soa_rrset);
+    int32_t                           soa_ttl = zdb_resource_record_set_ttl(soa_rrset);
     int32_t min_ttl;
     zdb_zone_getminttl(zone, &min_ttl);
     if(soa_ttl > min_ttl)
@@ -233,6 +221,113 @@ uint16_t zdb_query_to_wire_append_soa_rrsig_nttl(zdb_query_to_wire_context_t *co
 
     return count;
 }
+
+/** @brief Appends the SOA for an NXDOMAIN answer
+ *
+ * if the query record type is SOA, TTL = 0
+ * if the SOA record TTL > min TTL, uses min TTL
+ *
+ * @param context the query context
+ * @param zone the zone
+ *
+ * @return 1 (the number of records added)
+ */
+
+uint16_t zdb_query_to_wire_append_soa_nodata_nxdomain(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone)
+{
+    yassert(zone != NULL);
+
+    zdb_resource_record_set_t        *soa_rrset = zdb_resource_record_sets_find(&zone->apex->resource_record_set, TYPE_SOA);
+    const zdb_resource_record_data_t *soa_rr = zdb_resource_record_set_record_get_const(soa_rrset, 0);
+
+    int32_t soa_ttl;
+    int32_t min_ttl;
+    zdb_zone_getminttl(zone, &min_ttl);
+    soa_ttl = zdb_resource_record_set_ttl(soa_rrset);
+
+    if(context->record_type != TYPE_SOA)
+    {
+        if(soa_ttl > min_ttl)
+        {
+            soa_ttl = min_ttl;
+        }
+    }
+    else
+    {
+        soa_ttl = 0;
+    }
+
+    dns_packet_writer_add_fqdn(&context->pw, zone->origin);
+    dns_packet_writer_add_u16(&context->pw, TYPE_SOA);
+    dns_packet_writer_add_u16(&context->pw, CLASS_IN);
+    dns_packet_writer_add_u32(&context->pw, htonl(soa_ttl));
+    uint16_t offset = context->pw.packet_offset;
+    context->pw.packet_offset += 2;
+    const uint8_t *rname = zdb_resource_record_data_rdata_const(soa_rr);
+    const uint8_t *mname = rname + dnsname_len(rname);
+    const uint8_t *data = mname + dnsname_len(mname);
+    dns_packet_writer_add_fqdn(&context->pw, rname);
+    dns_packet_writer_add_fqdn(&context->pw, mname);
+    dns_packet_writer_add_bytes(&context->pw, data, 20);
+    dns_packet_writer_set_u16(&context->pw, htons(context->pw.packet_offset - offset - 2), offset);
+
+    return 1;
+}
+
+/** @brief Appends the SOA and its signature for an NXDOMAIN answer
+ *
+ * if the query record type is SOA, TTL = 0
+ * if the SOA record TTL > min TTL, uses min TTL
+ *
+ * @param context the query context
+ * @param zone the zone
+ *
+ * @return 1 (the number of records added)
+ */
+
+uint16_t zdb_query_to_wire_append_soa_rrsig_nodata_nxdomain(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone)
+{
+    yassert(zone != NULL);
+
+    zdb_resource_record_set_t        *soa_rrset = zdb_resource_record_sets_find(&zone->apex->resource_record_set, TYPE_SOA);
+    const zdb_resource_record_data_t *soa_rr = zdb_resource_record_set_record_get_const(soa_rrset, 0);
+
+    int32_t soa_ttl;
+    int32_t min_ttl;
+    zdb_zone_getminttl(zone, &min_ttl);
+    soa_ttl = zdb_resource_record_set_ttl(soa_rrset);
+
+    if(context->record_type != TYPE_SOA)
+    {
+        if(soa_ttl > min_ttl)
+        {
+            soa_ttl = min_ttl;
+        }
+    }
+    else
+    {
+        soa_ttl = 0;
+    }
+
+    dns_packet_writer_add_fqdn(&context->pw, zone->origin);
+    dns_packet_writer_add_u16(&context->pw, TYPE_SOA);
+    dns_packet_writer_add_u16(&context->pw, CLASS_IN);
+    dns_packet_writer_add_u32(&context->pw, htonl(soa_ttl));
+    uint16_t offset = context->pw.packet_offset;
+    context->pw.packet_offset += 2;
+    const uint8_t *rname = zdb_resource_record_data_rdata_const(soa_rr);
+    const uint8_t *mname = rname + dnsname_len(rname);
+    const uint8_t *data = mname + dnsname_len(mname);
+    dns_packet_writer_add_fqdn(&context->pw, rname);
+    dns_packet_writer_add_fqdn(&context->pw, mname);
+    dns_packet_writer_add_bytes(&context->pw, data, 20);
+    dns_packet_writer_set_u16(&context->pw, htons(context->pw.packet_offset - offset - 2), offset);
+
+    uint16_t count = zdb_query_to_wire_append_type_rrsigs(context, zone->apex, zone->origin, TYPE_SOA, soa_ttl) + 1;
+
+    return count;
+}
+
 
 void zdb_query_to_wire_append_soa_authority_nttl(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, bool dnssec)
 {

@@ -469,7 +469,7 @@ int zone_diff_check_changes(const zone_diff *diff, struct logger_handle_s *handl
 void zone_diff_sign_rrset(zone_diff *diff, zdb_zone_t *zone, ptr_vector_t *keys, ptr_vector_t *add, zone_diff_fqdn_rr_set *rr_set, zone_diff_fqdn_rr_set *rrsig_rr_set);
 
 /**
- * Appends RRSIGs to remove/add vector, following the the need-to-be-signed RR set, using keys from KSK and ZSK vectors.
+ * Appends RRSIGs to remove/add vector, following the need-to-be-signed RR set, using keys from KSK and ZSK vectors.
  *
  * @param diff
  * @param rrset_to_sign_vector

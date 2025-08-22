@@ -66,7 +66,6 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
-#include <openssl/engine.h>
 #include "dnscore/openssl.h"
 
 #include "dnscore/dnscore_config.h"

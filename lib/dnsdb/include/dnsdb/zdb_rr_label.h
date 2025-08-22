@@ -129,6 +129,7 @@ struct zdb_rr_label_find_ext_data
     zdb_rr_label_t *answer;
     int32_t         authority_index;
     int32_t         closest_index;
+    int32_t         wildcard_index;
 };
 
 typedef struct zdb_rr_label_find_ext_data zdb_rr_label_find_ext_data;

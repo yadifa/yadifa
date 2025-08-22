@@ -57,7 +57,6 @@
 #include "dnscore/crypto.h"
 
 #include <openssl/ssl.h>
-#include <openssl/engine.h>
 #include <openssl/err.h>
 
 extern logger_handle_t *g_system_logger;

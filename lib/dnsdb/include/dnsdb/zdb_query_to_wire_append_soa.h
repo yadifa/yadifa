@@ -44,60 +44,77 @@
 
 #include <dnsdb/zdb_query_to_wire_context.h>
 
-/** @brief Appends the SOA negative ttl record
+/** @brief Appends the SOA record of the zone
  *
- * At the end
- *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * 3 uses
+ * @returns 1 (the number of records added)
  */
 
 uint16_t zdb_query_to_wire_append_soa(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone);
 
-/** @brief Appends the SOA negative ttl record and its signature
+/** @brief Appends the SOA record of the zone and its signature
  *
- * At the end
- *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * @returns the minimum TTL (OBSOLETE !)
- *
- * 3 uses
+ * @returns the number of records added
  */
 
 uint16_t zdb_query_to_wire_append_soa_rrsig(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone);
 
-/** @brief Appends the SOA negative ttl record
+/** @brief Appends the SOA record of the zone
  *
- * At the end
+ * if the TTL is bigger than min TTL, then use min TTL
  *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * 3 uses
+ * @return 1 (the number of records added)
  */
+
+
 uint16_t zdb_query_to_wire_append_soa_nttl(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone);
 
-/** @brief Appends the SOA negative ttl record and its signature
+/** @brief Appends the SOA record of the zone and its signature
  *
- * At the end
+ * if the TTL is bigger than min TTL, then use min TTL
  *
+ * @param context the query context
  * @param zone the zone
- * @param headp a pointer to the section list
- * @param pool the memory pool
  *
- * @returns the minimum TTL (OBSOLETE !)
- *
- * 3 uses
+ * @return the number of records added
  */
 
+
 uint16_t     zdb_query_to_wire_append_soa_rrsig_nttl(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone);
+
+/** @brief Appends the SOA for an NXDOMAIN answer
+ *
+ * if the query record type is SOA, TTL = 0
+ * if the SOA record TTL > min TTL, uses min TTL
+ *
+ * @param context the query context
+ * @param zone the zone
+ *
+ * @return 1 (the number of records added)
+ */
+
+uint16_t     zdb_query_to_wire_append_soa_nodata_nxdomain(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone);
+
+/** @brief Appends the SOA and its signature for an NXDOMAIN answer
+ *
+ * if the query record type is SOA, TTL = 0
+ * if the SOA record TTL > min TTL, uses min TTL
+ *
+ * @param context the query context
+ * @param zone the zone
+ *
+ * @return 1 (the number of records added)
+ */
+
+uint16_t zdb_query_to_wire_append_soa_rrsig_nodata_nxdomain(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone);
 
 typedef void zdb_query_to_wire_append_soa_authority_method(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, bool dnssec);
 

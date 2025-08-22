@@ -623,7 +623,7 @@ void nsec3_closest_encloser_proof(const zdb_zone_t *zone, const dnsname_vector_t
 
     const_dnslabel_vector_reference_t qname_sections = qname->labels;
     // get the index of the apex:
-    int32_t             closest_encloser_index_limit = qname->size - apex_index + 1; /* note: "+1" because it starts at the apex */
+    int32_t closest_encloser_index_limit = qname->size - apex_index + 1; /* note: "+1" because it starts at the apex */
     const nsec3_zone_t *n3 = zone->nsec.nsec3;
 
 #if DEBUG
@@ -638,12 +638,6 @@ void nsec3_closest_encloser_proof(const zdb_zone_t *zone, const dnsname_vector_t
     {
         const zdb_rr_label_t *closest_provable_encloser_label = ((zdb_zone_get_flags(zone) & ZDB_ZONE_HAS_OPTOUT_COVERAGE) != 0) ? nsec3_get_closest_provable_encloser_optout(zone->apex, qname_sections, &closest_encloser_index_limit)
                                                                                                                                  : nsec3_get_closest_provable_encloser_optin(zone->apex, qname_sections, &closest_encloser_index_limit);
-
-        // log_debug("closest_provable_encloser_label: %{dnslabel}: %{digest32h}",
-        // closest_provable_encloser_label->name, closest_provable_encloser_label->nsec.nsec3->self->digest);
-        // log_debug("*.closest_provable_encloser_label: %{dnslabel}: %{digest32h}",
-        // closest_provable_encloser_label->name, closest_provable_encloser_label->nsec.nsec3->star->digest);
-
         /*
          * Convert from closest_encloser_label_bottom to name.size into a dnslabel
          */

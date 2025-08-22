@@ -333,6 +333,7 @@ uint32_t isqrt_org(uint32_t val)
     }
 }
 */
+
 uint32_t isqrt(uint32_t val)
 {
     if(val > 1)
@@ -353,6 +354,36 @@ uint32_t isqrt(uint32_t val)
     {
         return val;
     }
+}
+
+/**
+ * Returns the least common multiple of a and b
+ *
+ * @param a
+ * @param b
+ *
+ * @return least common multiple of a and b
+ *
+ */
+
+uint32_t lcm(uint32_t a, uint32_t b)
+{
+    int i = a;
+    int j = b;
+
+    while(a != b)
+    {
+        if(a < b)
+        {
+            a += i;
+        }
+        else
+        {
+            b += j;
+        }
+    }
+
+    return a;
 }
 
 void *memdup(const void *buffer, size_t buffer_size)

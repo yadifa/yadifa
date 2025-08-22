@@ -169,7 +169,7 @@ static ya_result database_service_zone_download_xfr(uint16_t qtype, const uint8_
     zone_set_status(zone_desc, ZONE_STATUS_DOWNLOADING_XFR_FILE);
 
     bool is_multiprimary = zone_is_multiprimary(zone_desc);
-    bool is_TRUE_multiprimary = zone_is_TRUE_multiprimary(zone_desc);
+    bool is_true_multiprimary = zone_is_true_multiprimary(zone_desc);
     bool force_load = (zone_desc->flags & ZONE_FLAG_DROP_CURRENT_ZONE_ON_LOAD) != 0;
 
     zone_unlock(zone_desc, ZONE_LOCK_DOWNLOAD_DESC);
@@ -550,7 +550,7 @@ static ya_result database_service_zone_download_xfr(uint16_t qtype, const uint8_
             host_address_list_roll(&zone_desc->primaries);
             zone_desc->multiprimary_failures = 0;
 
-            if(is_TRUE_multiprimary)
+            if(is_true_multiprimary)
             {
                 char file_name[PATH_MAX];
 

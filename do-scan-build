@@ -66,6 +66,6 @@ cd "$SRC"
 echo "building in $BLD"
 
 cd "$BLD"
-"$SRC/configure" --disable-zalloc --without-tests CFLAGS='-O0 -g3 -DDEBUG=1' $*
+"$SRC/configure" --disable-zalloc --enable-rrl --without-tests CFLAGS='-O0 -g3 -DDEBUG=1' $*
 $SB -maxloop 10 make -j 16
 

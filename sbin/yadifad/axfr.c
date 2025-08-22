@@ -290,7 +290,12 @@ ya_result axfr_query_ex(const host_address_t *servers, const uint8_t *origin, ui
     if(servers->tsig != NULL)
     {
         log_info("axfr: %{dnsname}: transfer will be signed with key '%{dnsname}'", origin, servers->tsig->name);
-        dns_message_sign_query(axfr_query, servers->tsig);
+        ret = dns_message_sign_query(axfr_query, servers->tsig);
+        if(FAIL(ret))
+        {
+            log_err("axfr: %{dnsname}: signature with key '%{dnsname}' failed: %r", origin, servers->tsig->name, ret);
+            return ret;
+        }
     }
 #endif
 

@@ -31,30 +31,35 @@
  *----------------------------------------------------------------------------*/
 
 /**-----------------------------------------------------------------------------
- * @defgroup
+ * @defgroup threading mutexes, ...
  * @ingroup dnscore
  * @brief
  *
- *
- *
  * @{
  *----------------------------------------------------------------------------*/
-#pragma once
 
-#include <dnscore/sys_types.h>
+#define __MUTEX_SEMAPHORE_C__ 1
 
-#if __MUTEX_SEMAPHORE_C__
-struct mutex_semaphore_s;
-#else
-struct mutex_semaphore_s
-{
-    void *sem;
-    char name[64-sizeof(void*)];
-};
+#if __linux__ || __APPLE__ || __FreeBSD__
+#define MUTEX_SEMAPHORE_SUPPORTED 1
 #endif
 
-typedef struct mutex_semaphore_s mutex_semaphore_t;
+#if MUTEX_SEMAPHORE_SUPPORTED
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <semaphore.h>
+#endif
 
+#include "dnscore/mutex_semaphore.h"
+
+#if MUTEX_SEMAPHORE_SUPPORTED
+struct mutex_semaphore_s
+{
+    sem_t *sem;
+    char name[64-sizeof(void*)];
+};
+
+typedef struct mutex_semaphore_s mutex_semaphore_t;
 
 /**
  * Initialises an inter-process mutex implemented with a semaphore.
@@ -64,7 +69,42 @@ typedef struct mutex_semaphore_s mutex_semaphore_t;
  * @return
  */
 
-ya_result mutex_semaphore_init_ex(mutex_semaphore_t *ms, const char *semaphore_name);
+ya_result mutex_semaphore_init_ex(mutex_semaphore_t *ms, const char *semaphore_name)
+{
+    if(strlen(semaphore_name) > sizeof(ms->name))
+    {
+        return INVALID_STATE_ERROR;
+    }
+
+    for(int attempt = 2; attempt > 0; attempt--)
+    {
+        sem_t *sem = sem_open(semaphore_name, O_CREAT | O_EXCL, S_IRUSR, 1);
+        if(sem != SEM_FAILED)
+        {
+            ms->sem = sem;
+            return SUCCESS;
+        }
+        else
+        {
+            int err = errno;
+            if(err == EEXIST)
+            {
+                if(sem_unlink(semaphore_name) >= 0)
+                {
+                    continue;
+                }
+                else
+                {
+                    err = errno;
+                }
+            }
+
+            return MAKE_ERRNO_ERROR(err);
+        }
+    }
+
+    return ERROR;
+}
 
 /**
  * Initialises an inter-process mutex implemented with a semaphore.
@@ -73,7 +113,12 @@ ya_result mutex_semaphore_init_ex(mutex_semaphore_t *ms, const char *semaphore_n
  * @return
  */
 
-ya_result mutex_semaphore_init(mutex_semaphore_t *ms);
+ya_result mutex_semaphore_init(mutex_semaphore_t *ms)
+{
+    char semaphore_name[64];
+    snprintf(semaphore_name, sizeof(semaphore_name), "mutex_semaphore-%08x-%p", getpid(), ms);
+    return mutex_semaphore_init_ex(ms, semaphore_name);
+}
 
 /**
  * Destroys the semaphore
@@ -81,7 +126,15 @@ ya_result mutex_semaphore_init(mutex_semaphore_t *ms);
  * @param ms
  */
 
-void mutex_semaphore_finalise(mutex_semaphore_t *ms);
+void mutex_semaphore_finalise(mutex_semaphore_t *ms)
+{
+    if(ms->sem != NULL)
+    {
+        sem_close(ms->sem);
+        sem_unlink(ms->name);
+        ms->sem = NULL;
+    }
+}
 
 /**
  * Locks the semaphore
@@ -89,14 +142,53 @@ void mutex_semaphore_finalise(mutex_semaphore_t *ms);
  * @param ms
  */
 
-void mutex_semaphore_lock(mutex_semaphore_t *ms);
+void mutex_semaphore_lock(mutex_semaphore_t *ms)
+{
+    sem_wait(ms->sem);
+}
 
 /**
  * Unlocks the semaphore
  *
  * @param ms
  */
-void mutex_semaphore_unlock(mutex_semaphore_t *ms);
+void mutex_semaphore_unlock(mutex_semaphore_t *ms)
+{
+    sem_post(ms->sem);
+}
+#else
+struct mutex_semaphore_s
+{
+    sem_t *sem;
+    char name[64-sizeof(void*)];
+};
 
+typedef struct mutex_semaphore_s mutex_semaphore_t;
+
+ya_result mutex_semaphore_init_ex(mutex_semaphore_t *ms, const char *semaphore_name)
+{
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
+}
+
+ya_result mutex_semaphore_init(mutex_semaphore_t *ms)
+{
+    return FEATURE_NOT_IMPLEMENTED_ERROR;
+}
+
+void mutex_semaphore_finalise(mutex_semaphore_t *ms)
+{
+    abort();
+}
+
+void mutex_semaphore_lock(mutex_semaphore_t *ms)
+{
+    abort();
+}
+
+void mutex_semaphore_unlock(mutex_semaphore_t *ms)
+{
+    abort();
+}
+#endif
 
 /** @} */

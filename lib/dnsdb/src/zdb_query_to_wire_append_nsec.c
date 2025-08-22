@@ -127,24 +127,33 @@ uint16_t zdb_query_to_wire_append_nsec_name_error(zdb_query_to_wire_context_t *c
         /*len = */ nsec_inverse_name(encloser_nsec_name, node->inverse_relative_name);
 
         zdb_resource_record_sets_node_t *nsec_rrset_node = zdb_resource_record_sets_set_find(&node->label->resource_record_set, TYPE_NSEC);
-
-        uint16_t                         count = zdb_query_to_wire_append_from_rrset(context, encloser_nsec_name, &nsec_rrset_node->value);
-
+        uint16_t  count = zdb_query_to_wire_append_from_rrset(context, encloser_nsec_name, &nsec_rrset_node->value);
         dnslabel_stack_to_dnsname(&name->labels[closest_index], name->size - closest_index, dname_inverted);
-
         nsec_node_t *wild_node = nsec_find_interval_start(&zone->nsec.nsec, dname_inverted);
-
         count += zdb_query_to_wire_append_type_rrsigs(context, node->label, encloser_nsec_name, TYPE_NSEC, zdb_resource_record_set_ttl(&nsec_rrset_node->value));
 
         if(wild_node != node)
         {
             /*len = */ nsec_inverse_name(wild_encloser_nsec_name, wild_node->inverse_relative_name);
-
             zdb_resource_record_sets_node_t *wild_nsec_rrset_node = zdb_resource_record_sets_set_find(&wild_node->label->resource_record_set, TYPE_NSEC);
-
             count += zdb_query_to_wire_append_from_rrset(context, wild_encloser_nsec_name, &wild_nsec_rrset_node->value);
-
             count += zdb_query_to_wire_append_type_rrsigs(context, wild_node->label, wild_encloser_nsec_name, TYPE_NSEC, zdb_resource_record_set_ttl(&wild_nsec_rrset_node->value));
+        }
+
+        if(context->cname_count > 0)
+        {
+            nsec_inverse_name(dname_inverted, context->original_canonised_fqdn);
+            nsec_node_t *cname_node = nsec_find_interval_start(&zone->nsec.nsec, dname_inverted);
+            if((cname_node != node) && (cname_node != wild_node))
+            {
+                nsec_inverse_name(dname_inverted, cname_node->inverse_relative_name);
+                if(!dnsname_equals(dname_inverted, context->original_canonised_fqdn))
+                {
+                    zdb_resource_record_sets_node_t *cname_nsec_rrset_node = zdb_resource_record_sets_set_find(&cname_node->label->resource_record_set, TYPE_NSEC);
+                    count += zdb_query_to_wire_append_from_rrset(context, dname_inverted, &cname_nsec_rrset_node->value);
+                    count += zdb_query_to_wire_append_type_rrsigs(context, cname_node->label, dname_inverted, TYPE_NSEC, zdb_resource_record_set_ttl(&cname_nsec_rrset_node->value));
+                }
+            }
         }
 
         return count;

@@ -2352,7 +2352,7 @@ zone_diff_fqdn *zone_diff_add_static_fqdn(zone_diff *diff, const uint8_t *fqdn, 
             }
         }
 
-        // the label will be emptied by validation later, the the NSEC3 chain doesn't know that yet.
+        // the label will be emptied by validation later, the NSEC3 chain doesn't know that yet.
 
         log_warn(
             "update: %{dnsname}: %{dnsname} label only contained DS and RRSIG resource record sets: they will be "
@@ -4681,7 +4681,7 @@ void zone_diff_sign_rrset(zone_diff *diff, zdb_zone_t *zone, ptr_vector_t *keys,
 }
 
 /**
- * Appends RRSIGs to remove/add vector, following the the need-to-be-signed RR set, using keys from KSK and ZSK vectors.
+ * Appends RRSIGs to remove/add vector, following the need-to-be-signed RR set, using keys from KSK and ZSK vectors.
  *
  * @param diff
  * @param rrset_to_sign_vector

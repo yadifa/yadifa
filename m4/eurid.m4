@@ -1250,7 +1250,7 @@ AC_DEFUN([AC_ATOMIC_LOAD_CHECK], [
     echo "Target processor is '$target_cpu'"
 
     case "$target_cpu" in
-        armel|armv6l|m68k|powerpc|sh4)
+        armel|armv6l|m68k|powerpc|sh4|arm)
             echo "This arch requires specific linking with libatomic"
             AC_SEARCH_LIBS([__atomic_load_4], [atomic]  , [
                                 echo "libatomic found"

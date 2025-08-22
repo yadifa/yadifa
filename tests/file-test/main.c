@@ -147,7 +147,7 @@ static int test_linear(file_t f, const char *name)
 
     if((ret = file_seek(f, -raw_size, SEEK_CUR)) != 0)
     {
-        formatln("test-linear: %s: could not seek relative position %lli ( => 0 the the beginning)) of file (returned %llx)", name, -raw_size, ret);
+        formatln("test-linear: %s: could not seek relative position %lli ( => 0 the beginning)) of file (returned %llx)", name, -raw_size, ret);
         flushout();
         return ERROR;
     }
@@ -262,7 +262,7 @@ static int test_linear_multipass(file_t f, const char *name)
     if((ret = file_seek(f, -raw_size, SEEK_CUR)) != 0)
     {
         formatln(
-            "test-linear-multipass: %s: could not seek relative position %lli ( => 0 the the beginning)) of file "
+            "test-linear-multipass: %s: could not seek relative position %lli ( => 0 the beginning)) of file "
             "(returned %llx)",
             name,
             -raw_size,
@@ -533,7 +533,7 @@ static int test_linear_multipass_readback(file_t f, const char *name)
     if((ret = file_seek(f, -raw_size, SEEK_CUR)) != 0)
     {
         formatln(
-            "test-linear-multipass-readback: %s: could not seek relative position %lli ( => 0 the the beginning)) of "
+            "test-linear-multipass-readback: %s: could not seek relative position %lli ( => 0 the beginning)) of "
             "file (returned %llx)",
             name,
             -raw_size,
@@ -816,7 +816,7 @@ static int test_linear_multipass_multi_readback(file_t f, const char *name)
     if((ret = file_seek(f, -raw_size, SEEK_CUR)) != 0)
     {
         formatln(
-            "test-linear-multipass-multi-readback: %s: could not seek relative position %lli ( => 0 the the "
+            "test-linear-multipass-multi-readback: %s: could not seek relative position %lli ( => 0 the "
             "beginning)) of file (returned %llx)",
             name,
             -raw_size,

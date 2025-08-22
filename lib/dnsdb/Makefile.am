@@ -58,6 +58,7 @@ pkginclude_HEADERS = \
 	$(I)/btree.h \
 	$(I)/dictionary.h \
 	$(I)/dictionary_node.h \
+	$(I)/dnsname_zone_dict.h \
 	$(I)/dnsrdata.h \
 	$(I)/dnssec.h \
 	$(I)/dnssec_config.h \

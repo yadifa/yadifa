@@ -403,7 +403,7 @@ void               zone_desc_status_flags_long_format(const void *value, output_
 
 static inline bool zone_is_multiprimary(const zone_desc_t *zone_desc) { return (zone_desc->primaries != NULL) && (zone_desc->primaries->next != NULL); }
 
-static inline bool zone_is_TRUE_multiprimary(const zone_desc_t *zone_desc) { return zone_is_multiprimary(zone_desc) && ((zone_desc->flags & ZONE_FLAG_TRUE_MULTIPRIMARY) != 0); }
+static inline bool zone_is_true_multiprimary(const zone_desc_t *zone_desc) { return zone_is_multiprimary(zone_desc) && ((zone_desc->flags & ZONE_FLAG_TRUE_MULTIPRIMARY) != 0); }
 
 void               zone_set_status(zone_desc_t *zone_desc, uint32_t flags);
 uint32_t           zone_get_set_status(zone_desc_t *zone_desc, uint32_t flags);

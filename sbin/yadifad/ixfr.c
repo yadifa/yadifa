@@ -258,13 +258,13 @@ ya_result ixfr_start_query(const host_address_t *servers, const uint8_t *origin,
      * Create the IXFR query packet
      */
 
-    ya_result return_value;
+    ya_result ret;
     uint32_t  serial;
 
-    if(FAIL(return_value = rr_soa_get_serial(soa_rdata, soa_rdata_size, &serial)))
+    if(FAIL(ret = rr_soa_get_serial(soa_rdata, soa_rdata_size, &serial)))
     {
-        log_err("ixfr: %{dnsname}: error with the SOA: %r", origin, return_value);
-        return return_value;
+        log_err("ixfr: %{dnsname}: error with the SOA: %r", origin, ret);
+        return ret;
     }
 
     random_ctx_t rndctx = thread_pool_get_random_ctx();
@@ -278,7 +278,12 @@ ya_result ixfr_start_query(const host_address_t *servers, const uint8_t *origin,
     {
         log_info("ixfr: %{dnsname}: %{hostaddr}: transfer will be signed with key '%{dnsname}'", origin, servers, servers->tsig->name);
 
-        dns_message_sign_query(ixfr_queryp, servers->tsig);
+        ret = dns_message_sign_query(ixfr_queryp, servers->tsig);
+        if(FAIL(ret))
+        {
+            log_err("ixfr: %{dnsname}: signature with key '%{dnsname}' failed: %r", origin, servers->tsig->name, ret);
+            return ret;
+        }
     }
 #endif
 
@@ -296,15 +301,15 @@ ya_result ixfr_start_query(const host_address_t *servers, const uint8_t *origin,
     host_address_t *current_transfer_source;
     current_transfer_source = transfer_source;
 
-    return_value = zone_transfer_source_tcp_connect(servers, &current_transfer_source, is, os, g_config->xfr_connect_timeout);
+    ret = zone_transfer_source_tcp_connect(servers, &current_transfer_source, is, os, g_config->xfr_connect_timeout);
 
-    if(ISOK(return_value))
+    if(ISOK(ret))
     {
 #if DEBUG
         log_debug("ixfr_start_query: write: sending %d bytes to %{hostaddr}", dns_message_get_size(ixfr_queryp) + 2, servers);
         log_memdump_ex(g_server_logger, LOG_DEBUG, dns_message_get_buffer_const(ixfr_queryp), dns_message_get_size(ixfr_queryp), 16, OSPRINT_DUMP_HEXTEXT);
 #endif
-        if(ISOK(return_value = dns_message_write_tcp(ixfr_queryp, os)))
+        if(ISOK(ret = dns_message_write_tcp(ixfr_queryp, os)))
         {
             output_stream_flush(os);
 
@@ -329,11 +334,11 @@ ya_result ixfr_start_query(const host_address_t *servers, const uint8_t *origin,
         }
         else
         {
-            log_info("ixfr: %{dnsname}: %{hostaddr}: stream connection failed: %r", origin, servers, return_value);
+            log_info("ixfr: %{dnsname}: %{hostaddr}: stream connection failed: %r", origin, servers, ret);
         }
     }
 
-    return return_value;
+    return ret;
 }
 
 /**

@@ -89,8 +89,8 @@ static inline void database_query(zdb_t *database, dns_message_t *mesg)
     int64_t ts_start = timeus();
 #endif
     zdb_query_to_wire_context_t context;
-    zdb_query_to_wire_context_init(&context, mesg);
-    zdb_query_to_wire(database, &context);
+    zdb_query_to_wire_context_init(&context, mesg, database);
+    zdb_query_to_wire(&context);
     zdb_query_to_wire_finalize(&context);
 #if DNSCORE_HAS_QUERY_US_DEBUG
     int64_t ts_stop = timeus();
@@ -115,8 +115,8 @@ static inline ya_result database_query_with_rrl(zdb_t *db, dns_message_t *mesg)
     int64_t ts_start = timeus();
 #endif
     zdb_query_to_wire_context_t context;
-    zdb_query_to_wire_context_init(&context, mesg);
-    zdb_query_to_wire(db, &context);
+    zdb_query_to_wire_context_init(&context, mesg, db);
+    zdb_query_to_wire(&context);
     ya_result ret = rrl_process(mesg, &context);
     zdb_query_to_wire_finalize(&context);
 #if DNSCORE_HAS_QUERY_US_DEBUG
@@ -128,7 +128,27 @@ static inline ya_result database_query_with_rrl(zdb_t *db, dns_message_t *mesg)
 #endif
 
 ya_result database_apply_nsec3paramqueued(zdb_zone_t *zone, zdb_resource_record_set_t *rrset, uint8_t lock_owner);
+
+/**
+ * Applied the update in the message to the database.
+ * Updates the message with the result of the update.
+ * In case of TSIG, the answer message is signed by the call.
+ *
+ * @param database the zone database
+ * @param mesg the update message
+ * @return an error code
+ */
+
 ya_result database_update(zdb_t *database, dns_message_t *mesg);
+
+/**
+ * Logs the update result in case of error.
+ *
+ * @param mesg the update message
+ * @param ret  the database_update return value
+ */
+
+void      database_update_log(dns_message_t *mesg, ya_result ret);
 ya_result database_print_zones(zone_desc_t *, char *);
 ya_result database_shutdown(zdb_t *);
 

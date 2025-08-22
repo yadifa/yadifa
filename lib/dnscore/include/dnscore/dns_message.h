@@ -341,7 +341,7 @@ struct dns_message_s
                                                                                  // IF MOVED, YOU NEED TO LOOK AT
                                                                                  // message_new_instance() ZEROMEMORY
                                                                                  // call
-    uint8_t              _canonised_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];
+    uint8_t _canonised_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];
 
     dns_message_cookie_t _cookie;
 

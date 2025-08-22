@@ -2502,7 +2502,7 @@ static int dns_udp_timeout_service(struct service_worker_s *worker)
 
     while(service_should_run(worker))
     {
-        sleep(1);
+        sleep(1); // scan-build: for some reason it thinks this is inside a critical section
 
         if(!service_should_run(worker))
         {

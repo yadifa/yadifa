@@ -131,7 +131,7 @@ zdb_resource_record_set_t *zdb_zone_find_resource_record_set(zdb_zone_t *zone, d
  * Searches the zone for the zdb_rr_label of an fqdn if it exists.
  *
  * @param[in] zone the zone
- * @parma[in] fqdn the fqdn of the the label
+ * @parma[in] fqdn the fqdn of the label
  *
  * @return a pointer the label, or NULL if it was not found.
  */

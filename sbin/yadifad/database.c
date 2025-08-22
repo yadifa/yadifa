@@ -1011,6 +1011,16 @@ ya_result database_zone_ensure_private_keys_from_message(dns_message_t *mesg)
 
 #if DNSCORE_HAS_PRIMARY_SUPPORT
 
+/**
+ * Applied the update in the message to the database.
+ * Updates the message with the result of the update.
+ * In case of TSIG, the answer message is signed by the call.
+ *
+ * @param database the zone database
+ * @param mesg the update message
+ * @return an error code
+ */
+
 ya_result database_update(zdb_t *database, dns_message_t *mesg)
 {
     ya_result ret;
@@ -1300,18 +1310,20 @@ ya_result database_update(zdb_t *database, dns_message_t *mesg)
                                         // if there was no maintenance and now there is, ...
                                         if((zone_maintain_mode_prev == 0) && (zone_maintain_mode_now != 0))
                                         {
+#if DEBUG
                                             log_info("database: update: %{dnsname}: DEBUG: maintenance mode enabled", zone_origin(zone_desc));
-
+#endif
                                             // if the zone was not maintained and the zone maintenance is not paused,
                                             // then the maintenance needs to be activated
 
                                             if(!zdb_zone_is_maintained(zone) && !zdb_zone_is_maintenance_paused(zone))
                                             {
+#if DEBUG
                                                 log_info(
                                                     "database: update: %{dnsname}: DEBUG: not maintained and not "
                                                     "maintenance paused => maintenance will start",
                                                     zone_origin(zone_desc));
-
+#endif
                                                 log_debug(
                                                     "database: update: %{dnsname}: zone had no maintenance mode but is "
                                                     "now %u and is not maintained: activating maintenance",
@@ -1329,11 +1341,12 @@ ya_result database_update(zdb_t *database, dns_message_t *mesg)
                                             zdb_zone_set_maintenance_paused(zone, false);
 
                                             database_service_zone_dnskey_set_alarms(zone); // we are in a ZT_PRIMARY case
-
+#if DEBUG
                                             log_info(
                                                 "database: update: %{dnsname}: DEBUG: key updated and added => "
                                                 "maintenance will start",
                                                 zone_origin(zone_desc));
+#endif
                                             database_service_zone_dnssec_maintenance_start = zdb_zone_is_maintained(zone);
                                         }
 
@@ -1341,11 +1354,12 @@ ya_result database_update(zdb_t *database, dns_message_t *mesg)
                                         {
                                             zdb_zone_set_maintained(zone, true);
                                             zdb_zone_set_maintenance_paused(zone, false);
-
+#if DEBUG
                                             log_info(
                                                 "database: update: %{dnsname}: DEBUG: key updated and removed => "
                                                 "maintenance will start",
                                                 zone_origin(zone_desc));
+#endif
                                             database_service_zone_dnssec_maintenance_start = zdb_zone_is_maintained(zone);
                                         }
                                         else if(ret & DYNUPDATE_DIFF_RETURN_NSEC3PARAM)
@@ -1535,7 +1549,9 @@ ya_result database_update(zdb_t *database, dns_message_t *mesg)
 #if ZDB_HAS_DNSSEC_SUPPORT && ZDB_HAS_RRSIG_MANAGEMENT_SUPPORT && ZDB_HAS_PRIMARY_SUPPORT
         if(database_service_zone_dnssec_maintenance_start)
         {
+#if DEBUG
             log_info("database: update: %{dnsname}: DEBUG: maintenance starting", zone_origin(zone_desc));
+#endif
             zone = zdb_acquire_zone_read_double_lock(database, &name, ZDB_ZONE_MUTEX_SIMPLEREADER, ZDB_ZONE_MUTEX_DYNUPDATE);
 
             if(zone != NULL && !zdb_zone_invalid(zone))
@@ -1579,6 +1595,33 @@ ya_result database_update(zdb_t *database, dns_message_t *mesg)
 
     dns_message_set_rcode(mesg, dns_message_get_status(mesg));
 
+    if(ISOK(ret))
+    {
+        dns_message_set_authoritative_answer(mesg);
+    }
+    else
+    {
+        switch(dns_message_get_status(mesg))
+        {
+            case RCODE_NOERROR:
+            {
+                dns_message_set_authoritative_answer(mesg);
+                dns_message_set_status(mesg, FP_RCODE_SERVFAIL);
+                break;
+            }
+            case RCODE_NOTZONE:
+            {
+                dns_message_set_answer(mesg);
+                break;
+            }
+            default:
+            {
+                dns_message_set_authoritative_answer(mesg);
+                break;
+            }
+        }
+    }
+
 #if DNSCORE_HAS_TSIG_SUPPORT
     if(dns_message_has_tsig(mesg))
     {
@@ -1588,6 +1631,42 @@ ya_result database_update(zdb_t *database, dns_message_t *mesg)
 #endif
 
     return (finger_print)ret;
+}
+
+/**
+ * Logs the update result in case of error.
+ *
+ * @param mesg the update message
+ * @param ret  the database_update return value
+ */
+
+void database_update_log(dns_message_t *mesg, ya_result ret)
+{
+    if(FAIL(ret))
+    {
+        if(dns_message_get_query_type(mesg) == TYPE_SOA)
+        {
+            if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+            {
+                log_info("update (%04hx) %{dnsname} temporary failure: zone file must be stored: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), ret);
+            }
+            else
+            {
+                log_warn("update (%04hx) %{dnsname} failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), ret);
+            }
+        }
+        else
+        {
+            if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
+            {
+                log_info("update (%04hx) %{dnsname} %{dnstype} temporary failure: zone file must be stored: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), ret);
+            }
+            else
+            {
+                log_warn("update (%04hx) %{dnsname} %{dnstype} failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), ret);
+            }
+        }
+    }
 }
 
 #endif

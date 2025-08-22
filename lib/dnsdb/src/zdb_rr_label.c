@@ -569,6 +569,7 @@ zdb_rr_label_t *zdb_rr_label_find_ext(zdb_rr_label_t *apex, dnslabel_vector_refe
     zdb_rr_label_t *closest = apex;
     int32_t         authority_index = index_ + 1;
     int32_t         closest_index = index_ + 1;
+    int32_t         wildcard_index = -1;
 
     /* look into the sub level*/
 
@@ -589,6 +590,7 @@ zdb_rr_label_t *zdb_rr_label_find_ext(zdb_rr_label_t *apex, dnslabel_vector_refe
 
                 rr_label = (zdb_rr_label_t *)dictionary_find(&closest->sub, WILD_HASH, (void *)WILD_LABEL, zdb_rr_label_zlabel_match);
                 closest_index = 0;
+                wildcard_index = index;
             }
 
             break;
@@ -611,6 +613,7 @@ zdb_rr_label_t *zdb_rr_label_find_ext(zdb_rr_label_t *apex, dnslabel_vector_refe
     ext->answer = rr_label;
     ext->authority_index = authority_index;
     ext->closest_index = closest_index;
+    ext->wildcard_index = wildcard_index;
 
     return rr_label;
 }
@@ -765,7 +768,7 @@ static ya_result zdb_rr_label_delete_record_process_callback(void *a, dictionary
         {
             /* If the type was XXXX and we deleted the last one the flag may change.
              * NS => not a delegation anymore
-             * CNAME => no cname anymore
+             * CNAME => no CNAME anymore
              * ANY => nothing anymore (and should not be relevant anymore either ...)
              */
 
@@ -1073,7 +1076,7 @@ static ya_result zdb_rr_label_delete_record_exact_process_callback(void *a, dict
         {
             /* If the type was XXXX and we deleted the last one the flag may change.
              * NS => not a delegation anymore
-             * CNAME => no cname anymore
+             * CNAME => no CNAME anymore
              * ANY => nothing anymore (and should not be relevant anymore either ...)
              */
 

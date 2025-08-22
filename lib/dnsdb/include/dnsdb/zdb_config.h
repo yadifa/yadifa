@@ -145,19 +145,6 @@ extern "C"
 #define ZDB_RECORDS_CLASS_MAX                       1
 
 /**
- * Previously, readers had to be "stopped" before any write was done into the database.  It's a reasonably fast
- * mechanism. With the drastic improve of the MT model on kernels > 3.x, the zone can now be explicitly locked by
- * readers. The first experiments tends to show that the price is minimal. The lock can still be drastically improved.
- *
- * == 0: no lock
- * != 0: lock
- *
- * The locking mechanism itself can be vastly improved
- */
-
-#define ZDB_EXPLICIT_READER_ZONE_LOCK               1
-
-/**
  * The maximum number of loops allowed with a cname.
  */
 

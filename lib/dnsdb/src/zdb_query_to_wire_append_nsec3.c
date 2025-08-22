@@ -104,7 +104,7 @@ uint16_t zdb_query_to_wire_append_nsec3_name_error(zdb_query_to_wire_context_t *
 
     nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, encloser_nsec3, zone->origin, NULL, min_ttl};
 
-    uint16_t                                             count = 0;
+    uint16_t count = 0;
 
     if(encloser_nsec3 != NULL)
     {
@@ -320,23 +320,11 @@ uint16_t zdb_query_to_wire_append_nsec3_ds_nodata_error(zdb_query_to_wire_contex
         if(nsec3_parms.item != NULL)
         {
             count = zdb_query_to_wire_append_nsec3_record(context, &nsec3_parms);
-            /*
-            nsec3_zone_item_to_new_zdb_resource_record_data(
-                &nsec3_parms,
-                out_closest_encloser_nsec3_owner,
-                out_closest_encloser_nsec3,
-                out_closest_encloser_nsec3_rrsig);
-            */
         }
         else
         {
-            /*
-             *out_closest_encloser_nsec3_owner = NULL;
-             *out_closest_encloser_nsec3 = NULL;
-             *out_closest_encloser_nsec3_rrsig = NULL;
-             * */
 #if DEBUG
-            log_debug("nsec3_nodata_error: no closest encloser proof");
+            log_debug("zdb_query_to_wire_append_nsec3_ds_nodata_error: no closest encloser proof");
 #endif
             count = 0;
         }
@@ -361,25 +349,10 @@ uint16_t zdb_query_to_wire_append_nsec3_ds_nodata_error(zdb_query_to_wire_contex
         nsec3_parms.item = owner_nsec3;
 
         count += zdb_query_to_wire_append_nsec3_record(context, &nsec3_parms);
-        /*
-        nsec3_zone_item_to_new_zdb_resource_record_data(
-            &nsec3_parms,
-            out_owner_nsec3_owner,
-            out_owner_nsec3,
-            out_owner_nsec3_rrsig);
-        */
     }
     else
     {
         log_err("%{dnsnamevector} has no NSEC3 owner, has DNSSEC mode been changed?", qname);
-
-        //
-        /*
-        ((zone->_flags & ZDB_ZONE_HAS_OPTOUT_COVERAGE) != 0)
-
-        digestname(closest_provable_encloser, dnsname_len(closest_provable_encloser), salt, salt_len, iterations,
-        &digest[1], false); closest_provable_encloser_nsec3 = nsec3_find(&n3->items, digest);
-        */
     }
 
     return count;
@@ -563,16 +536,45 @@ uint16_t zdb_query_to_wire_append_wild_nsec3_data(zdb_query_to_wire_context_t *c
     const nsec3_zone_item_t *wild_encloser_nsec3 = NULL;
     const nsec3_zone_item_t *closest_provable_encloser_nsec3 = NULL;
     const nsec3_zone_item_t *qname_encloser_nsec3 = NULL;
+    uint16_t authority_count = 0;
+
+    if(context->cname_count != 0)
+    {
+        dnsname_vector_t query_name_vector;
+        dnsname_to_dnsname_vector(context->original_canonised_fqdn, &query_name_vector);
+        nsec3_wild_closest_encloser_proof(zone, &query_name_vector, apex_index, &wild_encloser_nsec3, &closest_provable_encloser_nsec3, &qname_encloser_nsec3);
+
+        if(qname_encloser_nsec3 != NULL)
+        {
+            nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
+            authority_count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
+        }
+        wild_encloser_nsec3 = NULL;
+        closest_provable_encloser_nsec3 = NULL;
+        qname_encloser_nsec3 = NULL;
+    }
 
     nsec3_wild_closest_encloser_proof(zone, name, apex_index, &wild_encloser_nsec3, &closest_provable_encloser_nsec3, &qname_encloser_nsec3);
 
-    // nsec3_wild_next_closer_proof(zone, name, apex_index, &qname_encloser_nsec3);
+    if(context->cname_count > 0)
+    {
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
+        authority_count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
+        if(authority_count > 0)
+        {
+            return authority_count;
+        }
+
+        nsec3_wild_next_closer_proof(zone, name, apex_index, &qname_encloser_nsec3);
+    }
 
     if(qname_encloser_nsec3 != NULL)
     {
         nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
 
-        return zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
+        authority_count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
+
+        return authority_count;
     }
     else
     {

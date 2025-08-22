@@ -48,7 +48,6 @@
  *----------------------------------------------------------------------------*/
 #pragma once
 
-#include <openssl/engine.h>
 #include <openssl/sha.h>
 #include <openssl/md5.h>
 #include <dnscore/sys_types.h>

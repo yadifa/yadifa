@@ -53,7 +53,6 @@
 #include <openssl/err.h>
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
-#include <openssl/engine.h>
 #include "dnscore/openssl.h"
 
 #include "dnscore/sys_types.h"

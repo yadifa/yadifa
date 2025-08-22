@@ -62,7 +62,6 @@
 // #include <openssl/ec_lcl.h>
 #include <openssl/ecdsa.h>
 #include <openssl/ssl.h>
-#include <openssl/engine.h>
 #include "dnscore/openssl.h"
 
 #include "dnscore/dnscore_config.h"

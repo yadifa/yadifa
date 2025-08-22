@@ -668,6 +668,7 @@ static ya_result get_user_confirmation()
     }
     else
     {
+        free(line_buffer);
         log_notice("Got user confirmation");
     }
 

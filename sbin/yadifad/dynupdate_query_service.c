@@ -178,44 +178,7 @@ static int dynupdate_query_service_thread(struct service_worker_s *worker)
 
             ya_result ret = database_update(database, mesg);
 
-            if(ISOK(ret))
-            {
-                dns_message_set_authoritative_answer(mesg);
-            }
-            else
-            {
-                if(dns_message_get_status(mesg) != RCODE_NOTZONE)
-                {
-                    dns_message_set_authoritative_answer(mesg);
-                }
-                else
-                {
-                    dns_message_set_answer(mesg);
-                }
-
-                if(dns_message_get_query_type(mesg) == TYPE_SOA)
-                {
-                    if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
-                    {
-                        log_info("update (%04hx) %{dnsname} temporary failure: zone file must be stored: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), ret);
-                    }
-                    else
-                    {
-                        log_warn("update (%04hx) %{dnsname} failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), ret);
-                    }
-                }
-                else
-                {
-                    if(ret == ZDB_JOURNAL_MUST_SAFEGUARD_CONTINUITY)
-                    {
-                        log_info("update (%04hx) %{dnsname} %{dnstype} temporary failure: zone file must be stored: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), ret);
-                    }
-                    else
-                    {
-                        log_warn("update (%04hx) %{dnsname} %{dnstype} failed: %r", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), ret);
-                    }
-                }
-            }
+            database_update_log(mesg, ret);
 
             // local_statistics->udp_fp[message_get_status(mesg)]++;
 

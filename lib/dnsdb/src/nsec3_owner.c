@@ -867,7 +867,9 @@ void nsec3_item_move_all_star_to_nsec3_item(nsec3_zone_item_t *src, nsec3_zone_i
         {
             zdb_rr_label_t *label = nsec3_item_star_get(dst, i);
 
+#if NSEC3_OWNER_DEBUG
             log_debug("nsec3_move_all_star: %{digest32h} @%p %{dnslabel} @%p %i -> %i", ITEM_DIGEST(dst), dst, label->name, label, i, i);
+#endif
 
             owners.owners[i] = label;
         }
@@ -883,7 +885,9 @@ void nsec3_item_move_all_star_to_nsec3_item(nsec3_zone_item_t *src, nsec3_zone_i
         {
             zdb_rr_label_t *label = nsec3_item_star_get(src, i);
 
+#if NSEC3_OWNER_DEBUG
             log_debug("nsec3_move_all_star: %{digest32h} @%p %{dnslabel} @%p %i -> %i", ITEM_DIGEST(src), src, label->name, label, i, dst->sc + i);
+#endif
 
             nsec3_label_extension_replace_star(label->nsec.nsec3, src, dst);
             owners.owners[dst->sc + i] = label;

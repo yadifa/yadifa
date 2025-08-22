@@ -123,6 +123,7 @@ set(LIBRARY_HEADERS
         ${LIBRARY_HEADER_PATH}/btree.h
         ${LIBRARY_HEADER_PATH}/dictionary.h
         ${LIBRARY_HEADER_PATH}/dictionary_node.h
+        ${LIBRARY_HEADER_PATH}/dnsname_zone_dict.h
         ${LIBRARY_HEADER_PATH}/dnsrdata.h
         ${LIBRARY_HEADER_PATH}/dnssec.h
         ${LIBRARY_HEADER_PATH}/dnssec_config.h

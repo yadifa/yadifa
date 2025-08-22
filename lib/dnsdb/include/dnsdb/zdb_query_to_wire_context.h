@@ -42,6 +42,8 @@
 
 #pragma once
 
+#include "nsec3_item.h"
+
 #include <dnscore/dns_message.h>
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb_zone_resource_record_set.h>
@@ -50,6 +52,15 @@
 #define ZDB_QUERY_TO_WIRE_USE_PACKET_RRSET_OPTIMISATION 1
 
 #define ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX    16
+#define ZDB_QUERY_TO_WIRE_CONTEXT_MX_RRSET_COUNT_MAX    4
+
+struct zdb_query_to_wire_context_rrset_s
+{
+    const zdb_resource_record_set_t *rrset;
+    const zdb_zone_t *zone;
+};
+
+typedef struct zdb_query_to_wire_context_rrset_s zdb_query_to_wire_context_rrset_t;
 
 struct zdb_query_to_wire_context_s
 {
@@ -59,20 +70,71 @@ struct zdb_query_to_wire_context_s
 #if DNSCORE_HAS_RRL_SUPPORT
     zdb_rr_label_t *fqdn_label;
 #endif
-    uint16_t                         flags;
-    uint16_t                         record_type;
-    uint16_t                         answer_count;
-    uint16_t                         authority_count;
-    uint16_t                         additional_count;
-    uint8_t                          cname_count;
-    uint8_t                          ns_rrset_count;
-    bool                             delegation;
-    bool                             additionals_required;
-    const zdb_resource_record_set_t *ns_rrsets[ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX];
-    const uint8_t                   *cname_list[ZDB_CNAME_LOOP_MAX];
+    zdb_t                          *db;
+
+    uint16_t                        flags;
+    uint16_t                        record_type;
+    uint16_t                        answer_count;
+    uint16_t                        authority_count;
+
+    uint16_t                        additional_count;
+    uint8_t                         cname_count;
+    uint8_t                         ns_rrset_count;
+    uint8_t                         mx_rrset_count;
+    uint8_t                         locked_zones_count;
+
+    uint8_t                         locked_db_count;
+    bool                            delegation;
+    bool                            additionals_required;
+    bool                            additionals_added;  // temporary stuff
+    bool                            additionals_with_rrsig;
+    zdb_query_to_wire_context_rrset_t  ns_rrsets[ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX];
+    zdb_query_to_wire_context_rrset_t  mx_rrsets[ZDB_QUERY_TO_WIRE_CONTEXT_MX_RRSET_COUNT_MAX];
+    const uint8_t                   *cname_list[ZDB_CNAME_LOOP_MAX]; // used for CNAME loop detection
+    uint8_t                         original_canonised_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];
+    uint8_t                         last_cname_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];
+    zdb_zone_t                     *locked_zones[ZDB_CNAME_LOOP_MAX + 1];
 };
 
 typedef struct zdb_query_to_wire_context_s zdb_query_to_wire_context_t;
+
+/**
+ * Adds an NS rrset to the query context.
+ * Will be used later for additional computations.
+ *
+ * @param context the query context
+ * @param rrset the rrset to add
+ * @param zone  the associated zone
+ */
+
+static inline void zdb_query_to_wire_context_add_ns_rrset(zdb_query_to_wire_context_t *context, const zdb_resource_record_set_t *rrset, const zdb_zone_t *zone)
+{
+    if(context->ns_rrset_count < ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX)
+    {
+        context->ns_rrsets[context->ns_rrset_count].rrset = rrset;
+        context->ns_rrsets[context->ns_rrset_count].zone = zone;
+        ++context->ns_rrset_count;
+    }
+}
+
+/**
+ * Adds an MX rrset to the query context.
+ * Will be used later for additional computations.
+ *
+ * @param context the query context
+ * @param rrset the rrset to add
+ * @param zone  the associated zone
+ */
+
+static inline void zdb_query_to_wire_context_add_mx_rrset(zdb_query_to_wire_context_t *context, const zdb_resource_record_set_t *rrset, const zdb_zone_t *zone)
+{
+    if(context->mx_rrset_count < ZDB_QUERY_TO_WIRE_CONTEXT_MX_RRSET_COUNT_MAX)
+    {
+        context->mx_rrsets[context->mx_rrset_count].rrset = rrset;
+        context->mx_rrsets[context->mx_rrset_count].zone = zone;
+        ++context->mx_rrset_count;
+    }
+}
 
 static inline void                         zdb_query_to_wire_context_set_truncated(zdb_query_to_wire_context_t *context) { dns_message_set_truncated_answer(context->mesg); }
 

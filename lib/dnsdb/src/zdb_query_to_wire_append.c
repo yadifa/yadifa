@@ -125,7 +125,7 @@ uint16_t zdb_query_to_wire_append_ns_from_rrset(zdb_query_to_wire_context_t *con
  * 3 uses
  */
 
-uint16_t zdb_query_to_wire_append_authority(zdb_query_to_wire_context_t *context, const uint8_t *qname, const zdb_rr_label_find_ext_data *rr_label_info, bool dnssec)
+uint16_t zdb_query_to_wire_append_authority(zdb_query_to_wire_context_t *context, const uint8_t *qname, const zdb_rr_label_find_ext_data *rr_label_info, const zdb_zone_t *zone, bool dnssec)
 {
     zdb_resource_record_set_t *authority_rrset = zdb_resource_record_sets_find(&rr_label_info->authority->resource_record_set, TYPE_NS);
 
@@ -139,8 +139,7 @@ uint16_t zdb_query_to_wire_append_authority(zdb_query_to_wire_context_t *context
             i--;
         }
 
-        assert(context->ns_rrset_count < ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX);
-        context->ns_rrsets[context->ns_rrset_count++] = authority_rrset;
+        zdb_query_to_wire_context_add_ns_rrset(context, authority_rrset, zone);
         uint16_t count = zdb_query_to_wire_append_ns_from_rrset(context, qname, authority_rrset);
 
 #if ZDB_HAS_DNSSEC_SUPPORT
@@ -221,6 +220,17 @@ uint16_t zdb_query_to_wire_append_ips(zdb_query_to_wire_context_t *context, cons
     return count;
 }
 
+/**
+ * Adds the glues relevant to all FQDN found in the RDATAs of an NS rrset.
+ *
+ * @param context the query context
+ * @param zone the working zone
+ * @param ns_rrset the NS rrset
+ * @param dnssec add RRSIGs or not
+ *
+ * @return the number of records added
+ */
+
 uint16_t zdb_query_to_wire_append_glues_from_ns(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, const zdb_resource_record_set_t *ns_rrset, bool dnssec)
 {
     uint16_t count = 0;
@@ -234,6 +244,36 @@ uint16_t zdb_query_to_wire_append_glues_from_ns(zdb_query_to_wire_context_t *con
             const zdb_resource_record_data_t *ns_record = zdb_resource_record_set_const_iterator_next(&iter);
 
             count += zdb_query_to_wire_append_ips(context, zone, zdb_resource_record_data_rdata_const(ns_record), dnssec);
+        }
+    }
+
+    return count;
+}
+
+/**
+ * Adds the glues relevant to all FQDN found in the RDATAs of an MX rrset.
+ *
+ * @param context the query context
+ * @param zone the working zone
+ * @param mx_rrset the MX rrset
+ * @param dnssec add RRSIGs or not
+ *
+ * @return the number of records added
+ */
+
+uint16_t zdb_query_to_wire_append_glues_from_mx(zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, const zdb_resource_record_set_t *mx_rrset, bool dnssec)
+{
+    uint16_t count = 0;
+
+    if(mx_rrset != NULL)
+    {
+        zdb_resource_record_set_const_iterator iter;
+        zdb_resource_record_set_const_iterator_init(mx_rrset, &iter);
+        while(zdb_resource_record_set_const_iterator_has_next(&iter))
+        {
+            const zdb_resource_record_data_t *mx_record = zdb_resource_record_set_const_iterator_next(&iter);
+
+            count += zdb_query_to_wire_append_ips(context, zone, zdb_resource_record_data_rdata_const(mx_record) + 2, dnssec); // +2 because MX rdata
         }
     }
 

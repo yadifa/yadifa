@@ -43,6 +43,7 @@
 #include "dnscore/dnskey_signature.h"
 #include "dnscore/dnskey.h"
 #include "dnscore/logger.h"
+#include <openssl/err.h>
 
 #define MODULE_MSG_HANDLE      g_system_logger
 

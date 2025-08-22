@@ -474,32 +474,9 @@ int server_process_channel_message(tcp_manager_channel_t *tmc, dns_message_t *me
                             log_info("update [%04hx] %{dnsname} %{dnstype} from %{sockaddr}", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_sender_sa(mesg));
                         }
 
-                        if(ISOK(database_update(database, mesg)))
-                        {
-                            dns_message_set_authoritative_answer(mesg);
-                        }
-                        else
-                        {
-                            switch(dns_message_get_status(mesg))
-                            {
-                                case RCODE_NOERROR:
-                                {
-                                    dns_message_set_authoritative_answer(mesg);
-                                    dns_message_set_status(mesg, FP_RCODE_SERVFAIL);
-                                    break;
-                                }
-                                case RCODE_NOTZONE:
-                                {
-                                    dns_message_set_answer(mesg);
-                                    break;
-                                }
-                                default:
-                                {
-                                    dns_message_set_authoritative_answer(mesg);
-                                    break;
-                                }
-                            }
-                        }
+                        ret = database_update(database, mesg);
+
+                        database_update_log(mesg, ret);
 
                         ret = server_tcp_reply(mesg, tmc);
 

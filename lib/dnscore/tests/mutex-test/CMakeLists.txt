@@ -66,3 +66,5 @@ add_test(NAME "${NAME}-shared_group_mutex_transferlock_test"  COMMAND ${NAME} sh
 add_test(NAME "${NAME}-speed_test"  COMMAND ${NAME} speed_test)
 add_test(NAME "${NAME}-mutex_debug_test"  COMMAND ${NAME} mutex_debug_test)
 add_test(NAME "${NAME}-mutex_futex_test"  COMMAND ${NAME} mutex_futex_test)
+add_test(NAME "${NAME}-mutex_semaphore_test"  COMMAND ${NAME} mutex_semaphore_test)
+add_test(NAME "${NAME}-mutex_semaphore_shared_mem_test"  COMMAND ${NAME} mutex_semaphore_shared_mem_test)

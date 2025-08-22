@@ -330,6 +330,7 @@ libdnscore_la_SOURCES = \
 	src/mutex_futex.c \
 	src/mutex_group.c \
 	src/mutex_mutex.c \
+	src/mutex_semaphore.c \
 	src/mutex_shared_group.c \
 	src/network.c \
 	src/nsec3_hash.c \

@@ -151,9 +151,10 @@ set(LIBRARY_SOURCES
     ${LIBRARY_SOURCE_PATH}/mutex_futex.c
     ${LIBRARY_SOURCE_PATH}/mutex_group.c
     ${LIBRARY_SOURCE_PATH}/mutex_mutex.c
+    ${LIBRARY_SOURCE_PATH}/mutex_semaphore.c
     ${LIBRARY_SOURCE_PATH}/mutex_shared_group.c
     ${LIBRARY_SOURCE_PATH}/network.c
-    #${LIBRARY_SOURCE_PATH}/name.c
+    ${LIBRARY_SOURCE_PATH}/name.c
     ${LIBRARY_SOURCE_PATH}/nsec3_hash.c
     ${LIBRARY_SOURCE_PATH}/output_stream.c
     ${LIBRARY_SOURCE_PATH}/pace.c
@@ -356,7 +357,7 @@ set(LIBRARY_HEADERS
     ${LIBRARY_HEADER_PATH}/mutex_group.h
     ${LIBRARY_HEADER_PATH}/mutex_logger.h
     ${LIBRARY_HEADER_PATH}/mutex_mutex.h
-    ${LIBRARY_HEADER_PATH}/mutex_semaphore.h
+    #${LIBRARY_HEADER_PATH}/mutex_semaphore.h
     ${LIBRARY_HEADER_PATH}/mutex_shared_group.h
     ${LIBRARY_HEADER_PATH}/mutex_spinlock.h
     ${LIBRARY_HEADER_PATH}/network.h

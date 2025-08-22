@@ -56,8 +56,8 @@ struct yadifa_ctrl_settings_s
 
     /*    ------------------------------------------------------------    */
 
-    uint16_t rclass;
-    uint16_t rtype;
+    uint16_t qclass;
+    uint16_t qtype;
     uint16_t port;
 
     bool     clean;

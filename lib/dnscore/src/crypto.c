@@ -43,7 +43,6 @@
 #include "dnscore/crypto.h"
 #include "dnscore/logger.h"
 #include <openssl/ssl.h>
-#include <openssl/engine.h>
 #include <openssl/err.h>
 #include "dnscore/openssl.h"
 
@@ -69,79 +68,6 @@ void CRYPTO_cleanup_all_ex_data(void) {}
 #error "SSL_API not defined"
 #endif
 */
-#if 0
-/*
- * NOTE: strtok_r CRASHES if the first parameter is on non-writable memory (ie: "openssl" instead of strdup("openssl") )
- *       In order to avoid this, I dup the string before processing it.
- */
-
-ENGINE*
-dnssec_loadengine(const char *engine_name_const)
-{
-    ENGINE *engine;
-    char *token_pointer = NULL;
-
-    char *engine_name = strdup(engine_name_const);
-
-    char *token = strtok_r(engine_name, ENGINE_COMMAND_DELIMITER, &token_pointer);
-
-    if(token == NULL)
-    {
-        engine = ENGINE_by_id(engine_name);
-    }
-    else
-    {
-        engine = ENGINE_by_id(token);
-        token = strtok_r(NULL, ENGINE_COMMAND_DELIMITER, &token_pointer);
-    }
-
-    if(engine == NULL)
-    {
-        log_err("ENGINE %s not available", engine_name);
-        DIE(DNSSEC_ERROR_NOENGINE);
-    }
-
-    while(token != NULL)
-    {
-        char *command_pointer;
-        char *command = strtok_r(token, "=", &command_pointer);
-
-        if(command == NULL)
-        {
-            log_err("bad command %s", command);
-            DIE(DNSSEC_ERROR_INVALIDENGINE);
-        }
-        char *command_value = strtok_r(NULL, "=", &command_pointer);
-        if(command_value == NULL)
-        {
-            log_err("bad command value %s", command_value);
-            DIE(DNSSEC_ERROR_INVALIDENGINE);
-        }
-        // command_value is not NULL because DIE stops the program.
-        ENGINE_ctrl_cmd((ENGINE*)engine, command, atoi(command_value), NULL, NULL, 0);
-
-        token = strtok_r(NULL, ENGINE_COMMAND_DELIMITER, &token_pointer);
-    }
-
-    if(ENGINE_init((ENGINE*)engine) == 0)
-    {
-        log_err("ENGINE_init failed");
-        ENGINE_free((ENGINE*)engine); /* cfr: http://www.openssl.org/docs/crypto/engine.html */
-        DIE(DNSSEC_ERROR_INVALIDENGINE);
-    }
-
-    free(engine_name);
-
-    return engine;
-}
-
-void
-dnssec_unloadengine(ENGINE *engine)
-{
-    ENGINE_finish((ENGINE*)engine);
-    ENGINE_free((ENGINE*)engine);
-}
-#endif
 
 ya_result crypto_init()
 {
@@ -188,9 +114,7 @@ void crypto_finalise()
 
 #if SSL_API_LT_110
     CONF_modules_free();
-#endif
     ENGINE_cleanup();
-#if SSL_API_LT_110
     CONF_modules_unload(1);
 #endif
     ERR_free_strings();
@@ -219,7 +143,9 @@ void crypto_finalise()
     free(ssl_mutex);
 #endif
 
+#if SSL_API_LT_110
     ENGINE_cleanup();
+#endif
 }
 
 // SSL_ERROR_WANT_CLIENT_HELLO_CB

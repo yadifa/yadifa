@@ -33,8 +33,12 @@
 #include "yatest.h"
 #include "dnscore/thread_pool.h"
 #include "dnscore/mutex_logger.h"
+#include "dnscore/process.h"
+
 #include <dnscore/dnscore.h>
 #include <dnscore/mutex.h>
+#include <dnscore/mutex_semaphore.h>
+#include <sys/mman.h>
 
 static void init() { dnscore_init(); }
 
@@ -45,7 +49,7 @@ static void finalise() { dnscore_finalize(); }
 static uint8_t *buffer = NULL;
 static size_t   buffer_size = 0;
 
-static void     something_callback_1(void *notused)
+static void something_callback_1(void *notused)
 {
     (void)notused;
     for(size_t i = 0; i < buffer_size; ++i)
@@ -762,6 +766,122 @@ static int mutex_futex_test()
 #endif
 }
 
+struct mutex_semaphore_test_s
+{
+    mutex_semaphore_t ms;
+
+    atomic_uint64_t parent;
+    atomic_uint64_t child;
+    atomic_uint64_t both;
+};
+
+static int mutex_semaphore_test_ex(bool on_shared_memory)
+{
+#if __linux__ || __APPLE__ || __FreeBSD__
+    dnscore_init();
+
+    void *p = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if(p == MAP_FAILED)
+    {
+        yatest_err("mmap failed");
+        return 1;
+    }
+
+    struct mutex_semaphore_test_s *ctx = p;
+
+    memset(ctx, 0, sizeof(*ctx));
+
+    const int64_t n = 10000000;
+    int ret;
+
+    mutex_semaphore_t ms;
+    mutex_semaphore_t *msp;
+
+    if(on_shared_memory)
+    {
+        msp = &ctx->ms;
+    }
+    else
+    {
+        msp = &ms;
+    }
+    if(FAIL(ret = mutex_semaphore_init_ex(msp, "mutex_semaphore_test")))
+    {
+        yatest_err("mutex_semaphore_init failed");
+        if((ret & 0xffff0000) == 0x80000000)
+        {
+            yatest_err("error code: %s", strerror(ret & 0xffff));
+        }
+        return 1;
+    }
+
+    pid_t pid;
+    switch(pid = fork_ex())
+    {
+        default:
+        {
+            for(int64_t i = 0; i < n; i++)
+            {
+                mutex_semaphore_lock(msp);
+                ++ctx->parent;
+                ++ctx->both;
+                mutex_semaphore_unlock(msp);
+            }
+            waitpid_ex(pid, NULL, 0);
+            break;
+        }
+        case 0:
+        {
+            for(int64_t i = 0; i < n; i++)
+            {
+                mutex_semaphore_lock(msp);
+                ++ctx->child;
+                ++ctx->both;
+                mutex_semaphore_unlock(msp);
+            }
+            exit(0);
+        }
+        case -1:
+        {
+            yatest_err("fork failed");
+            return 1;
+        }
+    }
+
+    if((ctx->parent == n) && (ctx->child == n) && (ctx->both == n + n))
+    {
+        yatest_log("success");
+        ret = 0;
+    }
+    else
+    {
+        yatest_err("invalid counts: %lu,%lu,%lu instead of %li,%li,%li", ctx->parent, ctx->child, ctx->both, n, n, n + n);
+        ret = 1;
+    }
+
+    mutex_semaphore_finalise(msp);
+    munmap(p, 4096);
+
+    dnscore_finalize();
+
+    return ret;
+#else
+    yatest_log("skipped: feature not supported on this platform");
+    return 0;
+#endif
+}
+
+static int mutex_semaphore_test()
+{
+    return mutex_semaphore_test_ex(false);
+}
+
+static int mutex_semaphore_shared_mem_test()
+{
+    return mutex_semaphore_test_ex(true);
+}
+
+
 // cond_timedwait
 // cond_wait_auto_time_out
 // shared_group_mutex_trylock
@@ -788,4 +908,6 @@ YATEST(shared_group_mutex_transferlock_test)
 YATEST(speed_test)
 YATEST(mutex_debug_test)
 YATEST(mutex_futex_test)
+YATEST(mutex_semaphore_test)
+YATEST(mutex_semaphore_shared_mem_test)
 YATEST_TABLE_END

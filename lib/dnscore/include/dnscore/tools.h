@@ -79,7 +79,23 @@ size_t text_split_to_array(const char *text, char separator, char **array, size_
 
 size_t   text_split_to_vector(const char *text, char separator, ptr_vector_t *array);
 
+/**
+ * Computes the integer square root.
+ */
+
 uint32_t isqrt(uint32_t val);
+
+/**
+ * Returns the least common multiple of a and b
+ *
+ * @param a
+ * @param b
+ *
+ * @return least common multiple of a and b
+ *
+ */
+
+uint32_t lcm(uint32_t a, uint32_t b);
 
 void    *memdup(const void *buffer, size_t buffer_size);
 

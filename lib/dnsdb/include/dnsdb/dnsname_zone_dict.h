@@ -31,76 +31,98 @@
  *----------------------------------------------------------------------------*/
 
 /**-----------------------------------------------------------------------------
- * @defgroup query_ex Database top-level query function
+ * @defgroup query_ex Collections used by the query
  * @ingroup dnsdb
- * @brief Database top-level query function
- *
- *  Database top-level query function
+ * @brief A fqdn -> zone dict used to handle additionals
  *
  * @{
  *----------------------------------------------------------------------------*/
 
 #pragma once
 
-#include "zdb_lock.h"
-
-#include <dnsdb/zdb_query_to_wire_context.h>
-
 /**
- * Initialises the context for a query to the database
+ * A dictionary made specifically for zdb_query_to_wire to insert FQDNs and their zone
  *
- * This call locks the database structure.
- * Any call to this MUST be followed by a call to zdb_query_to_wire_finalize ASAP.
- *
- * @param context the context to initialise
- * @param mesg the message
- * @param db the database
- *
- * @return the status of the message (probably useless)
  */
 
-static inline void zdb_query_to_wire_context_init(zdb_query_to_wire_context_t *context, dns_message_t *mesg, zdb_t *db)
+#define FQDN_ZONE_DICT_SIZE_MAX 64
+
+struct dnsname_zone_dict_node_s
 {
-    dns_packet_writer_init_append_to_message(&context->pw, mesg);
-    context->mesg = mesg;
-    context->fqdn = dns_message_get_canonised_fqdn(mesg);
-#if DNSCORE_HAS_RRL_SUPPORT
-    context->fqdn_label = NULL;
-#endif
-    context->flags = ~0;
-    context->record_type = dns_message_get_query_type(mesg);
-    context->db = db;
-    memset(&context->answer_count, 0, (const uint8_t *)&context->ns_rrsets[0] - (const uint8_t *)&context->answer_count);
-    zdb_lock(db, ZDB_MUTEX_READER);
+    const uint8_t *fqdn;
+    const zdb_zone_t *zone;
+    struct dnsname_zone_dict_node_s *children[2];
+};
+
+struct dnsname_zone_dict_s
+{
+    struct dnsname_zone_dict_node_s nodes[FQDN_ZONE_DICT_SIZE_MAX];
+    int count;
+};
+
+/**
+ * Initialises the dictionary.
+ *
+ * @param dict the dictionary to initialise
+ */
+
+static inline void dnsname_zone_dict_init(struct dnsname_zone_dict_s *dict)
+{
+    dict->count = 0;
 }
 
 /**
- * Builds a dns_message_t answer for a query.
+ * Insert a fqdn + zone in the dictionary
  *
- * Typical usage:
+ * Duplicates are ignored.
  *
- *  zdb_query_to_wire_context_t context;
- *  zdb_query_to_wire_context_init(&context, mesg);
- *  zdb_query_to_wire(database, &context);
- *  zdb_query_to_wire_finalize(&context);   // absolutely mandatory after a call to zdb_query_to_wire_context_init
- *
- *  At this point the message is ready.
- *  TSIG signature could be the next step before answering.
- *
- * @param db the zone database
- * @param context the context to query for
- * @return the query status
+ * @param dict the dictionary to insert into
+ * @param fqdn the fqdn
+ * @param zone the zone
  */
 
-finger_print zdb_query_to_wire(zdb_query_to_wire_context_t *context);
+static inline void dnsname_zone_dict_insert(struct dnsname_zone_dict_s *dict, const uint8_t *fqdn, const zdb_zone_t *zone)
+{
+    if(dict->count > 0)
+    {
+        if(dict->count < FQDN_ZONE_DICT_SIZE_MAX)
+        {
+            struct dnsname_zone_dict_node_s *node = &dict->nodes[0];
 
-/**
- * Releases resources and database an zone locks associated to the context.
- * Must ALWAYS be called to conclude a call to zdb_query_to_wire_context_init
- *
- * @param context
- */
+            for(;;)
+            {
+                int d = dnsname_compare(fqdn, node->fqdn);
+                if(d == 0) // equals -> nothing to do
+                {
+                    return;
+                }
 
-void         zdb_query_to_wire_finalize(zdb_query_to_wire_context_t *context);
+                struct dnsname_zone_dict_node_s **nodep = &node->children[d > 0];
+
+                if(*nodep == NULL) // no children -> add it
+                {
+                    node = &dict->nodes[dict->count++];
+                    *nodep = node;
+                    node->fqdn = fqdn;
+                    node->zone = zone;
+                    node->children[0] = NULL;
+                    node->children[1] = NULL;
+                    return;
+                }
+
+                node = *nodep;
+            }
+        }
+    }
+    else
+    {
+        dict->nodes[0].fqdn = fqdn;
+        dict->nodes[0].zone = zone;
+        dict->nodes[0].children[0] = NULL;
+        dict->nodes[0].children[1] = NULL;
+        dict->count = 1;
+    }
+}
+
 
 /** @} */

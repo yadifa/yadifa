@@ -70,6 +70,7 @@
 #include "dnscore/format.h"
 #include "dnscore/zalloc.h"
 #include "dnscore/mutex.h"
+#include "dnscore/tools.h"
 
 extern logger_handle_t *g_system_logger;
 #define MODULE_MSG_HANDLE g_system_logger
@@ -77,6 +78,8 @@ extern logger_handle_t *g_system_logger;
 #if DNSCORE_HAS_ZALLOC_DEBUG_SUPPORT
 
 #include "dnscore/ptr_treemap_debug.h"
+
+#include "dnscore/tools.h"
 
 #define ZALLOC_DEBUG                     1
 #define DNSCORE_DEBUG_ZALLOC_TRASHMEMORY 1
@@ -131,28 +134,6 @@ extern logger_handle_t *g_system_logger;
 #endif
 
 typedef uint8_t *page;
-
-// least common multiple
-
-static uint32_t lcm(uint32_t a, uint32_t b)
-{
-    int i = a;
-    int j = b;
-
-    while(a != b)
-    {
-        if(a < b)
-        {
-            a += i;
-        }
-        else
-        {
-            b += j;
-        }
-    }
-
-    return a;
-}
 
 /**
  * Page size by slot size, PLEASE do not edit this.

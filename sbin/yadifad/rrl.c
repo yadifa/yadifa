@@ -304,7 +304,7 @@ typedef struct rrl_item_s rrl_item_s;
 
 static inline uint32_t    rrl_item_key_size(const uint8_t *key)
 {
-    uint32_t size = GET_U16_AT(key[0]) & 0x1ff;
+    uint32_t size = GET_U16_AT(key[0]) & RRL_KEY_SIZE_MASK;
 
     return size;
 }
@@ -327,7 +327,7 @@ static inline uint32_t rrl_item_size(const rrl_item_s *rrl)
 
 static inline bool rrl_key_is_error(const uint8_t *key)
 {
-    bool iserror = (GET_U16_AT(key[0]) & 0x8000) != 0;
+    bool iserror = (GET_U16_AT(key[0]) & RRL_KEY_FLAG_ERROR) != 0;
 
     return iserror;
 }
@@ -368,28 +368,27 @@ static inline uint32_t rrl_make_key(const dns_message_t *mesg, const zdb_query_t
         SET_U64_AT(out_key[10], ipl);
 
         tgt = &out_key[18];
-        flags |= 0x2000;
+        flags |= RRL_KEY_FLAG_IPV6;
     }
 
     // note: wildcard names are not handled (yet)
-
-    switch(dns_message_get_status(mesg))
+    // note: rcode is always set
+    switch(dns_message_get_rcode(mesg))
     {
         case FP_RCODE_NOERROR:
         {
             // take the answer
             if(!query_context->delegation)
             {
-                // src = message_get_canonised_fqdn(mesg); // query name
-                // src = query_context->
+                // no error and not a delegation: store the found label
                 src = (const uint8_t *)query_context->fqdn_label;
             }
             else
             {
-                // src = authority_fqdn;
+                // no error but a delegation: store the authority
                 if(query_context->ns_rrset_count > 0)
                 {
-                    src = (const uint8_t *)query_context->ns_rrsets[0];
+                    src = (const uint8_t *)query_context->ns_rrsets[0].rrset;
                 }
                 else
                 {
@@ -400,16 +399,15 @@ static inline uint32_t rrl_make_key(const dns_message_t *mesg, const zdb_query_t
         }
         case FP_RCODE_NXDOMAIN:
         {
-            flags |= 0x8000; // note: if we want to have a different key for NXDOMAIN and other errors, we can use
-                             // 0xc000 instead
+            flags |= RRL_KEY_FLAG_ERROR; // note: if we want to have a different key for NXDOMAIN and other errors, we can use
+                                         //       0xc000 instead
             if(query_context->ns_rrset_count > 0)
             {
                 // src = authority_fqdn;
-                src = (const uint8_t *)query_context->ns_rrsets[0];
+                src = (const uint8_t *)query_context->ns_rrsets[0].rrset;
             }
             else
             {
-                // src = message_get_canonised_fqdn(mesg);
                 src = (const uint8_t *)query_context->fqdn_label;
             }
             break;
@@ -417,20 +415,14 @@ static inline uint32_t rrl_make_key(const dns_message_t *mesg, const zdb_query_t
         // case wildcard name ?
         default:
         {
-            flags = 0x8000;
+            flags |= RRL_KEY_FLAG_ERROR;
             // src = message_get_canonised_fqdn(mesg); // query name
             src = (const uint8_t *)query_context->fqdn_label;
-            if(IS_WILD_LABEL(query_context->fqdn_label))
-            {
-                ++src;
-            }
         }
     }
 
-    /*
-    size += dnsname_copy(tgt, src);
-    size += 2;
-    */
+    // Instead of storing the name as the key, the value of the pointer to the label or the authority is stored
+
     SET_U64_AT_P(tgt, (intptr_t)src);
     size += sizeof(src);
 
@@ -443,7 +435,7 @@ static inline void rrl_set_key(rrl_item_s *rrl, const uint8_t *key)
 {
     uint32_t key_size = GET_U16_AT(key[0]);
 
-    key_size &= 0x01ff;
+    key_size &= RRL_KEY_SIZE_MASK;
 
     memcpy(rrl->error_mask_ip_imputed_name, key, key_size);
 }
@@ -794,11 +786,7 @@ ya_result rrl_process(dns_message_t *mesg, zdb_query_to_wire_context_t *query_co
 #if DEBUG
         log_debug(
             "rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: disabled or exempted", dns_message_get_sender_sa(mesg), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
-#endif /*                                                                                                                                                                                                                                      \
-         zdb_query_to_wire_context_t context;                                                                                                                                                                                                  \
-         zdb_query_to_wire_context_init(&context, mesg);                                                                                                                                                                                       \
-         zdb_query_to_wire(g_config->database, &context);                                                                                                                                                                                      \
- */
+#endif
         return return_code;
     }
 
@@ -972,8 +960,9 @@ ya_result rrl_process(dns_message_t *mesg, zdb_query_to_wire_context_t *query_co
                       g_rrl_settings.log_only);
 #endif
             zdb_query_to_wire_context_t context;
-            zdb_query_to_wire_context_init(&context, mesg);
-            zdb_query_to_wire(g_config->database, &context);
+            zdb_query_to_wire_context_init(&context, mesg, g_config->database);
+            zdb_query_to_wire(&context);
+            zdb_query_to_wire_finalize(&context);
         }
     }
     else
@@ -1010,8 +999,9 @@ ya_result rrl_process(dns_message_t *mesg, zdb_query_to_wire_context_t *query_co
         mutex_unlock(&rrl_mtx);
 
         zdb_query_to_wire_context_t context;
-        zdb_query_to_wire_context_init(&context, mesg);
-        zdb_query_to_wire(g_config->database, &context);
+        zdb_query_to_wire_context_init(&context, mesg, g_config->database);
+        zdb_query_to_wire(&context);
+        zdb_query_to_wire_finalize(&context);
     }
 
     return return_code;
