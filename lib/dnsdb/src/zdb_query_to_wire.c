@@ -692,7 +692,6 @@ finger_print zdb_query_to_wire(zdb_query_to_wire_context_t *context)
                         }
 #endif
                         dns_message_set_answer_count(mesg, context->answer_count);
-                        dns_message_set_canonised_fqdn(mesg, zdb_resource_record_data_rdata_const(cname_rr));
                         context->fqdn = cname_owner;
                         context->flags = 0;
                         zdb_query_to_wire(context);
