@@ -697,6 +697,9 @@ finger_print zdb_query_to_wire(zdb_query_to_wire_context_t *context)
                         context->flags = 0;
                         zdb_query_to_wire(context);
 
+                        /* We're back from recursion, need to set canonised_fqdn back to the value which is valid in our own context */
+                        dnsname_copy(dns_message_get_canonised_fqdn(mesg), context->original_canonised_fqdn);
+                        
 #if !ZDB_QUERY_TO_WIRE_ASSUME_ZERO
                         dns_message_set_authoritative_answer(mesg);
 
