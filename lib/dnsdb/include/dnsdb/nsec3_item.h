@@ -83,7 +83,6 @@ struct nsec3_zone_item_to_new_zdb_resource_record_data_parm
     const nsec3_zone_t      *n3;
     const nsec3_zone_item_t *item;
     const uint8_t           *origin;
-    uint8_t *restrict       *pool; // memory pool
     int32_t                  ttl;
 };
 
@@ -92,7 +91,8 @@ typedef struct nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_zone_i
 #define NSEC3_ZONE_ITEM_TO_NEW_zdb_resource_record_data_SIZE (ALIGN16(DOMAIN_LENGTH_MAX) + ALIGN16(NSEC3_ZONE_STRUCT_SIZE_FROM_SALT(255)))
 
 void     nsec3_zone_item_to_new_zdb_resource_record_data(nsec3_zone_item_to_new_zdb_resource_record_data_parm *nsec3_parms, uint8_t **out_owner_p, /* dnsname */
-                                                         zdb_resource_record_set_t *out_nsec3_rrset, zdb_resource_record_set_t *out_nsec3_rrsig_rrset);
+                                                         zdb_resource_record_set_t *out_nsec3_rrset, zdb_resource_record_set_t *out_nsec3_rrsig_rrset,
+                                                         uint8_t *restrict *pool);
 
 uint32_t nsec3_zone_item_rdata_size(const nsec3_zone_t *n3, const nsec3_zone_item_t *item);
 

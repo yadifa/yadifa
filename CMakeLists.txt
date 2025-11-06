@@ -36,7 +36,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/CheckCHeaders.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/CheckCompilerFlags.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/EURidToolbox.cmake)
 
-read_version("3.0.3")
+read_version("3.0.4")
 
 project(yadifa VERSION ${VERSION_TEXT} LANGUAGES C)
 
@@ -107,8 +107,8 @@ set(YATEST_INCLUDE_DIRECTORY "${CMAKE_SOURCE_DIR}/tests")
 # settings from subdirectories - START
 
 set(PACKAGE "yadifa")
-set(PACKAGE_VERSION "3.0.3")
-set(VERSION "3.0.3")
+set(PACKAGE_VERSION "3.0.4")
+set(VERSION "3.0.4")
 set(PACKAGE_STRING "${PACKAGE} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "bugreport@yadifa.eu")
 
@@ -186,6 +186,7 @@ option_has_support(OQS "If set, yadifad will support experimental post-quantum-s
 option_path(OPENSSL_DIRECTORY "Set to the path of openssl" "")
 
 option_has(GCC_HARDENED "Adds build options for GCC" OFF)
+option_has(SAVE_TEMPS "Keep the .s and .i files" OFF)
 
 # some 'has_XXX' for YADIFA binary
 
@@ -373,6 +374,9 @@ add_compile_options(-Wno-address-of-packed-member)
 add_compile_options(-fno-strict-aliasing)
 if(TIME64)
 add_compile_options(-D_TIME_BITS=64)
+endif()
+if(SAVE_TEMPS)
+add_compile_options(-save-temps=obj)
 endif()
 
 if(WITH_COVERAGE)

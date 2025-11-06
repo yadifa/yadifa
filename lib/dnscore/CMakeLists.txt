@@ -154,6 +154,7 @@ set(LIBRARY_SOURCES
     ${LIBRARY_SOURCE_PATH}/mutex_semaphore.c
     ${LIBRARY_SOURCE_PATH}/mutex_shared_group.c
     ${LIBRARY_SOURCE_PATH}/network.c
+    ${LIBRARY_SOURCE_PATH}/name.c
     ${LIBRARY_SOURCE_PATH}/nsec3_hash.c
     ${LIBRARY_SOURCE_PATH}/output_stream.c
     ${LIBRARY_SOURCE_PATH}/pace.c

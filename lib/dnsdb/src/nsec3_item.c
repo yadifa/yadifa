@@ -199,7 +199,8 @@ bool nsec3_zone_item_equals_rdata(const nsec3_zone_t *n3, const nsec3_zone_item_
  */
 
 void nsec3_zone_item_to_new_zdb_resource_record_data(nsec3_zone_item_to_new_zdb_resource_record_data_parm *nsec3_parms, uint8_t **out_owner_p, /* dnsname */
-                                                     zdb_resource_record_set_t *out_nsec3_rrset, zdb_resource_record_set_t *out_nsec3_rrsig_rrset)
+                                                     zdb_resource_record_set_t *out_nsec3_rrset, zdb_resource_record_set_t *out_nsec3_rrsig_rrset,
+                                                     uint8_t *restrict *pool) // memory pool
 {
     const nsec3_zone_t *n3 = nsec3_parms->n3;
 #if DEBUG
@@ -236,7 +237,6 @@ void nsec3_zone_item_to_new_zdb_resource_record_data(nsec3_zone_item_to_new_zdb_
 
     zdb_resource_record_data_t *nsec3;
 
-    uint8_t *restrict          *pool = nsec3_parms->pool;
     nsec3 = (zdb_resource_record_data_t *)*pool;
     *pool += ALIGN16(zdb_resource_record_data_storage_size_from_rdata_size(rdata_size));
     zdb_resource_record_data_init(nsec3, rdata_size);

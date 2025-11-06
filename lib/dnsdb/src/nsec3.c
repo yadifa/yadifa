@@ -503,10 +503,7 @@ void nsec3_wild_closest_encloser_proof(const zdb_zone_t *zone, const dnsname_vec
             digestname(tmp_fqdn, dnsname_len(tmp_fqdn), salt, salt_len, iterations, &digest[1], false);
             qname_encloser_nsec3 = nsec3_find_interval_start(&n3->items, digest);
 
-            if(qname_encloser_nsec3 != wild_closest_provable_encloser_nsec3)
-            {
-                *qname_encloser_nsec3p = qname_encloser_nsec3;
-            }
+            *qname_encloser_nsec3p = qname_encloser_nsec3;
         }
 
         *wild_encloser_nsec3p = wild_closest_provable_encloser_nsec3;

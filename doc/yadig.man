@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIG" "1" "2025\-08\-21" "YADIFA " "YADIFA "
+.TH "YADIG" "1" "2025\-10\-31" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -97,7 +97,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 3.0.3 of 2025\-08\-21. 
+Version: 3.0.4 of 2025\-10\-31. 
 .PP
 .SH LICENSE AND COPYRIGHT
 

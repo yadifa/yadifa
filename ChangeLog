@@ -30,6 +30,13 @@
 #
 ################################################################################
 
+20251031:
+    YADIFA 3.0.4
+
+    Fixes an issue with DNSSEC 3 answers sometimes missing a NSEC3 record.
+    Fixes an issue that would occur on architectures where unaligned writes
+          would fail silently (AWS)
+
 20250821:
     YADIFA 3.0.3
 

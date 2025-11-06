@@ -53,6 +53,7 @@
 
 #define ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX    16
 #define ZDB_QUERY_TO_WIRE_CONTEXT_MX_RRSET_COUNT_MAX    4
+#define ZDB_QUERY_TO_WIRE_CONTEXT_NSEC3_RRSET_COUNT_MAX 8
 
 struct zdb_query_to_wire_context_rrset_s
 {
@@ -81,15 +82,17 @@ struct zdb_query_to_wire_context_s
     uint8_t                         cname_count;
     uint8_t                         ns_rrset_count;
     uint8_t                         mx_rrset_count;
+    uint8_t                         nsec3_rrset_count;
     uint8_t                         locked_zones_count;
-
     uint8_t                         locked_db_count;
+
     bool                            delegation;
     bool                            additionals_required;
     bool                            additionals_added;  // temporary stuff
     bool                            additionals_with_rrsig;
     zdb_query_to_wire_context_rrset_t  ns_rrsets[ZDB_QUERY_TO_WIRE_CONTEXT_NS_RRSET_COUNT_MAX];
     zdb_query_to_wire_context_rrset_t  mx_rrsets[ZDB_QUERY_TO_WIRE_CONTEXT_MX_RRSET_COUNT_MAX];
+    const nsec3_zone_item_t         *nsec3_rrsets[ZDB_QUERY_TO_WIRE_CONTEXT_NSEC3_RRSET_COUNT_MAX];
     const uint8_t                   *cname_list[ZDB_CNAME_LOOP_MAX]; // used for CNAME loop detection
     uint8_t                         original_canonised_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];
     uint8_t                         last_cname_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];

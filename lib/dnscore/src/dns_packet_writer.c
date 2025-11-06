@@ -363,7 +363,7 @@ ya_result dns_packet_writer_add_rdata(dns_packet_writer_t *pw, uint16_t rr_type,
             dns_packet_writer_add_bytes(pw, rdata, 2);
             rdata += 2;
 
-            /* Fallthrough */
+            FALLTHROUGH
 
         case TYPE_NS:
         case TYPE_CNAME:

@@ -30,12 +30,9 @@
 #
 ################################################################################
 
-20250821:
-    YADIFA 3.0.3
+20251031:
+    YADIFA 3.0.4
 
     Fixes an issue with DNSSEC 3 answers sometimes missing a NSEC3 record.
-    Fixes an issue that would occur with response-rate-limiting enabled.
-    Fixes an issue where some yadifa commands would not be recognised anymore.
-    Fixes an issue that could occur with TSIG answers.
-    Removes dependency on openssl/engine.h for OpenSSL >= 3.0
-
+    Fixes an issue that would occur on architectures where unaligned writes
+          would fail silently (AWS)

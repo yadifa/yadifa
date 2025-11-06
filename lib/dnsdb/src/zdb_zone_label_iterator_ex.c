@@ -144,10 +144,9 @@ bool zdb_zone_label_iterator_ex_hasnext(zdb_zone_label_iterator_ex *iter)
                 nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {iter->n3,
                                                                                     nsec3_node, /// note:  in an iterator, if used properly, the returned node cannot be NULL
                                                                                     iter->zone->origin,
-                                                                                    &iter->pool,
                                                                                     iter->min_ttl};
 
-                nsec3_zone_item_to_new_zdb_resource_record_data(&nsec3_parms, &iter->nsec3_owner, &iter->nsec3_label_nsec3.value, &iter->nsec3_label_rrsig.value);
+                nsec3_zone_item_to_new_zdb_resource_record_data(&nsec3_parms, &iter->nsec3_owner, &iter->nsec3_label_nsec3.value, &iter->nsec3_label_rrsig.value, &iter->pool);
 
                 // craft an zdb_rr_label that suits our needs
 

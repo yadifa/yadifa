@@ -102,7 +102,7 @@ uint16_t zdb_query_to_wire_append_nsec3_name_error(zdb_query_to_wire_context_t *
     int32_t       min_ttl;
     zdb_zone_getminttlsoa(zone, &min_ttl);
 
-    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, encloser_nsec3, zone->origin, NULL, min_ttl};
+    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, encloser_nsec3, zone->origin, min_ttl};
 
     uint16_t count = 0;
 
@@ -127,11 +127,36 @@ uint16_t zdb_query_to_wire_append_nsec3_name_error(zdb_query_to_wire_context_t *
     return count;
 }
 
+/**
+ * Writes an NSEC3 record and its RRSIGs to the message.
+ * Returns the number of written records.
+ *
+ * note: 0 always means truncation, but > 0 doesn't mean no truncation
+ *
+ * @param context
+ * @param nsec3_parms
+ * @return
+ */
 uint16_t zdb_query_to_wire_append_nsec3_record(zdb_query_to_wire_context_t *context, nsec3_zone_item_to_new_zdb_resource_record_data_parm *nsec3_parms)
 {
+    const nsec3_zone_item_t *item = nsec3_parms->item;
+
+    for(uint8_t i = 0; i < context->nsec3_rrset_count; ++i)
+    {
+        if(item == context->nsec3_rrsets[i])
+        {
+            return 0;  // already stored
+        }
+    }
+
+    if(context->nsec3_rrset_count < ZDB_QUERY_TO_WIRE_CONTEXT_NSEC3_RRSET_COUNT_MAX)
+    {
+        context->nsec3_rrsets[context->nsec3_rrset_count++] = item;
+    }
+
     const nsec3_zone_t      *n3 = nsec3_parms->n3;
     uint32_t                 param_rdata_size = NSEC3PARAM_RDATA_SIZE_FROM_CHAIN(n3);
-    const nsec3_zone_item_t *item = nsec3_parms->item;
+
     dns_packet_writer_t     *pw = &context->pw;
     int32_t                  ne_ttl = (int32_t)htonl(nsec3_parms->ttl);
 
@@ -240,7 +265,7 @@ uint16_t zdb_query_to_wire_append_nsec3_nodata_error(zdb_query_to_wire_context_t
 
     uint16_t                                             count;
 
-    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, NULL, zone->origin, NULL, min_ttl};
+    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, NULL, zone->origin, min_ttl};
 
     nsec3_closest_encloser_proof(zone, qname, apex_index, &nsec3_parms.item, &closest_provable_encloser_nsec3, NULL);
 
@@ -308,7 +333,7 @@ uint16_t zdb_query_to_wire_append_nsec3_ds_nodata_error(zdb_query_to_wire_contex
 
     uint16_t                                             count;
 
-    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, NULL, zone->origin, NULL, min_ttl};
+    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, NULL, zone->origin, min_ttl};
 
     // If there is no NSEC3 that matches the qname ...
 
@@ -393,7 +418,7 @@ uint16_t zdb_query_to_wire_append_nsec3_nodata(zdb_query_to_wire_context_t *cont
 
                 if(owner_nsec3 != NULL)
                 {
-                    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, owner_nsec3, zone->origin, NULL, min_ttl};
+                    nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {n3, owner_nsec3, zone->origin, min_ttl};
 
                     count = zdb_query_to_wire_append_nsec3_record(context, &nsec3_parms);
                 }
@@ -437,7 +462,7 @@ uint16_t zdb_query_to_wire_append_nsec3_delegation(zdb_query_to_wire_context_t *
     {
         /* add it */
 
-        nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {zone->nsec.nsec3, nsec3_label_extension_self(authority->nsec.nsec3), zone->origin, NULL, min_ttl};
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm nsec3_parms = {zone->nsec.nsec3, nsec3_label_extension_self(authority->nsec.nsec3), zone->origin, min_ttl};
 
         return zdb_query_to_wire_append_nsec3_record(context, &nsec3_parms);
     }
@@ -477,21 +502,21 @@ uint16_t zdb_query_to_wire_append_wild_nsec3_nodata_error(zdb_query_to_wire_cont
 
     if(wild_encloser_nsec3 != NULL)
     {
-        nsec3_zone_item_to_new_zdb_resource_record_data_parm wild_encloser_nsec3_parms = {zone->nsec.nsec3, wild_encloser_nsec3, zone->origin, NULL, min_ttl};
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm wild_encloser_nsec3_parms = {zone->nsec.nsec3, wild_encloser_nsec3, zone->origin, min_ttl};
 
         count += zdb_query_to_wire_append_nsec3_record(context, &wild_encloser_nsec3_parms);
     }
 
     if((closest_provable_encloser_nsec3 != wild_encloser_nsec3) && (closest_provable_encloser_nsec3 != NULL))
     {
-        nsec3_zone_item_to_new_zdb_resource_record_data_parm closest_provable_encloser_nsec3_parms = {zone->nsec.nsec3, closest_provable_encloser_nsec3, zone->origin, NULL, min_ttl};
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm closest_provable_encloser_nsec3_parms = {zone->nsec.nsec3, closest_provable_encloser_nsec3, zone->origin, min_ttl};
 
         count += zdb_query_to_wire_append_nsec3_record(context, &closest_provable_encloser_nsec3_parms);
     }
 
     if((qname_encloser_nsec3 != wild_encloser_nsec3) && (qname_encloser_nsec3 != closest_provable_encloser_nsec3) && (qname_encloser_nsec3 != NULL))
     {
-        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, min_ttl};
 
         count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
     }
@@ -546,7 +571,7 @@ uint16_t zdb_query_to_wire_append_wild_nsec3_data(zdb_query_to_wire_context_t *c
 
         if(qname_encloser_nsec3 != NULL)
         {
-            nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
+            nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, min_ttl};
             authority_count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
         }
         wild_encloser_nsec3 = NULL;
@@ -558,19 +583,14 @@ uint16_t zdb_query_to_wire_append_wild_nsec3_data(zdb_query_to_wire_context_t *c
 
     if(context->cname_count > 0)
     {
-        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, min_ttl};
         authority_count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
-        if(authority_count > 0)
-        {
-            return authority_count;
-        }
-
-        nsec3_wild_next_closer_proof(zone, name, apex_index, &qname_encloser_nsec3);
+        return authority_count;
     }
 
     if(qname_encloser_nsec3 != NULL)
     {
-        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, NULL, min_ttl};
+        nsec3_zone_item_to_new_zdb_resource_record_data_parm qname_encloser_nsec3_parms = {zone->nsec.nsec3, qname_encloser_nsec3, zone->origin, min_ttl};
 
         authority_count += zdb_query_to_wire_append_nsec3_record(context, &qname_encloser_nsec3_parms);
 

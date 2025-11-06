@@ -145,8 +145,8 @@ struct dns_resource_record;
 #define MESSAGE_FLAGS_SET(buffer_, hi_, lo_) *((uint16_t *)&(buffer_[2])) = (hi_ | ((uint16_t)lo_ << 8))
 #endif
 
-#define MESSAGE_ID(buffer)           (*((uint16_t *)&(buffer)[0]))
-#define MESSAGE_SET_ID(buffer_, id_) (*((uint16_t *)&(buffer)[0])) = (id_)
+#define MESSAGE_ID(buffer_)           (*((uint16_t *)&(buffer_)[0]))
+#define MESSAGE_SET_ID(buffer_, id_) (*((uint16_t *)&(buffer_)[0])) = (id_)
 
 #endif
 

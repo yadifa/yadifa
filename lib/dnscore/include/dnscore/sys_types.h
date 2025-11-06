@@ -446,44 +446,42 @@ typedef double realptr; // a float with the same size as a data pointer
 #endif
 #endif
 
-#define AVOID_ANTIALIASING 1
+// modern compilers are smart enough to use unaligned assignation when they can.
 
-#ifndef DNSCORE_HAS_MEMALIGN_ISSUES
-#error "DNSCORE_HAS_MEMALIGN_ISSUES is not defined.  Please ensure the relevant config.h is included at some level above."
-#endif
-
-#if !DNSCORE_HAS_MEMALIGN_ISSUES
-
-#if AVOID_ANTIALIASING
 static inline uint16_t GET_U16_AT_P(const void *address)
 {
-    const uint16_t *p = (const uint16_t *)address;
-    return *p;
+    uint16_t w;
+    memcpy(&w, address, sizeof(uint16_t));
+    return w;
 }
+
 static inline void SET_U16_AT_P(void *address, uint16_t value)
 {
-    uint16_t *p = (uint16_t *)address;
-    *p = value;
+    memcpy(address, &value, sizeof(uint16_t));
 }
+
 static inline uint32_t GET_U32_AT_P(const void *address)
 {
-    const uint32_t *p = (const uint32_t *)address;
-    return *p;
+    uint32_t w;
+    memcpy(&w, address, sizeof(uint32_t));
+    return w;
 }
+
 static inline void SET_U32_AT_P(void *address, uint32_t value)
 {
-    uint32_t *p = (uint32_t *)address;
-    *p = value;
+    memcpy(address, &value, sizeof(uint32_t));
 }
+
 static inline uint64_t GET_U64_AT_P(const void *address)
 {
-    const uint64_t *p = (const uint64_t *)address;
-    return *p;
+    uint64_t w;
+    memcpy(&w, address, sizeof(uint64_t));
+    return w;
 }
+
 static inline void SET_U64_AT_P(void *address, uint64_t value)
 {
-    uint64_t *p = (uint64_t *)address;
-    *p = value;
+    memcpy(address, &value, sizeof(uint64_t));
 }
 
 #define GET_U16_AT(address__)          GET_U16_AT_P(&(address__))
@@ -492,176 +490,6 @@ static inline void SET_U64_AT_P(void *address, uint64_t value)
 #define SET_U32_AT(address__, value__) SET_U32_AT_P(&(address__), (value__))
 #define GET_U64_AT(address__)          GET_U64_AT_P(&(address__))
 #define SET_U64_AT(address__, value__) SET_U64_AT_P(&(address__), (value__))
-#else
-#define GET_U16_AT(address)        (*((uint16_t *)&(address)))
-#define SET_U16_AT(address, value) *((uint16_t *)&(address)) = (value)
-
-#define GET_U32_AT(address)        (*((uint32_t *)&(address)))
-#define SET_U32_AT(address, value) *((uint32_t *)&(address)) = (value)
-
-#define GET_U64_AT(address)        (*((uint64_t *)&(address)))
-#define SET_U64_AT(address, value) *((uint64_t *)&(address)) = (value)
-#endif
-
-#else /* sparc ... */
-
-/*
- *  Why in caps ? Traditionnaly it was an helper macro.  Macros are in caps except when they hide a virtual call.
- *
- */
-
-static inline uint16_t GET_U16_AT_P(const void *p)
-{
-    const uint8_t *p8 = (const uint8_t *)p;
-    uint16_t       v;
-
-#ifdef WORDS_BIGENDIAN
-    v = p8[0];
-    v <<= 8;
-    v |= p8[1];
-#else
-    v = p8[1];
-    v <<= 8;
-    v |= p8[0];
-#endif
-
-    return v;
-}
-
-#define GET_U16_AT(x) GET_U16_AT_P(&(x))
-
-static inline void SET_U16_AT_P(void *p, uint16_t v)
-{
-    uint8_t *p8 = (uint8_t *)p;
-
-#ifdef WORDS_BIGENDIAN
-    p8[0] = v >> 8;
-    p8[1] = v;
-#else
-    p8[0] = v;
-    p8[1] = v >> 8;
-#endif
-}
-
-#define SET_U16_AT(x___, y___) SET_U16_AT_P(&(x___), (y___))
-
-static inline uint32_t GET_U32_AT_P(const void *p)
-{
-    const uint8_t *p8 = (const uint8_t *)p;
-    uint32_t       v;
-
-#ifdef WORDS_BIGENDIAN
-    v = p8[0];
-    v <<= 8;
-    v |= p8[1];
-    v <<= 8;
-    v |= p8[2];
-    v <<= 8;
-    v |= p8[3];
-#else
-    v = p8[3];
-    v <<= 8;
-    v |= p8[2];
-    v <<= 8;
-    v |= p8[1];
-    v <<= 8;
-    v |= p8[0];
-#endif
-    return v;
-}
-
-#define GET_U32_AT(x) GET_U32_AT_P(&(x))
-
-static inline void SET_U32_AT_P(void *p, uint32_t v)
-{
-    uint8_t *p8 = (uint8_t *)p;
-
-#ifdef WORDS_BIGENDIAN
-    p8[0] = v >> 24;
-    p8[1] = v >> 16;
-    p8[2] = v >> 8;
-    p8[3] = v;
-#else
-    p8[0] = v;
-    p8[1] = v >> 8;
-    p8[2] = v >> 16;
-    p8[3] = v >> 24;
-#endif
-}
-
-#define SET_U32_AT(x___, y___) SET_U32_AT_P(&(x___), (y___))
-
-static inline uint64_t GET_U64_AT_P(const void *p)
-{
-    const uint8_t *p8 = (const uint8_t *)p;
-    uint32_t       v;
-
-#ifdef WORDS_BIGENDIAN
-    v = p8[0];
-    v <<= 8;
-    v |= p8[1];
-    v <<= 8;
-    v |= p8[2];
-    v <<= 8;
-    v |= p8[3];
-    v <<= 8;
-    v |= p8[4];
-    v <<= 8;
-    v |= p8[5];
-    v <<= 8;
-    v |= p8[6];
-    v <<= 8;
-    v |= p8[7];
-#else
-    v = p8[7];
-    v <<= 8;
-    v |= p8[6];
-    v <<= 8;
-    v |= p8[5];
-    v <<= 8;
-    v |= p8[4];
-    v <<= 8;
-    v = p8[3];
-    v <<= 8;
-    v |= p8[2];
-    v <<= 8;
-    v |= p8[1];
-    v <<= 8;
-    v |= p8[0];
-#endif
-    return v;
-}
-
-#define GET_U64_AT(x) GET_U64_AT_P(&(x))
-
-static inline void SET_U64_AT_P(void *p, uint64_t v)
-{
-    uint8_t *p8 = (uint8_t *)p;
-
-#ifdef WORDS_BIGENDIAN
-    p8[0] = v >> 56;
-    p8[1] = v >> 48;
-    p8[2] = v >> 40;
-    p8[3] = v >> 32;
-    p8[4] = v >> 24;
-    p8[5] = v >> 16;
-    p8[6] = v >> 8;
-    p8[7] = v;
-#else
-    p8[0] = v;
-    p8[1] = v >> 8;
-    p8[2] = v >> 16;
-    p8[3] = v >> 24;
-    p8[4] = v >> 32;
-    p8[5] = v >> 40;
-    p8[6] = v >> 48;
-    p8[7] = v >> 56;
-#endif
-}
-
-#define SET_U64_AT(x___, y___) SET_U64_AT_P(&(x___), (y___))
-
-#endif
 
 #if __SIZEOF_POINTER__ == 4
 #define SET_PTR_AT_P SET_U32_AT_P

@@ -719,7 +719,7 @@ finger_print zdb_query_to_wire(zdb_query_to_wire_context_t *context)
                                     digestname(fqdn, dnsname_len(fqdn), salt, salt_len, iterations, &digest[1], false);
                                     digest[0] = SHA_DIGEST_LENGTH;
                                     const nsec3_zone_item_t *nsec3_node = nsec3_zone_item_find_encloser_start(n3, digest); // get the interval covering the next closer
-                                    nsec3_zone_item_to_new_zdb_resource_record_data_parm cname_target_nsec3_parm = {n3, nsec3_node, zone->origin, NULL, min_ttl};
+                                    nsec3_zone_item_to_new_zdb_resource_record_data_parm cname_target_nsec3_parm = {n3, nsec3_node, zone->origin, min_ttl};
                                     context->authority_count += zdb_query_to_wire_append_nsec3_record(context, &cname_target_nsec3_parm);
                                     dns_message_set_authority_count(mesg, context->authority_count);
                                 }
@@ -757,7 +757,7 @@ finger_print zdb_query_to_wire(zdb_query_to_wire_context_t *context)
                                     digestname(fqdn, dnsname_len(fqdn), salt, salt_len, iterations, &digest[1], false);
                                     digest[0] = SHA_DIGEST_LENGTH;
                                     const nsec3_zone_item_t *nsec3_node = nsec3_zone_item_find_encloser_start(n3, digest); // get the interval covering the next closer
-                                    nsec3_zone_item_to_new_zdb_resource_record_data_parm cname_target_nsec3_parm = {n3, nsec3_node, zone->origin, NULL, min_ttl};
+                                    nsec3_zone_item_to_new_zdb_resource_record_data_parm cname_target_nsec3_parm = {n3, nsec3_node, zone->origin, min_ttl};
                                     context->authority_count += zdb_query_to_wire_append_nsec3_record(context, &cname_target_nsec3_parm);
                                     dns_message_set_authority_count(mesg, context->authority_count);
                                 }
@@ -786,7 +786,7 @@ finger_print zdb_query_to_wire(zdb_query_to_wire_context_t *context)
                                     digestname(fqdn, dnsname_len(fqdn), salt, salt_len, iterations, &digest[1], false);
                                     digest[0] = SHA_DIGEST_LENGTH;
                                     const nsec3_zone_item_t *nsec3_node = nsec3_zone_item_find_encloser_start(n3, digest); // get the interval covering the next closer
-                                    nsec3_zone_item_to_new_zdb_resource_record_data_parm cname_target_nsec3_parm = {n3, nsec3_node, zone->origin, NULL, min_ttl};
+                                    nsec3_zone_item_to_new_zdb_resource_record_data_parm cname_target_nsec3_parm = {n3, nsec3_node, zone->origin, min_ttl};
                                     context->authority_count += zdb_query_to_wire_append_nsec3_record(context, &cname_target_nsec3_parm);
                                     dns_message_set_authority_count(mesg, context->authority_count);
                                 }

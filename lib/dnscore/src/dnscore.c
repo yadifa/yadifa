@@ -215,9 +215,12 @@ typedef void (*function_pointer_t)(const uint8_t *fqdn);
 
 static void dnscore_arch_checkup()
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
+
+
 /// @note 20170413 edf -- older compilers (gcc 4.6 and such) used to complain a lot about this
 ///
-#pragma message("Don't worry about the possible warnings below")
     ARCH_CHECK_SIZE(__SIZEOF_POINTER__, sizeof(void *));
     ARCH_CHECK_SIZE(sizeof(uint8_t), 1);
     ARCH_CHECK_SIZE(sizeof(int8_t), 1);
@@ -250,7 +253,7 @@ static void dnscore_arch_checkup()
     }
 #endif
 
-#pragma message("You can resume worrying about warnings ...")
+#pragma GCC diagnostic pop
 
 #if WORDS_BIGENDIAN == 1
     static const uint8_t endian[4] = {1, 2, 3, 4}; /* BIG    */
