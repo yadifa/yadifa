@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YAKEYROLLD" "8" "2025\-10\-31" "YAKEYROLLD " "YADIFA "
+.TH "YAKEYROLLD" "8" "2025\-11\-19" "YAKEYROLLD " "YADIFA "
 .SH NAME
 
 .PP
@@ -266,7 +266,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 3.0.4 of 2025\-10\-31. 
+Version: 3.0.5 of 2025\-11\-19. 
 .PP
 .SH MAILINGLIST
 

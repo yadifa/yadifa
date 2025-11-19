@@ -598,6 +598,7 @@ ya_result dns_packet_writer_add_rrset(dns_packet_writer_t *pw, const uint8_t *fq
                             break;
                         }
 
+                        dns_packet_writer_add_u16(pw, code); // compression code
                         dns_packet_writer_add_u16(pw, TYPE_MX);
                         dns_packet_writer_add_u16(pw, CLASS_IN);
                         dns_packet_writer_add_u32(pw, ne_ttl);
@@ -928,6 +929,9 @@ ya_result dns_packet_writer_add_rrset(dns_packet_writer_t *pw, const uint8_t *fq
                         break;
                     }
 
+                    // the first FQDN of the RRSET has already been written, so the next thing to write are:
+                    // type, class, ttl, rdata size (known quantity in this case), rdata bytes
+
                     dns_packet_writer_add_u16(pw, rtype);
                     dns_packet_writer_add_u16(pw, CLASS_IN);
                     dns_packet_writer_add_u32(pw, ne_ttl);
@@ -940,7 +944,7 @@ ya_result dns_packet_writer_add_rrset(dns_packet_writer_t *pw, const uint8_t *fq
                     {
                         rr = zdb_resource_record_set_const_iterator_next(&iter);
 
-                        if(dns_packet_writer_get_remaining_capacity(pw) < 12 + zdb_resource_record_data_rdata_size(rr))
+                        if(dns_packet_writer_get_remaining_capacity(pw) < 12 + zdb_resource_record_data_rdata_size(rr)) // 12 because compression code + 10
                         {
                             pw->packet_offset = last_good_offset;
                             ret = BUFFER_WOULD_OVERFLOW;
@@ -948,8 +952,8 @@ ya_result dns_packet_writer_add_rrset(dns_packet_writer_t *pw, const uint8_t *fq
                             break;
                         }
 
+                        // subsequent FQDNs can be written compressed using the pre-computed code
                         dns_packet_writer_add_u16(pw, code); // compression code
-
                         dns_packet_writer_add_u16(pw, rtype);
                         dns_packet_writer_add_u16(pw, CLASS_IN);
                         dns_packet_writer_add_u32(pw, ne_ttl);

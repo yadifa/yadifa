@@ -36,7 +36,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/CheckCHeaders.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/CheckCompilerFlags.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/EURidToolbox.cmake)
 
-read_version("3.0.4")
+read_version("3.0.5")
 
 project(yadifa VERSION ${VERSION_TEXT} LANGUAGES C)
 
@@ -107,8 +107,8 @@ set(YATEST_INCLUDE_DIRECTORY "${CMAKE_SOURCE_DIR}/tests")
 # settings from subdirectories - START
 
 set(PACKAGE "yadifa")
-set(PACKAGE_VERSION "3.0.4")
-set(VERSION "3.0.4")
+set(PACKAGE_VERSION "3.0.5")
+set(VERSION "3.0.5")
 set(PACKAGE_STRING "${PACKAGE} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "bugreport@yadifa.eu")
 
