@@ -951,6 +951,11 @@ ya_result file_get_absolute_path(const char *filename, char *buffer, size_t buff
 {
     ya_result ret;
 
+    if((filename == NULL) || (buffer == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
     if(filename[0] == '/')
     {
         strcpy_ex(buffer, filename, buffer_size);
@@ -964,7 +969,7 @@ ya_result file_get_absolute_path(const char *filename, char *buffer, size_t buff
             return ERRNO_ERROR;
         }
 
-        size_t n = strlen(buffer);
+        size_t n = strlen(buffer); // scan-build false positive, assume buffer is non-null, then that it is null
 
         if(n < buffer_size)
         {
@@ -1000,6 +1005,11 @@ ya_result file_get_absolute_path(const char *filename, char *buffer, size_t buff
 
 ya_result file_get_absolute_parent_directory(const char *filename, char *buffer, size_t buffer_size)
 {
+    if((filename == NULL) || (buffer == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
     char *last_separator = strrchr(filename, '/');
     if(last_separator != NULL)
     {
@@ -1009,7 +1019,7 @@ ya_result file_get_absolute_parent_directory(const char *filename, char *buffer,
             {
                 return ERRNO_ERROR;
             }
-            size_t basedir_size = strlen(buffer);
+            size_t basedir_size = strlen(buffer); // scan-build false positive, assume buffer is non-null, then that it is null
             buffer_size -= basedir_size;
             buffer += basedir_size;
         }

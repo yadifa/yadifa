@@ -325,30 +325,10 @@ bool journal_jnl_iswritelocked(journal_jnl *jnl)
 
 static inline bool journal_jnl_is_dirty_nolock(const journal_jnl *jnl) { return jnl->dirty; }
 
-#if UNUSED
-
-static inline bool journal_jnl_is_dirty(journal_jnl *jnl)
-{
-    journal_jnl_readlock(jnl);
-    bool ret = journal_jnl_is_dirty_nolock(jnl);
-    journal_jnl_readunlock(jnl);
-    return ret;
-}
-
-#endif
-
 static inline void journal_jnl_set_dirty_nolock(journal_jnl *jnl) { jnl->dirty = true; }
 
 static inline void journal_jnl_clear_dirty_nolock(journal_jnl *jnl) { jnl->dirty = false; }
 
-#if UNUSED
-static inline void journal_jnl_clear_dirty(journal_jnl *jnl)
-{
-    journal_jnl_writelock(jnl);
-    journal_jnl_clear_dirty_nolock(jnl);
-    journal_jnl_writeunlock(jnl);
-}
-#endif
 /*
 void
 log_debug_jnl(journal_jnl *jnl, const char *text)

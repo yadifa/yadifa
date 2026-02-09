@@ -1434,8 +1434,6 @@ struct dns_message_header_s
 #define CLASS_NONE_NAME "NONE"
 #define CLASS_ANY_NAME  "ANY"
 
-extern const class_table_t qclass[];
-
 #define TYPE_A_NAME          "A"
 #define TYPE_NS_NAME         "NS"
 #define TYPE_MD_NAME         "MD"
@@ -1556,8 +1554,6 @@ extern const class_table_t qclass[];
 #define CERT_IACPKIX           NU16(7)
 #define CERT_URI               NU16(253)
 #define CERT_OID               NU16(254)
-
-extern const type_table_t qtype[];
 
 /**
  * Static asciiz representation of a dns class

@@ -68,7 +68,8 @@ static string_treemap_node_t *dnssec_algo_set = NULL;
 static string_treemap_t       word_set = NULL;
 static initialiser_state_t    rfc_init_state = INITIALISE_STATE_INIT;
 
-const class_table_t           qclass[] = {{CLASS_IN, CLASS_IN_NAME},
+static const class_table_t    qclass_to_name_table[] = {
+                                          {CLASS_IN, CLASS_IN_NAME},
                                           {CLASS_CS, CLASS_CS_NAME},
                                           {CLASS_CH, CLASS_CH_NAME},
                                           {CLASS_HS, CLASS_HS_NAME},
@@ -78,7 +79,8 @@ const class_table_t           qclass[] = {{CLASS_IN, CLASS_IN_NAME},
                                           {CLASS_ANY, CLASS_ANY_NAME},
                                           {0, NULL}};
 
-const type_table_t            qtype[] = {{TYPE_A, TYPE_A_NAME},                   // 1
+static const type_table_t     qtype_to_name_table[] = {
+                                         {TYPE_A, TYPE_A_NAME},                   // 1
                                          {TYPE_NS, TYPE_NS_NAME},                 // 2
                                          {TYPE_MD, TYPE_MD_NAME},                 // 3
                                          {TYPE_MF, TYPE_MF_NAME},                 // 4
@@ -1198,10 +1200,10 @@ void        rfc_init()
 
         string_treemap_init(&class_set);
 
-        for(i = 0; qclass[i].id != 0; i++)
+        for(i = 0; qclass_to_name_table[i].id != 0; i++)
         {
-            string_treemap_node_t *node = string_treemap_insert(&class_set, qclass[i].data);
-            node->value = qclass[i].id;
+            string_treemap_node_t *node = string_treemap_insert(&class_set, qclass_to_name_table[i].data);
+            node->value = qclass_to_name_table[i].id;
         }
 
         for(i = 0;; ++i)
@@ -1218,10 +1220,10 @@ void        rfc_init()
 
         string_treemap_init(&type_set);
 
-        for(i = 0; qtype[i].id != 0; i++)
+        for(i = 0; qtype_to_name_table[i].id != 0; i++)
         {
-            string_treemap_node_t *node = string_treemap_insert(&type_set, qtype[i].data);
-            node->value = qtype[i].id;
+            string_treemap_node_t *node = string_treemap_insert(&type_set, qtype_to_name_table[i].data);
+            node->value = qtype_to_name_table[i].id;
         }
 
         for(i = 0;; ++i)

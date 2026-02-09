@@ -295,16 +295,6 @@ void server_process_tls_finalize()
 #endif
 }
 
-#if UNUSED
-static void server_process_tls_message_thread(void *parm)
-{
-    server_process_tls_thread_parm *tls_parm = (server_process_tls_thread_parm *)parm;
-    tcp_manager_channel_t          *tmc = tls_parm->tmc;
-    server_process_channel_message(tmc, tls_parm->mesg, tls_parm->ctx->base.statisticsp, tls_parm->ctx->base.sockfd);
-    tcp_manager_channel_release(tmc);
-}
-#endif
-
 void        tcp_manager_accept_epoll_wake_all();
 
 static void server_dns_tls_worker_wakeup(struct service_s *desc)

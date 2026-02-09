@@ -651,27 +651,6 @@ ya_result json_write_to(json_t j, output_stream_t *os)
     return ret;
 }
 
-#if UNUSED
-static ya_result json_read_next_char_skip_blanks(input_stream_t *is, uchar_t *cp)
-{
-    ya_result ret;
-    for(;;)
-    {
-        ret = utf8_next_uchar_from_stream(is, cp);
-        if(ret <= 0)
-        {
-            return ret;
-        }
-        uchar_t c = *cp;
-        if((c == '\t') || (c == '\n') || (c == '\r') || (c == ' '))
-        {
-            continue;
-        }
-        return ret;
-    }
-}
-#endif
-
 static ya_result json_expect_next_char_skip_blanks(input_stream_t *is, uchar_t *cp)
 {
     ya_result ret;

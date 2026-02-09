@@ -122,10 +122,6 @@ struct dnskey_raw_field_s
 
 typedef struct dnskey_raw_field_s dnskey_raw_field_t;
 
-#if UNUSED
-void dnskey_raw_field_bytes(dnskey_raw_field_t *field);
-#endif
-
 #ifdef OSSL_PARAM_BN
 #define OSSL_PARAM_RAW(name__, raw_field__) OSSL_PARAM_BN(name__, (raw_field__)->buffer, (raw_field__)->size)
 #endif

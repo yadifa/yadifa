@@ -848,7 +848,7 @@ static int mutex_semaphore_test_ex(bool on_shared_memory)
         }
     }
 
-    if((ctx->parent == n) && (ctx->child == n) && (ctx->both == n + n))
+    if((ctx->parent == (uint64_t)n) && (ctx->child == (uint64_t)n) && (ctx->both == (uint64_t)(n + n)))
     {
         yatest_log("success");
         ret = 0;

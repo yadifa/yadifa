@@ -246,6 +246,9 @@ CONFIG_ALIAS(module, dynamic_modules)
 CONFIG_BOOL(hidden_primary, "0")            // doc
 CONFIG_ALIAS(hidden_master, hidden_primary) // compatibility
 
+CONFIG_BOOL(cookie_support, "1")
+
+
 #if DEBUG
 CONFIG_BOOL(print_config, "0") // debug build only, prints the loaded configuration
 #endif
@@ -604,6 +607,7 @@ static ya_result config_main_section_postprocess(struct config_section_descripto
     }
 #endif
     dns_message_edns0_setmaxsize(g_config->edns0_max_size);
+    dns_message_cookie_support_set(g_config->cookie_support);
 
     g_config->total_interfaces = host_address_count(g_config->listen);
 

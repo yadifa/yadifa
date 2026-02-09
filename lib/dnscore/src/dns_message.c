@@ -92,6 +92,7 @@ uint16_t        edns0_maxsize = EDNS0_LENGTH_MAX;
 
 double          g_message_data_minimum_troughput_default = 0;
 static uint16_t g_dns_message_fudge = 300;
+static bool     g_dns_message_cookie_support_enabled = true;
 
 void            dns_message_fudge_set(uint16_t fudge) { g_dns_message_fudge = fudge; }
 
@@ -103,9 +104,50 @@ void            dns_message_set_minimum_troughput_default(double rate)
     }
 }
 
-void               dns_message_edns0_setmaxsize(uint16_t maxsize) { edns0_maxsize = maxsize; }
+void            dns_message_edns0_setmaxsize(uint16_t maxsize) { edns0_maxsize = maxsize; }
 
-uint16_t           dns_message_edns0_getmaxsize() { return edns0_maxsize; }
+uint16_t        dns_message_edns0_getmaxsize() { return edns0_maxsize; }
+
+/**
+ * Enables or disables the cookie support when processing additionals in queries
+ *
+ * @param enabled
+ */
+
+void            dns_message_cookie_support_set(bool enabled) { g_dns_message_cookie_support_enabled = enabled; }
+
+/**
+ * To know if cookie support is enabled while processing additionals in queries
+ *
+ * @param enabled
+ */
+
+bool            dns_message_cookie_support_get() { return g_dns_message_cookie_support_enabled; }
+
+/**
+ * Attempts to update the EDNS0 size of a message at low cost.
+ * Meant to be used in error reporting.
+ *
+ * @param mesg
+ * @return true iff the operation succeeded
+ */
+bool               dns_message_edns0_update_size(dns_message_t *mesg)
+{
+    uint8_t *additional_section_ptr = dns_message_get_additional_section_ptr(mesg);
+    if(additional_section_ptr != NULL)
+    {
+        // expects the '.' for the fqdn
+        if(*additional_section_ptr == 0)
+        {
+            if(GET_U16_AT(additional_section_ptr[1]) == TYPE_OPT)
+            {
+                SET_U16_AT(additional_section_ptr[3], htons(edns0_maxsize));
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 static inline void dns_message_cookie_set(dns_message_t *mesg) { mesg->_opt |= MESSAGE_OPT_COOKIE; }
 
@@ -211,19 +253,10 @@ static inline void message_process_adjust_buffer_size(dns_message_t *mesg, uint1
     dns_message_set_buffer_size(mesg, mesg_buffer_size);
 }
 
-static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s, uint16_t ar_count)
+static ya_result dns_message_process_additionals(dns_message_t *mesg, uint16_t ar_count)
 {
-    (void)s;
-    /*
-     * @note: I've moved this in the main function (the one calling this one)
-     */
-
-    // yassert(ar_count != 0 && ar_count == message_get_additional_count(mesg));
-
-    uint8_t  *buffer = mesg->_buffer;
-    ya_result ret;
-
-    ar_count = ntohs(MESSAGE_AR(buffer));
+    uint8_t *buffer = dns_message_get_buffer(mesg);
+    ar_count = ntohs(ar_count);
 
     /*
      * rfc2845
@@ -248,13 +281,13 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
      *
      */
 
-    uint32_t            query_end = dns_message_get_size(mesg);
+    uint32_t query_end = dns_message_get_size(mesg);
 
     dns_packet_reader_t purd;
     purd.packet = buffer;
     purd.packet_size = query_end;
 
-    if(mesg->_ar_start == NULL)
+    if(dns_message_get_additional_section_ptr(mesg) == NULL)
     {
         uint32_t ar_index = ntohs(MESSAGE_AN(buffer)) + ntohs(MESSAGE_NS(buffer));
 
@@ -271,8 +304,7 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
             /*
              * It should be in this kind of processing that we read the EDNS0 flag
              */
-
-            if(FAIL(ret = dns_packet_reader_skip_record(&purd)))
+            if(FAIL(dns_packet_reader_skip_record(&purd)))
             {
                 dns_message_set_status(mesg, FP_ERROR_READING_QUERY);
                 return UNPROCESSABLE_MESSAGE;
@@ -293,43 +325,46 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
     /* We are now at the start of the ar */
 
     struct type_class_ttl_rdlen_s tctr;
-    uint8_t                       tsigname[DOMAIN_LENGTH_MAX];
-#if DNSCORE_HAS_TSIG_SUPPORT
     uint32_t record_offset;
-#endif
+    ya_result return_code = SUCCESS;
+    uint8_t tsigname[DOMAIN_LENGTH_MAX];
+
+    // 0 1 or 2 records
 
     while(ar_count-- > 0)
     {
-#if DNSCORE_HAS_TSIG_SUPPORT
         record_offset = purd.packet_offset;
-#endif
 
         if(FAIL(dns_packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
         {
             /* oops */
 
             dns_message_set_status(mesg, FP_ERROR_READING_QUERY);
-
             return UNPROCESSABLE_MESSAGE;
         }
 
-        if(dns_packet_reader_read(&purd, &tctr, 10) == 10) // exact
+        if(dns_packet_reader_read(&purd, &tctr, 10) != 10) // exact
         {
-            /*
-             * EDNS (0)
-             */
+            /* oops */
 
-            if(tctr.rtype == TYPE_OPT)
+            dns_message_set_status(mesg, FP_ERROR_READING_QUERY);
+            return UNPROCESSABLE_MESSAGE;
+        }
+
+        switch(tctr.rtype)
+        {
+            case TYPE_OPT:
             {
+                // EDNS (0)
+
                 /**
-                 * Handle EDNS
+                 * Handle EDNS0
                  */
 
                 if((tctr.ttl & NU32(0x00ff0000)) == 0) /* ensure version is 0 */
                 {
                     uint32_t rdlen = ntohs(tctr.rdlen);
 
-#if DNSCORE_HAS_NSID_SUPPORT
                     if(rdlen != 0)
                     {
                         uint32_t next = purd.packet_offset + rdlen;
@@ -342,12 +377,14 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
                             {
                                 if(opt_type_size == NU32(0x00030000)) // check if it's NSID request
                                 {
+#if DNSCORE_HAS_NSID_SUPPORT
                                     // nsid
                                     dns_message_nsid_set(mesg);
+#endif
                                     continue;
                                 }
 
-                                if((opt_type_size & 0xffff) == OPT_COOKIE) // check if it's COOKIE
+                                if(g_dns_message_cookie_support_enabled && ((opt_type_size & 0xffff) == OPT_COOKIE)) // check if it's COOKIE
                                 {
                                     // cookie
                                     int32_t cookie_len = ntohl(opt_type_size) & 0xffff;
@@ -421,7 +458,7 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
                             }
                             else
                             {
-                                break;
+                                break; // OPTions for loop
                             }
                         }
 
@@ -430,12 +467,7 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
                             return UNPROCESSABLE_MESSAGE;
                         }
                     }
-#else
-                    if(FAIL(dns_packet_reader_skip(&purd, rdlen)))
-                    {
-                        return UNPROCESSABLE_MESSAGE;
-                    }
-#endif
+
                     if(tsigname[0] == '\0')
                     {
                         message_process_adjust_buffer_size(mesg, ntohs(tctr.rclass));
@@ -453,34 +485,33 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
                 }
                 else
                 {
-                    dns_message_set_status(mesg, FP_EDNS_BAD_VERSION);
-                    message_process_adjust_buffer_size(mesg, ntohs(tctr.rclass));
+                    if(FAIL(dns_packet_reader_skip_bytes(&purd, ntohs(tctr.rdlen))))
+                    {
+                        /* oops */
+                        dns_message_set_status(mesg, FP_ERROR_READING_QUERY);
+                        return UNPROCESSABLE_MESSAGE;
+                    }
 
+                    dns_message_set_status(mesg, FP_EDNS_BAD_VERSION);
                     dns_message_edns0_set(mesg);
                     mesg->_edns0_opt_ttl.as_u32 = 0;
+
 #if DEBUG
                     log_debug("OPT record is not processable (not supported)");
 #endif
-                    return MAKE_RCODE_ERROR(FP_EDNS_BAD_VERSION);
+                    return_code = MAKE_RCODE_ERROR(FP_EDNS_BAD_VERSION);
                 }
-            }
-#if DNSCORE_HAS_TSIG_SUPPORT
-            /*
-             * TSIG
-             */
 
-            else if(tctr.rtype == TYPE_TSIG)
+                break;
+            }
+            case TYPE_TSIG:
             {
                 if(ar_count == 0)
                 {
-                    /*
-                     * It looks like a TSIG ...
-                     */
-
-                    ya_result return_code;
-
                     if(dns_message_is_query(mesg))
                     {
+                        ya_result return_code;
+
                         if(FAIL(return_code = tsig_process_query(mesg, &purd, record_offset, tsigname, &tctr)))
                         {
 #if DEBUG
@@ -490,9 +521,9 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
                             return return_code;
                         }
                     }
-                    else
+                    else // answer
                     {
-                        tsig_key_t *key = tsig_get(tsigname);
+                        const tsig_key_t *key = tsig_get(tsigname);
 
                         if(key != NULL)
                         {
@@ -515,41 +546,41 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint8_t *s
                         }
                     }
 
-                    break; /* we know there is no need to loop anymore */
+                    break;
                 }
                 else
                 {
-                    /*
-                     * Error: TSIG is not the last AR record
-                     */
-
+                    // Error: TSIG is not the last AR record
 #if DEBUG
                     log_debug("TSIG record is not the last AR");
 #endif
-
                     dns_message_set_status(mesg, FP_TSIG_IS_NOT_LAST);
-
                     return UNPROCESSABLE_MESSAGE;
                 }
             }
-#endif
-            else
+            default: // other types
             {
-                /* Unhandled AR TYPE */
+                if(dns_message_has_edns0(mesg))
+                {
+                    dns_message_set_status(mesg, FP_UNEXPECTED_RR_IN_QUERY);
+                    return UNPROCESSABLE_MESSAGE;
+                }
 
-                log_debug("unhandled AR type %{dnstype}", &tctr.rtype);
-
-                dns_message_set_status(mesg, FP_UNEXPECTED_RR_IN_QUERY);
-
-                return UNPROCESSABLE_MESSAGE;
+                if(FAIL(dns_packet_reader_skip_bytes(&purd, ntohs(tctr.rdlen))))
+                {
+                    /* oops */
+                    dns_message_set_status(mesg, FP_ERROR_READING_QUERY);
+                    return UNPROCESSABLE_MESSAGE;
+                }
+                break;
             }
-        }
+        }  // switch rtype
     } /* While there are AR to process */
 
     dns_message_set_additional_count_ne(mesg, 0);
     dns_message_set_size(mesg, query_end);
 
-    return SUCCESS;
+    return return_code;
 }
 
 /**
@@ -595,7 +626,7 @@ static ya_result dns_message_process_answer_additionals(dns_message_t *mesg, uin
      *
      */
 
-    uint32_t            message_size = dns_message_get_size(mesg);
+    uint32_t message_size = dns_message_get_size(mesg);
 
     dns_packet_reader_t purd;
     purd.packet = buffer;
@@ -819,8 +850,6 @@ static ya_result dns_message_process_answer_additionals(dns_message_t *mesg, uin
         }
     } /* While there are AR to process */
 
-    // message_sub_additional_count(mesg, 1);
-
     dns_message_set_additional_count_ne(mesg, 0);
     dns_message_set_size(mesg, message_size);
 
@@ -988,7 +1017,7 @@ ya_result dns_message_process_query(dns_message_t *mesg)
         return UNPROCESSABLE_MESSAGE;
     }
     */
-    uint8_t *s = dns_message_process_copy_fqdn(mesg);
+    const uint8_t *s = dns_message_process_copy_fqdn(mesg);
 
     if(s == NULL)
     {
@@ -1019,14 +1048,12 @@ ya_result dns_message_process_query(dns_message_t *mesg)
 
     {
         ya_result return_code;
-        uint32_t  nsar_count;
+        uint16_t  ar_count;
 
-        if((nsar_count = MESSAGE_NSAR(buffer)) != 0)
+        if((ar_count = MESSAGE_AR(buffer)) != 0)
         {
-            if(FAIL(return_code = dns_message_process_additionals(mesg, s, nsar_count)))
+            if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
             {
-                // message_set_size(mesg, s - buffer);
-
                 return return_code;
             }
         }
@@ -1141,11 +1168,11 @@ int dns_message_process(dns_message_t *mesg)
 
             {
                 ya_result return_code;
-                uint32_t  nsar_count;
+                uint16_t  ar_count;
 
-                if((nsar_count = MESSAGE_NSAR(buffer)) != 0)
+                if((ar_count = MESSAGE_AR(buffer)) != 0)
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, s, nsar_count)))
+                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
                     {
                         dns_message_set_size(mesg, s - buffer);
 
@@ -1249,7 +1276,7 @@ int dns_message_process(dns_message_t *mesg)
 
                 if((ar_count = MESSAGE_AR(buffer)) != 0)
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, s, ar_count)))
+                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
                     {
                         return return_code;
                     }
@@ -1350,7 +1377,7 @@ int dns_message_process(dns_message_t *mesg)
 
                 if((ar_count = MESSAGE_AR(buffer)) != 0)
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, s, ar_count)))
+                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
                     {
                         return return_code;
                     }
@@ -1458,7 +1485,7 @@ int dns_message_process(dns_message_t *mesg)
 
                 if((ar_count = MESSAGE_AR(buffer)) != 0)
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, s, ar_count)))
+                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
                     {
                         return return_code;
                     }
@@ -1944,7 +1971,7 @@ void dns_message_transform_to_error(dns_message_t *mesg)
 
     if(dns_message_get_status(mesg) == RCODE_FORMERR)
     {
-        SET_U64_AT(mesg->_buffer[4], 0);
+        SET_U64_AT(mesg->_buffer[4], 0);  // sets all the record counts for all sections to 0
         dns_message_set_size(mesg, DNS_HEADER_LENGTH);
     }
     else
@@ -1963,6 +1990,188 @@ void dns_message_transform_to_signed_error(dns_message_t *mesg)
     {
         tsig_sign_answer(mesg);
     }
+}
+
+
+ya_result dns_message_transform_to_unsigned_error(dns_message_t *mesg)
+{
+    // 1 extract the singnature without its MAC
+    // 2 transform the message to error, with ends0 if appropriate
+    // 3 append the signature
+    dns_packet_reader_t purd;
+    ya_result ret;
+
+    uint8_t *ar_ptr = dns_message_get_additional_section_ptr(mesg);
+    if(ar_ptr == NULL)
+    {
+        // can't be called if additionals have not been processed yet
+        return INVALID_STATE_ERROR;
+    }
+
+    dns_packet_reader_init_from_message(&purd, mesg);
+    if(FAIL(ret = dns_packet_reader_skip_query_section(&purd)))
+    {
+        return ret;
+    }
+
+    uint32_t after_query_offset = dns_packet_reader_position(&purd);
+
+    if(dns_message_has_tsig(mesg))
+    {
+        dns_message_clear_authenticated_data(mesg);
+        dns_message_set_answer(mesg);
+        dns_message_set_answer_count_ne(mesg, 0);
+        dns_message_set_authority_count_ne(mesg, 0);
+        dns_message_set_additional_count_ne(mesg, NU16(1));  // pre-count the TSIG
+        dns_message_set_size(mesg, after_query_offset);
+        dns_message_set_rcode(mesg, dns_message_get_status(mesg));
+        dns_message_edns0_append(mesg);
+
+        const uint8_t *algorithm_name = tsig_get_algorithm_name(mesg->_tsig.mac_algorithm);
+
+        uint32_t algorithm_name_len = dnsname_len(algorithm_name);
+
+        if(dns_message_get_size(mesg) + algorithm_name_len + mesg->_tsig.tsig->name_len + 10 + 16 > dns_message_get_buffer_size(mesg))
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+
+        uint8_t *tsig_ptr = dns_message_get_buffer_limit(mesg);
+        uint8_t *p = tsig_ptr;
+        memcpy(p, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
+        p += mesg->_tsig.tsig->name_len;
+        SET_U16_AT_P(p, TYPE_TSIG);
+        p += 2;
+        SET_U16_AT_P(p, CLASS_ANY);
+        p += 2;
+        SET_U32_AT_P(p, 0);
+        p += 4;
+        uint8_t *rdata_size_ptr = p;
+        SET_U16_AT_P(p, 0);
+        p += 2;
+
+        memcpy(p, algorithm_name, algorithm_name_len);
+        p += algorithm_name_len;
+
+        uint64_t now = time(NULL);
+        SET_U16_AT(p[0], htons((uint16_t)(now >> 32)));
+        SET_U32_AT(p[2], htonl((uint32_t)now));
+        SET_U16_AT(p[6], NU16(300));
+        SET_U16_AT(p[8], 0);
+        SET_U16_AT(p[10], mesg->_tsig.original_id);
+        SET_U16_AT(p[12], mesg->_tsig.error);
+        SET_U16_AT(p[14], 0);
+        p += 16;
+
+        size_t rdata_len = p - rdata_size_ptr - 2;
+        SET_U16_AT_P(rdata_size_ptr, ntohs(rdata_len));
+
+        dns_message_set_size(mesg, p - dns_message_get_buffer(mesg));
+    }
+    else
+    {
+        // skip to the TSIG
+
+        dns_packet_reader_set_position(&purd, ar_ptr - purd.packet);
+
+        int32_t additional_count = dns_message_get_additional_count(mesg);
+
+
+        for(additional_count = additional_count - 1; additional_count > 0; --additional_count)
+        {
+            ya_result ret = dns_packet_reader_skip_record(&purd);
+            if(FAIL(ret))
+            {
+                return ret;
+            }
+        }
+
+        // read the TSIG
+
+        uint8_t tsig_buffer[4096];
+
+        // find the TSIG
+        uint8_t *p = tsig_buffer;
+        uint32_t buffer_available_len = sizeof(tsig_buffer);
+
+        if(FAIL(ret = dns_packet_reader_read_fqdn(&purd, p, buffer_available_len)))
+        {
+            return ret;
+        }
+        p += ret;
+        buffer_available_len -= ret;
+
+        if(FAIL(ret = dns_packet_reader_read(&purd, p, 10)))
+        {
+            return ret;
+        }
+
+        uint16_t rtype = GET_U16_AT(p[0]);
+
+        if(rtype != TYPE_TSIG)
+        {
+            // the function is expected to be called while processing a TSIG
+            return INVALID_STATE_ERROR;
+        }
+
+        uint8_t *rdata_size_ptr = &p[8];
+
+        p += 10;
+        buffer_available_len -= 10;
+
+        // algorithm name
+        if(FAIL(ret = dns_packet_reader_read_fqdn(&purd, p, buffer_available_len)))
+        {
+            return ret;
+        }
+
+        p += ret;
+        buffer_available_len -= ret;
+
+        if(buffer_available_len < 16)
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+
+        uint64_t now = time(NULL);
+        SET_U16_AT(p[0], htons((uint16_t)(now >> 32)));
+        SET_U32_AT(p[2], htonl((uint32_t)now));
+        SET_U16_AT(p[6], NU16(300));
+        SET_U16_AT(p[8], 0);
+        SET_U16_AT(p[10], dns_message_get_id(mesg));
+        SET_U16_AT(p[12], mesg->_tsig.error);
+        SET_U16_AT(p[14], 0);
+        p += 16;
+        //buffer_available_len -= 16;
+        size_t tsig_len = p - tsig_buffer;
+        size_t rdata_len = p - rdata_size_ptr - 2;
+        SET_U16_AT_P(rdata_size_ptr, ntohs(rdata_len));
+
+        // update the message with the (optional) EDNS0 and the TSIG that was read (and emptied)
+
+        dns_message_clear_authenticated_data(mesg);
+        dns_message_set_answer(mesg);
+        dns_message_set_answer_count_ne(mesg, 0);
+        dns_message_set_authority_count_ne(mesg, 0);
+        dns_message_set_additional_count_ne(mesg, NU16(1));  // pre-count the TSIG
+        dns_message_set_size(mesg, after_query_offset);
+
+        dns_message_set_rcode(mesg, dns_message_get_status(mesg));
+        dns_message_edns0_append(mesg);
+        size_t message_size = dns_message_get_size(mesg);
+
+        if(tsig_len > dns_message_get_buffer_size(mesg) - message_size)
+        {
+            return BUFFER_WOULD_OVERFLOW;
+        }
+
+        p = dns_message_get_buffer(mesg);
+        p +=  message_size;
+        memcpy(p, tsig_buffer, tsig_len);
+        dns_message_set_size(mesg, message_size + tsig_len);
+    }
+
+    return SUCCESS;
 }
 
 /**

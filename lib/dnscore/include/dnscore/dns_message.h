@@ -414,6 +414,22 @@ typedef struct dns_message_map_s dns_message_map_t;
 void dns_message_fudge_set(uint16_t fudge);
 
 /**
+ * Enables or disables the cookie support when processing additionals in queries
+ *
+ * @param enabled
+ */
+
+void dns_message_cookie_support_set(bool enabled);
+
+/**
+ * To know if cookie support is enabled while processing additionals in queries
+ *
+ * @param enabled
+ */
+
+bool dns_message_cookie_support_get();
+
+/**
  * This sets a default, global, rate for functions supporting it.
  * Rate is used in TCP streaming so that if the other end reads or writes
  * too slowly then the connection is severed, harshly.
@@ -679,6 +695,8 @@ static inline void     dns_message_clear_recursion_desired(dns_message_t *mesg) 
 
 static inline void     dns_message_set_authenticated_data(dns_message_t *mesg) { MESSAGE_LOFLAGS(mesg->_buffer) |= AD_BITS; }
 
+static inline void     dns_message_clear_authenticated_data(dns_message_t *mesg) { MESSAGE_LOFLAGS(mesg->_buffer) &= ~AD_BITS; }
+
 static inline bool     dns_message_is_authoritative(const dns_message_t *mesg) { return (MESSAGE_HIFLAGS(mesg->_buffer) & AA_BITS) != 0; }
 
 static inline void     dns_message_apply_mask(dns_message_t *mesg, int hi, int lo) { MESSAGE_FLAGS_AND(mesg->_buffer, (uint8_t)hi, (uint8_t)lo); }
@@ -898,6 +916,16 @@ static inline void dns_message_clear_control(dns_message_t *mesg)
 
 uint16_t           dns_message_edns0_getmaxsize();
 
+/**
+ * Attempts to update the EDNS0 size of a message at low cost.
+ * Meant to be used in error reporting.
+ *
+ * @param mesg
+ * @return true iff the operation succeeded
+ */
+
+bool               dns_message_edns0_update_size(dns_message_t *mesg);
+
 static inline void dns_message_set_edns0(dns_message_t *mesg, bool enabled)
 {
     if(enabled)
@@ -1059,6 +1087,7 @@ int                dns_message_process_lenient(dns_message_t *mesg);
 
 void               dns_message_transform_to_error(dns_message_t *mesg);
 void               dns_message_transform_to_signed_error(dns_message_t *mesg);
+ya_result          dns_message_transform_to_unsigned_error(dns_message_t *mesg);
 
 /* global */
 

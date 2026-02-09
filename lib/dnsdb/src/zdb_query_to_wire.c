@@ -110,46 +110,6 @@ extern logger_handle_t *g_database_logger;
 process_flags_t zdb_query_process_flags = ~0;
 
 /**
- * @brief Update a name set with the name found in an RDATA
- *
- * @param source the record rdata containing the name to add
- * @param headp a pointer to the section list
- * @param rtype the type of the record
- * @param set collection where to add the name
- *
- * 10 use
- */
-static void zdb_query_to_wire_additionals_dname_set_update_ns(dnsname_set *set, zdb_resource_record_set_t *rrset DECLARE_ZCLASS_PARAMETER)
-{
-    zdb_resource_record_set_iterator iter;
-    zdb_resource_record_set_iterator_init(rrset, &iter);
-    while(zdb_resource_record_set_iterator_has_next(&iter))
-    {
-        zdb_resource_record_data_t *record = zdb_resource_record_set_iterator_next(&iter);
-
-        if(!dnsname_set_insert(set, zdb_resource_record_data_rdata(record)))
-        {
-            break;
-        }
-    }
-}
-
-static void zdb_query_to_wire_additionals_dname_set_update_mx(dnsname_set *set, zdb_resource_record_set_t *rrset DECLARE_ZCLASS_PARAMETER)
-{
-    zdb_resource_record_set_iterator iter;
-    zdb_resource_record_set_iterator_init(rrset, &iter);
-    while(zdb_resource_record_set_iterator_has_next(&iter))
-    {
-        zdb_resource_record_data_t *record = zdb_resource_record_set_iterator_next(&iter);
-
-        if(!dnsname_set_insert(set, zdb_resource_record_data_rdata(record) + 2))
-        {
-            break;
-        }
-    }
-}
-
-/**
  * @brief Handles what to do when a record has not been found (NXRRSET)
  *
  * @param zone the zone
@@ -350,36 +310,6 @@ static inline finger_print zdb_query_to_wire_record_not_found(zdb_query_to_wire_
 #endif
 
     return FP_BASIC_RECORD_NOTFOUND;
-}
-
-/**
- * @brief Appends all the glue records associated to the names in the set to the message
- *
- * @param set the set with all the fqdns
- * @param context the context of the query
- * @param zone the current zone
- * @param dnssec dnssec enabled or not
- *
- * 10 use
- */
-static uint16_t zdb_query_to_wire_additionals_dname_set_append(dnsname_set *set, zdb_query_to_wire_context_t *context, const zdb_zone_t *zone, bool dnssec)
-{
-    uint16_t             count = 0;
-
-    dnsname_set_iterator iter;
-
-    dnsname_set_iterator_init(set, &iter);
-
-    while(dnsname_set_iterator_hasnext(&iter))
-    {
-        /* ADD NS "A/AAAA" TO ADDITIONAL  */
-
-        const uint8_t *dns_name = dnsname_set_iterator_next_node(&iter)->key;
-
-        count += zdb_query_to_wire_append_ips(context, zone, dns_name, dnssec);
-    }
-
-    return count;
 }
 
 /**

@@ -174,9 +174,9 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                 {
                     dns_message_edns0_clear_undefined_flags(mesg);
 
-                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                     {
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                     }
                 }
                 else
@@ -497,10 +497,10 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
 
             if((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
             {
-                if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                 {
                     dns_message_edns0_clear_undefined_flags(mesg);
-                    dns_message_transform_to_error(mesg);
+                    dns_message_transform_to_signed_error(mesg);
                 }
             }
             else

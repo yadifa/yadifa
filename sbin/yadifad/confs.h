@@ -466,6 +466,8 @@ struct yadifad_config_main_s
 
     bool   hidden_primary;
 
+    bool   cookie_support;
+
     bool   check_policies;
 #if DEBUG
     bool print_config;

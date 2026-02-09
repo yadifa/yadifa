@@ -458,75 +458,6 @@ static void    tsig_update_time(dns_message_t *mesg)
     mesg->_tsig.timelo = htonl((uint32_t)now);
 }
 
-static ya_result tsig_process_append_unsigned(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t tsig_offset)
-{
-    uint16_t *tsig_rdata_size_position_p;
-    uint16_t  tsig_rdata_size;
-    dns_message_set_status(mesg, FP_RCODE_NOTAUTH); // no fingerprint here, it's RFC
-    dns_message_update_answer_status(mesg);
-    dns_message_set_rcode(mesg, RCODE_NOTAUTH);
-    dns_packet_reader_set_position(purd, tsig_offset);
-
-    if(FAIL(dns_packet_reader_skip_zone_record(purd)))
-    {
-        return MAKE_RCODE_ERROR(RCODE_FORMERR);
-    }
-
-    if(dns_packet_reader_available(purd) <= 6)
-    {
-        return MAKE_RCODE_ERROR(RCODE_FORMERR);
-    }
-
-    dns_packet_reader_skip_bytes(purd, 4); // return value guaranteed : checked above
-    tsig_rdata_size_position_p = (uint16_t *)dns_packet_reader_get_current_ptr_const(purd, 2);
-    dns_packet_reader_read_u16_unchecked(purd, &tsig_rdata_size); // checked above
-
-    if(FAIL(dns_packet_reader_skip_fqdn(purd))) // algorithm
-    {
-        return MAKE_RCODE_ERROR(RCODE_FORMERR);
-    }
-
-    uint8_t *p = (uint8_t *)dns_packet_reader_get_current_ptr_const(purd, 16); // ensures there is enough room
-    if(p != NULL)
-    {
-        dns_message_set_answer(mesg); // Make the message an answer
-
-        // overwrite the TSIG without the MAC and with a BADKEY error code
-        // keep the name and the algorithm
-
-        uint32_t now = timeus() / ONE_SECOND_US;
-        SET_U16_AT_P(p, 0);
-        p += 2;
-        SET_U32_AT_P(p, htonl(now));
-        p += 4;
-        SET_U16_AT_P(p, NU16(300));
-        p += 2;
-        SET_U16_AT_P(p, 0);
-        p += 2;
-        SET_U16_AT_P(p, dns_message_get_id(mesg));
-        p += 2;
-        SET_U16_AT_P(p, mesg->_tsig.error); // the error code is stored in network order
-        p += 2;
-        SET_U16_AT_P(p, 0);
-        p += 2;
-
-        // adjust the TSIG rdata size
-
-        SET_U16_AT_P(tsig_rdata_size_position_p, htons((p - (uint8_t *)tsig_rdata_size_position_p) - 2));
-
-        // adjust the message size
-
-        dns_packet_reader_skip_unchecked(purd, 16); // we know it's available
-        dns_message_set_size(mesg, dns_packet_reader_position(purd));
-
-        return MAKE_RCODE_ERROR(ntohs(mesg->_tsig.error));
-    }
-    else
-    {
-        return MAKE_RCODE_ERROR(RCODE_FORMERR);
-    }
-}
-
 static ya_result tsig_verify_query(dns_message_t *mesg)
 {
     uint32_t md_len = EVP_MAX_MD_SIZE;
@@ -546,6 +477,7 @@ static ya_result tsig_verify_query(dns_message_t *mesg)
     {
         dns_message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
 
+        dns_message_clear_authenticated_data(mesg);
         dns_message_update_answer_status(mesg);
         dns_message_set_rcode(mesg, RCODE_NOTAUTH);
 
@@ -555,7 +487,7 @@ static ya_result tsig_verify_query(dns_message_t *mesg)
         SET_U16_AT_P(mesg->_tsig.other, 0);
         SET_U32_AT_P(mesg->_tsig.other + 2, htonl(time(NULL)));
 
-        mesg->_tsig.error = NU16(RCODE_BADTIME);
+        dns_message_tsig_set_error(mesg, NU16(RCODE_BADTIME)); 
         tsig_digest_answer(mesg);
         tsig_add_tsig(mesg);
 
@@ -608,13 +540,10 @@ static ya_result tsig_verify_query(dns_message_t *mesg)
 
     if((md_len != mesg->_tsig.mac_size) || (memcmp(mesg->_tsig.mac, md, md_len) != 0))
     {
-        dns_packet_reader_t purd;
-        purd.packet = dns_message_get_buffer(mesg);
-        purd.packet_size = dns_message_get_buffer_size(mesg);
-        uint16_t additionals = 1; // message_is_edns0(mesg)?2:1;
-        dns_message_set_additional_count(mesg, dns_message_get_additional_count(mesg) + additionals);
-        mesg->_tsig.error = NU16(RCODE_BADSIG);
-        tsig_process_append_unsigned(mesg, &purd, mesg->_tsig.tsig_offset);
+        dns_message_set_status(mesg, FP_RCODE_NOTAUTH);
+        dns_message_tsig_set_error(mesg, NU16(RCODE_BADSIG));
+
+        dns_message_transform_to_unsigned_error(mesg);
         return TSIG_BADSIG;
     }
 
@@ -642,7 +571,7 @@ ya_result tsig_verify_answer(dns_message_t *mesg, const uint8_t *mac, uint16_t m
 
     if(llabs((int64_t)((int64_t)then - now)) > fudge) // cast to signed in case now > then
     {
-        mesg->_tsig.error = NU16(RCODE_BADTIME);
+        dns_message_tsig_set_error(mesg, NU16(RCODE_BADTIME)); 
         dns_message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
         return TSIG_BADTIME;
     }
@@ -860,7 +789,7 @@ ya_result tsig_process(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t 
         {
             /* oops */
 
-            mesg->_tsig.error = NU16(RCODE_BADKEY);
+            dns_message_tsig_set_error(mesg, NU16(RCODE_BADKEY)); 
             dns_message_set_status(mesg, FP_TSIG_BROKEN);
             return MAKE_RCODE_ERROR(FP_TSIG_BROKEN); // format error reading the algorithm name
         }
@@ -882,9 +811,18 @@ ya_result tsig_process(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t 
 
             // The TSIG is modified here so we don't need to memorise the name of an unknown key.
 
-            mesg->_tsig.error = NU16(RCODE_BADKEY);
-            return_code = tsig_process_append_unsigned(mesg, purd, tsig_offset);
-            return return_code;
+            dns_message_set_status(mesg, FP_RCODE_NOTAUTH);
+            dns_message_tsig_set_error(mesg, NU16(RCODE_BADKEY));
+
+            if(ISOK(return_code = dns_message_transform_to_unsigned_error(mesg)))
+            {
+                return MAKE_RCODE_ERROR(RCODE_BADKEY);
+            }
+            else
+            {
+                // an error occurred while processing an error: drop it
+                return UNPROCESSABLE_MESSAGE;
+            }
         }
 
         tsig_rdata_len -= 10 + 6;
@@ -1048,7 +986,7 @@ ya_result tsig_process_answer(dns_message_t *mesg, dns_packet_reader_t *purd, ui
                 free(mesg->_tsig.other);
                 mesg->_tsig.other = NULL;
                 mesg->_tsig.other_len = 0;
-                mesg->_tsig.error = NU16(RCODE_BADSIG);
+                dns_message_tsig_set_error(mesg, NU16(RCODE_BADSIG)); 
 
                 tsig_append_error(mesg);
             }
@@ -1057,114 +995,6 @@ ya_result tsig_process_answer(dns_message_t *mesg, dns_packet_reader_t *purd, ui
 
     return return_value;
 }
-
-#if UNUSED
-/**
- * Extracts the TSIG from the message
- *
- * Reads all the records but the last AR one
- */
-
-ya_result tsig_extract_and_process(dns_message_t *mesg)
-{
-    /*yassert(message_is_additional_section_ptr_set(mesg));*/
-
-    /*
-     * rfc2845
-     *
-     * If there is a TSIG then
-     * _ It must be put aside, safely
-     * _ It must be removed from the query
-     * _ It must be processed
-     *
-     * rfc2671
-     *
-     * Handle OPT
-     *
-     */
-
-    /*
-     * Read DNS name (decompression on)
-     * Read type (TSIG = 250)
-     * Read class (ANY)
-     * Read TTL (0)
-     * Read RDLEN
-     *
-     */
-
-    dns_packet_reader_t purd;
-
-    purd.packet = dns_message_get_buffer_const(mesg);
-    purd.packet_size = dns_message_get_size(mesg);
-
-    if(!dns_message_is_additional_section_ptr_set(mesg))
-    {
-        uint32_t tsig_index = dns_message_get_answer_count(mesg) + dns_message_get_authority_count(mesg) + dns_message_get_additional_count(mesg) - 1;
-        purd.offset = DNS_HEADER_LENGTH;           /* Header */
-        dns_packet_reader_skip_fqdn(&purd);        // checked below
-        if(FAIL(dns_packet_reader_skip(&purd, 4))) // type class
-        {
-            return UNPROCESSABLE_MESSAGE;
-        }
-
-        while(tsig_index-- > 0) /* Skip all AR records but the last one */
-        {
-            /*
-             * It should be in this kind of processing that we read the EDNS0 flag
-             */
-
-            if(FAIL(dns_packet_reader_skip_record(&purd)))
-            {
-                return UNPROCESSABLE_MESSAGE;
-            }
-        }
-
-        dns_message_set_additional_section_ptr(mesg, (void *)dns_packet_reader_get_next_u8_ptr_const(&purd));
-    }
-    else
-    {
-        dns_packet_reader_set_position(&purd, dns_message_get_additional_section_ptr(mesg) - dns_message_get_buffer(mesg));
-    }
-
-    struct type_class_ttl_rdlen tctr;
-
-    uint32_t                    record_offset = purd.offset;
-
-    uint8_t                     tsigname[DOMAIN_LENGTH_MAX];
-
-    if(FAIL(dns_packet_reader_read_fqdn(&purd, tsigname, sizeof(tsigname))))
-    {
-        /* oops */
-
-        return TSIG_FORMERR;
-    }
-
-    /*yassert(((uint8_t*)&tctr.rdlen) - ((uint8_t*)&tctr.qtype) == 8);*/
-
-    if(ISOK(dns_packet_reader_read(&purd, &tctr, 10))) // exact
-    {
-        if(tctr.qtype == TYPE_TSIG) /* && (tctr.qclass == TYPE_ANY) && (tctr.ttl == 0 )*/
-        {
-            /* It must be the last AR record, class = ANY and TTL = 0 */
-
-            if(dns_message_is_query(mesg))
-            {
-                return tsig_process_query(mesg, &purd, record_offset, tsigname, &tctr);
-            }
-            else
-            {
-                return tsig_process_answer(mesg, &purd, record_offset, tsigname, &tctr);
-            }
-        } /* if type is TSIG */
-
-        /* AR but not a TSIG  : there is just no TSIG in this packet */
-
-        dns_message_tsig_clear_key(mesg);
-    }
-
-    return TSIG_FORMERR;
-}
-#endif
 
 /**
  * Adds the TSIG to the message
@@ -1292,81 +1122,6 @@ ya_result tsig_sign_query(dns_message_t *mesg)
 
     return ret;
 }
-
-/**
- * On a RECEIVED message.
- *
- *  Adds a TSIG error to the message
- *
- */
-#if UNUSED
-ya_result tsig_append_unsigned_error(dns_message_t *mesg)
-{
-    yassert(dns_message_is_additional_section_ptr_set(mesg));
-
-    uint16_t            ar_count = dns_message_get_additional_count(mesg);
-
-    dns_packet_reader_t purd;
-    dns_packet_reader_init_from_message(&purd, mesg);
-    dns_packet_reader_skip_fqdn(&purd);        // checked below
-    if(FAIL(dns_packet_reader_skip(&purd, 4))) // type class
-    {
-        return TSIG_UNABLE_TO_SIGN;
-    }
-
-    dns_message_set_size(mesg, purd.offset);
-
-    dns_message_set_query_answer_authority_additional_counts_ne(mesg, NU16(1), 0, 0, 0);
-
-    if(!dns_message_has_tsig(mesg) || dns_message_get_buffer_size(mesg) < dns_message_get_size(mesg) +            // valid use of message_get_buffer_size()
-                                                                              mesg->_tsig.tsig->name_len +        /* DNS NAME of the TSIG (name of the key) */
-                                                                              0 +                                 /* MAC */
-                                                                              0 +                                 /* OTHER DATA */
-                                                                              12 /* DO NOT REPLACE THIS VALUE */) /* = time + fudge + mac size + original id + error + other len */
-    {
-        /* Cannot sign */
-
-        return TSIG_UNABLE_TO_SIGN;
-    }
-
-    uint8_t *tsig_ptr = dns_message_get_buffer_limit(mesg);
-
-    /* record */
-
-    memcpy(tsig_ptr, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
-    tsig_ptr += mesg->_tsig.tsig->name_len;
-
-    memcpy(tsig_ptr, tsig_typeclassttl, sizeof(tsig_typeclassttl));
-    tsig_ptr += sizeof(tsig_typeclassttl);
-    uint16_t *rdata_size_ptr = (uint16_t *)tsig_ptr;
-    tsig_ptr += 2;
-
-    /* rdata */
-
-    memcpy(tsig_ptr, mesg->_tsig.tsig->mac_algorithm_name, mesg->_tsig.tsig->mac_algorithm_name_len);
-    tsig_ptr += mesg->_tsig.tsig->mac_algorithm_name_len;
-
-    SET_U16_AT(tsig_ptr[0], mesg->_tsig.timehi);
-    SET_U32_AT(tsig_ptr[2], mesg->_tsig.timelo);
-    SET_U16_AT(tsig_ptr[6], mesg->_tsig.fudge);
-    SET_U16_AT(tsig_ptr[8], 0); /* MAC len */
-    SET_U16_AT(tsig_ptr[10], mesg->_tsig.original_id);
-    SET_U16_AT(tsig_ptr[12], mesg->_tsig.error);
-    SET_U16_AT(tsig_ptr[14], 0); /* Error len */
-
-    tsig_ptr += 16;
-
-    uint16_t rdata_size = (tsig_ptr - (uint8_t *)rdata_size_ptr) - 2;
-
-    SET_U16_AT(*rdata_size_ptr, htons(rdata_size));
-
-    dns_message_set_size(mesg, tsig_ptr - dns_message_get_buffer(mesg));
-
-    dns_message_set_additional_count(mesg, ar_count + 1);
-
-    return SUCCESS;
-}
-#endif
 
 ya_result tsig_append_error(dns_message_t *mesg)
 {

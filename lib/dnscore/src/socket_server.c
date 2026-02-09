@@ -658,7 +658,7 @@ static void socket_server_server()
 #endif
             if(FAIL(setsockopt(sockfd, level, optname, opt_val, optlen)))
             {
-                ya_result setsockopt_ret = ERRNO_ERROR;
+                ya_result setsockopt_ret = ERRNO_ERROR;  // setsockopt_ret is an error code
 
                 if((operation & SOCKET_SERVER_OPERATION_ERROR_BEHAVIOUR_MASK) == SOCKET_SERVER_OPERATION_ERROR_BEHAVIOUR_WARNING)
                 {
@@ -676,7 +676,7 @@ static void socket_server_server()
 #endif
                     log_err("socket-server: setsockopt: failed to setsockopt(%i, %s, %s, %p, %i) for %{sockaddr}: %r", sockfd, level_buffer, optname_buffer, opt_val, optlen, &ai_addr, setsockopt_ret);
                     socket_server_close_fd(&sockfd);
-                    ret = setsockopt_ret;
+                    ret = setsockopt_ret;  // setsockopt_ret is an error code
                     break;
                 }
             }
@@ -691,7 +691,7 @@ static void socket_server_server()
             formatln("socket-server: bind(%i, %{sockadd}, %i)", sockfd, &ai_addr.sa, ai_addrlen);
             flushout();
 #endif
-            if(ISOK(bind(sockfd, &ai_addr.sa, ai_addrlen)))
+            if(ISOK(bind(sockfd, &ai_addr.sa, ai_addrlen)))  // scan-build false positive, sockdf can only be -1 if ret is an error
             {
                 // send the socket on its channel
 #if DEBUG

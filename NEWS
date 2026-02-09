@@ -30,8 +30,10 @@
 #
 ################################################################################
 
-20251117:
-    YADIFA 3.0.5
+20260209:
+    YADIFA 3.0.6
 
-    Fixes an issue where MX answers with multiple records would not be properly encoded
+    Adds an option to disable cookies using "cookie-support no" in the <main> section of the configuration.
+
+    Fixes an issue where the answer to an unsupported EDNS version was not being replied to with the appropriate error code.
 

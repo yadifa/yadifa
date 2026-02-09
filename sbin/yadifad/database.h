@@ -116,7 +116,6 @@ static inline ya_result database_query_with_rrl(zdb_t *db, dns_message_t *mesg)
 #endif
     zdb_query_to_wire_context_t context;
     zdb_query_to_wire_context_init(&context, mesg, db);
-    zdb_query_to_wire(&context);
     ya_result ret = rrl_process(mesg, &context);
     zdb_query_to_wire_finalize(&context);
 #if DNSCORE_HAS_QUERY_US_DEBUG

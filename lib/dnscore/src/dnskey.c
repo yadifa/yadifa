@@ -2877,8 +2877,5 @@ void dnskey_raw_field_clean_finalize(dnskey_raw_field_t *drf)
     }
 }
 
-#if UNUSED
-void dnskey_raw_field_bytes(dnskey_raw_field_t *field) { bytes_swap(field->buffer, field->size); }
-#endif
 
 /** @} */

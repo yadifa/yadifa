@@ -34,12 +34,12 @@ configure_base_path="$0/"
 
 dnl Do NOT change this block of comments
 dnl ====================================
-dnl YADIFA VERSION 3.0.5 DATE 2025-11-19
+dnl YADIFA VERSION 3.0.6 DATE 2026-02-09
 dnl ====================================
 
 AC_PREREQ([2.69])
 AC_REVISION([$Revision$])
-define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(cat "${configure_base_path}VERSION") 11722)])
+define(YADIFA_VERSION, [m4_esyscmd(printf "%s-%s" $(cat "${configure_base_path}VERSION") 11737)])
 
 AC_INIT([yadifa],YADIFA_VERSION,[info@yadifa.eu])
 

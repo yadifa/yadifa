@@ -787,6 +787,7 @@ ya_result rrl_process(dns_message_t *mesg, zdb_query_to_wire_context_t *query_co
         log_debug(
             "rrl: %{sockaddrip} %{dnsname} %{dnstype} %{dnsclass}: disabled or exempted", dns_message_get_sender_sa(mesg), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg), dns_message_get_query_class_ptr(mesg));
 #endif
+        zdb_query_to_wire(query_context);
         return return_code;
     }
 
@@ -959,10 +960,7 @@ ya_result rrl_process(dns_message_t *mesg, zdb_query_to_wire_context_t *query_co
                       return_code,
                       g_rrl_settings.log_only);
 #endif
-            zdb_query_to_wire_context_t context;
-            zdb_query_to_wire_context_init(&context, mesg, g_config->database);
-            zdb_query_to_wire(&context);
-            zdb_query_to_wire_finalize(&context);
+            zdb_query_to_wire(query_context);
         }
     }
     else
@@ -997,11 +995,7 @@ ya_result rrl_process(dns_message_t *mesg, zdb_query_to_wire_context_t *query_co
         }
 
         mutex_unlock(&rrl_mtx);
-
-        zdb_query_to_wire_context_t context;
-        zdb_query_to_wire_context_init(&context, mesg, g_config->database);
-        zdb_query_to_wire(&context);
-        zdb_query_to_wire_finalize(&context);
+        zdb_query_to_wire(query_context);
     }
 
     return return_code;

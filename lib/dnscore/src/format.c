@@ -279,10 +279,6 @@ void format_class_finalize()
     format_handler_descriptor_hash_table = NULL;
 }
 
-#if UNUSED
-bool format_available() { return format_handler_descriptor_table.data != NULL; }
-#endif
-
 uint32_t isqrt(uint32_t);
 
 #define FORMAT_GROW_HASH_TABLE_COUNT 19
