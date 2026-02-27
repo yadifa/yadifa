@@ -1474,8 +1474,8 @@ static int dnssec_policy_dnskey_ptr_vector_qsort_by_activation_time_callback(con
 
                 if(r == 0)
                 {
-                    uint8_t  a_bytes[1024];
-                    uint8_t  b_bytes[1024];
+                    uint8_t  a_bytes[DNSKEY_RDATA_TMP_BUFFER_SIZE];
+                    uint8_t  b_bytes[DNSKEY_RDATA_TMP_BUFFER_SIZE];
                     uint32_t a_size = a->vtbl->dnskey_writerdata(a, a_bytes, sizeof(a_bytes));
                     uint32_t b_size = b->vtbl->dnskey_writerdata(b, b_bytes, sizeof(b_bytes));
 

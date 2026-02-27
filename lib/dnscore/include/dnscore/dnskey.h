@@ -79,6 +79,8 @@
 #define DNSKEY_PROTOCOL(x__)         (zdb_resource_record_data_rdata_const(x__)[2])
 #define DNSKEY_ALGORITHM(x__)        (zdb_resource_record_data_rdata_const(x__)[3])
 
+#define DNSKEY_RDATA_TMP_BUFFER_SIZE (65536 - 18 - 256)
+
 /*
  * Computes the key tag from a packed record
  */

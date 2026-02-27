@@ -3074,8 +3074,8 @@ ya_result keyroll_store(keyroll_t *keyroll)
 
     output_stream_t baos;
     output_stream_t previous_end_result_os;
-    char            file_path[PATH_MAX];
-    uint8_t        *rdata = (uint8_t *)file_path; // both buffers can coexist
+    char            file_path[DNSKEY_RDATA_TMP_BUFFER_SIZE];
+    uint8_t        *rdata = (uint8_t *)file_path; // both buffers can coexist, size = DNSKEY_RDATA_TMP_BUFFER_SIZE
 
     bytearray_output_stream_init(&baos, NULL, 8192);
 
@@ -3281,7 +3281,7 @@ ya_result keyroll_store(keyroll_t *keyroll)
             {
                 dnskey_t    *key = (dnskey_t *)ptr_vector_get(&step->dnskey_del, i);
 
-                int          rdata_size = key->vtbl->dnskey_writerdata(key, rdata, PATH_MAX);
+                int          rdata_size = key->vtbl->dnskey_writerdata(key, rdata, DNSKEY_RDATA_TMP_BUFFER_SIZE);
                 rdata_desc_t dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
                 osformatln(&fos, "update delete %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
@@ -3302,7 +3302,7 @@ ya_result keyroll_store(keyroll_t *keyroll)
             {
                 dnskey_t    *key = (dnskey_t *)ptr_vector_get(&step->dnskey_add, i);
 
-                int          rdata_size = key->vtbl->dnskey_writerdata(key, rdata, PATH_MAX);
+                int          rdata_size = key->vtbl->dnskey_writerdata(key, rdata, DNSKEY_RDATA_TMP_BUFFER_SIZE);
                 rdata_desc_t dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
                 osformatln(&fos, "update add %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
@@ -3340,7 +3340,7 @@ ya_result keyroll_store(keyroll_t *keyroll)
                     u32_treemap_node_t *node = u32_treemap_iterator_next_node(&iter);
                     dnskey_t           *key = (dnskey_t *)node->value;
 
-                    int                 rdata_size = key->vtbl->dnskey_writerdata(key, rdata, PATH_MAX);
+                    int                 rdata_size = key->vtbl->dnskey_writerdata(key, rdata, DNSKEY_RDATA_TMP_BUFFER_SIZE);
                     rdata_desc_t        dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
                     osformatln(&fos, "endresult %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
                     osformatln(&previous_end_result_os, "expect %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);
@@ -3421,7 +3421,7 @@ ya_result keyroll_store(keyroll_t *keyroll)
                 u32_treemap_node_t *node = u32_treemap_iterator_next_node(&iter);
                 dnskey_t           *key = (dnskey_t *)node->value;
 
-                int                 rdata_size = key->vtbl->dnskey_writerdata(key, rdata, PATH_MAX);
+                int                 rdata_size = key->vtbl->dnskey_writerdata(key, rdata, DNSKEY_RDATA_TMP_BUFFER_SIZE);
                 rdata_desc_t        dnskeyrdata = {TYPE_DNSKEY, rdata_size, rdata};
 
                 osformatln(&fos, "endresult %{dnsname} %i %{typerdatadesc}", keyroll->domain, TTL, &dnskeyrdata);

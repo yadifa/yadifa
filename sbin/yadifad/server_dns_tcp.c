@@ -66,9 +66,7 @@
 #define __USE_GNU 1
 #endif
 #define _GNU_SOURCE 1
-
 #include <sched.h>
-
 #endif
 
 // <-- keep this order

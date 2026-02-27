@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
             dnskey_t *key = NULL;
             if(ISOK(ret = dnskey_new_public_key_from_file(g_main_settings.file, &key)))
             {
-                uint8_t  dnskey_rdata[4096];
+                uint8_t  dnskey_rdata[DNSKEY_RDATA_TMP_BUFFER_SIZE];
                 uint32_t dnskey_rdata_size = key->vtbl->dnskey_writerdata(key, dnskey_rdata);
 
                 uint8_t  ds_rdata[256];

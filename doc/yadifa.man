@@ -10,7 +10,7 @@
 
 .fi
 ..
-.TH "YADIFA" "8" "2026\-02\-09" "YADIFA " "YADIFA "
+.TH "YADIFA" "8" "2026\-02\-24" "YADIFA " "YADIFA "
 .SH NAME
 
 .PP
@@ -345,7 +345,7 @@ file from the sources code.
 .SH VERSION
 
 .PP
-Version: 3.0.6 of 2026\-02\-09.
+Version: 3.0.7 of 2026\-02\-24.
 .PP
 .SH MAILINGLIST
 

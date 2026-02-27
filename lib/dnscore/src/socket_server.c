@@ -675,7 +675,7 @@ static void socket_server_server()
                     flushout();
 #endif
                     log_err("socket-server: setsockopt: failed to setsockopt(%i, %s, %s, %p, %i) for %{sockaddr}: %r", sockfd, level_buffer, optname_buffer, opt_val, optlen, &ai_addr, setsockopt_ret);
-                    socket_server_close_fd(&sockfd);
+                    socket_server_close_fd(&sockfd);  // scan-build false positive, this is why it believes sockdf is -1, missing that setsockopt_ret is an error code
                     ret = setsockopt_ret;  // setsockopt_ret is an error code
                     break;
                 }

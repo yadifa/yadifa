@@ -30,60 +30,29 @@
 #
 ################################################################################
 
-ACLOCAL_AMFLAGS = -I m4
+cmake_minimum_required(VERSION 3.22)
 
-dist_noinst_DATA = VERSION yadifa.supp autogen.sh m4/contributions/20201002-bug_971605_message_5.mbox
+# include(${CMAKE_SOURCE_DIR}/cmake/FindYADIFA.cmake)
 
-SUBDIRS = lib/dnscore lib/dnsdb
+get_filename_component(AUTO_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 
-SUBDIRS += etc doc var
+message("Building test: ${AUTO_NAME}")
 
-SUBDIRS += sbin/yadifad
-SUBDIRS += sbin/yakeyrolld
-SUBDIRS += lib/dnslg
-SUBDIRS += bin/yadifa
+project(${AUTO_NAME} LANGUAGES C)
 
-if HAS_TESTS
-SUBDIRS += tests/circular-file-test
-SUBDIRS += tests/cjf-scan
-SUBDIRS += tests/cmdline-test
-SUBDIRS += tests/collection-test
-SUBDIRS += tests/daemonised-logger-test
-SUBDIRS += tests/dns-message-test
-SUBDIRS += tests/dnskey-benchmark
-SUBDIRS += tests/dnssec-test
-SUBDIRS += tests/dsfromkey-test
-SUBDIRS += tests/ethbenchprobe
-SUBDIRS += tests/file-test
-SUBDIRS += tests/freebsd12-test
-SUBDIRS += tests/hmac-test
-SUBDIRS += tests/ipc-test
-SUBDIRS += tests/journal-fusion
-SUBDIRS += tests/journal-from-ixfr
-#SUBDIRS += tests/journal-server
-SUBDIRS += tests/journal-speed-test
-SUBDIRS += tests/keygen-test
-SUBDIRS += tests/limiter-test
-SUBDIRS += tests/message-test
-SUBDIRS += tests/network-interfaces-forall-test
-SUBDIRS += tests/notify-test
-SUBDIRS += tests/nsec3-answer
-SUBDIRS += tests/nsec3-hash
-SUBDIRS += tests/pid-file-test
-SUBDIRS += tests/protocol-test
-SUBDIRS += tests/query-hammer-test
-SUBDIRS += tests/rndc-test
-SUBDIRS += tests/rrsig-test
-SUBDIRS += tests/shared-circular-buffer-test
-SUBDIRS += tests/shared-heap-test
-SUBDIRS += tests/simple-http-server-test
-SUBDIRS += tests/stream-test
-SUBDIRS += tests/threaded-queue
-SUBDIRS += tests/udp-echo-test
-SUBDIRS += tests/update-test
-SUBDIRS += tests/zone-save-test
-endif
+# FindYADIFA(DNSCORE DNSDB SEARCH_PATHS ../../lib/dnscore ../../lib/dnsdb)
 
-features:
-	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_COMMON_FLAGS}")
+
+include_directories(${YADIFA_INCLUDE_DIRS})
+
+include_directories("${CMAKE_SOURCE_DIR}/lib/dnscore/include")
+include_directories("${CMAKE_BINARY_DIR}/lib/dnscore/include")
+
+#include_directories("${CMAKE_SOURCE_DIR}/lib/dnsdb/include")
+#include_directories("${CMAKE_BINARY_DIR}/lib/dnsdb/include")
+
+add_executable(${PROJECT_NAME} main.c)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC ${DNSCORELIB_NAME})
 

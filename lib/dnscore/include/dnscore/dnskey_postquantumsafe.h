@@ -52,11 +52,27 @@ extern "C"
 {
 #endif
 
+struct dnskey_postquantumsafe_info_s
+{
+    const char *method_name;
+    const char *alg_version;
+    size_t length_public_key;
+    size_t length_secret_key;
+    size_t length_signature;
+    uint8_t claimed_nist_level;
+};
+
+typedef struct dnskey_postquantumsafe_info_s dnskey_postquantumsafe_info_t;
+
 ya_result dnskey_postquantumsafe_loadpublic(const uint8_t *rdata, uint16_t rdata_size, const char *origin, dnskey_t **out_key);
 
 ya_result dnskey_postquantumsafe_newinstance(uint32_t size, uint8_t algorithm, uint16_t flags, const char *origin, dnskey_t **out_key);
 
 void      dnskey_postquantumsafe_parse_init(dnskey_field_parser *fp);
+
+ya_result dnskey_postquantumsafe_info(uint8_t algorithm, dnskey_postquantumsafe_info_t *out_info);
+
+void dnskey_postquantumsafe_algorithm_range(uint8_t *fromp, uint8_t *top);
 
 #ifdef __cplusplus
 }

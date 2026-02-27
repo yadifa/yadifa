@@ -106,7 +106,9 @@ static const uint8_t              NSEC3_FLAGS_MARKED_MODIFIED = 0x40;
 static const uint8_t              NSEC3_FLAGS_MARKED_DELETED = 0x20;
 static const uint8_t              NSEC3_FLAGS_MARKED_OPTOUT = 0x01;
 
-static value_name_table_t         dnssec_enum[] = {{ZDB_ZONE_MAINTAIN_NSEC, "nsec"}, {ZDB_ZONE_MAINTAIN_NSEC3, "nsec3"}, {ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT, "nsec3-optout"}, {0, NULL}};
+static const value_name_table_t         dnssec_enum[] = {{ZDB_ZONE_MAINTAIN_NSEC, "nsec"}, {ZDB_ZONE_MAINTAIN_NSEC3, "nsec3"}, {ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT, "nsec3-optout"}, {0, NULL}};
+
+static int32_t g_nttl = 600;
 
 #define KEYS_PATH_DEFAULT LOCALSTATEDIR "/zones/keys/"
 #define SIGN_FROM_DEFAULT "-1d"
@@ -129,7 +131,7 @@ CONFIG_U32_RANGE(jitter, "0", 0, INT32_MAX)
 CONFIG_U32_RANGE(dnskey_ttl, "86400", 0, INT32_MAX)
 CONFIG_U32(new_serial, "0")
 CONFIG_U32(workers, "0")
-CONFIG_U16(nsec3_iterations, "1")
+CONFIG_U16(nsec3_iterations, "0")
 CONFIG_BOOL(nsec3_optout, "0")
 CONFIG_BOOL(read_journal, "0")
 CONFIG_BOOL(smart_signing, "0")
@@ -419,6 +421,8 @@ static void                                   zonesign_nsec3_chain_item_sign(voi
 
     nsec3_zone_item_rrsig_delete_all(item);
 
+    item->rrsig_rrset = zdb_resource_record_set_new_instance(TYPE_RRSIG, g_nttl);
+
     for(int_fast32_t i = 0; i <= ptr_vector_last_index(zsks); ++i)
     {
         dnskey_t *key = (dnskey_t *)ptr_vector_get(zsks, i);
@@ -509,6 +513,10 @@ static ya_result zonesign_nsec3_chain_update(zdb_zone_t *zone, nsec3_zone_t *n3,
     salt_len = NSEC3PARAM_RDATA_SALT_LEN(n3->rdata);
     hash_iterations = NSEC3PARAM_RDATA_ITERATIONS(n3->rdata);
     nsec3param_rdata_size = NSEC3PARAM_LENGTH_MIN + salt_len;
+
+    zdb_soa_rdata_t soa_fields;
+    zdb_zone_getsoa(zone, &soa_fields);
+    g_nttl = soa_fields.minimum;
 
     bool nsec3_chain_is_new = n3->items == NULL;
 
@@ -1492,7 +1500,7 @@ static ya_result zonesign_run()
     bool auto_nsec3_iterations = (config_value_get_source(ZONESIGN_SECTION_NAME, "nsec3_iterations") == CONFIG_SOURCE_DEFAULT);
     bool auto_nsec3_optout = (config_value_get_source(ZONESIGN_SECTION_NAME, "nsec3_optout") == CONFIG_SOURCE_DEFAULT);
     bool auto_dnssec_mode = (config_value_get_source(ZONESIGN_SECTION_NAME, "dnssec_mode") <= CONFIG_SOURCE_DEFAULT);
-    bool auto_dnssec = false; // auto_dnssec_mode & auto_nsec3_salt & auto_nsec3_iterations & auto_nsec3_optout;
+    bool auto_dnssec = auto_dnssec_mode & auto_nsec3_salt & auto_nsec3_iterations & auto_nsec3_optout;
     bool required_nsec3 = (!auto_nsec3_salt | !auto_nsec3_iterations | !auto_nsec3_optout);
 
     if(auto_dnssec_mode)
@@ -1505,6 +1513,10 @@ static ya_result zonesign_run()
         {
             g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC;
         }
+
+        auto_nsec3_salt = FALSE;
+        auto_dnssec_mode = FALSE;
+        auto_dnssec = FALSE;
     }
     else
     {
@@ -1724,40 +1736,49 @@ static ya_result zonesign_run()
         formatln("serial value set to %u", g_yadifa_zonesign_settings.new_serial);
     }
 
-    uint16_t mode = zone->apex->_flags & ZDB_RR_LABEL_DNSSEC_MASK;
-    char    *zone_dnssec_mode;
+    uint16_t loaded_zone_mode;
+    char    *zone_dnssec_mode = "?";
 
-    switch(mode)
+    loaded_zone_mode = zone->apex->_flags & ZDB_RR_LABEL_DNSSEC_MASK;
+
+    if(auto_dnssec_mode)
     {
-        case 0:
-            formatln("zone doesn't appear to be DNSSEC");
-            zone_dnssec_mode = "none";
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
-            g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC;
-            break;
-        case ZDB_RR_LABEL_NSEC:
-            formatln("zone appears to be NSEC");
-            zone_dnssec_mode = "nsec";
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
-            g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC;
-            break;
-        case ZDB_RR_LABEL_NSEC3:
-            formatln("zone appears to be NSEC3");
-            zone_dnssec_mode = "nsec3";
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
-            g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC3;
-            break;
-        case ZDB_RR_LABEL_NSEC3 | ZDB_RR_LABEL_NSEC3_OPTOUT:
-            formatln("zone appears to be NSEC3 optout");
+        switch(loaded_zone_mode)
+        {
+            case 0:
+                formatln("zone doesn't appear to be DNSSEC");
+                zone_dnssec_mode = "none";
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC;
+                break;
+            case ZDB_RR_LABEL_NSEC:
+                formatln("zone appears to be NSEC");
+                zone_dnssec_mode = "nsec";
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC);
+                g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC;
+                break;
+            case ZDB_RR_LABEL_NSEC3:
+                formatln("zone appears to be NSEC3");
+                zone_dnssec_mode = "nsec3";
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3);
+                g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC3;
+                break;
+            case ZDB_RR_LABEL_NSEC3 | ZDB_RR_LABEL_NSEC3_OPTOUT:
+                formatln("zone appears to be NSEC3 optout");
 
-            zone_dnssec_mode = "nsec3 optout";
-            zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
-            g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT;
-            break;
-        default:
-            zone_dnssec_mode = "???";
-            formatln("zone has an unexpected DNSSEC state");
-            break;
+                zone_dnssec_mode = "nsec3 optout";
+                zone_set_maintain_mode(zone, ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
+                g_yadifa_zonesign_settings.dnssec_mode = ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT;
+                break;
+            default:
+                zone_dnssec_mode = "???";
+                formatln("zone has an unexpected DNSSEC state");
+                break;
+        }
+    }
+    else
+    {
+        zone_set_maintain_mode(zone, g_yadifa_zonesign_settings.dnssec_mode);
     }
 
     if(auto_dnssec)
@@ -1765,7 +1786,7 @@ static ya_result zonesign_run()
         // automatic, an unsigned zone will be signed as nsec
         formatln("detected %s dnssec-mode will be used", zone_dnssec_mode);
 
-        if(mode == ZDB_RR_LABEL_NSEC)
+        if(loaded_zone_mode == ZDB_RR_LABEL_NSEC)
         {
             zdb_zone_lock(zone, ZDB_ZONE_MUTEX_RRSIG_UPDATER);
             nsec_update_zone(zone, false);
@@ -1779,7 +1800,7 @@ static ya_result zonesign_run()
         ret = ERROR;
 
         const char *dnssec_mode_name = "?";
-        // zone_set_maintain_mode(zone, g_yadifa_zonesign_settings.dnssec_mode);
+
         g_yadifa_zonesign_settings.nsec3_optout = (g_yadifa_zonesign_settings.dnssec_mode == ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);
         value_name_table_get_name_from_value(dnssec_enum, g_yadifa_zonesign_settings.dnssec_mode, &dnssec_mode_name);
         formatln("%s mode will be used", dnssec_mode_name);
@@ -1792,7 +1813,7 @@ static ya_result zonesign_run()
 
         if(!nsec3_chains_must_be_deleted)
         {
-            if((g_yadifa_zonesign_settings.dnssec_mode >= ZDB_ZONE_MAINTAIN_NSEC3) && (mode >= ZDB_RR_LABEL_NSEC3))
+            if((g_yadifa_zonesign_settings.dnssec_mode >= ZDB_ZONE_MAINTAIN_NSEC3) && (loaded_zone_mode >= ZDB_RR_LABEL_NSEC3))
             {
                 bool one_match = false;
                 for(nsec3_zone_t *n3 = zone->nsec.nsec3; n3 != NULL; n3 = n3->next)
@@ -1836,7 +1857,7 @@ static ya_result zonesign_run()
         {
             uint8_t nsec3param_rdata[NSEC3PARAM_RDATA_SIZE_FROM_SALT(255)];
             nsec3param_rdata[0] = NSEC3_DIGEST_ALGORITHM_SHA1;
-            nsec3param_rdata[1] = g_yadifa_zonesign_settings.nsec3_optout ? 1 : 0;
+            nsec3param_rdata[1] = 0;
             SET_U16_AT(nsec3param_rdata[2], htons(g_yadifa_zonesign_settings.nsec3_iterations));
             nsec3param_rdata[4] = g_yadifa_zonesign_settings.nsec3_salt_size;
             memcpy(&nsec3param_rdata[5], g_yadifa_zonesign_settings.nsec3_salt, g_yadifa_zonesign_settings.nsec3_salt_size);

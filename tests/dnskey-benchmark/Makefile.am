@@ -30,60 +30,26 @@
 #
 ################################################################################
 
-ACLOCAL_AMFLAGS = -I m4
+ACLOCAL_AMFLAGS = -I ../../m4
 
-dist_noinst_DATA = VERSION yadifa.supp autogen.sh m4/contributions/20201002-bug_971605_message_5.mbox
+include ../../mk/common_settings.mk
 
-SUBDIRS = lib/dnscore lib/dnsdb
+AM_CFLAGS += -I$(top_srcdir)/lib/dnscore/include -I$(top_builddir)/lib/dnscore/include
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnsdb/include -I$(top_builddir)/lib/dnsdb/include
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnslg/include -I$(top_builddir)/lib/dnslg/include 
+#AM_CFLAGS += -I$(top_srcdir)/lib/dnstcl/include -I$(top_builddir)/lib/dnstcl/include
 
-SUBDIRS += etc doc var
+noinst_PROGRAMS = dnskey-benchmark
 
-SUBDIRS += sbin/yadifad
-SUBDIRS += sbin/yakeyrolld
-SUBDIRS += lib/dnslg
-SUBDIRS += bin/yadifa
+dnskey_benchmark_SOURCES = main.c
+dnskey_benchmark_LDADD = $(top_builddir)/lib/dnscore/libdnscore.la
+#dnskey_benchmark_LDADD += $(top_builddir)/lib/dnsdb/libdnsdb.la
+#dnskey_benchmark_LDADD += $(top_builddir)/lib/dnslg/libdnslg.la
+#dnskey_benchmark_LDADD += $(top_builddir)/lib/dnstcl/libdnstcl.la
 
-if HAS_TESTS
-SUBDIRS += tests/circular-file-test
-SUBDIRS += tests/cjf-scan
-SUBDIRS += tests/cmdline-test
-SUBDIRS += tests/collection-test
-SUBDIRS += tests/daemonised-logger-test
-SUBDIRS += tests/dns-message-test
-SUBDIRS += tests/dnskey-benchmark
-SUBDIRS += tests/dnssec-test
-SUBDIRS += tests/dsfromkey-test
-SUBDIRS += tests/ethbenchprobe
-SUBDIRS += tests/file-test
-SUBDIRS += tests/freebsd12-test
-SUBDIRS += tests/hmac-test
-SUBDIRS += tests/ipc-test
-SUBDIRS += tests/journal-fusion
-SUBDIRS += tests/journal-from-ixfr
-#SUBDIRS += tests/journal-server
-SUBDIRS += tests/journal-speed-test
-SUBDIRS += tests/keygen-test
-SUBDIRS += tests/limiter-test
-SUBDIRS += tests/message-test
-SUBDIRS += tests/network-interfaces-forall-test
-SUBDIRS += tests/notify-test
-SUBDIRS += tests/nsec3-answer
-SUBDIRS += tests/nsec3-hash
-SUBDIRS += tests/pid-file-test
-SUBDIRS += tests/protocol-test
-SUBDIRS += tests/query-hammer-test
-SUBDIRS += tests/rndc-test
-SUBDIRS += tests/rrsig-test
-SUBDIRS += tests/shared-circular-buffer-test
-SUBDIRS += tests/shared-heap-test
-SUBDIRS += tests/simple-http-server-test
-SUBDIRS += tests/stream-test
-SUBDIRS += tests/threaded-queue
-SUBDIRS += tests/udp-echo-test
-SUBDIRS += tests/update-test
-SUBDIRS += tests/zone-save-test
-endif
+noinst_HEADERS =
+
+include ../../mk/common_labels.mk
 
 features:
-	for m in $(SUBDIRS); do $(MAKE) -C $$m features;done
 

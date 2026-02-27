@@ -386,6 +386,8 @@ ya_result tcp_manager_channel_accept(int sockfd, tcp_manager_channel_t **tmcp)
     }
     else
     {
+        ZFREE_OBJECT(tmc);
+
         return ERRNO_ERROR;
     }
 }

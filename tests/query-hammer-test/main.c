@@ -135,58 +135,6 @@ static ya_result query_hammer_test(const host_address_t *ip, const uint8_t *zone
     return SUCCESS;
 }
 
-#if 0
-static ya_result
-query_hammer_test(const host_address *ip, const uint8_t *zone_fqdn, const uint8_t *fqdn, uint16_t qtype)
-{
-    random_ctx rndctx = random_init_auto();
-    message_data* mesg = message_new_instance();
-    ya_result ret;
-
-    uint64_t start = timeus();
-    uint64_t stop;
-    double dt;
-    
-    message_edns0_setmaxsize(4096);
-
-    uint16_t id = (uint16_t)random_next(rndctx);
-    message_make_query_ex(mesg, id, zone_fqdn, qtype, CLASS_IN, MESSAGE_EDNS0_DNSSEC);
-
-    if(ISOK(ret = message_query(mesg, ip)))
-    {
-        stop = timeus();
-        
-        dt = stop - start;
-        dt /= 1000.0;
-        
-        formatln("%{dnsname} %{dnstype}: query too %fms", zone_fqdn, &qtype, dt);
-        
-        if(verbose)
-        {
-            dns_message_print_format_dig(termout, message_get_buffer_const(mesg), message_get_size(mesg), 15, 0);
-        }
-
-        if((message_get_rcode(mesg) == RCODE_NOERROR) || (message_get_rcode(mesg) == RCODE_NXDOMAIN))
-        {
-            formatln("%{dnsname} %{dnstype}: query done", zone_fqdn, &qtype, dt);
-                    }
-        else
-        {
-            formatln("error: %{dnsname} %{dnstype}: query failed with: RCODE=%s", zone_fqdn, &qtype, dns_message_rcode_get_name(message_get_rcode(mesg)));
-        }
-    }
-    else
-    {
-        formatln("error: %{dnsname} %{dnstype}: network failed with: %r (%i)", zone_fqdn, &qtype, ret, ret);
-    }
-      
-    message_free(mesg);
-    random_finalize(rndctx);
-    
-    return ret;
-}
-#endif
-
 static ya_result zone_forall(const host_address_t *ip, const uint8_t *zone_fqdn)
 {
     random_ctx_t   rndctx = random_init_auto();

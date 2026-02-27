@@ -468,9 +468,9 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                        dns_message_get_sender_sa(mesg),
                        dns_message_get_size_u16(mesg));
 
-            dns_message_process_lenient(mesg);
+            ret = dns_message_process_lenient(mesg);
 
-            if(dns_message_get_status(mesg) == RCODE_OK) // else a TSIG may have some complain
+            if((ret != INVALID_MESSAGE) && (dns_message_get_status(mesg) == RCODE_OK)) // else a TSIG may have some complain
             {
                 dns_message_set_status(mesg, FP_RCODE_NOTIMP);
                 dns_message_update_answer_status(mesg);
@@ -495,7 +495,7 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                 log_memdump_ex(MODULE_MSG_HANDLE, MSG_WARNING, dns_message_get_buffer(mesg), dns_message_get_size(mesg), 16, OSPRINT_DUMP_BUFFER);
             }
 
-            if((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0))
+            if((ret != INVALID_MESSAGE) && ((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)))
             {
                 if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                 {

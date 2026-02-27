@@ -1,3 +1,4 @@
+
 /*------------------------------------------------------------------------------
  *
  * Copyright (c) 2011-2025, EURid vzw. All rights reserved.
@@ -54,6 +55,10 @@
 #include "dnscore/file_input_stream.h"
 #include "dnscore/dns_message.h"
 #include <dnscore/dns_packet_writer.h>
+
+#if DNSCORE_HAS_OQS_SUPPORT
+#include <oqs/oqsconfig.h>
+#endif
 
 extern struct dnskey_inputs_s         dnskey_inputs[];
 extern struct dnskey_private_inputs_s dnskey_private_inputs[];
@@ -149,6 +154,237 @@ static const int                         dnskey_algorithm_list[] = {DNSKEY_ALGOR
                                                                     DNSKEY_ALGORITHM_ECDSAP384SHA384,
                                                                     DNSKEY_ALGORITHM_ED25519,
                                                                     DNSKEY_ALGORITHM_ED448,
+#if OQS_ENABLE_SIG_DILITHIUM
+                                                                    DNSKEY_ALGORITHM_DILITHIUM2,
+                                                                    DNSKEY_ALGORITHM_DILITHIUM3,
+                                                                    DNSKEY_ALGORITHM_DILITHIUM5,
+#endif
+#if OQS_ENABLE_SIG_FALCON
+                                                                    DNSKEY_ALGORITHM_FALCON512,
+                                                                    DNSKEY_ALGORITHM_FALCON1024,
+                                                                    DNSKEY_ALGORITHM_FALCONPAD512,
+                                                                    DNSKEY_ALGORITHM_FALCONPAD1024,
+#endif
+#if OQS_ENABLE_SIG_SPHINCS
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHA2128F,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHA2128S,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHA2192F,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHA2192S,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHA2256F,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHA2256S,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHAKE128F,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHAKE128S,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHAKE192F,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHAKE192S,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHAKE256F,
+                                                                    DNSKEY_ALGORITHM_SPHINCSSHAKE256S,
+#endif
+#if OQS_ENABLE_SIG_MAYO
+                                                                    DNSKEY_ALGORITHM_MAYO1,
+                                                                    DNSKEY_ALGORITHM_MAYO2,
+                                                                    DNSKEY_ALGORITHM_MAYO3,
+                                                                    DNSKEY_ALGORITHM_MAYO5,
+#endif
+#if OQS_ENABLE_SIG_CROSS
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP128BALANCED,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP128FAST,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP128SMALL,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP192BALANCED,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP192FAST,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP192SMALL,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP256BALANCED,
+                                                                    // DNSKEY_ALGORITHM_CROSS_RSDP256FAST, // size of the signature beyond the,KB limit
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDP256SMALL,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG128BALANCED,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG128FAST,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG128SMALL,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG192BALANCED,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG192FAST,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG192SMALL,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG256BALANCED,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG256FAST,
+                                                                    DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL,
+#endif
+#if OQS_ENABLE_SIG_ML_DSA
+                                                                    DNSKEY_ALGORITHM_ML_DSA_44,
+                                                                    DNSKEY_ALGORITHM_ML_DSA_65,
+                                                                    DNSKEY_ALGORITHM_ML_DSA_87,
+#endif
+#if OQS_ENABLE_SIG_UOV
+                                                                    DNSKEY_ALGORITHM_UOV_IP_PKC,
+#endif
+#if OQS_ENABLE_SIG_SNOVA
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_24_5_4,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_24_5_4_SHAKE,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_24_5_4_ESK,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_24_5_4_SHAKE_ESK,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_37_17_2,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_25_8_3,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_56_25_2,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_49_11_3,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_37_8_4,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_24_5_5,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_60_10_4,
+                                                                    DNSKEY_ALGORITHM_SNOVA_SNOVA_29_6_5,
+#endif
+#if OQS_ENABLE_SIG_SLH_DSA
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_PURE_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_224_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_256_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_384_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_224_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA2_512_256_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_224_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_256_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_384_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHA3_512_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_128_PREHASH_SHAKE_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHA2_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHA2_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHA2_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHA2_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHA2_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHA2_256F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHAKE_128S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHAKE_128F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHAKE_192S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHAKE_192F,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHAKE_256S,
+                                                                    DNSKEY_ALGORITHM_SLH_DSA_SHAKE_256_PREHASH_SHAKE_256F,
+#endif
                                                                     -1};
 
 static const uint8_t soa_rdata[] = {3, 'n', 's', '1', 6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0, 5, 'a', 'd', 'm', 'i', 'n', 6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0, 0, 1, 2, 3, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 3, 0, 0, 0, 2, 0};
@@ -196,6 +432,7 @@ static const struct expected_signature_s *expected_signature_get(uint16_t tag)
     return NULL;
 }
 
+#if DNSCORE_HAS_OQS_SUPPORT
 static ya_result dnskey_test_signature_size(dnskey_t *key)
 {
     uint8_t         *signature;
@@ -220,7 +457,7 @@ static ya_result dnskey_test_signature_size(dnskey_t *key)
     }
     uint32_t signature_size = 0x1000000;
     signature = malloc(signature_size);
-    if(buffer == NULL)
+    if(signature == NULL)
     {
         free(buffer);
         return MAKE_ERRNO_ERROR(ENOMEM);
@@ -262,6 +499,7 @@ static ya_result dnskey_test_signature_size(dnskey_t *key)
         return signature_generated;
     }
 }
+#endif
 
 static void sign_verify_test(dnskey_t *signing_key, dnskey_t *verifying_key)
 {
@@ -1629,7 +1867,7 @@ static int dnskey_matches_rdata_test()
     int ret;
     init();
     static const char *fqdn_text = ".";
-    static const int   rdata_size_max = 2048;
+    static const int   rdata_size_max = DNSKEY_RDATA_TMP_BUFFER_SIZE;
     uint8_t           *rdata = (uint8_t *)malloc(rdata_size_max);
 
     if(rdata == NULL)
@@ -2262,7 +2500,13 @@ static int dnskey_postquantumsafe_experimental_test()
         yatest_log("trying algorithm %i", algorithm);
         dnskey_postquantumsafe_algorithm_test(algorithm);
     }
-    for(uint8_t algorithm = DNSKEY_ALGORITHM_DILITHIUM2; algorithm <= DNSKEY_ALGORITHM_CROSS_RSDPG256SMALL; ++algorithm)
+
+    uint8_t algorithm_from = 0;
+    uint8_t algorithm_to = 0;
+
+    dnskey_postquantumsafe_algorithm_range(&algorithm_from, &algorithm_to);
+
+    for(uint8_t algorithm = algorithm_from; algorithm <= algorithm_to; ++algorithm)
     {
         if(dns_encryption_algorithm_get_name(algorithm) == NULL)
         {

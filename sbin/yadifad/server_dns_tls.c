@@ -68,11 +68,6 @@
 #include <sched.h>
 #endif
 
-#if defined __FreeBSD__
-#include <sys/param.h>
-#include <sys/cpuset.h>
-typedef cpuset_t cpu_set_t;
-#endif
 
 // <-- keep this order
 
@@ -89,7 +84,6 @@ typedef cpuset_t cpu_set_t;
 #include <dnscore/host_address.h>
 #include <dnscore/process.h>
 #include <dnscore/error_state.h>
-#include <dnscore/tcp_manager2.h>
 
 #include <dnsdb/zdb_types.h>
 #include <dnsdb/zdb_zone_lock.h>
@@ -208,7 +202,6 @@ static void     server_dns_tls_thread_context_init(network_thread_context_t *ctx
 
 static void server_dns_tls_set_cpu_affinity(int index)
 {
-#if HAS_PTHREAD_SETAFFINITY_NP
     int cpu_count = sys_get_cpu_count();
     if(cpu_count < 0)
     {
@@ -220,32 +213,7 @@ static void server_dns_tls_set_cpu_affinity(int index)
     affinity_with %= cpu_count;
     log_info("server-dns-tcp: worker setting affinity with virtual cpu %i", affinity_with);
 
-#if __NetBSD__
-    cpuset_t *mycpu = cpuset_create();
-    if(mycpu != NULL)
-    {
-        cpuset_zero(mycpu);
-        cpuset_set((cpuid_t)affinity_with, mycpu);
-        if(pthread_setaffinity_np(thread_self(), cpuset_size(mycpu), mycpu) != 0)
-        {
-#pragma message("TODO: report errors") // NetBSD
-        }
-        cpuset_destroy(mycpu);
-    }
-    else
-    {
-    }
-#elif __windows__
-#pragma message("TODO: implement") // windows
-#else
-    cpu_set_t mycpu;
-    CPU_ZERO(&mycpu);
-    CPU_SET(affinity_with, &mycpu);
-    pthread_setaffinity_np(thread_self(), sizeof(cpu_set_t), &mycpu);
-#endif
-#else
-    (void)index;
-#endif
+    thread_setaffinity(thread_self(), affinity_with);
 }
 
 ya_result server_process_tls_init()
@@ -359,15 +327,19 @@ static int server_dns_tls_worker_thread(struct service_worker_s *worker)
         }
         else
         {
-            if((ret & 0xffff0000) == ERRNO_ERROR_BASE)
+            if(ret != MAKE_ERRNO_ERROR(ETIMEDOUT))
             {
-                if(error_state_log(&server_process_tls_error_state, ret))
+                if((ret & 0xffff0000) == ERRNO_ERROR_BASE)
                 {
-                    log_err("tcp: accept returned %r", ret);
+                    if(error_state_log(&server_process_tls_error_state, ret))
+                    {
+                        if((ret != MAKE_ERRNO_ERROR(EBADF)) || (ret == MAKE_ERRNO_ERROR(EBADF) && service_should_run(worker)))
+                        {
+                            log_err("tls: accept returned %r", ret);
+                        }
+                    }
                 }
             }
-
-            log_debug("server_dns_tls_accept: %r", ret);
 
             TCPSTATS(tcp_overflow_count++);
         }
@@ -430,31 +402,7 @@ static ya_result server_dns_tls_configure(network_server_t *server)
     MALLOC_OBJECT_ARRAY_OR_DIE(sockets, int, socket_count, SOCKET_TAG);
     for(uint_fast32_t i = 0; i < tcp_interface_count; ++i)
     {
-        struct addrinfo addrinfo;
-        addrinfo = *server_context_tcp_interface(i);
-        socketaddress_t ss;
-        if(addrinfo.ai_addr == NULL)
-        {
-            continue;
-        }
-        if(addrinfo.ai_family == AF_INET)
-        {
-            ss.sa4 = *(struct sockaddr_in *)addrinfo.ai_addr;
-            ss.sa4.sin_port = ntohs(g_config->server_tls_port_value);
-        }
-        else if(addrinfo.ai_socktype == AF_INET6)
-        {
-            ss.sa6 = *(struct sockaddr_in6 *)addrinfo.ai_addr;
-            ss.sa6.sin6_port = ntohs(g_config->server_tls_port_value);
-        }
-        else
-        {
-            continue;
-        }
-
-        addrinfo.ai_addr = &ss.sa;
-
-        if(FAIL(ret = server_context_socket_open_bind_multiple(&addrinfo, SOCK_STREAM, true, &sockets[i * worker_per_interface], worker_per_interface)))
+        if(FAIL(ret = server_context_socket_open_bind_multiple(server_context_tcp_interface(i), SOCK_STREAM, true, &sockets[i * worker_per_interface], worker_per_interface)))
         {
             server_context_socket_close_multiple(sockets, i * worker_per_interface);
             free(sockets);
@@ -465,6 +413,7 @@ static ya_result server_dns_tls_configure(network_server_t *server)
     if((server_tls_thread_pool == NULL) && (g_config->max_tcp_queries > 0))
     {
         uint32_t max_thread_pool_size = thread_pool_get_max_thread_per_pool_limit();
+
         if(max_thread_pool_size < (uint32_t)g_config->max_tcp_queries)
         {
             log_warn("updating the maximum thread pool size to match the number of TCP queries (from %i to %i)", max_thread_pool_size, g_config->max_tcp_queries);
