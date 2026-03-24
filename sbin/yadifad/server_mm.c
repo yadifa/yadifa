@@ -220,18 +220,14 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
     struct mmsghdr *udp_packets = NULL;
     struct mmsghdr *udp_packets_send = NULL;
     unsigned int    udp_packets_count = SERVER_MM_PACKETS_AT_ONCE;
-
     const size_t    packet_size = (g_config->edns0_max_size + 4095) & ~4095;
+
+    // packet_buffers is a contigous area of udp_packets_count buffers for the messages.
+
 #if !DNSCORE_HAS_MALLOC_DEBUG_SUPPORT
     uint8_t *packet_buffers = aligned_alloc(4096, udp_packets_count * packet_size);
-#if DNS_MESSAGE_HAS_POOL
-    uint8_t *pool_buffers = aligned_alloc(4096, udp_packets_count * packet_size);
-#endif
 #else // aligned_alloc isn't supported by the DNSCORE_HAS_MALLOC_DEBUG_SUPPORT feature
     uint8_t *packet_buffers = malloc(udp_packets_count * packet_size);
-#if DNS_MESSAGE_HAS_POOL
-    uint8_t *pool_buffers = malloc(udp_packets_count * packet_size);
-#endif
 #endif
 
     if(packet_buffers == NULL)
@@ -240,6 +236,8 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
         dnscore_shutdown();
         return MAKE_ERRNO_ERROR(ENOMEM);
     }
+
+    // for each buffer, make a dns_message_t and give it the buffer
 
     dns_message_t **messages;
     MALLOC_OBJECT_ARRAY_OR_DIE(messages, dns_message_t *, udp_packets_count, SMMMSGS_TAG);
@@ -253,8 +251,13 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
         dns_message_set_pool_buffer(messages[i], &pool_buffers[packet_size * i], packet_size);
 #endif
         dns_message_reset_control(messages[i]);
+        // copy the msg_hdr from the message to the external structure (so it can be passed to the system calls)
         dns_message_copy_msghdr(messages[i], &udp_packets[i].msg_hdr);
         udp_packets[i].msg_len = 0;
+#if DEBUG
+        assert(udp_packets[i].msg_hdr.msg_iov->iov_len <= packet_size);
+        assert(udp_packets[i].msg_len <= packet_size);
+#endif
     }
 
     for(;;)
@@ -266,6 +269,14 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
         /// @note 20210107 edf -- recvmmsg timeout doesnt work as intended (cfr: man recvmmsg)
         ///                       a convoluted mechanism has been put in place to force getting out of the call when
         ///                       needed (search for "static const uint8_t dummy" in this file)
+        ///
+#if DEBUG
+        for(uint_fast32_t i = 0; i < udp_packets_count; ++i)
+        {
+            assert(udp_packets[i].msg_hdr.msg_iov->iov_len <= packet_size);
+            assert(udp_packets[i].msg_len <= packet_size);
+        }
+#endif
 
 #if DEBUG_MM_BUFFERS
         for(uint_fast32_t i = 0; i < udp_packets_count; ++i)
@@ -329,7 +340,10 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
             if(n >= DNS_HEADER_LENGTH)
             {
                 // this direct access to internals is unacceptable, I have to fix that
-
+#if DEBUG
+                assert(udp_packets[i].msg_hdr.msg_iov->iov_len <= packet_size);
+                assert(udp_packets[i].msg_len <= packet_size);
+#endif
                 mesg->_msghdr.msg_namelen = udp_packets[i].msg_hdr.msg_namelen;
                 mesg->_msghdr.msg_controllen = udp_packets[i].msg_hdr.msg_controllen;
                 mesg->_msghdr.msg_iov->iov_len = udp_packets[i].msg_len;
@@ -355,13 +369,21 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
 
                 if(dest_port > 0)
                 {
+#if DEBUG
+                    assert(messages[i]->_msghdr.msg_iov->iov_len <= packet_size);
+#endif
                     ya_result ret = server_process_message_udp((network_thread_context_base_t *)ctx, mesg);
 
                     if(ISOK(ret))
                     {
                         // that message will be replied to
-
+#if DEBUG
+                        assert(messages[i]->_msghdr.msg_iov->iov_len <= packet_size);
+#endif
                         dns_message_copy_msghdr(messages[i], &udp_packets_send[udp_packets_index].msg_hdr);
+#if DEBUG
+                        assert(udp_packets_send[udp_packets_index].msg_hdr.msg_iov->iov_len <= packet_size);
+#endif
                         ++udp_packets_index;
                     }
                     else
@@ -417,14 +439,7 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
                 else // if(dest_port < 0)
                 {
                     log_err("server-mm: error replying to message %04hx %{dnsname} %{dnstype} invalid IP family", ntohs(dns_message_get_id(mesg)), dns_message_get_canonised_fqdn(mesg), dns_message_get_query_type_ptr(mesg));
-                } /*
-                 else
-                 {
-                     log_err("server-mm: error replying to message %04hx %{dnsname} %{dnstype} from %{sockaddr}: %r",
-                             ntohs(message_get_id(mesg)), message_get_canonised_fqdn(mesg),
-                 message_get_query_type_ptr(mesg), mesg->_msghdr.msg_name, ret);
-                 }*/
-
+                }
             } // end of the block if n > DNS_HEADER_LENGTH
             else
             {
@@ -440,6 +455,12 @@ static int server_mm_udp_worker_thread(struct service_worker_s *worker)
 #endif
             for(;;)
             {
+#if DEBUG
+                for(int i = 0; i < udp_packets_index; ++i)
+                {
+                    assert(udp_packets_send_queue[i].msg_hdr.msg_iov->iov_len <= packet_size);
+                }
+#endif
                 int sendmmsg_ret = sendmmsg(fd, udp_packets_send_queue, udp_packets_index, 0);
 
                 if(sendmmsg_ret >= 0)

@@ -59,6 +59,14 @@
 #include "dnscore/format.h"
 #include "dnscore/parsing.h"
 
+struct addrinfo_sockaddr_s
+{
+    struct addrinfo addr;
+    socketaddress_t sa;
+};
+
+typedef struct addrinfo_sockaddr_s addrinfo_sockaddr_t;
+
 /*------------------------------------------------------------------------------
  * FUNCTIONS */
 
@@ -471,18 +479,51 @@ void host_address_set_port_value(host_address_t *address, uint16_t port)
     }
 }
 
+ya_result addrinfo_dup(const struct addrinfo *src, struct addrinfo **addrp)
+{
+    if((src == NULL) || (addrp == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+    struct sockaddr *sa_src = src->ai_addr;
+
+    if(sa_src == NULL)
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
+
+    if((src->ai_family != sa_src->sa_family) || ((src->ai_family != AF_INET) && (src->ai_family != AF_INET6)))
+    {
+        return INVALID_ARGUMENT_ERROR;
+    }
+
+    addrinfo_sockaddr_t *addr_sock;
+    MALLOC_OBJECT_OR_DIE(addr_sock, addrinfo_sockaddr_t, ADDRINFO_TAG);
+    struct addrinfo *addr = &addr_sock->addr;
+    *addr = *src;
+    socklen_t sa_len = sockaddr_len(sa_src);
+    memcpy(&addr_sock->sa, sa_src, sa_len);
+    addr->ai_addr = &addr_sock->sa.sa;
+    addr->ai_addrlen = sa_len;
+    addr->ai_next = NULL; // irrelevant for our purpose
+    *addrp = addr;
+    return SUCCESS;
+}
+
 /**
  * Converts an host_address to a addrinfo
- * Must can be freed by "free"
+ * Must be freed by "free"
  */
 
 ya_result host_address2addrinfo(const host_address_t *address, struct addrinfo **addrp)
 {
-    struct addrinfo *addr;
+    addrinfo_sockaddr_t *addr_sock;
     ya_result        ret;
 
-    MALLOC_OBJECT_OR_DIE(addr, struct addrinfo, ADDRINFO_TAG); // no ZALLOC (yet)
+    MALLOC_OBJECT_OR_DIE(addr_sock, addrinfo_sockaddr_t, ADDRINFO_TAG); // no ZALLOC (yet)
 
+    struct addrinfo *addr = &addr_sock->addr;
     addr->ai_flags = AI_PASSIVE;
 
     addr->ai_protocol = 0; /* IPPROTO_UDP | IPPROTO_TCP */
@@ -509,9 +550,11 @@ ya_result host_address2addrinfo(const host_address_t *address, struct addrinfo *
         }
     }
 
-    if(ISOK(ret = host_address2allocated_sockaddr(address, &addr->ai_addr)))
+    if(ISOK(ret = host_address2sockaddr(address, &addr_sock->sa)))
     {
+        addr->ai_addr = &addr_sock->sa.sa;
         addr->ai_addrlen = ret;
+        addr->ai_next = NULL;  // pointless
         *addrp = addr;
     }
     else

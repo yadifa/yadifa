@@ -64,7 +64,7 @@ ya_result    dns_message_writer_easyparse(const dns_message_writer_t *dmw, const
 
     counter_output_stream_context_t counters;
     output_stream_t                 cos;
-    counter_output_stream_init(dmw->os, &cos, &counters);
+    counter_output_stream_init(&cos, dmw->os, &counters);
 
     output_stream_t    *os = &cos;
 
@@ -152,13 +152,6 @@ ya_result    dns_message_writer_easyparse(const dns_message_writer_t *dmw, const
     {
         uint32_t section_idx = 0;
 
-        /* Print SECTION name */
-#if 0
-        if(message_viewer_requires_section(section_idx, view_mode_with))
-        {
-            osformat(os, "\n;; %s:\n", section_name[section_idx]);
-        }
-#endif
 
         for(uint_fast16_t n = count[section_idx]; n > 0; n--)
         {
@@ -219,13 +212,6 @@ ya_result    dns_message_writer_easyparse(const dns_message_writer_t *dmw, const
 
     for(uint_fast32_t section_idx = 1; section_idx < 4; section_idx++)
     {
-#if 0
-        if(message_viewer_requires_section(section_idx, view_mode_with))
-        {
-            osformat(os, ";; %s:\n", section_name[section_idx]);
-        }
-#endif
-
         for(uint_fast16_t n = count[section_idx]; n > 0; n--)
         {
             /* Get next record and put the packet reader offset on the next record */
@@ -292,7 +278,7 @@ ya_result    dns_message_writer_easyparse(const dns_message_writer_t *dmw, const
                 osprintln(os, "");
             }
         }
-        if(message_viewer_requires_section(section_idx, view_mode_with))
+        if(message_viewer_requires_section(section_idx, view_mode_with) && count[section_idx] > 0)
         {
             osprintln(os, "");
         }

@@ -80,8 +80,6 @@ extern "C"
 
 #define NETWORK_BUFFER_SIZE                65536
 
-#define DNS_MESSAGE_HAS_POOL               0
-
 #define DNSCORE_MESSAGE_PAYLOAD_IS_POINTER 1
 
 #define DNSCORE_MESSAGE_HAS_TIMINGS        0
@@ -308,20 +306,12 @@ struct dns_message_s
 
     uint8_t  _referral;
     uint8_t  _control_buffer_size;
-#if NOTUSED
-    uint8_t _tcp_serial;
-#endif
 
     /* bool is_delegation; for quick referral : later */
 
     uint32_t _buffer_size;       // 32 bits aligned      // the maximum number of bytes we are ready to fill (can be changed)
     uint32_t _buffer_size_limit; //                      // the maximum number of bytes we can ever fill (as the buffer
                                  //                      size is limited and )
-
-#if DNS_MESSAGE_HAS_POOL // prior versions of yadifa needed a pool, not anymore
-    void *_pool;         // a pool to be used as a quick memory for the message
-    int   _pool_size;    // a zdb query will store some temporary records in it. Consider size to be from 64K to 128K.
-#endif
 
 #if DNSCORE_HAS_TSIG_SUPPORT
     message_tsig_t _tsig;
@@ -344,8 +334,6 @@ struct dns_message_s
     uint8_t _canonised_fqdn[(DOMAIN_LENGTH_MAX + 7) & ~7];
 
     dns_message_cookie_t _cookie;
-
-    /* Ensure (buffer - buffer_tcp_len) is equal to 2 ! */
 #if DNSCORE_MESSAGE_PAYLOAD_IS_POINTER
     uint8_t *_buffer;
 #else
@@ -496,18 +484,6 @@ static inline void dns_message_set_authority_additional_counts_ne(dns_message_t 
 #endif
     MESSAGE_SET_NSAR(mesg->_buffer, value);
 }
-
-#if DNS_MESSAGE_HAS_POOL
-static inline void dns_message_set_pool_buffer(dns_message_t *mesg, void *p, int size)
-{
-    mesg->_pool = p;
-    mesg->_pool_size = size;
-}
-
-static inline void *dns_message_get_pool_buffer(const dns_message_t *mesg) { return mesg->_pool; }
-
-static inline int   dns_message_get_pool_size(const dns_message_t *mesg) { return mesg->_pool_size; }
-#endif
 
 static inline uint8_t dns_message_get_opcode(const dns_message_t *mesg) { return MESSAGE_OP(mesg->_buffer); }
 
@@ -739,7 +715,10 @@ static inline uint16_t        dns_message_get_size_u16(const dns_message_t *mesg
 
 static inline size_t          dns_message_get_size(const dns_message_t *mesg) { return mesg->_msghdr.msg_iov[0].iov_len; }
 
-static inline void            dns_message_set_size(dns_message_t *mesg, size_t size) { mesg->_msghdr.msg_iov[0].iov_len = size; }
+static inline void            dns_message_set_size(dns_message_t *mesg, size_t size)
+{
+    mesg->_msghdr.msg_iov[0].iov_len = size;
+}
 
 static inline void            dns_message_increase_size(dns_message_t *mesg, size_t size) { mesg->_msghdr.msg_iov[0].iov_len += size; }
 
@@ -761,14 +740,13 @@ static inline uint8_t         dns_message_get_op(const dns_message_t *mesg) { re
 
 /**
  * Returns a pointer to the first byte not set in the buffer (&buffer[size])
- * MAY BE RENAMED INTO message_get_buffer_end(mesg)
  * @param mesg
  * @return
  */
 
-static inline uint8_t       *dns_message_get_buffer_limit(dns_message_t *mesg) { return &mesg->_buffer[dns_message_get_size(mesg)]; }
+static inline uint8_t       *dns_message_get_message_limit(dns_message_t *mesg) { return &mesg->_buffer[dns_message_get_size(mesg)]; }
 
-static inline const uint8_t *dns_message_get_buffer_limit_const(const dns_message_t *mesg) { return &mesg->_buffer[dns_message_get_size(mesg)]; }
+static inline const uint8_t *dns_message_get_message_limit_const(const dns_message_t *mesg) { return &mesg->_buffer[dns_message_get_size(mesg)]; }
 
 /**
  * The maximum size of the buffer is, of course, a constant.
@@ -1311,24 +1289,42 @@ static inline void dns_message_recv_udp_reset(dns_message_t *mesg)
     mesg->_iovec.iov_len = mesg->_buffer_size;
 }
 
+/**
+ * Reads a DNS message from an UDP sockfd
+ *
+ * @param mesg the message structure to read in
+ * @param sockfd the UDP socket
+ *
+ * @return the number of bytes read or an ERRNO_ERROR. Note: never MAKE_ERRNO_ERROR(EINTR)
+ */
+
 static inline ssize_t dns_message_recv_udp(dns_message_t *mesg, int sockfd)
 {
-    ssize_t ret = recvmsg(sockfd, &mesg->_msghdr, 0);
-    if(ret >= 0)
+    for(;;)
     {
-        dns_message_set_size(mesg, ret);
-#if __FreeBSD__ || __OpenBSD__
-        if(mesg->_msghdr.msg_controllen == 0)
+        ssize_t ret = recvmsg(sockfd, &mesg->_msghdr, 0);
+        if(ret >= 0)
         {
-            mesg->_msghdr.msg_control = NULL;
-        }
+            dns_message_set_size(mesg, ret);
+#if __FreeBSD__ || __OpenBSD__
+            if(mesg->_msghdr.msg_controllen == 0)
+            {
+                mesg->_msghdr.msg_control = NULL;
+            }
 #endif
+            return ret;
+        }
+        else
+        {
+            int err = errno;
+            if(err == EINTR)
+            {
+                continue;
+            }
+
+            return MAKE_ERRNO_ERROR(err);
+        }
     }
-    else
-    {
-        ret = ERRNO_ERROR;
-    }
-    return ret;
 }
 
 static inline const uint8_t *dns_message_parse_query_fqdn(const dns_message_t *mesg)

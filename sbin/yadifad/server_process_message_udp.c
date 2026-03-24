@@ -147,13 +147,7 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                     default:
                     {
                         dns_message_set_status(mesg, FP_NOT_SUPP_CLASS);
-                        dns_message_transform_to_error(mesg);
-#if DNSCORE_HAS_TSIG_SUPPORT
-                        if(dns_message_has_tsig(mesg)) /* NOTE: the TSIG information is in mesg */
-                        {
-                            tsig_sign_answer(mesg);
-                        }
-#endif
+                        dns_message_transform_to_signed_error(mesg);
                         local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
                         break;
                     }
@@ -221,7 +215,7 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
 
                             if(!dns_message_has_tsig(mesg))
                             {
-                                dns_message_transform_to_error(mesg);
+                                dns_message_transform_to_error(mesg); // we know there is no TSIG so this one is enough
                             }
                             break;
                         }
@@ -264,9 +258,9 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                 {
                     dns_message_edns0_clear_undefined_flags(mesg);
 
-                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                     {
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                     }
                 }
                 else
@@ -316,7 +310,7 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                         }
 #else
                         dns_message_set_status(mesg, FP_FEATURE_DISABLED);
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                         local_statistics->udp_fp[FP_FEATURE_DISABLED]++;
                         break;
 #endif
@@ -356,9 +350,9 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                 {
                     dns_message_edns0_clear_undefined_flags(mesg);
 
-                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                     {
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                     }
                 }
                 else
@@ -404,13 +398,7 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                                     return;
                                 }
 
-                                message_transform_to_error(mesg);
-#if DNSCORE_HAS_TSIG_SUPPORT
-                                if(message_has_tsig(mesg)) /* NOTE: the TSIG information is in mesg */
-                                {
-                                    tsig_sign_answer(mesg);
-                                }
-#endif
+                                message_transform_to_signed_error(mesg);
                                 break;
                             }
                             else
@@ -436,7 +424,7 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
                                  message_get_query_type_ptr(mesg),
                                  message_get_query_class_ptr(mesg),
                                  message_get_sender_sa(mesg));
-                        message_make_error(mesg, FP_NOT_SUPP_CLASS);
+                        message_make_signed_error(mesg, FP_NOT_SUPP_CLASS);
                         local_statistics->udp_fp[FP_NOT_SUPP_CLASS]++;
                         break;
                     }
@@ -474,13 +462,6 @@ int           server_process_message_udp(network_thread_context_base_t *ctx, dns
             {
                 dns_message_set_status(mesg, FP_RCODE_NOTIMP);
                 dns_message_update_answer_status(mesg);
-
-#if DNSCORE_HAS_TSIG_SUPPORT
-                if(dns_message_has_tsig(mesg))
-                {
-                    tsig_sign_answer(mesg);
-                }
-#endif
             }
 
             local_statistics->udp_undefined_count++;

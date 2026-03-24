@@ -41,6 +41,8 @@
  *
  */
 
+#include "dnscore/dns_message_writer.h"
+
 #include <unistd.h>
 #include <stddef.h>
 
@@ -71,12 +73,32 @@
 
 #define PROCOTOL_TEST_SECTION_NAME "protocol-test"
 
+#define KEY_NONE 0
+#define KEY_GOOD 1
+#define KEY_BAD 2
+#define KEY_UNKNOWN 3
+
 struct protocol_test_settings_s
 {
     host_address_t    *server;
     uint8_t           *fqdn;
-    struct tsig_key_s *tsig_key_item; // for the -y option
+    struct tsig_key_s *tsig_key_item; // for the -y option          good known key
+    struct tsig_key_s *bad_tsig_key_item; // for the -b option      bad known key
+    struct tsig_key_s *unknown_tsig_key_item; // for the -u option  unknown key
+    bool test_random;
+    bool test_random_tcp;
+    bool test_update;
+    bool test_notify;
+    bool test_query;
+    bool test_z_opt;
+    bool test_invalid_fqdn;
+    bool test_compression_loop_3;
+    bool test_compression_loop_2;
+    bool test_compression_loop_1;
+    bool test_corruption;
+    bool test_hammer;
 };
+
 typedef struct protocol_test_settings_s protocol_test_settings_t;
 
 #define CONFIG_TYPE protocol_test_settings_t
@@ -84,6 +106,21 @@ CONFIG_BEGIN(protocol_test_settings_desc)
 CONFIG_HOST_LIST_EX(server, "127.0.0.1", CONFIG_HOST_LIST_FLAGS_DEFAULT, 1)
 CONFIG_FQDN(fqdn, ".")
 CONFIG_TSIG_ITEM(tsig_key_item, NULL)
+CONFIG_TSIG_ITEM(bad_tsig_key_item, NULL)
+CONFIG_TSIG_ITEM(unknown_tsig_key_item, NULL)
+CONFIG_BOOL(test_random, "0")
+CONFIG_BOOL(test_random_tcp, "0")
+CONFIG_BOOL(test_update, "0")
+CONFIG_BOOL(test_notify, "0")
+CONFIG_BOOL(test_query, "0")
+CONFIG_BOOL(test_z_opt, "0")
+CONFIG_BOOL(test_invalid_fqdn, "0")
+CONFIG_BOOL(test_compression_loop_3, "0")
+CONFIG_BOOL(test_compression_loop_2, "0")
+CONFIG_BOOL(test_compression_loop_1, "0")
+CONFIG_BOOL(test_corruption, "0")
+CONFIG_BOOL(test_hammer, "0")
+
 CONFIG_END(protocol_test_settings_desc)
 
 CMDLINE_BEGIN(protocol_test_cmdline)
@@ -100,14 +137,31 @@ CMDLINE_IMSGS("", "note: the quotes are needed")
 CMDLINE_IMSGS("@<host>", "equivalent to --server <host>")
 CMDLINE_OPT("key", 'y', "tsig_key_item")
 CMDLINE_HELP("[hmac:]name:key", "TSIG key to use for authentication (default hmac: hmac-md5)")
+CMDLINE_OPT("bad_key", 'b', "bad_tsig_key_item")
+CMDLINE_HELP("[hmac:]name:key", "TSIG key to use for wrong authentication (default hmac: hmac-md5)")
+CMDLINE_OPT("unkown_key", 'u', "unknown_tsig_key_item")
+CMDLINE_HELP("[hmac:]name:key", "Unknown TSIG key to use (default hmac: hmac-md5)")
 CMDLINE_OPT("domain", 'd', "fqdn")
+
+CMDLINE_BOOL("random", 0, "test_random")
+CMDLINE_BOOL("random_tcp", 0, "test_random_tcp")
+CMDLINE_BOOL("update", 0, "test_update")
+CMDLINE_BOOL("notify", 0, "test_notify")
+CMDLINE_BOOL("query", 0, "test_query")
+CMDLINE_BOOL("z_opt", 0, "test_z_opt")
+CMDLINE_BOOL("invalid_fqdn", 0, "test_invalid_fqdn")
+CMDLINE_BOOL("compression_loop_3", 0, "test_compression_loop_3")
+CMDLINE_BOOL("compression_loop_2", 0, "test_compression_loop_2")
+CMDLINE_BOOL("compression_loop_1", 0, "test_compression_loop_1")
+CMDLINE_BOOL("corruption", 0, "test_corruption")
+CMDLINE_BOOL("hammer", 0, "test_hammer")
 
 CMDLINE_VERSION_HELP(protocol_test_cmdline)
 CMDLINE_END(protocol_test_cmdline)
 
 static protocol_test_settings_t g_protocol_test_settings;
 
-static ya_result                protocol_test_message_udp_with_timeout(dns_message_t *mesg, const host_address_t *server, int seconds, dns_message_t *answ)
+static ya_result protocol_test_message_udp_with_timeout(dns_message_t *mesg, const host_address_t *server, int seconds, dns_message_t *answ)
 {
     yassert(mesg != NULL);
     yassert(server != NULL);
@@ -121,7 +175,7 @@ static ya_result                protocol_test_message_udp_with_timeout(dns_messa
     uint16_t  rclass = dns_message_parse_query_class(mesg);
     bool      has_fqdn = false;
     uint8_t   fqdn[DOMAIN_LENGTH_MAX + 1];
-
+    println("======== SENDING ==================================================================================================");
     formatln("sending message with ID %i to %{hostaddr} for domain %{dnsname} %{dnstype} %{dnsclass}", dns_message_get_id(mesg), server, dns_message_parse_query_fqdn(mesg), &rtype, &rclass);
     flushout();
 
@@ -137,6 +191,9 @@ static ya_result                protocol_test_message_udp_with_timeout(dns_messa
 
             tcp_set_recvtimeout(sockfd, seconds, 0); /* half a second for UDP is a lot ... */
 
+            println("======== SENDING MESSAGE ==========================================================================================");
+            dns_message_print_format_easyparse(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), DNS_MESSAGE_WRITER_SIMPLE_QUERY, 0);
+
             if((n = dns_message_send_udp(mesg, sockfd)) == (ssize_t)dns_message_get_size(mesg))
             {
                 socketaddress_t query_sa;
@@ -148,7 +205,7 @@ static ya_result                protocol_test_message_udp_with_timeout(dns_messa
                 if(dns_message_get_query_count_ne(mesg) != 0)
                 {
                     has_fqdn = true;
-                    dnsname_copy(fqdn, dns_message_get_buffer_const(mesg) + 12);
+                    dnsname_copy(fqdn, dns_message_get_buffer_const(mesg) + DNS_HEADER_LENGTH);
                 }
 
                 dns_message_recv_udp_reset(answ);
@@ -168,6 +225,11 @@ static ya_result                protocol_test_message_udp_with_timeout(dns_messa
 
                         if(n >= 0)
                         {
+                            println("======== SENDING ANSWER ===========================================================================================");
+                            formatln("received answer with ID %i to %{hostaddr} for domain %{dnsname} %{dnstype} %{dnsclass}", dns_message_get_id(mesg), server, dns_message_parse_query_fqdn(mesg), &rtype, &rclass);
+                            dns_message_print_format_easyparse(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), DNS_MESSAGE_WRITER_SIMPLE_QUERY, 0);
+                            flushout();
+
                             break;
                         }
 
@@ -262,6 +324,8 @@ static ya_result                protocol_test_message_udp_with_timeout(dns_messa
         }
     }
 
+    println("======== SENDING DONE =============================================================================================");
+
     return ret;
 }
 
@@ -274,10 +338,9 @@ static ya_result hammer_message_udp_with_timeout(dns_message_t *mesg, const host
 
     ya_result ret;
 
-    // const uint32_t to_us = 5000ULL; // 5 ms
-    const uint32_t to_us = 5000000ULL; // 5s
+    const uint32_t to_us = ONE_SECOND_US;
 
-    uint16_t       id;
+    uint16_t id;
 
     if(ISOK(ret = dns_message_set_sender_from_host_address(mesg, server)))
     {
@@ -300,7 +363,7 @@ static ya_result hammer_message_udp_with_timeout(dns_message_t *mesg, const host
                 id = dns_message_get_id(mesg);
 
                 dns_message_recv_udp_reset(answ);
-                dns_message_reset_control_size(mesg);
+                dns_message_reset_control_size(answ);
 
                 int64_t time_limit = timeus();
                 time_limit += to_us;
@@ -309,16 +372,11 @@ static ya_result hammer_message_udp_with_timeout(dns_message_t *mesg, const host
 
                 for(;;)
                 {
-                    for(;;)
+                    for(int countdown = 5; countdown > 0; --countdown)
                     {
                         n = dns_message_recv_udp(answ, sockfd);
 
                         if(n >= 0)
-                        {
-                            break;
-                        }
-
-                        if(errno != EINTR)
                         {
                             break;
                         }
@@ -386,12 +444,19 @@ static ya_result hammer_message_udp_with_timeout(dns_message_t *mesg, const host
     return ret;
 }
 
-static void update_test(const host_address_t *server, const uint8_t *fqdn)
+static void update_test(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
     // send an update packet in UDP
     // check the answer
 
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("update_test: no key for type %i", key_type);
+        return;
+    }
+
     formatln("update_test: %{hostaddr} %{dnsname} (begin)", server, fqdn);
+    flushout();
 
     random_ctx_t               rndctx = random_init(0);
     dns_message_t             *mesg = dns_message_new_instance();
@@ -415,9 +480,20 @@ static void update_test(const host_address_t *server, const uint8_t *fqdn)
     dns_message_update_add_record(mesg, &pw, a_ns_fqdn, TYPE_A, CLASS_IN, 86400, 4, ip_rdata);
     dns_message_update_finalize(mesg, &pw);
 
+    if(key != NULL)
+    {
+        dns_message_sign_query(mesg, key);
+    }
+
     if(ISOK(ret = protocol_test_message_udp_with_timeout(mesg, server, TIMEOUT_S, mesg)))
     {
-        if(dns_message_get_rcode(mesg) != RCODE_NOERROR)
+        dns_message_print_format_easyparse(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), DNS_MESSAGE_WRITER_SIMPLE_QUERY, 0);
+
+        if(dns_message_get_rcode(mesg) == RCODE_NOERROR)
+        {
+            formatln("INFO: update_test: %{hostaddr} %{dnsname}: server answered with %s", server, fqdn, dns_message_rcode_get_name(dns_message_get_rcode(mesg)));
+        }
+        else
         {
             formatln("WARNING: update_test: %{hostaddr} %{dnsname}: server answered with %s", server, fqdn, dns_message_rcode_get_name(dns_message_get_rcode(mesg)));
         }
@@ -435,13 +511,18 @@ static void update_test(const host_address_t *server, const uint8_t *fqdn)
 
     if(ISOK(ret = protocol_test_message_udp_with_timeout(mesg, server, TIMEOUT_S, mesg)))
     {
-        if(dns_message_get_rcode(mesg) != RCODE_NOERROR)
+        if(dns_message_get_rcode(mesg) == RCODE_NOERROR)
         {
+            formatln("INFO: update_test: %{hostaddr} %{dnsname}: returned with %x (2)", server, fqdn, dns_message_get_rcode(mesg));
+        }
+        else
+        {
+            formatln("WARNING: update_test: %{hostaddr} %{dnsname}: returned with %x (2)", server, fqdn, dns_message_get_rcode(mesg));
         }
     }
     else
     {
-        formatln("ERROR: update_test: %{hostaddr} %{dnsname}: %r", server, fqdn, ret);
+        formatln("ERROR: update_test: %{hostaddr} %{dnsname}: %r (2)", server, fqdn, ret);
     }
 
     random_finalize(rndctx);
@@ -449,6 +530,59 @@ static void update_test(const host_address_t *server, const uint8_t *fqdn)
 
     formatln("update_test: %{hostaddr} %{dnsname} (end)", server, fqdn);
 }
+
+static void notify_test(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
+{
+    // send an update packet in UDP
+    // check the answer
+
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("notify_test: no key for type %i", key_type);
+        return;
+    }
+
+    formatln("notify_test: %{hostaddr} %{dnsname} (begin)", server, fqdn);
+    flushout();
+
+    random_ctx_t               rndctx = random_init(0);
+    dns_message_t             *mesg = dns_message_new_instance();
+    ya_result                  ret;
+    uint16_t                   id;
+
+    id = (uint16_t)random_next(rndctx);
+
+    dns_message_make_notify(mesg, id, fqdn, TYPE_SOA, CLASS_IN);
+
+    if(key != NULL)
+    {
+        dns_message_sign_query(mesg, key);
+    }
+
+    if(ISOK(ret = protocol_test_message_udp_with_timeout(mesg, server, TIMEOUT_S, mesg)))
+    {
+        dns_message_print_format_easyparse(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), DNS_MESSAGE_WRITER_SIMPLE_QUERY, 0);
+
+        if(dns_message_get_rcode(mesg) == RCODE_NOERROR)
+        {
+            formatln("INFO: notify_test: %{hostaddr} %{dnsname}: server answered with %s", server, fqdn, dns_message_rcode_get_name(dns_message_get_rcode(mesg)));
+        }
+        else
+        {
+            formatln("WARNING: notify_test: %{hostaddr} %{dnsname}: server answered with %s", server, fqdn, dns_message_rcode_get_name(dns_message_get_rcode(mesg)));
+        }
+    }
+    else
+    {
+        formatln("ERROR: notify_test: %{hostaddr} %{dnsname}: %r", server, fqdn, ret);
+    }
+
+    random_finalize(rndctx);
+    dns_message_delete(mesg);
+
+    formatln("notify_test: %{hostaddr} %{dnsname} (end)", server, fqdn);
+}
+
 
 static void message_fingerprint(const dns_message_t *mesg)
 {
@@ -489,8 +623,14 @@ static void message_fingerprint(const dns_message_t *mesg)
     }
 }
 
-static void hammer_test(const host_address_t *server, const uint8_t *fqdn)
+static void hammer_test(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("hammer_test: no key for type %i", key_type);
+        return;
+    }
+
     static const uint16_t hammer_types[4] = {TYPE_SOA, TYPE_NS, TYPE_A, TYPE_AAAA};
 
     static const uint8_t  hammer_soa_rdata[] = {0, 0, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 0, 0, 3, 4};
@@ -510,19 +650,8 @@ static void hammer_test(const host_address_t *server, const uint8_t *fqdn)
     dns_message_t *answ = dns_message_new_instance();
     ya_result      ret;
     uint16_t       id;
-    /*
-    uint8_t ns_fqdn[128];
-    uint8_t a_ns_fqdn[128];
-    */
-    struct dns_packet_writer_s pw;
-    /*
-    memcpy(ns_fqdn, "\017udp-update-test", 16);
-    dnsname_copy(&ns_fqdn[16], fqdn);
 
-    memcpy(a_ns_fqdn, "\003ns1\017udp-update-test", 20);
-    dnsname_copy(&a_ns_fqdn[20], fqdn);
-    */
-    // static const uint8_t ip_rdata[4] = {1,0,0,127};
+    struct dns_packet_writer_s pw;
 
     // send queries with 0 to 2 items etc ...
     // truncate the packet down to 0 bytes long
@@ -600,6 +729,11 @@ static void hammer_test(const host_address_t *server, const uint8_t *fqdn)
                         {
                             dns_message_set_size(mesg, dns_packet_writer_get_offset(&pw) - truncate_by);
 
+                            if(key != NULL)
+                            {
+                                dns_message_sign_query(mesg, key);
+                            }
+
                             print("Q={");
                             message_fingerprint(mesg);
                             print("},A={");
@@ -610,7 +744,7 @@ static void hammer_test(const host_address_t *server, const uint8_t *fqdn)
                             }
                             else
                             {
-                                format("ERROR=%x", ret);
+                                format("ERROR=%x=%r", ret, ret);
                             }
 
                             if(truncate_by > 0)
@@ -619,6 +753,11 @@ static void hammer_test(const host_address_t *server, const uint8_t *fqdn)
                             }
 
                             println("}");
+
+                            if(ret == MAKE_ERRNO_ERROR(EFAULT))
+                            {
+                                break;
+                            }
                         }
                     }
                 }
@@ -631,8 +770,14 @@ static void hammer_test(const host_address_t *server, const uint8_t *fqdn)
     random_finalize(rndctx);
 }
 
-static void corrupt_test(const host_address_t *server, const uint8_t *fqdn)
+static void corrupt_test(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("corrupt_test: no key for type %i", key_type);
+        return;
+    }
+
     (void)fqdn;
     println("corrupt_test");
 
@@ -676,6 +821,11 @@ static void corrupt_test(const host_address_t *server, const uint8_t *fqdn)
                                 {
                                     dns_message_set_size(mesg, size - truncate_by);
 
+                                    if(key != NULL)
+                                    {
+                                        dns_message_sign_query(mesg, key);
+                                    }
+
                                     print("Q={");
                                     message_fingerprint(mesg);
                                     print("},A={");
@@ -686,7 +836,11 @@ static void corrupt_test(const host_address_t *server, const uint8_t *fqdn)
                                     }
                                     else
                                     {
-                                        format("ERROR=%x", ret);
+                                        format("ERROR=%x=%r", ret, ret);
+                                        if(ret == MAKE_ERRNO_ERROR(EFAULT))
+                                        {
+                                            format("@%{host_addr}", server);
+                                        }
                                     }
 
                                     if(truncate_by > 0)
@@ -709,8 +863,14 @@ static void corrupt_test(const host_address_t *server, const uint8_t *fqdn)
     random_finalize(rndctx);
 }
 
-static void compression_loop_test(const host_address_t *server, const uint8_t *fqdn)
+static void compression_loop_test(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("compression_loop_test: no key for type %i", key_type);
+        return;
+    }
+
     (void)fqdn;
     println("compression_loop_test");
 
@@ -778,6 +938,11 @@ static void compression_loop_test(const host_address_t *server, const uint8_t *f
 
         dns_message_set_size(mesg, 517);
 
+        if(key != NULL)
+        {
+            dns_message_sign_query(mesg, key);
+        }
+
         print("Q={");
         message_fingerprint(mesg);
         print("},A={");
@@ -788,7 +953,7 @@ static void compression_loop_test(const host_address_t *server, const uint8_t *f
         }
         else
         {
-            format("ERROR=%x", ret);
+            format("ERROR=%x=%r", ret, ret);
         }
 
         println("}");
@@ -811,7 +976,7 @@ static void compression_loop_test(const host_address_t *server, const uint8_t *f
         }
         else
         {
-            format("ERROR=%x", ret);
+            format("ERROR=%x=%r", ret, ret);
         }
 
         println("}");
@@ -839,7 +1004,7 @@ static void compression_loop_test(const host_address_t *server, const uint8_t *f
         }
         else
         {
-            format("ERROR=%x", ret);
+            format("ERROR=%x=%r", ret, ret);
         }
 
         println("}");
@@ -857,8 +1022,14 @@ static void compression_loop_test(const host_address_t *server, const uint8_t *f
     random_finalize(rndctx);
 }
 
-static void compression_loop_test2(const host_address_t *server, const uint8_t *fqdn)
+static void compression_loop_test2(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("compression_loop_test2: no key for type %i", key_type);
+        return;
+    }
+
     println("compression_loop_test2");
     (void)fqdn;
 
@@ -894,7 +1065,12 @@ static void compression_loop_test2(const host_address_t *server, const uint8_t *
 
     for(int_fast32_t i = 0; i < 64; ++i)
     {
-        hammer_message_udp_with_timeout(clnr, server, answ);
+        ret = hammer_message_udp_with_timeout(clnr, server, answ);
+        if(ret != MAKE_ERRNO_ERROR(EAGAIN))
+        {
+            formatln("compression_loop_test2: failed sending: %u bytes: %r", dns_message_get_size(clnr),ret);
+            break;
+        }
     }
 
     for(uint_fast8_t opcode = 0; opcode < 16; ++opcode)
@@ -932,7 +1108,7 @@ static void compression_loop_test2(const host_address_t *server, const uint8_t *
         }
         else
         {
-            format("ERROR=%x", ret);
+            format("ERROR=%x=%r", ret, ret);
         }
 
         println("}");
@@ -955,7 +1131,7 @@ static void compression_loop_test2(const host_address_t *server, const uint8_t *
         }
         else
         {
-            format("ERROR=%x", ret);
+            format("ERROR=%x=%r", ret, ret);
         }
 
         println("}");
@@ -983,7 +1159,7 @@ static void compression_loop_test2(const host_address_t *server, const uint8_t *
         }
         else
         {
-            format("ERROR=%x", ret);
+            format("ERROR=%x=%r", ret, ret);
         }
 
         println("}");
@@ -1001,8 +1177,14 @@ static void compression_loop_test2(const host_address_t *server, const uint8_t *
     random_finalize(rndctx);
 }
 
-static void compression_loop_test3(const host_address_t *server, const uint8_t *fqdn)
+static void compression_loop_test3(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("compression_loop_test3: no key for type %i", key_type);
+        return;
+    }
+
     println("compression_loop_test3");
     flushout();
 
@@ -1038,7 +1220,12 @@ static void compression_loop_test3(const host_address_t *server, const uint8_t *
 
     for(int_fast32_t i = 0; i < 64; ++i)
     {
-        hammer_message_udp_with_timeout(clnr, server, answ);
+        ret = hammer_message_udp_with_timeout(clnr, server, answ);
+        if(ret != MAKE_ERRNO_ERROR(EAGAIN))
+        {
+            formatln("compression_loop_test3: failed sending: %u bytes: %r", dns_message_get_size(clnr),ret);
+            break;
+        }
     }
 
     dns_message_make_notify(mesg, rand(), fqdn, TYPE_SOA, CLASS_IN);
@@ -1110,7 +1297,7 @@ static void compression_loop_test3(const host_address_t *server, const uint8_t *
             }
             else
             {
-                format("ERROR=%x", ret);
+                format("ERROR=%x=%r", ret, ret);
             }
 
             println("}");
@@ -1129,7 +1316,7 @@ static void compression_loop_test3(const host_address_t *server, const uint8_t *
             }
             else
             {
-                format("ERROR=%x", ret);
+                format("ERROR=%x=%r", ret, ret);
             }
 
             println("}");
@@ -1270,7 +1457,11 @@ static void query_z_opt_test(const host_address_t *server, const uint8_t *fqdn)
         uint32_t rttl;
         uint16_t rdatasize;
         uint8_t  tmp[1024];
-        ret = dns_packet_reader_read_fqdn(&pr, tmp, sizeof(tmp));
+        if(FAIL(ret = dns_packet_reader_read_fqdn(&pr, tmp, sizeof(tmp))))
+        {
+            formatln("query_z_opt_test: failed to parse last answer fqdn: %r", ret);
+            break;
+        }
 
         if(FAIL(ret = dns_packet_reader_skip_record(&pr)))
         {
@@ -1278,7 +1469,13 @@ static void query_z_opt_test(const host_address_t *server, const uint8_t *fqdn)
             break;
         }
 
-        ret = dns_packet_reader_read_u16(&pr, &rtype);
+        if(FAIL(ret = dns_packet_reader_read_u16(&pr, &rtype)))
+        {
+            formatln("query_z_opt_test: failed to read record type: %r", ret);
+            break;
+        }
+
+        formatln("type: %hu", ntohs(rtype));
 
         if(FAIL(ret = dns_packet_reader_skip_record(&pr)))
         {
@@ -1293,7 +1490,13 @@ static void query_z_opt_test(const host_address_t *server, const uint8_t *fqdn)
             break;
         }
 
-        ret = dns_packet_reader_read_u16(&pr, &rclass);
+        if(FAIL(ret = dns_packet_reader_read_u16(&pr, &rclass)))
+        {
+            formatln("query_z_opt_test: failed to read EDNS0 size field (class): %r", ret);
+            break;
+        }
+
+        formatln("class: %hu", ntohs(rclass));
 
         if(FAIL(ret = dns_packet_reader_skip_record(&pr)))
         {
@@ -1301,7 +1504,13 @@ static void query_z_opt_test(const host_address_t *server, const uint8_t *fqdn)
             break;
         }
 
-        ret = dns_packet_reader_read_u32(&pr, &rttl);
+        if(FAIL(ret = dns_packet_reader_read_u32(&pr, &rttl)))
+        {
+            formatln("query_z_opt_test: failed to read EDNS0 flags field (ttl): %r", ret);
+            break;
+        }
+
+        formatln("ttl: %08x", ntohl(rttl));
 
         if(FAIL(ret = dns_packet_reader_skip_record(&pr)))
         {
@@ -1316,7 +1525,13 @@ static void query_z_opt_test(const host_address_t *server, const uint8_t *fqdn)
             break;
         }
 
-        ret = dns_packet_reader_read_u16(&pr, &rdatasize);
+        if(FAIL(ret = dns_packet_reader_read_u16(&pr, &rdatasize)))
+        {
+            formatln("query_z_opt_test: failed to read EDNS0 rdatasize field (rdatasize): %r", ret);
+            break;
+        }
+
+        formatln("rdatasize: %hd", ntohs(rdatasize));
 
         if(FAIL(ret = dns_packet_reader_skip_record(&pr)))
         {
@@ -1336,8 +1551,14 @@ static void query_z_opt_test(const host_address_t *server, const uint8_t *fqdn)
     formatln("query_z_opt_test: %{hostaddr} %{dnsname} (end) (%r)", server, fqdn, ret);
 }
 
-static ya_result query_with_tsig(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key)
+static ya_result query_with_tsig(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
+    if(key == NULL)
+    {
+        formatln("query_with_tsig: no key for type %i", key_type);
+        return SUCCESS;
+    }
+
     random_ctx_t   rnd = random_init_auto();
     uint16_t       id = (uint16_t)random_next(rnd);
 
@@ -1346,7 +1567,6 @@ static ya_result query_with_tsig(const host_address_t *server, const uint8_t *fq
     dns_message_make_query(mesg, id, fqdn, TYPE_A, CLASS_IN);
     if(key != NULL)
     {
-        dns_message_tsig_set_key(mesg, key);
         dns_message_sign_query(mesg, key);
     }
 
@@ -1363,11 +1583,22 @@ static ya_result query_with_tsig(const host_address_t *server, const uint8_t *fq
     return ret;
 }
 
-static ya_result query_invalid_fqdn(const host_address_t *server, const uint8_t *fqdn)
+static ya_result query_invalid_fqdn(const host_address_t *server, const uint8_t *fqdn, const tsig_key_t *key, const int key_type)
 {
     (void)fqdn;
+
+    if(key == NULL && key_type != KEY_NONE)
+    {
+        formatln("query_invalid_fqdn: no key for type %i", key_type);
+        return SUCCESS;
+    }
+
     ya_result      ret = SUCCESS;
     random_ctx_t   rnd = random_init(0);
+    static uint8_t bad_message00[] = {0x00, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x79, 0x7a, 0x48};
+    static uint8_t bad_message01[] = {0x00, 0x10, 0x80, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x79, 0x7a, 0x48};
+    static uint8_t bad_message02[] = {0x00, 0x10, 0x00, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x79, 0x7a, 0x48};
+
     static uint8_t bad_message0[] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 'w', 'w', 'w', 0x40, 99, 99, 99, 99, 99, 99, 99,   99,   99,   99,  99, 99,
                                      99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,  99,  99,  99,   99, 99, 99, 99, 99, 99, 99,   99,   99,   99,  99, 99,
                                      99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,   99,  99,  99,  99,   99, 99, 99, 99, 99, 99, 0x02, 0x00, 0x01, 0x00};
@@ -1526,7 +1757,11 @@ static ya_result query_invalid_fqdn(const host_address_t *server, const uint8_t 
         size_t         size;
     } bad_message_t;
 
-    static const bad_message_t bad_messages[] = {{bad_message0, sizeof(bad_message0)},
+    static const bad_message_t bad_messages[] = {{bad_message00, sizeof(bad_message00)},
+                                                {bad_message01, sizeof(bad_message01)},
+                                                {bad_message02, sizeof(bad_message02)},
+        {NULL, 0},
+                                                 {bad_message0, sizeof(bad_message0)},
                                                  {bad_message1, sizeof(bad_message1)},
                                                  {bad_message2, sizeof(bad_message2)},
                                                  {bad_message3, sizeof(bad_message3)},
@@ -1571,10 +1806,28 @@ static ya_result query_invalid_fqdn(const host_address_t *server, const uint8_t 
     {
         fd_setcloseonexec(sockfd);
     }
+    else
+    {
+        formatln("query_invalid_fqdn: failed to open socket for %{sockaddr}", &sa.sa);
+        return INVALID_STATE_ERROR;
+    }
+
+    dns_message_t *mesg = dns_message_new_instance_ex(NULL, 4096);
 
     for(const bad_message_t *m = bad_messages; m->message != NULL; ++m)
     {
-        /*ssize_t n = */ sendto(sockfd, m->message, m->size, 0, &sa.sa, sa_len);
+        osformatln(termout, "sending %llu bytes:", m->size);
+        dns_message_copy_into_buffer(mesg, m->message, m->size);
+        if(key != NULL)
+        {
+            dns_message_tsig_set_key(mesg, key);
+            dns_message_sign_query(mesg, key);
+        }
+
+        osprint_dump_with_base(termout, m->message, m->size, 16, OSPRINT_DUMP_LAYOUT_DENSE | OSPRINT_DUMP_BUFFER, m->message);
+        osprintln(termout, "");
+
+        /*ssize_t n = */ sendto(sockfd, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 0, &sa.sa, sa_len);
         usleep(10000);
     }
 
@@ -1593,8 +1846,10 @@ static ya_result query_invalid_fqdn(const host_address_t *server, const uint8_t 
         0x00,
     };
 
+#define QUERY_INVALID_FQDN_LOOPS 200
+
     uint16_t id = 0;
-    for(int_fast32_t loops = 10000; loops > 0; --loops)
+    for(int_fast32_t loops = QUERY_INVALID_FQDN_LOOPS; loops > 0; --loops)
     {
         static const uint8_t  filler_0[4] = {0x00, 0xff, 0x00, 0x01};
         static const uint8_t  filler_1[4] = {0x00, 0x01, 0x00, 0xff};
@@ -1607,22 +1862,38 @@ static ya_result query_invalid_fqdn(const host_address_t *server, const uint8_t 
             flushout();
         }
 
-        for(int_fast32_t len = sizeof(bad_messageR) - 12; len >= 0; --len)
+        for(int_fast32_t len = sizeof(bad_messageR) - DNS_HEADER_LENGTH; len >= 0; --len)
         {
-            uint32_t *p = (uint32_t *)&bad_messageR[12];
+            uint32_t *p = (uint32_t *)&bad_messageR[DNS_HEADER_LENGTH];
             for(int_fast32_t i = 0; i < len / 4; ++i)
             {
                 *p++ = random_next(rnd);
             }
-            for(size_t i = len; i < sizeof(bad_messageR) - 12; ++i)
+            for(size_t i = len; i < sizeof(bad_messageR) - DNS_HEADER_LENGTH; ++i)
             {
-                bad_messageR[12 + i] = filler[i & 3];
+                bad_messageR[DNS_HEADER_LENGTH + i] = filler[i & 3];
             }
             SET_U16_AT_P(bad_messageR, htons(id++));
-            /*ssize_t n = */ sendto(sockfd, bad_messageR, 12 + len, 0, &sa.sa, sa_len);
+
+            dns_message_copy_into_buffer(mesg, bad_messageR, DNS_HEADER_LENGTH + len);
+            if(key != NULL)
+            {
+                dns_message_tsig_set_key(mesg, key);
+                dns_message_sign_query(mesg, key);
+            }
+
+            if(loops == QUERY_INVALID_FQDN_LOOPS)
+            {
+                osprint_dump_with_base(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 16, OSPRINT_DUMP_LAYOUT_DENSE | OSPRINT_DUMP_BUFFER, dns_message_get_buffer_const(mesg));
+                osprintln(termout, "");
+            }
+
+            /*ssize_t n = */ sendto(sockfd, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 0, &sa.sa, sa_len);
             usleep(1000);
         }
     }
+
+    dns_message_delete(mesg);
 
     socketclose_ex(sockfd);
 
@@ -1716,7 +1987,204 @@ static ya_result main_config(int argc, char *argv[])
 
     config_set_source(CONFIG_SOURCE_DEFAULT);
 
+    if(!(g_protocol_test_settings.test_random ||
+        g_protocol_test_settings.test_random_tcp ||
+        g_protocol_test_settings.test_update ||
+        g_protocol_test_settings.test_notify ||
+        g_protocol_test_settings.test_query ||
+        g_protocol_test_settings.test_z_opt ||
+        g_protocol_test_settings.test_invalid_fqdn ||
+        g_protocol_test_settings.test_compression_loop_3 ||
+        g_protocol_test_settings.test_compression_loop_2 ||
+        g_protocol_test_settings.test_compression_loop_1 ||
+        g_protocol_test_settings.test_corruption ||
+        g_protocol_test_settings.test_hammer))
+    {
+        g_protocol_test_settings.test_random = TRUE;
+        //g_protocol_test_settings.test_random_tcp = TRUE;
+        g_protocol_test_settings.test_update = TRUE;
+        g_protocol_test_settings.test_notify = TRUE;
+        g_protocol_test_settings.test_query = TRUE;
+        g_protocol_test_settings.test_z_opt = TRUE;
+        g_protocol_test_settings.test_invalid_fqdn = TRUE;
+        g_protocol_test_settings.test_compression_loop_3 = TRUE;
+        g_protocol_test_settings.test_compression_loop_2 = TRUE;
+        g_protocol_test_settings.test_compression_loop_1 = TRUE;
+        g_protocol_test_settings.test_corruption = TRUE;
+        g_protocol_test_settings.test_hammer = TRUE;
+    }
+
     return ret;
+}
+
+void query_random(const host_address_t *server)
+{
+    int ret;
+    int sockfd;
+    size_t message_len = 0;
+    uint8_t buffer[65536];
+
+    socketaddress_t sa;
+    if(FAIL(ret = host_address2sockaddr(server, &sa)))
+    {
+        formatln("query_random: %{hostaddr}: host_address2sockaddr: %r", server, ret);
+        return;
+    }
+    socklen_t sa_len = sockaddr_len(&sa.sa);
+
+    random_ctx_t r = random_init(0);
+
+    size_t total_messages = 0;
+    size_t total_bytes = 0;
+    size_t total_truncated = 0;
+
+    for(size_t size_group = 1; size_group < 1024; ++size_group)
+    {
+        size_t message_len_max = MIN(size_group * 64, UINT16_MAX);
+        size_t message_len_base = message_len_max - 64;
+
+        formatln("query_random: %{hostaddr}: sizes: %llu to %llu", server, message_len_base, message_len_max);
+
+        size_t count_total = message_len_max < 2048?16384:1024;
+
+        for(size_t count = 0; count < count_total; ++count)
+        {
+            if((sockfd = socket(sa.sa_family, SOCK_DGRAM, SOCKET_PROTOCOL_FROM_TYPE(SOCK_DGRAM))) < 0)
+            {
+                formatln("query_random: %{hostaddr}: socket: %r", server, ret);
+                continue;
+            }
+
+            message_len = message_len_base + random_next(r) % 64;
+
+            uint32_t *buffer_u32 = (uint32_t*)&buffer[0];
+            size_t message_len4 = MAX((message_len + 3) / 4, 1);
+            for(size_t i = 0; i < message_len4; ++i)
+            {
+                buffer_u32[i] = random_next(r);
+            }
+
+            ret = sendto(sockfd, buffer, message_len, 0, &sa.sa, sa_len);
+            if(ret < 0)
+            {
+                ret = ERRNO_ERROR;
+                formatln("query_random: %{hostaddr}: sendto(%i, %p, %llu, %{sockaddr}, %u): %r", server, sockfd, buffer, message_len, &sa, sa_len, ret);
+            }
+            total_bytes += ret;
+            total_truncated += message_len - ret;
+            total_messages++;
+
+            close_ex(sockfd);
+        }
+    }
+
+    formatln("query_random: messages: %llu bytes: %llu truncated: %llu", total_messages, total_bytes, total_truncated);
+    flushout();
+    random_finalize(r);
+}
+
+void query_random_tcp(const host_address_t *server)
+{
+    int ret;
+    int sockfd;
+    size_t message_len = 0;
+    uint8_t buffer[65536];
+
+    socketaddress_t sa;
+    if(FAIL(ret = host_address2sockaddr(server, &sa)))
+    {
+        formatln("query_random_tcp: %{hostaddr}: host_address2sockaddr: %r", server, ret);
+        return;
+    }
+    socklen_t sa_len = sockaddr_len(&sa.sa);
+
+    random_ctx_t r = random_init(0);
+
+    size_t total_messages = 0;
+    size_t total_bytes = 0;
+    size_t total_truncated = 0;
+
+    for(size_t size_group = 1; size_group < 1024; ++size_group)
+    {
+        size_t message_len_max = MIN(size_group * 64, UINT16_MAX);
+        size_t message_len_base = message_len_max - 64;
+
+        formatln("query_random_tcp: %{hostaddr}: sizes: %llu to %llu", server, message_len_base, message_len_max);
+
+        size_t count_total = message_len_max < 2048?16384:1024;
+
+        for(size_t count = 0; count < count_total; ++count)
+        {
+            if((sockfd = socket(sa.sa_family, SOCK_STREAM, SOCKET_PROTOCOL_FROM_TYPE(SOCK_STREAM))) < 0)
+            {
+                formatln("query_random_tcp: %{hostaddr}: socket: %r", server, ret);
+                continue;
+            }
+
+            if(connect(sockfd, &sa.sa, sa_len) < 0)
+            {
+                ret = ERRNO_ERROR;
+                formatln("query_random_tcp: %{hostaddr}: connect: %r", server, ret);
+                close_ex(sockfd);
+                continue;
+            }
+
+            do
+            {
+                message_len = message_len_base + random_next(r) % 64;
+            }
+            while(message_len < 2);
+
+            uint32_t *buffer_u32 = (uint32_t*)&buffer[0];
+            size_t message_len4 = MAX((message_len + 3) / 4, 1);
+            for(size_t i = 0; i < message_len4; ++i)
+            {
+                buffer_u32[i] = random_next(r);
+            }
+
+            buffer[0] = ((message_len - 2) >> 8);
+            buffer[1] = (message_len - 2);
+
+            if(writefully(sockfd, buffer, message_len) < 0)
+            {
+                ret = ERRNO_ERROR;
+                formatln("query_random_tcp: %{hostaddr}: sendto(%i, %p, %llu, %{sockaddr}, %u): %r", server, sockfd, buffer, message_len, &sa, sa_len, ret);
+            }
+
+            total_bytes += ret;
+            total_truncated += message_len - ret;
+            total_messages++;
+            tcp_set_recvtimeout(sockfd, 0, 500000);
+            ret = readfully_limited(sockfd, buffer, 2, 1000000);
+            if(ISOK(ret))
+            {
+                size_t len = GET_U16_AT(buffer);
+                formatln("query_random_tcp: %{hostaddr}: server replying with %llu bytes", server, len);
+                ret = readfully_limited_ex(sockfd, buffer, len, 50000, 512000000.0);
+                if(ISOK(ret))
+                {
+                    formatln("query_random_tcp: %{hostaddr}: server replied with %lu bytes", server, ret);
+                }
+                else
+                {
+                    formatln("query_random_tcp: %{hostaddr}: server didn't reply: %r", server, ret);
+                    flushout();
+                }
+            }
+            else
+            {
+                formatln("query_random_tcp: %{hostaddr}: server didn't answer: %r", server, ret);
+                flushout();
+            }
+
+            close_ex(sockfd);
+
+        }
+    }
+
+    formatln("query_random_tcp: messages: %llu bytes: %llu truncated: %llu", total_messages, total_bytes, total_truncated);
+    flushout();
+    random_finalize(r);
 }
 
 int main(int argc, char *argv[])
@@ -1757,36 +2225,132 @@ int main(int argc, char *argv[])
         fqdn = dnsname_dup((const uint8_t *)"");
     }
 
-    tsig_key_t *key = g_protocol_test_settings.tsig_key_item;
+    tsig_key_t *keys[4] = {
+        NULL,
+        g_protocol_test_settings.tsig_key_item,
+        g_protocol_test_settings.bad_tsig_key_item,
+        g_protocol_test_settings.unknown_tsig_key_item
+    };
 
     formatln("server: %{hostaddr}\nfqdn: %{dnsname}", server, fqdn);
-    if(key != NULL)
+    for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
     {
-        formatln("key: %{dnsname}", key->name);
+        if(keys[key_type] != NULL)
+        {
+            formatln("key[%i]: %{dnsname}", key_type, keys[key_type]->name);
+        }
+        flushout();
     }
-    flushout();
 
     signal_handler_init();
     signal_handler_set(SIGINT, signal_int);
     signal_handler_set(SIGTERM, signal_int);
 
-    ret = query_with_tsig(server, fqdn, key);
+    if(g_protocol_test_settings.test_random_tcp)
+    {
+        query_random_tcp(server);
+    }
 
-    query_z_opt_test(server, fqdn);
-    flushout();
-    query_invalid_fqdn(server, fqdn);
-    flushout();
-    compression_loop_test3(server, fqdn);
-    flushout();
-    compression_loop_test2(server, fqdn);
-    flushout();
-    compression_loop_test(server, fqdn);
-    flushout();
-    corrupt_test(server, fqdn);
-    flushout();
-    hammer_test(server, fqdn);
-    flushout();
-    update_test(server, fqdn);
+    if(g_protocol_test_settings.test_random)
+    {
+        query_random(server);
+    }
+
+    if(g_protocol_test_settings.test_update)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling update_test, key=%p, key_type=%i", keys[key_type], key_type);
+            update_test(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_notify)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling notify_test, key=%p, key_type=%i", keys[key_type], key_type);
+            notify_test(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_query)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_with_tsig, key=%p, key_type=%i", keys[key_type], key_type);
+            query_with_tsig(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_z_opt)
+    {
+        query_z_opt_test(server, fqdn);
+        flushout();
+    }
+
+    if(g_protocol_test_settings.test_invalid_fqdn)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_invalid_fqdn, key=%p, key_type=%i", keys[key_type], key_type);
+            query_invalid_fqdn(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_compression_loop_3)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_with_tsig, key=%p, key_type=%i", keys[key_type], key_type);
+            compression_loop_test3(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_compression_loop_2)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_with_tsig, key=%p, key_type=%i", keys[key_type], key_type);
+            compression_loop_test2(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_compression_loop_1)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_with_tsig, key=%p, key_type=%i", keys[key_type], key_type);
+            compression_loop_test(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_corruption)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_with_tsig, key=%p, key_type=%i", keys[key_type], key_type);
+            corrupt_test(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
+
+    if(g_protocol_test_settings.test_hammer)
+    {
+        for(int key_type = KEY_NONE; key_type <= KEY_UNKNOWN; ++key_type)
+        {
+            formatln("calling query_with_tsig, key=%p, key_type=%i", keys[key_type], key_type);
+            hammer_test(server, fqdn, keys[key_type], key_type);
+            flushout();
+        }
+    }
 
     flushout();
     flusherr();

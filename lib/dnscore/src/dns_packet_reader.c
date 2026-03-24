@@ -997,7 +997,7 @@ ya_result dns_packet_reader_read_dns_resource_record(dns_packet_reader_t *reader
     if(ISOK(ret = dns_packet_reader_read_fqdn(reader, rr->name, sizeof(rr->name))))
     {
         rr->name_len = ret;
-        if(ISOK(ret = dns_packet_reader_read(reader, &rr->tctr, 10)))
+        if(ISOK(ret = dns_packet_reader_read(reader, &rr->tctr, TYPE_CLASS_TTL_RDLEN_SIZE)))
         {
             uint16_t rdata_size = ntohs(rr->tctr.rdlen);
             dns_resource_record_ensure_size(rr, rdata_size);

@@ -275,7 +275,6 @@ libdnscore_la_SOURCES = \
 	src/debug_mmap.c \
 	src/debug_stacktrace.c \
     src/digest_md5_internal.c \
-	src/digest_rawdata.c \
 	src/dns_udp.c \
 	src/dns_message_verify_rrsig.c \
 	src/dns_message_writer.c \
@@ -288,8 +287,6 @@ libdnscore_la_SOURCES = \
 	src/dnsformat.c \
 	src/dnskey.c \
 	src/dnskey_keyring.c \
-	src/dnskey_eddsa.c \
-	src/dnskey_signature.c \
 	src/dns_message.c \
 	src/dnsname.c \
 	src/empty_input_stream.c \
@@ -401,6 +398,9 @@ libdnscore_la_SOURCES = \
 
 if OPENSSL_VERSION_MAJOR_3
 libdnscore_la_SOURCES += \
+    src/dnskey_eddsa.c \
+	src/dnskey_signature.c \
+    src/digest_rawdata.c \
 	src/dnskey_evp.c \
 	src/dnskey_evp_ecdsa.c \
 	src/dnskey_evp_rsa.c \
@@ -408,11 +408,11 @@ libdnscore_la_SOURCES += \
 	src/hmac_evp.c
 else
 libdnscore_la_SOURCES += \
-	src/dnskey_ecdsa.c \
-	src/dnskey_eddsa.c \
-	src/dnskey_rsa.c \
+    src/dnskey_eddsa.c \
 	src/dnskey_signature.c \
-	src/digest_rawdata.c \
+    src/digest_rawdata.c \
+	src/dnskey_ecdsa.c \
+	src/dnskey_rsa.c \
 	src/digest_sha1.c \
 	src/digest_sha256.c \
 	src/digest_sha384.c \

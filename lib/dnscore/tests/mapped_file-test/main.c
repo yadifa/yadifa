@@ -131,6 +131,13 @@ static void    init(uint8_t open_mode)
     }
 
     ret = mapped_file_get_buffer_const(fsf, &buffer_const, &buffer_size);
+
+    if(FAIL(ret))
+    {
+        yatest_err("mapped_file_get_buffer_const failed");
+        exit(1);
+    }
+
     ret = mapped_file_get_buffer(fsf, &buffer, &buffer_size);
     if(FAIL(ret))
     {

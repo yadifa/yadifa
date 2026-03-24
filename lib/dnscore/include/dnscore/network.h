@@ -229,6 +229,29 @@ static inline int32_t  sockaddr_inet_port(const struct sockaddr *sa)
     }
 }
 
+static inline void sockaddr_set_inet_port(struct sockaddr *sa, uint16_t ne_port)
+{
+    switch(sa->sa_family)
+    {
+        case AF_INET:
+        {
+            struct sockaddr_in *ipv4 = (void *)sa;
+            ipv4->sin_port = ne_port;
+            break;
+        }
+        case AF_INET6:
+        {
+            struct sockaddr_in6 *ipv6 = (void *)sa;
+            ipv6->sin6_port = ne_port;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+}
+
 /**
  * Tool function to tell if a (listening) address is ANY
  */

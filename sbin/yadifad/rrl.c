@@ -717,7 +717,7 @@ static inline int32_t rrl_slip(dns_message_t *mesg)
 
                 dns_message_set_additional_count_ne(mesg, NETWORK_ONE_16);
 
-                uint8_t *ednsrecord = dns_message_get_buffer_limit(mesg);
+                uint8_t *ednsrecord = dns_message_get_message_limit(mesg);
 
                 *ednsrecord++ = 0;                 // fqdn
                 SET_U16_AT(*ednsrecord, TYPE_OPT); // type

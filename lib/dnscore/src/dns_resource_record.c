@@ -184,7 +184,7 @@ ya_result dns_resource_record_read(dns_resource_record_t *rr, input_stream_t *is
 
     rr->name_len = ret;
 
-    if(FAIL(ret = input_stream_read_fully(is, &rr->tctr, 10))) /* cannot use sizeof(tctr) */
+    if(FAIL(ret = input_stream_read_fully(is, &rr->tctr, TYPE_CLASS_TTL_RDLEN_SIZE))) /* cannot use sizeof(tctr) */
     {
         return ret;
     }
@@ -244,7 +244,7 @@ ya_result dns_resource_record_write(const dns_resource_record_t *rr, output_stre
         return return_value;
     }
 
-    if(FAIL(return_value = output_stream_write(os, (uint8_t *)&rr->tctr, 10)))
+    if(FAIL(return_value = output_stream_write(os, (uint8_t *)&rr->tctr, TYPE_CLASS_TTL_RDLEN_SIZE)))
     {
         return return_value;
     }

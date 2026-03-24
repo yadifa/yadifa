@@ -90,7 +90,7 @@ static ya_result clone_input_output_stream_skip(input_stream_t *stream, uint32_t
 
     if(ISOK(return_code = input_stream_skip(&data->cloned, len)))
     {
-        int n = return_code;
+        ya_result n = return_code;
         while(n > 4)
         {
             output_stream_write(&data->copy, skip, 4);

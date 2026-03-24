@@ -71,17 +71,17 @@ static uint8_t *version_txt = NULL;
 static uint8_t *hostname_txt = NULL;
 static uint8_t *id_server_txt = NULL;
 
-void            class_ch_set_hostname(const char *name)
+void class_ch_set_hostname(const char *name)
 {
     if(name != NULL)
     {
         size_t   name_len = MIN(strlen(name), 255);
         uint8_t *tmp;
         MALLOC_OR_DIE(uint8_t *, tmp, 13 + name_len, CHHOSTNM_TAG);
-        memcpy(tmp, chaos_txt_stub, 10); // VS false positive (nonsense)
-        SET_U16_AT(tmp[10], htons(name_len + 1));
-        tmp[12] = (uint8_t)name_len;
-        memcpy(&tmp[13], name, name_len);
+        memcpy(tmp, chaos_txt_stub, sizeof(chaos_txt_stub)); // VS false positive (nonsense)
+        SET_U16_AT(tmp[sizeof(chaos_txt_stub)], htons(name_len + 1));
+        tmp[sizeof(chaos_txt_stub) + 2] = (uint8_t)name_len;
+        memcpy(&tmp[sizeof(chaos_txt_stub) + 3], name, name_len);
         uint8_t *old = hostname_txt;
         hostname_txt = tmp;
         free(old);
@@ -101,10 +101,10 @@ void class_ch_set_version(const char *name)
         size_t   name_len = MIN(strlen(name), 255);
         uint8_t *tmp;
         MALLOC_OR_DIE(uint8_t *, tmp, 13 + name_len, CHVRSION_TAG);
-        memcpy(tmp, chaos_txt_stub, 10); // VS false positive (nonsense)
-        SET_U16_AT(tmp[10], htons(name_len + 1));
-        tmp[12] = (uint8_t)name_len;
-        memcpy(&tmp[13], name, name_len);
+        memcpy(tmp, chaos_txt_stub, sizeof(chaos_txt_stub)); // VS false positive (nonsense)
+        SET_U16_AT(tmp[sizeof(chaos_txt_stub)], htons(name_len + 1));
+        tmp[sizeof(chaos_txt_stub) + 2] = (uint8_t)name_len;
+        memcpy(&tmp[sizeof(chaos_txt_stub) + 3], name, name_len);
         uint8_t *old = version_txt;
         version_txt = tmp;
         free(old);
@@ -124,10 +124,10 @@ void class_ch_set_id_server(const char *name)
         size_t   name_len = MIN(strlen(name), 255);
         uint8_t *tmp;
         MALLOC_OR_DIE(uint8_t *, tmp, 13 + name_len, CHIDSVR_TAG);
-        memcpy(tmp, chaos_txt_stub, 10); // VS false positive (nonsense)
-        SET_U16_AT(tmp[10], htons(name_len + 1));
-        tmp[12] = (uint8_t)name_len;
-        memcpy(&tmp[13], name, name_len);
+        memcpy(tmp, chaos_txt_stub, sizeof(chaos_txt_stub)); // VS false positive (nonsense)
+        SET_U16_AT(tmp[sizeof(chaos_txt_stub)], htons(name_len + 1));
+        tmp[sizeof(chaos_txt_stub) + 2] = (uint8_t)name_len;
+        memcpy(&tmp[sizeof(chaos_txt_stub) + 3], name, name_len);
         uint8_t *old = id_server_txt;
         id_server_txt = tmp;
         free(old);
@@ -164,7 +164,7 @@ static void    chaos_make_message(dns_message_t *mesg, const uint8_t *record_wir
     dns_message_set_authoritative_answer(mesg);
     dns_message_apply_mask(mesg, QR_BITS | AA_BITS | RD_BITS, 0);
 
-    uint8_t *p = dns_message_get_buffer_limit(mesg);
+    uint8_t *p = dns_message_get_message_limit(mesg);
 
     if(t == TYPE_TXT || t == TYPE_ANY)
     {
@@ -213,7 +213,7 @@ void class_ch_process(dns_message_t *mesg)
     if(ACL_REJECTED(acl_check_access_filter(mesg, &g_config->ac->allow_query)))
     {
         dns_message_set_status(mesg, FP_ACCESS_REJECTED);
-        dns_message_transform_to_error(mesg);
+        dns_message_transform_to_signed_error(mesg);
 
         return;
     }
@@ -250,7 +250,7 @@ void class_ch_process(dns_message_t *mesg)
         /* REFUSED */
 
         dns_message_set_status(mesg, FP_NOZONE_FOUND);
-        dns_message_transform_to_error(mesg);
+        dns_message_transform_to_signed_error(mesg);
     }
 
 #if DNSCORE_HAS_TSIG_SUPPORT

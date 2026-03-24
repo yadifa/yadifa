@@ -146,7 +146,7 @@ static void recvfully_test_hook(recv_function_args_t *args)
     }
 
     recvfully_test_hook_offset += n;
-    remaining -= n;
+    //remaining -= n;
 
     args->mask = 0x3f;
     args->n = n;
@@ -230,7 +230,7 @@ static void sendfully_limited_test_hook(send_function_args_t *args)
     yatest_log("remaining=%i n=%i", remaining, n);
 
     sendfully_test_hook_offset += n;
-    remaining -= n;
+    //remaining -= n;
 
     args->mask = 0x1f;
     args->n = n;
@@ -330,7 +330,7 @@ static void writefully_test_hook(write_function_args_t *args)
     yatest_log("remaining=%i n=%i", remaining, n);
 
     writefully_test_hook_offset += n;
-    remaining -= n;
+    //remaining -= n;
 
     args->mask = 0x1f;
     args->n = n;
@@ -420,7 +420,7 @@ static void readfully_test_hook(read_function_args_t *args)
     }
 
     readfully_test_hook_offset += n;
-    remaining -= n;
+    //remaining -= n;
 
     args->mask = 0x1f;
     args->n = n;
@@ -742,13 +742,12 @@ static int writefully_test()
     glibchooks_set_or_die("write", writefully_test_hook);
     memset(buffer, 0, buffer_size);
     ret = writefully(DUMMY_FD, buffer, buffer_size + 1);
+    free(buffer);
     if(ret != buffer_size)
     {
         yatest_err("writefully expected to return %i, got %i instead (%i difference)", buffer_size, ret, buffer_size - ret);
         return 1;
     }
-
-    free(buffer);
     finalise();
     return 0;
 }
@@ -762,12 +761,12 @@ static int writefully_limited_test()
     glibchooks_set_or_die("write", writefully_test_hook);
     memset(buffer, 0, buffer_size);
     ret = writefully_limited(DUMMY_FD, buffer, buffer_size + 1, MINIMUM_RATE_US);
+    free(buffer);
     if(ret != buffer_size)
     {
         yatest_err("writefully_limited expected to return %i, got %i instead", buffer_size, ret);
         return 1;
     }
-    free(buffer);
     finalise();
     return 0;
 }
@@ -782,12 +781,12 @@ static int writefully_limited_slow_test()
     glibchooks_set_or_die("write", writefully_test_hook);
     memset(buffer, 0, buffer_size);
     ret = writefully_limited(DUMMY_FD, buffer, buffer_size + 1, MINIMUM_RATE_US);
+    free(buffer);
     if(ret != TCP_RATE_TOO_SLOW)
     {
         yatest_err("writefully_limited expected to return %i=%08x, got %i=%08x instead", TCP_RATE_TOO_SLOW, TCP_RATE_TOO_SLOW, ret, ret);
         return 1;
     }
-    free(buffer);
     finalise();
     return 0;
 }
@@ -801,12 +800,12 @@ static int sendfully_limited_test()
     glibchooks_set_or_die("send", sendfully_limited_test_hook);
     memset(buffer, 0, buffer_size);
     ret = sendfully_limited(DUMMY_FD, buffer, buffer_size, 0, MINIMUM_RATE_US);
+    free(buffer);
     if(ret != buffer_size)
     {
         yatest_err("sendfully_limited expected to return %i, got %i instead (difference is %i)", buffer_size, ret, buffer_size - ret);
         return 1;
     }
-    free(buffer);
     finalise();
     return 0;
 }
@@ -821,12 +820,12 @@ static int sendfully_limited_slow_test()
     glibchooks_set_or_die("send", sendfully_limited_test_hook);
     memset(buffer, 0, buffer_size);
     ret = sendfully_limited(DUMMY_FD, buffer, buffer_size, 0, MINIMUM_RATE_US);
+    free(buffer);
     if(ret != TCP_RATE_TOO_SLOW)
     {
         yatest_err("sendfully_limited expected to return %i=%08x, got %i=%08x", TCP_RATE_TOO_SLOW, TCP_RATE_TOO_SLOW, ret, ret);
         return 1;
     }
-    free(buffer);
     finalise();
     return 0;
 }
@@ -843,6 +842,7 @@ static int recvfully_limited_ex_test()
     if(ret != buffer_size)
     {
         yatest_err("recvfully_limited_ex expected to return %i, got %i instead", buffer_size, ret);
+        free(buffer);
         return 1;
     }
     for(int i = 0; i < buffer_size; ++i)
@@ -850,6 +850,7 @@ static int recvfully_limited_ex_test()
         if(buffer[i] != (uint8_t)i)
         {
             yatest_err("buffer[%i] = %02x instead of %02x", i, buffer[i], (uint8_t)i);
+            free(buffer);
             return 1;
         }
     }
@@ -868,12 +869,12 @@ static int recvfully_limited_ex_slow_test()
     glibchooks_set_or_die("recv", recvfully_test_hook);
     memset(buffer, 0, buffer_size);
     ret = recvfully_limited_ex(DUMMY_FD, buffer, buffer_size + 1, 0, IO_TIMEOUT_US, MINIMUM_RATE_US);
+    free(buffer);
     if(ret != TCP_RATE_TOO_SLOW)
     {
         yatest_err("recvfully_limited_ex expected to return %i=%08x, got %i=%08x instead", TCP_RATE_TOO_SLOW, TCP_RATE_TOO_SLOW, ret, ret);
         return 1;
     }
-    free(buffer);
     finalise();
     return 0;
 }
@@ -1018,7 +1019,7 @@ static int unlink_ex_test()
 {
     int              ret;
     static const int buffer_size = BUFFER_SIZE;
-    char            *buffer = malloc(buffer_size);
+
     init(true);
     glibchooks_set_or_die("unlink", unlink_ex_test_hook);
 
@@ -1030,18 +1031,19 @@ static int unlink_ex_test()
         return 1;
     }
 
+    char            *buffer = malloc(buffer_size);
     memset(buffer, 'X', buffer_size);
     buffer[0] = '/';
     buffer[buffer_size - 1] = '\0';
     unlink_ex_test_hook_expected = "-";
     ret = unlink_ex(buffer, "myfile");
+    free(buffer);
     if(ret >= 0)
     {
         yatest_err("unlink exceeding PATH_MAX succeeded");
         return 1;
     }
 
-    free(buffer);
     finalise();
     return 0;
 }
@@ -2609,7 +2611,7 @@ static int rmdir_ex_test()
         yatest_err("rmdir_ex failed with %08x", ret);
     }
 
-    if((ret = rmdir_ex("/tmp/fdtools-test", true)) >= 0)
+    if(rmdir_ex("/tmp/fdtools-test", true) >= 0)
     {
         yatest_err("rmdir_ex expected to fail");
     }

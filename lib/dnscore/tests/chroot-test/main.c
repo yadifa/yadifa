@@ -32,6 +32,7 @@
 
 #include "yatest.h"
 #include "yatest_stream.h"
+#include "dnscore/format.h"
 
 #include <dnscore/dnscore.h>
 #include <dnscore/chroot.h>
@@ -48,6 +49,11 @@ static void init()
     yatest_mkdir(CHROOT_TEST_DIR);
 
     FILE *f = fopen(CHROOT_TEST_FILE, "w+");
+    if(f == NULL)
+    {
+        printf("failed to open '%s'", CHROOT_TEST_FILE);
+        exit(1);
+    }
     fputs(yatest_lorem_ipsum, f);
     fclose(f);
 }

@@ -59,7 +59,7 @@
 #define DUMP_DNSKEY_PRIVATE_TEXT 0
 #define DUMP_DNSKEY_PUBLIC_TEXT 0
 
-static const uint32_t signature_batch_count = 10;
+static const uint32_t signature_batch_count = 300; // kept low because some algorithms are very slow
 
 static const uint8_t ns1_yadifa_eu[] = {
     6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0,                //  0 .. 11

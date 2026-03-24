@@ -190,7 +190,11 @@ static int error_passthrough()
     output_stream_t os;
 
     yatest_error_output_stream_init(&eos, buffer_size + 1, error_code);
-    ret = buffer_output_stream_init(&os, &eos, buffer_size);
+    if(FAIL(ret = buffer_output_stream_init(&os, &eos, buffer_size)))
+    {
+        printf("error_passthrough: buffer_output_stream_init failed with: %08x", ret);
+        exit(1);
+    }
 
     char *buffer = (char *)malloc(buffer_size);
     memset(buffer, 0, buffer_size);
@@ -229,7 +233,11 @@ static int error_delayed()
     output_stream_t os;
 
     yatest_error_output_stream_init(&eos, buffer_size + 1, error_code);
-    ret = buffer_output_stream_init(&os, &eos, buffer_size);
+    if(FAIL(ret = buffer_output_stream_init(&os, &eos, buffer_size)))
+    {
+        printf("error_delayed: buffer_output_stream_init failed with: %08x", ret);
+        exit(1);
+    }
 
     char *buffer = (char *)malloc(buffer_size);
     memset(buffer, 0, buffer_size);

@@ -169,6 +169,11 @@ static int hmac_evp_error_test()
         return 1;
     }
     ret = hmac_init(t, key, sizeof(key), algorithms[0].algorithm_id);
+    if(FAIL(ret))
+    {
+        yatest_err("hmac_init failed, returned %08x = %s", ret, error_gettext(ret));
+        return 1;
+    }
     ret = hmac_init(t, key, sizeof(key), algorithms[0].algorithm_id);
     if(ret != INVALID_STATE_ERROR)
     {

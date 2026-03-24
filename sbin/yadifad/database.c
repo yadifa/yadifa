@@ -668,7 +668,7 @@ ya_result database_add_key_parameters_from_message(zdb_zone_t *zone, dns_message
         {
             break;
         }
-        if(FAIL(ret = dns_packet_reader_read(&pr, &tctr, 10))) // exact
+        if(FAIL(ret = dns_packet_reader_read(&pr, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE))) // exact
         {
             break;
         }
@@ -955,7 +955,7 @@ ya_result database_zone_ensure_private_keys_from_message(dns_message_t *mesg)
         {
             break;
         }
-        if(FAIL(ret = dns_packet_reader_read(&pr, &tctr, 10))) // exact
+        if(FAIL(ret = dns_packet_reader_read(&pr, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE))) // exact
         {
             break;
         }

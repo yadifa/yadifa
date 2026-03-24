@@ -83,8 +83,16 @@ static int simple_test()
     {
         ssl_input_output_stream_init(&is, &is, &os, &os, NULL, NULL);
         const char *http_query = "GET /\r\n\r\n";
-        ret = output_stream_write(&os, http_query, strlen(http_query));
-        ret = output_stream_flush(&os);
+        if(FAIL(ret = output_stream_write(&os, http_query, strlen(http_query))))
+        {
+            printf("simple_test: failed to write http_query: %08x", ret);
+            exit(1);
+        }
+        if(FAIL(ret = output_stream_flush(&os)))
+        {
+            printf("simple_test: failed to flush http_query: %08x", ret);
+            exit(1);
+        }
         size_t line_size = 0x100000;
         char  *line = (char *)malloc(line_size);
         for(;;)
@@ -135,8 +143,16 @@ static int error_test()
         if(ISOK(ret))
         {
             const char *http_query = "GET /\r\n\r\n";
-            ret = output_stream_write(&os, http_query, strlen(http_query));
-            ret = output_stream_flush(&os);
+            if(FAIL(ret = output_stream_write(&os, http_query, strlen(http_query))))
+            {
+                printf("error_test: output_stream_write failed: %08x", ret);
+                exit(1);
+            }
+            if(FAIL(ret = output_stream_flush(&os)))
+            {
+                printf("error_test: output_stream_flush failed: %08x", ret);
+                exit(1);
+            }
             size_t line_size = 0x100000;
             char  *line = (char *)malloc(line_size);
             for(;;)

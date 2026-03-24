@@ -333,8 +333,10 @@ int main(int argc, char *argv[])
                 formatln("error loading the key: %r", ret);
             }
 #else // NOT easy
-
-            ret = print_ds_from_public_key_from_file(g_main_settings.file);
+            if(FAIL(ret = print_ds_from_public_key_from_file(g_main_settings.file)))
+            {
+                formatln("print_ds_from_public_key_from_file returned: %r", ret);
+            }
 #endif
         }
         else

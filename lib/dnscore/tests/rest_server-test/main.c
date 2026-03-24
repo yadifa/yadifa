@@ -181,7 +181,7 @@ static ya_result rest_server_test_rest_query(const char *command, const char *te
         int32_t key_len = parse_copy_next_word(key, sizeof(key), p);
         p += key_len;
         key[key_len - 1] = '\0';
-        p += parse_copy_next_word(value, sizeof(value), p);
+        /*p += */parse_copy_next_word(value, sizeof(value), p);
         yatest_log("Header: %s = '%s'", key, value);
 
         if(strcmp(key, "Content-Length") == 0)
@@ -682,6 +682,11 @@ static int pid_locked_test()
     rest_args.pid_file = "/tmp/rest_server_test-setup_test.pid";
 
     FILE *f = fopen(rest_args.pid_file, "w+");
+    if(f == NULL)
+    {
+        printf("failed to open '%s'", rest_args.pid_file);
+        exit(1);
+    }
     fprintf(f, "1\n");
     fclose(f);
 

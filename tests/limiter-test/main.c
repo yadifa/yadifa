@@ -89,7 +89,7 @@ static void test_bandwidth(uint64_t (*giver)(uint32_t))
     uint64_t total = 0;
     uint64_t start = timeus();
     uint64_t reported = 0;
-    uint64_t now = start;
+    uint64_t now;
     uint64_t previous = 0;
     uint64_t min_time = 1000000;
     double   min_time_f = 1.0;
@@ -137,7 +137,7 @@ static void test_rate()
     uint64_t total = 0;
     uint64_t start = timeus();
     uint64_t reported = 0;
-    uint64_t now = start;
+    uint64_t now;
     uint64_t previous = 0;
     uint64_t min_time = 1000000;
     double   min_time_f = 1.0;

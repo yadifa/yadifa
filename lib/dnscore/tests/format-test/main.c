@@ -780,16 +780,23 @@ static int fformat_test()
     if(ret < 0)
     {
         yatest_err("asformat failed with %08x = %s", ret, error_gettext(ret));
+        fclose(f);
         return 1;
     }
     char zero[1] = {0};
     fwrite(zero, 1, 1, f);
     fclose(f);
     f = fopen(filename, "r");
+    if(f == NULL)
+    {
+        yatest_err("fopen(%s, \"w+\") failed with %s (which is impossible)", strerror(errno));
+        return 1;
+    }
     int tmp_size = fread(tmp, 1, 64, f);
     if(tmp_size != sizeof(expected_output))
     {
         yatest_err("fread returned %i instead of %i", tmp_size, sizeof(expected_output));
+        fclose(f);
         return 1;
     }
     fclose(f);

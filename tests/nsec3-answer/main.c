@@ -469,8 +469,9 @@ static ya_result nsec3_test(const host_address_t *ip, const uint8_t *zone_fqdn, 
             uint8_t *n3_salt = p;
             p += n3_salt_size;
             uint8_t *n3_next = p;
-            p += *n3_next + 1;
-            // p = type bitmap
+
+            //p += *n3_next + 1;
+            // p => type bitmap
 
             // formatln("from %{digest32h} %{digest32h}", n3_digest, n3_next);
 

@@ -731,9 +731,9 @@ static int header_test()
         return 1;
     }
 
-    dns_message_set_additional_section_ptr(mesg, dns_message_get_buffer(mesg) + 12);
+    dns_message_set_additional_section_ptr(mesg, dns_message_get_buffer(mesg) + DNS_HEADER_LENGTH);
 
-    if(dns_message_get_additional_section_ptr(mesg) != dns_message_get_buffer(mesg) + 12)
+    if(dns_message_get_additional_section_ptr(mesg) != dns_message_get_buffer(mesg) + DNS_HEADER_LENGTH)
     {
         yatest_err(
             "dns_message_set_additional_section_ptr didn't set the pointer properly "
@@ -741,7 +741,7 @@ static int header_test()
         return 1;
     }
 
-    if(dns_message_get_additional_section_ptr_const(mesg) != dns_message_get_buffer(mesg) + 12)
+    if(dns_message_get_additional_section_ptr_const(mesg) != dns_message_get_buffer(mesg) + DNS_HEADER_LENGTH)
     {
         yatest_err(
             "dns_message_set_additional_section_ptr didn't set the pointer properly "
@@ -770,6 +770,7 @@ static int buffer_test()
     if(FAIL(ret))
     {
         yatest_err("dns_message_process_query failed with %s", error_gettext(ret));
+        free(buffer_copy);
         return 1;
     }
 
@@ -781,6 +782,7 @@ static int buffer_test()
     if(dns_message_get_size_u16(mesg) != dns_message_get_size(mesg))
     {
         yatest_err("dns_message_get_size_u16 != dns_message_get_size (%04x != %04x)", dns_message_get_size_u16(mesg), dns_message_get_size(mesg));
+        free(buffer_copy);
         return 1;
     }
 
@@ -788,25 +790,29 @@ static int buffer_test()
     if((message_size + 1) != (int)dns_message_get_size(mesg))
     {
         yatest_err("dns_message_increase_size didn't increase the size as expected (%04x != %04x)", message_size + 1, dns_message_get_size(mesg));
+        free(buffer_copy);
         return 1;
     }
     dns_message_set_size(mesg, message_size);
     if((message_size) != (int)dns_message_get_size(mesg))
     {
         yatest_err("dns_message_set_size set the size as expected (%04x != %04x)", message_size, dns_message_get_size(mesg));
+        free(buffer_copy);
         return 1;
     }
 
     const uint8_t *buffer = dns_message_get_buffer(mesg);
-    const uint8_t *limit = dns_message_get_buffer_limit(mesg);
+    const uint8_t *limit = dns_message_get_message_limit(mesg);
     if(buffer + message_size != limit)
     {
         yatest_err("buffer[size] != limit (%p + %x != %p)", buffer, message_size, limit);
+        free(buffer_copy);
         return 1;
     }
-    if(limit != dns_message_get_buffer_limit_const(mesg))
+    if(limit != dns_message_get_message_limit_const(mesg))
     {
         yatest_err("dns_message_get_buffer_limit != dns_message_get_buffer_limit_const");
+        free(buffer_copy);
         return 1;
     }
 
@@ -814,6 +820,7 @@ static int buffer_test()
     if(buffer_size / 2 != (int)dns_message_get_buffer_size(mesg))
     {
         yatest_err("dns_message_get_buffer_size failed: %i != %i", buffer_size / 2, dns_message_get_buffer_size(mesg));
+        free(buffer_copy);
         return 1;
     }
     dns_message_set_buffer_size(mesg, buffer_size);
@@ -822,6 +829,7 @@ static int buffer_test()
     if(memcmp(buffer_copy, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg)) != 0)
     {
         yatest_err("dns_message_copy_buffer failed");
+        free(buffer_copy);
         return 1;
     }
     memset(dns_message_get_buffer(mesg), 0xff, dns_message_get_buffer_size_max(mesg));
@@ -829,6 +837,7 @@ static int buffer_test()
     if(memcmp(buffer_copy, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg)) != 0)
     {
         yatest_err("dns_message_copy_buffer failed");
+        free(buffer_copy);
         return 1;
     }
 
@@ -838,6 +847,7 @@ static int buffer_test()
     if(memcmp(buffer_copy, mesg->_msghdr.msg_control, dns_message_control_size(mesg)) != 0)
     {
         yatest_err("dns_message_copy_control failed");
+        free(buffer_copy);
         return 1;
     }
     dns_message_set_control(mesg, buffer_copy, dns_message_control_size(mesg));
@@ -1487,7 +1497,7 @@ static int network_dns_message_send_recv_tcp_test()
 
     yatest_log("dns_message_send_tcp returned %i", ret);
 
-    ret = dns_message_copy_sender_from_socket(mesg512, -1);
+    ret = dns_message_copy_sender_from_socket(mesg512, -1); // -1 is on purpose
 
     if(ISOK(ret))
     {
@@ -2668,7 +2678,7 @@ static int dns_message_with_buffer()
 static int dns_message_map_test()
 {
     init();
-
+    int return_code = 1;
     int            ret;
     dns_message_t *mesg = mesg64K;
     const uint16_t query_type_const = TYPE_ANY;
@@ -2715,19 +2725,19 @@ static int dns_message_map_test()
     if(record_count != expected_count)
     {
         yatest_err("record_count != expected_count : %i != %i", record_count, expected_count);
-        return 1;
+        return_code = 1; goto dns_message_map_test_end;
     }
 
     if((ret = dns_message_map_get_next_record_from(&map, 0, TYPE_NSEC)) != 2)
     {
         yatest_err("dns_message_map_get_next_record_from for TYPE_NSEC expected to return 2, returned %i instead", ret);
-        return 1;
+        return_code = 1; goto dns_message_map_test_end;
     }
 
     if((ret = dns_message_map_get_next_record_from_section(&map, 1, 0, TYPE_NSEC)) != 1)
     {
         yatest_err("dns_message_map_get_next_record_from_section for TYPE_NSEC expected to return 1, returned %i instead", ret);
-        return 1;
+        return_code = 1; goto dns_message_map_test_end;
     }
 
     if((ret = dns_message_map_get_next_record_from(&map, 0, 0xffff)) != -1)
@@ -2736,7 +2746,7 @@ static int dns_message_map_test()
             "dns_message_map_get_next_record_from for a type that doesn't exist expected to return -1, returned %i "
             "instead",
             ret);
-        return 1;
+        return_code = 1; goto dns_message_map_test_end;
     }
 
     for(int section_index = 0; section_index < 4; ++section_index)
@@ -2749,7 +2759,7 @@ static int dns_message_map_test()
             if(FAIL(ret = dns_message_map_get_fqdn(&map, i, fqdn, sizeof(fqdn))))
             {
                 yatest_err("dns_message_map_get_fqdn(&map, %i, ...) failed with %08x = %s", i, ret, error_gettext(ret));
-                return 1;
+                return_code = 1; goto dns_message_map_test_end;
             }
             if(section_index > 0)
             {
@@ -2757,12 +2767,12 @@ static int dns_message_map_test()
                 if(FAIL(ret = dns_message_map_get_tctr(&map, i, &tctr)))
                 {
                     yatest_err("dns_message_map_get_tctr(&map, %i, ...) failed with %08x = %s", i, ret, error_gettext(ret));
-                    return 1;
+                    return_code = 1; goto dns_message_map_test_end;
                 }
                 if(FAIL(ret = dns_message_map_get_rdata(&map, i, rdata, rdata_size)))
                 {
                     yatest_err("dns_message_map_get_rdata(&map, %i, ...) failed with %08x = %s", i, ret, error_gettext(ret));
-                    return 1;
+                    return_code = 1; goto dns_message_map_test_end;
                 }
             }
             else
@@ -2770,14 +2780,14 @@ static int dns_message_map_test()
                 if(FAIL(ret = dns_message_map_get_tctr(&map, i, &tctr)))
                 {
                     yatest_err("dns_message_map_get_tctr(&map, %i, ...) failed with %08x = %s", i, ret, error_gettext(ret));
-                    return 1;
+                    return_code = 1; goto dns_message_map_test_end;
                 }
             }
 
             if(FAIL(ret = dns_message_map_get_type(&map, i)))
             {
                 yatest_err("dns_message_map_get_type(&map, %i, ...) failed with %08x = %s", i, ret, error_gettext(ret));
-                return 1;
+                return_code = 1; goto dns_message_map_test_end;
             }
 
             if(section_index > 0)
@@ -2785,13 +2795,17 @@ static int dns_message_map_test()
                 if(ret != tctr.rtype)
                 {
                     yatest_err("dns_message_map_get_type and dns_message_map_get_rdata do not agree for record %i", i);
-                    return 1;
+                    return_code = 1; goto dns_message_map_test_end;
                 }
             }
 
             yatest_log("record %i is %s", i, dns_type_get_name(ret));
         }
     }
+
+dns_message_map_test_end:
+
+    free(rdata);
 
     dns_message_map_reorder(&map);
 
@@ -2802,7 +2816,7 @@ static int dns_message_map_test()
     dns_message_map_finalize(&map);
 
     finalise();
-    return 0;
+    return return_code;
 }
 
 struct dns_message_generated_flags_s
@@ -4319,7 +4333,11 @@ static int dns_message_verify_rrsig_test()
         dnskey_signature_set_rrset_reference(&ds, &rrset);
 
         void *rrsig_rr = NULL;
-        ret = dnskey_signature_sign(&ds, key, &rrsig_rr);
+        if(FAIL(ret = dnskey_signature_sign(&ds, key, &rrsig_rr)))
+        {
+            printf("dns_message_verify_rrsig_test: dnskey_signature_sign failed with %08x", ret);
+            exit(1);
+        }
         dns_packet_writer_add_dnsrr(&pw, (dns_resource_record_t *)rrsig_rr);
         dnskey_signature_finalize(&ds);
         ptr_vector_clear(&rrset);
@@ -4342,7 +4360,11 @@ static int dns_message_verify_rrsig_test()
         dnskey_signature_set_rrset_reference(&ds, &rrset);
 
         void *rrsig_rr = NULL;
-        ret = dnskey_signature_sign(&ds, key, &rrsig_rr);
+        if(FAIL(ret = dnskey_signature_sign(&ds, key, &rrsig_rr)))
+        {
+            printf("dns_message_verify_rrsig_test: dnskey_signature_sign failed with: %08x", ret);
+            exit(1);
+        }
         dns_packet_writer_add_dnsrr(&pw, (dns_resource_record_t *)rrsig_rr);
         dnskey_signature_finalize(&ds);
         ptr_vector_clear(&rrset);
@@ -4365,7 +4387,11 @@ static int dns_message_verify_rrsig_test()
         dnskey_signature_set_rrset_reference(&ds, &rrset);
 
         void *rrsig_rr = NULL;
-        ret = dnskey_signature_sign(&ds, key, &rrsig_rr);
+        if(FAIL(ret = dnskey_signature_sign(&ds, key, &rrsig_rr)))
+        {
+            printf("dns_message_verify_rrsig_test: dnskey_signature_sign failed with %08x", ret);
+            exit(1);
+        }
         dns_packet_writer_add_dnsrr(&pw, (dns_resource_record_t *)rrsig_rr);
         dnskey_signature_finalize(&ds);
         ptr_vector_clear(&rrset);
@@ -4388,7 +4414,11 @@ static int dns_message_verify_rrsig_test()
         dnskey_signature_set_rrset_reference(&ds, &rrset);
 
         void *rrsig_rr = NULL;
-        ret = dnskey_signature_sign(&ds, key, &rrsig_rr);
+        if(FAIL(ret = dnskey_signature_sign(&ds, key, &rrsig_rr)))
+        {
+            printf("dns_message_verify_rrsig_test: dnskey_signature_sign failed with: %08x", ret);
+            exit(1);
+        }
         dns_packet_writer_add_dnsrr(&pw, (dns_resource_record_t *)rrsig_rr);
         dnskey_signature_finalize(&ds);
         ptr_vector_clear(&rrset);

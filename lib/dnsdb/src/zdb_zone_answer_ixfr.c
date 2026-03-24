@@ -179,7 +179,7 @@ static ya_result zdb_zone_answer_ixfr_read_record(input_stream_t *is, uint8_t *q
         tctrlp->rtype = 0;
         tctrlp->rdlen = 0;
 
-        if(FAIL(return_code = input_stream_read_fully(is, tctrlp, 10)))
+        if(FAIL(return_code = input_stream_read_fully(is, tctrlp, TYPE_CLASS_TTL_RDLEN_SIZE)))
         {
             log_err("zone write ixfr: error reading IXFR record: %r", return_code);
 
@@ -291,7 +291,7 @@ static ya_result zdb_zone_answer_ixfr_thread_read_SOA_serial(zdb_zone_answer_ixf
         return MAKE_RCODE_ERROR(RCODE_FORMERR);
     }
 
-    if(FAIL(dns_packet_reader_read(purd, &tctr, 10)))
+    if(FAIL(dns_packet_reader_read(purd, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE)))
     {
         return MAKE_RCODE_ERROR(RCODE_FORMERR);
     }
@@ -658,7 +658,7 @@ static void zdb_zone_answer_ixfr_thread(void *data_)
      */
 
     dns_packet_writer_add_fqdn(&pw, (const uint8_t *)origin);
-    dns_packet_writer_add_bytes(&pw, (const uint8_t *)&current_soa_tctrl, 8); /* not 10 ? */
+    dns_packet_writer_add_bytes(&pw, (const uint8_t *)&current_soa_tctrl, TYPE_CLASS_TTL_RDLEN_SIZE - 2); // -2 because the next call writes the rdata size before the rdata
     dns_packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
 
     uint32_t last_serial;
@@ -751,7 +751,7 @@ static void zdb_zone_answer_ixfr_thread(void *data_)
 #endif
 
             dns_packet_writer_add_fqdn(&pw, (const uint8_t *)origin);
-            dns_packet_writer_add_bytes(&pw, (const uint8_t *)&current_soa_tctrl, 8); /* not 10 ? */
+            dns_packet_writer_add_bytes(&pw, (const uint8_t *)&current_soa_tctrl, TYPE_CLASS_TTL_RDLEN_SIZE - 2); // -2 because the next call writes the rdata size before the rdata
             dns_packet_writer_add_rdata(&pw, TYPE_SOA, current_soa_rdata_buffer, current_soa_rdata_size);
 
             ++an_count;

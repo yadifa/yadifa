@@ -863,7 +863,7 @@ static void                              hostaddr_format_handler_method(const vo
             case HOST_ADDRESS_DNAME:
             {
                 buffer[0] = '\0';
-                int n = cstr_init_with_dnsname(buffer, ha->ip.dname.dname);
+                uint32_t n = cstr_init_with_dnsname(buffer, ha->ip.dname.dname);
                 buffer[n++] = PORT_SEPARATOR_DNAME;
                 snprintf(&buffer[n], 6, "%i", ntohs(ha->port));
                 break;

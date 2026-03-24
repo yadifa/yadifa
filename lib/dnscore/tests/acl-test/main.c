@@ -434,11 +434,18 @@ static int acl_test_init()
     bytearray_output_stream_init(&os, NULL, 0);
 
     ret = tsig_register(MYKEY_NAME, mykey_mac, sizeof(mykey_mac), HMAC_SHA1);
+
+    if(FAIL(ret))
+    {
+        yatest_err("tsig_register MYKEY_NAME failed with %x", ret);
+        return 1;
+    }
+
     ret = tsig_register(NOTMYKEY_NAME, notmykey_mac, sizeof(notmykey_mac), HMAC_SHA1);
 
     if(FAIL(ret))
     {
-        yatest_err("tsig_register failed with %x", ret);
+        yatest_err("tsig_register NOTMYKEY_NAME failed with %x", ret);
         return 1;
     }
 

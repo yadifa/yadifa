@@ -640,7 +640,11 @@ static void jnl_scan(const char *filepath)
     if(g_clean_mode)
     {
         dns_resource_record_init(&last_soa_rr);
-        ret = journal_get_last_soa(jnl, &last_soa_rr);
+        if(FAIL(ret = journal_get_last_soa(jnl, &last_soa_rr)))
+        {
+            formatln("; jnl: '%s' failed to get last SOA : %r", filepath, ret);
+            return;
+        }
         formatln("%{dnsrr}", &last_soa_rr);
     }
 

@@ -383,7 +383,7 @@ static bool notify_primaryquery_read_soa(const uint8_t *origin, dns_packet_reade
         {
             struct type_class_ttl_rdlen_s tctr;
 
-            if(dns_packet_reader_read(reader, &tctr, 10) == 10) // exact
+            if(dns_packet_reader_read(reader, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE) == TYPE_CLASS_TTL_RDLEN_SIZE) // exact
             {
                 if((tctr.rtype == TYPE_SOA) && (tctr.rclass == CLASS_IN))
                 {
@@ -1196,7 +1196,7 @@ static void notify_ipv4_receiver_service(struct service_worker_s *worker)
     log_info("notify: notification service IPv4 receiver started (socket %i)", send_socket4);
 
     dns_message_t *mesg = dns_message_new_instance();
-    tcp_set_recvtimeout(send_socket4, NOTIFY_RECEIVE_TIMEOUT_SECONDS, 0); /* half a second for UDP is a lot ... */
+    tcp_set_recvtimeout(send_socket4, NOTIFY_RECEIVE_TIMEOUT_SECONDS, 0);
 
     while(service_should_run(worker))
     {
@@ -1213,7 +1213,7 @@ static void notify_ipv4_receiver_service(struct service_worker_s *worker)
         dns_message_recv_udp_reset(mesg);
         dns_message_reset_control_size(mesg);
 
-        ret = dns_message_recv_udp(mesg, send_socket4);
+        ret = dns_message_recv_udp(mesg, send_socket4); // return the number of bytes read or ERRNO_ERROR
 
         if(ret > 0)
         {
@@ -1232,8 +1232,7 @@ static void notify_ipv4_receiver_service(struct service_worker_s *worker)
         }
         else
         {
-            ret = ERRNO_ERROR;
-            if((ret == MAKE_ERRNO_ERROR(EAGAIN)) || (ret == MAKE_ERRNO_ERROR(EINTR)))
+            if(ret == MAKE_ERRNO_ERROR(EAGAIN))
             {
 #if NOTIFY_DETAILED_LOG
                 log_debug("notify_ipv4_receiver_service: %r", ret);
@@ -1273,7 +1272,7 @@ static void notify_ipv6_receiver_service(struct service_worker_s *worker)
 #endif
 
         dns_message_recv_udp_reset(mesg);
-        if(dns_message_recv_udp(mesg, send_socket6) > 0)
+        if(ISOK(ret = dns_message_recv_udp(mesg, send_socket6)))
         {
             // process secondary answer
 
@@ -1291,8 +1290,7 @@ static void notify_ipv6_receiver_service(struct service_worker_s *worker)
         }
         else
         {
-            ret = ERRNO_ERROR;
-            if((ret == MAKE_ERRNO_ERROR(EAGAIN)) || (ret == MAKE_ERRNO_ERROR(EINTR)))
+            if(ret == MAKE_ERRNO_ERROR(EAGAIN))
             {
 #if NOTIFY_DETAILED_LOG
                 log_debug("notify_ipv6_receiver_service: %r", ret);

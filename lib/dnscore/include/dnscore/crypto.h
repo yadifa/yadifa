@@ -44,12 +44,34 @@
 // #if SSL
 #define SSL_ERROR_BASE        0x800f0000
 #define SSL_ERROR_CODE(code_) ((int32_t)(SSL_ERROR_BASE + (code_)))
+#define SSL_ERROR_MAKE_FROM_CATEGORY_ONLY(code_) SSL_ERROR_CODE(0xfff0 + (code_))  // only report the general category of the error
+#define SSL_ERROR_CATEGORY_MAX 15
 
 ya_result   crypto_init();
 
 void        crypto_finalise();
 
-void        crypto_ssl_error(void *ssl_, int n);
+/**
+ * Decodes an SSL error.
+ *
+ * Logs the error on the system logger if the feature isn't disabled,
+ * else prints on stderr using osformatln.
+ *
+ * Returns a proper YADIFA error code.
+ *
+ * The error may be translated.
+ * e.g.
+ *    0 for EOF
+ *    MAKE_ERRNO_ERROR(EAGAIN) for non-blocking calls (but not exclusively)
+ *    INVALID_STATE
+ *    SSL-specific error code (SSL_ERROR_BASE + something)
+ *
+ * @param ssl the ssl object
+ * @param n the code returned by the SSL function ( <= 0)
+ * @return an error code
+ */
+
+ya_result   crypto_ssl_error(void *ssl_, int n);
 
 ya_result   crypto_openssl_error();
 

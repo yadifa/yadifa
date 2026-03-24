@@ -228,7 +228,7 @@ static int features()
         return 1;
     }
 
-    new_position = bytearray_output_stream_setposition(&os, size - 1);
+    /*new_position = */bytearray_output_stream_setposition(&os, size - 1);
 
     ret = output_stream_write(&os, dummy, sizeof(dummy));
 

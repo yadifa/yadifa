@@ -628,12 +628,12 @@ static void mockserver_answer_dns(yatest_serverclient_t *client, dns_message_t *
             const uint8_t *p = record_buffer;
             dns_packet_writer_add_fqdn(&pw, p);
             p += dnsname_len(p);
-            dns_packet_writer_add_bytes(&pw, p, 10);
+            dns_packet_writer_add_bytes(&pw, p, TYPE_CLASS_TTL_RDLEN_SIZE);
             p += 8;
             uint16_t rdata_len = ntohs(*(uint16_t *)p);
             p += 2;
             dns_packet_writer_add_bytes(&pw, p, rdata_len);
-            p += rdata_len;
+            //p += rdata_len;
             // p - buffer bytes have been read
 
             --group_by_countdown;

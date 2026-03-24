@@ -64,34 +64,162 @@ struct ssl_input_output_stream_data
 
 typedef struct ssl_input_output_stream_data ssl_input_output_stream_data;
 
-static ya_result                            ssl_input_stream_read(input_stream_t *stream, void *buffer, uint32_t len)
+/**
+ * SSL read helper.
+ * Reads from an SSL connection.
+ * Handles retries.
+ * Can short-read.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to read to
+ * @param len the number of bytes to read
+ * @return the number of bytes read or an error code
+ */
+ya_result ssl_read(void *ssl_, void *buffer, uint32_t len)
+{
+    SSL *ssl = (SSL*)ssl_;
+
+    for(;;)
+    {
+        int n = SSL_read(ssl, buffer, len);
+        if(n > 0)
+        {
+            return n;
+        }
+
+        ya_result ret = crypto_ssl_error(ssl, n); // logs detailed errors
+        if((ret == MAKE_ERRNO_ERROR(EAGAIN)) || (ret == MAKE_ERRNO_ERROR(EINTR)))
+        {
+            continue;
+        }
+
+        return ret;
+    }
+}
+
+/**
+ * SSL read helper.
+ * Reads from an SSL connection.
+ * Handles retries.
+ * May short read in case of connection closed or error.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to read to
+ * @param len the number of bytes to read
+ * @return the number of bytes read or an error code
+ */
+ya_result ssl_readfully(void *ssl_, void *buffer, uint32_t len)
+{
+    SSL *ssl = (SSL*)ssl_;
+
+    uint32_t remaining = len;
+    uint8_t *p = buffer;
+
+    while(remaining > 0)
+    {
+        ya_result ret = ssl_read(ssl, p, remaining);
+        if(ret > 0)
+        {
+            remaining -= ret;
+            p += ret;
+            continue;
+        }
+        if(ret == 0)
+        {
+            // EOF (connection closed)
+            break;
+        }
+        return ret;
+    }
+    return len - remaining; // number of bytes read, which may be short in case of EOF
+}
+
+static ya_result ssl_input_stream_read(input_stream_t *stream, void *buffer, uint32_t len)
 {
     ssl_input_output_stream_data *data = (ssl_input_output_stream_data *)stream->data;
-    int                           n = SSL_read(data->ssl, buffer, len);
-    if(n <= 0)
+    return ssl_read(data->ssl, buffer, len);
+}
+
+/**
+ * SSL write helper.
+ * Writes to an SSL connection.
+ * Handles retries.
+ * Can short-write.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to write
+ * @param len the number of bytes to write
+ * @return the number of bytes written or an error code
+ */
+ya_result ssl_write(void *ssl_, const uint8_t *buffer, uint32_t len)
+{
+    if(len == 0)
     {
-        crypto_ssl_error(data->ssl, n);
-        if(n < 0)
-        {
-            n = ERROR;
-        }
+        return 0;
     }
-    return n;
+
+    SSL *ssl = (SSL*)ssl_;
+
+    for(;;)
+    {
+        int n = SSL_write(ssl, buffer, len);
+        if(n > 0)
+        {
+            return n;
+        }
+
+        ya_result ret = crypto_ssl_error(ssl, n); // logs detailed errors
+
+        if((ret == MAKE_ERRNO_ERROR(EAGAIN)) || (ret == MAKE_ERRNO_ERROR(EINTR)))
+        {
+            continue;
+        }
+
+        return ret;
+    }
+}
+
+/**
+ * SSL write helper.
+ * Writes to an SSL connection.
+ * Handles retries.
+ * May short write in case of connection closed or error.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to write
+ * @param len the number of bytes to write
+ * @return the number of bytes written or an error code
+ */
+ya_result ssl_writefully(void *ssl_, const void *buffer, uint32_t len)
+{
+    SSL *ssl = (SSL*)ssl_;
+
+    uint32_t remaining = len;
+    const uint8_t *p = buffer;
+
+    while(remaining > 0)
+    {
+        ya_result ret = ssl_write(ssl, p, remaining);
+        if(ret > 0)
+        {
+            remaining -= ret;
+            p += ret;
+            continue;
+        }
+        if(ret == 0)
+        {
+            // connection closed
+            break;
+        }
+        return ret;
+    }
+    return len - remaining; // number of bytes read, which may be short in case of EOF
 }
 
 static ya_result ssl_output_stream_write(output_stream_t *stream, const uint8_t *buffer, uint32_t len)
 {
-    ssl_input_output_stream_data *data = (ssl_input_output_stream_data *)stream->data;
-    int                           n = SSL_write(data->ssl, buffer, len);
-    if(n <= 0)
-    {
-        crypto_ssl_error(data->ssl, n);
-        if(n < 0)
-        {
-            n = ERROR;
-        }
-    }
-    return n;
+    ssl_input_output_stream_data *data = (ssl_input_output_stream_data*)stream->data;
+    return ssl_writefully(data->ssl, buffer, len);
 }
 
 static ya_result ssl_output_stream_flush(output_stream_t *stream)
@@ -126,38 +254,67 @@ static void ssl_output_stream_close(output_stream_t *stream)
     ssl_input_stream_data_release(data);
 }
 
+/**
+ * SSL skip helper.
+ * Skip bytes from an SSL connection.
+ * Handles retries.
+ * May skip less in case of connection closed or error.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param len the number of bytes to skip
+ * @return the number of bytes skipped or an error code
+ */
+ya_result ssl_skip(void *ssl_, uint32_t len)
+{
+    if(len == 0)
+    {
+        return 0;
+    }
+
+    SSL *ssl = (SSL*)ssl_;
+    uint32_t                      remaining = len;
+    ya_result                     n;
+    uint8_t                       buffer[1024];
+
+    while(remaining > sizeof(buffer))
+    {
+        n = ssl_readfully(ssl, buffer, sizeof(buffer));
+
+        if(n > 0)
+        {
+            remaining -= n;
+            continue;
+        }
+
+        int skipped = len - remaining;
+        if(skipped > 0)
+        {
+            return skipped;
+        }
+
+        return n;
+    }
+
+    n = ssl_readfully(ssl, buffer, remaining);
+
+    if(n > 0) // adjust the number of skipped bytes if relevant
+    {
+        remaining -= n;
+    }
+
+    int skipped = len - remaining;
+    if(skipped > 0) // if it skipped at all, return it
+    {
+        return skipped;
+    }
+    // else return the error or 0
+    return n;
+}
+
 static ya_result ssl_input_stream_skip(input_stream_t *stream, uint32_t len)
 {
     ssl_input_output_stream_data *data = (ssl_input_output_stream_data *)stream->data;
-    uint32_t                      req_len = len;
-    int                           n;
-    uint8_t                       buffer[1024];
-
-    while(len > sizeof(buffer))
-    {
-        n = SSL_read(data->ssl, buffer, 1024);
-        if(n <= 0)
-        {
-            if(n == 0)
-            {
-                return req_len - len;
-            }
-            return ERROR;
-        }
-
-        len -= n;
-    }
-
-    n = SSL_read(data->ssl, buffer, len);
-
-    if(n >= 0)
-    {
-        len -= n;
-
-        return req_len - len;
-    }
-
-    return ERROR;
+    return ssl_skip(data->ssl, len);
 }
 
 static const input_stream_vtbl  ssl_input_stream_vtbl = {ssl_input_stream_read, ssl_input_stream_skip, ssl_input_stream_close, "ssl_input_stream"};

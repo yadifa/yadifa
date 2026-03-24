@@ -279,6 +279,7 @@ static int features_test()
     if(ret != 0)
     {
         yatest_err("features_test: fd_input_stream_seek '%s' ret=%i/%08x", filename, ret, ret);
+        free(buffer1);free(buffer0);
         return 1;
     }
     input_stream_read_fully(&is, buffer1, size);
@@ -289,6 +290,7 @@ static int features_test()
     if(ret >= 0)
     {
         yatest_err("features_test: fd_input_stream_get_filedescriptor '%s' expected to return an error, got %i instead", filename, ret);
+        free(buffer1);free(buffer0);
         return 1;
     }
 
@@ -298,8 +300,11 @@ static int features_test()
     if(ret >= 0)
     {
         yatest_err("features_test: fd_input_stream_attach of an invalid fd expected to return an error, got %i instead", ret);
+        free(buffer1);free(buffer0);
         return 1;
     }
+
+    free(buffer1);free(buffer0);
 
     return 0;
 }

@@ -116,9 +116,9 @@ static struct dns_udp_receive_ctx_s **dns_udp_receive_context = NULL;
 static list_dl_t *volatile dns_udp_high_priority = NULL;
 static uint32_t          dns_udp_socket_count = 0;
 
-static pool_t            dns_simple_message_pool;
-static pool_t            dns_message_pool;
-static pool_t            dns_simple_message_async_node_pool;
+static pool_t            dns_simple_message_pool = {0};
+static pool_t            dns_message_pool = {0};
+static pool_t            dns_simple_message_async_node_pool = {0};
 
 static mutex_t           sendto_statistics_mtx = MUTEX_INITIALIZER;
 static mutex_t           recvfrom_statistics_mtx = MUTEX_INITIALIZER;
@@ -2502,7 +2502,7 @@ static int dns_udp_timeout_service(struct service_worker_s *worker)
 
     while(service_should_run(worker))
     {
-        sleep(1); // scan-build: for some reason it thinks this is inside a critical section
+        sleep(1);    // scan-build: for some reason it thinks this is inside a critical section. However the critical section is entered and exited in dns_udp_timeout_service_cull
 
         if(!service_should_run(worker))
         {

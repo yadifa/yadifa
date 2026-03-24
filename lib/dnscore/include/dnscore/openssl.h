@@ -56,6 +56,13 @@
 #define SSL_API_LT_111 1
 #define SSL_API_LT_110 0
 #define SSL_API_LT_100 0
+#elif(LIBRESSL_VERSION_NUMBER >= 0x40000000L) && (LIBRESSL_VERSION_NUMBER < 0x50000000L)
+// #pragma message "LIBRESSL [v4; v5["
+#define SSL_API_GT_300 0
+#define SSL_API_LT_300 1
+#define SSL_API_LT_111 0
+#define SSL_API_LT_110 0
+#define SSL_API_LT_100 0
 #else
 #pragma message("Unsupported LibreSSL version " SSL_TOSTRING(LIBRESSL_VERSION_NUMBER))
 #error "Unsupported LibreSSL version"

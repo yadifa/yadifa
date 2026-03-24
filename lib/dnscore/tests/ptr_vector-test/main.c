@@ -1043,6 +1043,7 @@ static void ptr_vector_new_instance_test_free(void *ptr) { free(ptr); }
 
 static int  ptr_vector_new_instance_test()
 {
+    int return_code = 0;
     init();
     ptr_vector_t *v_empty = ptr_vector_new_instance_empty();
     ptr_vector_t *v_default = ptr_vector_new_instance();
@@ -1050,23 +1051,25 @@ static int  ptr_vector_new_instance_test()
     if(ptr_vector_capacity(v_empty) != 0)
     {
         yatest_err("v_empty is wrong");
-        return 1;
+        return_code = 1; goto ptr_vector_new_instance_test_end;
     }
     if(ptr_vector_capacity(v_default) != PTR_VECTOR_DEFAULT_SIZE)
     {
         yatest_err("v_default is wrong");
-        return 1;
+        return_code = 1; goto ptr_vector_new_instance_test_end;
     }
     if(ptr_vector_capacity(v_ex) != 12345)
     {
         yatest_err("v_ex is wrong");
-        return 1;
+        return_code = 1; goto ptr_vector_new_instance_test_end;
     }
+
+ptr_vector_new_instance_test_end:
     ptr_vector_delete(v_ex);
     ptr_vector_delete(v_default);
     ptr_vector_callback_and_delete(v_empty, ptr_vector_new_instance_test_free);
     finalise();
-    return 0;
+    return return_code;
 }
 
 YATEST_TABLE_BEGIN

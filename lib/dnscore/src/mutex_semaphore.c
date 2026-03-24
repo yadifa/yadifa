@@ -116,7 +116,7 @@ ya_result mutex_semaphore_init_ex(mutex_semaphore_t *ms, const char *semaphore_n
 ya_result mutex_semaphore_init(mutex_semaphore_t *ms)
 {
     char semaphore_name[64];
-    snprintf(semaphore_name, sizeof(semaphore_name), "mutex_semaphore-%08x-%p", getpid(), ms);
+    snprintf(semaphore_name, sizeof(semaphore_name), "mutex_semaphore-%08x-%p", getpid(), (void*)ms);
     return mutex_semaphore_init_ex(ms, semaphore_name);
 }
 

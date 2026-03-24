@@ -168,7 +168,11 @@ static ya_result json_test_n(const char *json_text)
         json_t cloned_j = json_clone(j);
 
         bytearray_output_stream_reset(&baos);
-        n = json_write_to(cloned_j, &baos);
+        if(FAIL(n = json_write_to(cloned_j, &baos)))
+        {
+            printf("json_test_n: json_write_to failed with %08x", n);
+            exit(1);
+        }
         output_stream_write_u8(&baos, 0);
         const char *cloned_json_back = (const char *)bytearray_output_stream_buffer(&baos);
         uint32_t    cloned_json_back_len = bytearray_output_stream_size(&baos) - 1;

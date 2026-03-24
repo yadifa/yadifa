@@ -268,7 +268,6 @@ ya_result tsig_sign_query(struct dns_message_s *mesg);
 
 ya_result tsig_verify_answer(struct dns_message_s *mesg, const uint8_t *mac, uint16_t mac_size);
 
-ya_result tsig_append_unsigned_error(struct dns_message_s *mesg);
 ya_result tsig_append_error(struct dns_message_s *mesg);
 
 /**

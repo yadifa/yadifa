@@ -39,6 +39,7 @@
 
 #include "dnscore/logger.h"
 #include "dnscore/crypto.h"
+#include "dnscore/ssl_input_output_stream.h"
 #include "dnscore/tcp_manager2.h"
 
 static const char         alpn_dot_protocol[4] = {3, 'd', 'o', 't'}; // ALPN
@@ -56,28 +57,38 @@ static ya_result tcp_manager_channel_message_tls_read(struct tcp_manager_channel
     uint32_t len_max = dns_message_get_buffer_size_max(mesg);
     uint8_t *buffer = dns_message_get_buffer(mesg);
     mutex_lock(&tmc->rd_mtx);
-    if((n = SSL_read(ssl_socket, &len, 2)) == 2)
+    if((n = ssl_readfully(ssl_socket, &len, 2)) == 2)
     {
         len = ntohs(len);
         if(len <= len_max)
         {
-            n = SSL_read(ssl_socket, buffer, len);
-            dns_message_set_size(mesg, n);
-        }
-        else
-        {
-            int  m;
-            char tmp[512];
-            n = SSL_read(ssl_socket, buffer, len_max);
-            dns_message_set_size(mesg, n);
-            int dt = len - n;
-            while(dt > (int)sizeof(buffer))
+            n = ssl_readfully(ssl_socket, buffer, len);
+            if(n >= 0)
             {
-                m = SSL_read(ssl_socket, tmp, sizeof(buffer));
-                dt -= m;
+                dns_message_set_size(mesg, n);
             }
-            m = readfully(tmc->sock, tmp, dt);
+            else
+            {
+                // n is the error code
+            }
         }
+        else // can only read len_max bytes
+        {
+            n = ssl_readfully(ssl_socket, buffer, len_max);
+            if(n >= 0)
+            {
+                dns_message_set_size(mesg, n);
+                ssl_skip(ssl_socket, len - len_max);
+            }
+            else
+            {
+                // n is the error code
+            }
+        }
+    }
+    else
+    {
+        // n is the error code
     }
     mutex_unlock(&tmc->rd_mtx);
     return n;
@@ -85,15 +96,23 @@ static ya_result tcp_manager_channel_message_tls_read(struct tcp_manager_channel
 
 static ya_result tcp_manager_channel_message_tls_write(struct tcp_manager_channel_s *tmc, dns_message_t *mesg)
 {
-    SSL     *ssl_socket = tmc->ssl_socket;
-
     uint16_t size = dns_message_get_size(mesg);
+    if(size == 0)
+    {
+        return 0;
+    }
+
+    SSL *ssl_socket = tmc->ssl_socket;
+
     uint16_t size_ne = htons(size);
 
-    SSL_write(ssl_socket, &size_ne, 2);
-    SSL_write(ssl_socket, dns_message_get_buffer(mesg), size);
+    ya_result n = ssl_writefully(ssl_socket, &size_ne, 2);
+    if(n > 0)
+    {
+        n = ssl_writefully(ssl_socket, dns_message_get_buffer(mesg), size);
+    }
 
-    return size;
+    return n;
 }
 
 static ya_result tcp_manager_channel_message_tls_close(struct tcp_manager_channel_s *tmc)
@@ -108,7 +127,7 @@ static ya_result tcp_manager_channel_message_tls_close(struct tcp_manager_channe
 
 struct tcp_manager_channel_message_vtbl tcp_manager_channel_message_tls_vtbl = {tcp_manager_channel_message_tls_read, tcp_manager_channel_message_tls_write, tcp_manager_channel_message_tls_close};
 
-int                                     tcp_manager_socket_context_ssl_close(tcp_manager_channel_t *tmc)
+int tcp_manager_socket_context_ssl_close(tcp_manager_channel_t *tmc)
 {
     SSL *ssl_socket = tmc->ssl_socket;
     SSL_free(ssl_socket);
@@ -199,11 +218,10 @@ SSL *SSL_new_tcp_manager_channel_ssl(SSL_CTX *ssl_ctx, tcp_manager_channel_t *tm
 
 int tcp_manager_channel_ssl_handshake(tcp_manager_channel_t *tmc, SSL_CTX *ssl_ctx)
 {
-    int  ssl_err;
     SSL *ssl_socket = SSL_new_tcp_manager_channel_ssl(ssl_ctx, tmc);
     if(ssl_socket != NULL)
     {
-        if((ssl_err = SSL_accept(ssl_socket)) > 0)
+        if(SSL_accept(ssl_socket) > 0)
         {
             // change this socket context to SSL
             tmc->ssl_socket = ssl_socket;
@@ -212,8 +230,7 @@ int tcp_manager_channel_ssl_handshake(tcp_manager_channel_t *tmc, SSL_CTX *ssl_c
         }
         else
         {
-            crypto_openssl_error();
-            ya_result ret = SSL_ERROR_CODE(ERR_get_error());
+            ya_result ret = crypto_openssl_error();
             SSL_free(ssl_socket);
             return ret;
         }

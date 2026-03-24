@@ -110,6 +110,11 @@ static int pushback_test()
     }
 
     ret = input_stream_read(&pbis, buffer, sizeof(yatest_lorem_ipsum) + sizeof(hello_world) - 2);
+    if(ret != sizeof(yatest_lorem_ipsum) + sizeof(hello_world) - 2)
+    {
+        yatest_err("pushback_test: failed to read %i, got %i", sizeof(yatest_lorem_ipsum) + sizeof(hello_world) - 2, ret);
+        return 1;
+    }
 
     if(memcmp(buffer, hello_world, sizeof(hello_world) - 1) != 0)
     {

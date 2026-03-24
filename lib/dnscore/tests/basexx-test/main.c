@@ -104,6 +104,7 @@ static int base16_test()
     if(base16_decode(yatest_source_message_base16, 1, (uint8_t *)b) != PARSEB16_ERROR)
     {
         yatest_err("accepted invalid size input");
+        free(b);free(a);free(p);
         return 16;
     }
 
@@ -115,6 +116,7 @@ static int base16_test()
     if(base16_decode(a, 2, (uint8_t *)b) != PARSEB16_ERROR)
     {
         yatest_err("accepted invalid data input");
+        free(b);free(a);free(p);
         return 16;
     }
 
@@ -125,6 +127,7 @@ static int base16_test()
         if(base16_decode_nibble('0' + i) != i)
         {
             yatest_err("nibble for %c appear to be incorrect", '0' + i);
+            free(b);free(a);free(p);
             return 17;
         }
     }
@@ -134,6 +137,7 @@ static int base16_test()
         if(base16_decode_nibble('A' - 10 + i) != i)
         {
             yatest_err("nibble for %c appear to be incorrect", 'A' - 10 + i);
+            free(b);free(a);free(p);
             return 18;
         }
     }
@@ -143,7 +147,8 @@ static int base16_test()
         if(base16_decode_nibble('a' - 10 + i) != i)
         {
             yatest_err("nibble for %c appear to be incorrect", 'a' - 10 + i);
-            return 17;
+            free(b);free(a);free(p);
+            return 19;
         }
     }
 
@@ -155,6 +160,7 @@ static int base16_test()
     if(d != 0)
     {
         yatest_err("encoded '%s' to '%s' instead of to '%s", yatest_source_message_base16, a, yatest_source_encoded_base16);
+        free(b);free(a);free(p);
         return 1;
     }
 
@@ -164,6 +170,7 @@ static int base16_test()
     if(d != 0)
     {
         yatest_err("decoded '%s' to '%s' instead of to '%s", a, b, yatest_source_message_base16);
+        free(b);free(a);free(p);
         return 2;
     }
 
@@ -173,12 +180,14 @@ static int base16_test()
     if(FAIL(b_size))
     {
         yatest_err("decoding failed");
+        free(b);free(a);free(p);
         return 3;
     }
 
     if(b_size != PATTERN_SIZE)
     {
         yatest_err("decoded size is wrong: %i instead of %i", b_size, PATTERN_SIZE);
+        free(b);free(a);free(p);
         return 4;
     }
 
@@ -187,6 +196,7 @@ static int base16_test()
     if(d != 0)
     {
         yatest_err("original and decoded patterns differ");
+        free(b);free(a);free(p);
         return 5;
     }
 
@@ -210,6 +220,7 @@ static int base16lc_test()
     if(d != 0)
     {
         yatest_err("encoded '%s' to '%s' instead of to '%s", yatest_source_message_base16lc, a, yatest_source_encoded_base16lc);
+        free(b);free(a);free(p);
         return 1;
     }
 
@@ -219,6 +230,7 @@ static int base16lc_test()
     if(d != 0)
     {
         yatest_err("decoded '%s' to '%s' instead of to '%s", a, b, yatest_source_message_base16lc);
+        free(b);free(a);free(p);
         return 2;
     }
 
@@ -228,12 +240,14 @@ static int base16lc_test()
     if(FAIL(b_size))
     {
         yatest_err("decoding failed");
+        free(b);free(a);free(p);
         return 3;
     }
 
     if(b_size != PATTERN_SIZE)
     {
         yatest_err("decoded size is wrong: %i instead of %i", b_size, PATTERN_SIZE);
+        free(b);free(a);free(p);
         return 4;
     }
 
@@ -242,6 +256,7 @@ static int base16lc_test()
     if(d != 0)
     {
         yatest_err("original and decoded patterns differ");
+        free(b);free(a);free(p);
         return 5;
     }
 
@@ -266,6 +281,7 @@ static int base32_test()
         if(base32_decode(yatest_source_message_base32, wrong_size, (uint8_t *)b) != PARSEB32_ERROR)
         {
             yatest_err("accepted invalid size input");
+            free(b);free(a);free(p);
             return 16;
         }
     }
@@ -280,13 +296,15 @@ static int base32_test()
     if(base32_decode(a, 8, (uint8_t *)b) != PARSEB32_ERROR)
     {
         yatest_err("accepted invalid data input");
+        free(b);free(a);free(p);
         return 17;
     }
 
     if(base32_decode(a, 16, (uint8_t *)b) != PARSEB32_ERROR)
     {
         yatest_err("accepted invalid data input");
-        return 17;
+        free(b);free(a);free(p);
+        return 18;
     }
 
     // error check 2
@@ -305,7 +323,8 @@ static int base32_test()
             if(base32_decode(b, b_size, (uint8_t *)a) != PARSEB32_ERROR)
             {
                 yatest_err("accepted invalid data input: size=%i, j=%i", size, j);
-                return 17;
+                free(b);free(a);free(p);
+                return 19;
             }
             b[j] = old;
         }
@@ -319,6 +338,7 @@ static int base32_test()
     if(d != 0)
     {
         yatest_err("encoded '%s' to '%s' instead of to '%s", yatest_source_message_base32, a, yatest_source_encoded_base32);
+        free(b);free(a);free(p);
         return 1;
     }
 
@@ -328,6 +348,7 @@ static int base32_test()
     if(d != 0)
     {
         yatest_err("decoded '%s' to '%s' instead of to '%s", a, b, yatest_source_message_base32);
+        free(b);free(a);free(p);
         return 2;
     }
 
@@ -339,12 +360,14 @@ static int base32_test()
         if(FAIL(b_size))
         {
             yatest_err("decoding failed, pattern_size=%u", pattern_size);
+            free(b);free(a);free(p);
             return 3;
         }
 
         if((uint32_t)b_size != pattern_size)
         {
             yatest_err("decoded size is wrong: %i instead of %u", b_size, pattern_size);
+            free(b);free(a);free(p);
             return 4;
         }
 
@@ -353,6 +376,7 @@ static int base32_test()
         if(d != 0)
         {
             yatest_err("original and decoded patterns differ, pattern_size=%u", pattern_size);
+            free(b);free(a);free(p);
             return 5;
         }
     }
@@ -378,6 +402,7 @@ static int base32hex_test()
         if(base32hex_decode(yatest_source_message_base32, wrong_size, (uint8_t *)b) != PARSEB32H_ERROR)
         {
             yatest_err("accepted invalid size input");
+            free(p);free(a);free(b);
             return 16;
         }
     }
@@ -392,12 +417,14 @@ static int base32hex_test()
     if(base32hex_decode(a, 8, (uint8_t *)b) != PARSEB32H_ERROR)
     {
         yatest_err("accepted invalid data input");
+        free(p);free(a);free(b);
         return 17;
     }
 
     if(base32hex_decode(a, 16, (uint8_t *)b) != PARSEB32H_ERROR)
     {
         yatest_err("accepted invalid data input");
+        free(p);free(a);free(b);
         return 17;
     }
 
@@ -417,7 +444,8 @@ static int base32hex_test()
             if(base32hex_decode(b, b_size, (uint8_t *)a) != PARSEB32H_ERROR)
             {
                 yatest_err("accepted invalid data input: size=%i, j=%i", size, j);
-                return 17;
+                free(p);free(a);free(b);
+                return 18;
             }
             b[j] = old;
         }
@@ -431,6 +459,7 @@ static int base32hex_test()
     if(d != 0)
     {
         yatest_err("encoded '%s' to '%s' instead of to '%s", yatest_source_message_base32hex, a, yatest_source_encoded_base32hex);
+        free(p);free(a);free(b);
         return 1;
     }
 
@@ -440,6 +469,7 @@ static int base32hex_test()
     if(d != 0)
     {
         yatest_err("decoded '%s' to '%s' instead of to '%s", a, b, yatest_source_message_base32hex);
+        free(p);free(a);free(b);
         return 2;
     }
 
@@ -451,12 +481,14 @@ static int base32hex_test()
         if(FAIL(b_size))
         {
             yatest_err("decoding failed, pattern_size=%u", pattern_size);
+            free(p);free(a);free(b);
             return 3;
         }
 
         if((uint32_t)b_size != pattern_size)
         {
             yatest_err("decoded size is wrong: %i instead of %u", b_size, pattern_size);
+            free(p);free(a);free(b);
             return 4;
         }
 
@@ -465,6 +497,7 @@ static int base32hex_test()
         if(d != 0)
         {
             yatest_err("original and decoded patterns differ, pattern_size=%u", pattern_size);
+            free(p);free(a);free(b);
             return 5;
         }
 
@@ -479,12 +512,14 @@ static int base32hex_test()
         {
             yatest_err("output_stream_write_base32hex encoded size is wrong: %u instead of %u", encoded_stream_size, a_size);
             output_stream_close(&os);
+            free(p);free(a);free(b);
             return 6;
         }
         if(memcmp(encoded_stream_buffer, a, a_size) != 0)
         {
             yatest_err("output_stream_write_base32hex encoded stream is wrong");
             output_stream_close(&os);
+            free(p);free(a);free(b);
             return 7;
         }
         output_stream_close(&os);
@@ -511,6 +546,7 @@ static int base32hexlc_test()
         if(base32hex_decode(yatest_source_message_base32, wrong_size, (uint8_t *)b) != PARSEB32H_ERROR)
         {
             yatest_err("accepted invalid size input");
+            free(b);free(a);free(p);
             return 16;
         }
     }
@@ -525,13 +561,15 @@ static int base32hexlc_test()
     if(base32hex_decode(a, 8, (uint8_t *)b) != PARSEB32H_ERROR)
     {
         yatest_err("accepted invalid data input");
+        free(b);free(a);free(p);
         return 17;
     }
 
     if(base32hex_decode(a, 16, (uint8_t *)b) != PARSEB32H_ERROR)
     {
         yatest_err("accepted invalid data input");
-        return 17;
+        free(b);free(a);free(p);
+        return 18;
     }
 
     // error check 2
@@ -550,7 +588,8 @@ static int base32hexlc_test()
             if(base32hex_decode(b, b_size, (uint8_t *)a) != PARSEB32H_ERROR)
             {
                 yatest_err("accepted invalid data input: size=%i, j=%i", size, j);
-                return 17;
+                free(b);free(a);free(p);
+                return 19;
             }
             b[j] = old;
         }
@@ -564,6 +603,7 @@ static int base32hexlc_test()
     if(d != 0)
     {
         yatest_err("encoded '%s' to '%s' instead of to '%s", yatest_source_message_base32hexlc, a, yatest_source_encoded_base32hexlc);
+        free(b);free(a);free(p);
         return 1;
     }
 
@@ -573,6 +613,7 @@ static int base32hexlc_test()
     if(d != 0)
     {
         yatest_err("decoded '%s' to '%s' instead of to '%s", a, b, yatest_source_message_base32hexlc);
+        free(b);free(a);free(p);
         return 2;
     }
 
@@ -584,12 +625,14 @@ static int base32hexlc_test()
         if(FAIL(b_size))
         {
             yatest_err("decoding failed, pattern_size=%u", pattern_size);
+            free(b);free(a);free(p);
             return 3;
         }
 
         if((uint32_t)b_size != pattern_size)
         {
             yatest_err("decoded size is wrong: %i instead of %u", b_size, pattern_size);
+            free(b);free(a);free(p);
             return 4;
         }
 
@@ -598,6 +641,7 @@ static int base32hexlc_test()
         if(d != 0)
         {
             yatest_err("original and decoded patterns differ, pattern_size=%u", pattern_size);
+            free(b);free(a);free(p);
             return 5;
         }
     }
@@ -623,13 +667,15 @@ static int base64_test()
         if(base64_decode(yatest_source_message_base64, wrong_size, (uint8_t *)b) != PARSEB64_ERROR)
         {
             yatest_err("accepted invalid size input");
+            free(b);free(a);free(p);
             return 16;
         }
 
         if(base64_equals_binary(yatest_source_message_base64, wrong_size, (uint8_t *)b) != PARSEB64_ERROR)
         {
             yatest_err("accepted invalid size input");
-            return 16;
+            free(b);free(a);free(p);
+            return 17;
         }
     }
 
@@ -643,7 +689,8 @@ static int base64_test()
     if(base64_decode(a, 8, (uint8_t *)b) != PARSEB64_ERROR)
     {
         yatest_err("accepted invalid data input");
-        return 17;
+        free(b);free(a);free(p);
+        return 18;
     }
 
     // error check 2
@@ -659,7 +706,8 @@ static int base64_test()
         if((base64_equals_binary(b, b_size, (uint8_t *)a)) != 0)
         {
             yatest_err("data should have matched: size=%i", size);
-            return 18;
+            free(b);free(a);free(p);
+            return 19;
         }
 
         for(uint32_t j = 0; (j < b_size) && (b[j] != '='); ++j)
@@ -669,13 +717,15 @@ static int base64_test()
             if(base64_decode(b, b_size, (uint8_t *)a) != PARSEB64_ERROR)
             {
                 yatest_err("accepted invalid data input: size=%i, j=%i", size, j);
-                return 19;
+                free(b);free(a);free(p);
+                return 20;
             }
 
             if(base64_equals_binary(b, b_size, (uint8_t *)a) != PARSEB64_ERROR)
             {
                 yatest_err("data should not have been accepted: size=%i, j=%i", size, j);
-                return 20;
+                free(b);free(a);free(p);
+                return 21;
             }
 
             b[j] = old;
@@ -683,7 +733,8 @@ static int base64_test()
             if(base64_equals_binary(b, b_size, (uint8_t *)a) != 0)
             {
                 yatest_err("data did not match: size=%i, j=%i", size, j);
-                return 21;
+                free(b);free(a);free(p);
+                return 22;
             }
 
             if(b_size >= 8)
@@ -696,7 +747,8 @@ static int base64_test()
                     if((ret = base64_equals_binary(b, b_size, (uint8_t *)a)) == 0)
                     {
                         yatest_err("data should not have matched: size=%i, j=%i (%x)", size, j, ret);
-                        return 22;
+                        free(b);free(a);free(p);
+                        return 23;
                     }
 
                     b[k] ^= 1;
@@ -727,7 +779,8 @@ static int base64_test()
         if(base64_character_set_contains(i) != table[i])
         {
             yatest_err("base64_character_set_contains(%i)=%i appears to be incorrect (%i)", i, base64_character_set_contains(i), table[i]);
-            return 23;
+            free(b);free(a);free(p);
+            return 24;
         }
     }
 
@@ -739,6 +792,7 @@ static int base64_test()
     if(d != 0)
     {
         yatest_err("encoded '%s' to '%s' instead of to '%s", yatest_source_message_base64, a, yatest_source_encoded_base64);
+        free(b);free(a);free(p);
         return 1;
     }
 
@@ -748,6 +802,7 @@ static int base64_test()
     if(d != 0)
     {
         yatest_err("decoded '%s' to '%s' instead of to '%s", a, b, yatest_source_message_base64);
+        free(b);free(a);free(p);
         return 2;
     }
 
@@ -759,12 +814,14 @@ static int base64_test()
         if(FAIL(b_size))
         {
             yatest_err("decoding failed, pattern_size=%u", pattern_size);
+            free(b);free(a);free(p);
             return 3;
         }
 
         if((uint32_t)b_size != pattern_size)
         {
             yatest_err("decoded size is wrong: %i instead of %u", b_size, pattern_size);
+            free(b);free(a);free(p);
             return 4;
         }
 
@@ -773,6 +830,7 @@ static int base64_test()
         if(d != 0)
         {
             yatest_err("original and decoded patterns differ, pattern_size=%u", pattern_size);
+            free(b);free(a);free(p);
             return 5;
         }
     }

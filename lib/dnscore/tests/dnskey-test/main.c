@@ -1881,6 +1881,7 @@ static int dnskey_matches_rdata_test()
     if(ret < 0)
     {
         yatest_err("dnskey_newinstance unexpectedly failed (internal error) %08x = %s", ret, error_gettext(ret));
+        free(rdata);
         return 1;
     }
 
@@ -1889,6 +1890,8 @@ static int dnskey_matches_rdata_test()
     if(!dnskey_matches_rdata(key, rdata, rdata_size))
     {
         yatest_err("dnskey_matches_rdata returned false");
+        dnskey_release(key);
+        free(rdata);
         return 1;
     }
 
@@ -1898,13 +1901,15 @@ static int dnskey_matches_rdata_test()
         if(dnskey_matches_rdata(key, rdata, rdata_size))
         {
             yatest_err("dnskey_matches_rdata returned true (offset %u)", i);
+            dnskey_release(key);
+            free(rdata);
             return 1;
         }
         rdata[i] ^= 1;
     }
 
-    free(rdata);
     dnskey_release(key);
+    free(rdata);
 
     finalise();
     return 0;
@@ -1931,6 +1936,7 @@ static int dnskey_init_dns_resource_record_test()
     if(ret < 0)
     {
         yatest_err("dnskey_newinstance unexpectedly failed (internal error) %08x = %s", ret, error_gettext(ret));
+        free(rdata);
         return 1;
     }
 
@@ -1941,14 +1947,21 @@ static int dnskey_init_dns_resource_record_test()
     if(rdata_size != rr->rdata_size)
     {
         yatest_err("dnskey_init_dns_resource_record_test rdata_size doesn't match %u != %u", rr->rdata_size, rdata_size);
+        dnskey_release(key);
+        free(rdata);
         return 1;
     }
 
     if(memcmp(rr->rdata, rdata, rdata_size) != 0)
     {
         yatest_err("dnskey_init_dns_resource_record_test rdata doesn't match");
+        dnskey_release(key);
+        free(rdata);
         return 1;
     }
+
+    dnskey_release(key);
+    free(rdata);
 
     finalise();
     return 0;

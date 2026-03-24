@@ -183,7 +183,13 @@ static int  ipv4_test()
         yatest_err("host_address2allocated_sockaddr failed with %08x = %s", ret, error_gettext(ret));
         return 1;
     }
-    ret = host_address2sockaddr(ha0, &sa1);
+
+    if(FAIL(ret = host_address2sockaddr(ha0, &sa1)))
+    {
+        yatest_err("host_address2sockaddr failed with %08x = %s", ret, error_gettext(ret));
+        return 1;
+    }
+
     if(!sockaddr_equals(sa0, &sa1.sa))
     {
         yatest_err("sockaddr_equals returned false");
@@ -547,7 +553,11 @@ static int ipv6_test()
         yatest_err("host_address2allocated_sockaddr failed with %08x = %s", ret, error_gettext(ret));
         return 1;
     }
-    ret = host_address2sockaddr(ha0, &sa1);
+    if(FAIL(ret = host_address2sockaddr(ha0, &sa1)))
+    {
+        yatest_err("host_address2sockaddr failed with %08x = %s", ret, error_gettext(ret));
+        return 1;
+    }
     if(!sockaddr_equals(sa0, &sa1.sa))
     {
         yatest_err("sockaddr_equals returned false");

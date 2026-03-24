@@ -1428,7 +1428,7 @@ static ya_result circular_file_script_test(const circular_file_resize_script_lin
 
     file_pool_t              fp = file_pool_init("circular-files", 4);
     circular_file_t          cf = NULL;
-    ya_result                ret;
+    ya_result                ret = SUCCESS;
 
     struct reserved_header_s hdr = {0, 0, 0, 0};
     static const uint8_t     magic[4] = {'C', 'F', 0, 0};
@@ -1619,7 +1619,7 @@ circular_file_test_exit:
 
     file_pool_finalize(fp);
 
-    return SUCCESS;
+    return ret;
 }
 
 int main(int argc, char *argv[])

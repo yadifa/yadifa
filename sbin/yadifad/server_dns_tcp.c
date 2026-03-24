@@ -262,6 +262,9 @@ static void server_process_channel_message_thread(void *parm)
     server_process_tcp_thread_parm *channel_message_parm = (server_process_tcp_thread_parm *)parm;
     tcp_manager_channel_t          *tmc = channel_message_parm->tmc;
     dns_message_t                  *mesg = channel_message_parm->mesg;
+#if DEBUG
+    log_debug("server_process_channel_message_thread: resolving query from %{sockaddr}", dns_message_get_sender_sa(mesg));
+#endif
     server_process_channel_message(tmc, mesg /*, channel_message_parm->ctx->base.statisticsp*/, channel_message_parm->ctx->base.sockfd);
     tcp_manager_channel_release(tmc);
 #if DNS_MESSAGE_HAS_POOL
@@ -300,21 +303,28 @@ void server_process_channel_thread(void *parm)
 
     for(;;)
     {
-        /*#if SERVER_TCP_USE_LAZY_MAPPING
-                uint32_t thread_index = thread_pool_thread_index_get();
-                tcp_thread_memory_t *thread_memory = &tcp_thread_memory[thread_index];
-                dns_message_t *mesg = message_data_with_buffer_init(&thread_memory->message_data); // tcp
-                pool_buffer = &thread_memory->pool_buffer[0];
-        */
-        // = dns_message_data_with_buffer_init(&mesg_buff); // tcp
         mesg = dns_message_new_instance_ex(NULL, NETWORK_BUFFER_SIZE);
 
         dns_message_copy_sender_from_sa(mesg, &channel_parm->tmc->ss.sa, channel_parm->tmc->ss_len);
+
+#if DEBUG
+        log_debug("server_process_channel_thread: reading query from %{sockaddr}", &channel_parm->tmc->ss.sa);
+#endif
 
         ret = channel_parm->tmc->vtbl->read(channel_parm->tmc, mesg);
 
         if(ret <= 0) // error or EOF
         {
+#if DEBUG
+            if(ret == 0)
+            {
+                log_debug("server_process_channel_thread: reading query from %{sockaddr}: empty", &channel_parm->tmc->ss.sa);
+            }
+            else
+            {
+                log_debug("server_process_channel_thread: reading query from %{sockaddr}: %r", &channel_parm->tmc->ss.sa, ret);
+            }
+#endif
             break;
         }
 
@@ -338,6 +348,10 @@ void server_process_channel_thread(void *parm)
 
         mesg = NULL;
 
+#if DEBUG
+        log_debug("server_process_channel_thread: queuing query from %{sockaddr}: %r", &channel_parm->tmc->ss.sa, ret);
+#endif
+
         tcp_manager_channel_acquire(channel_parm->tmc);
         thread_pool_enqueue_call(server_tcp_thread_pool, server_process_channel_message_thread, channel_message_parm, NULL, "srvprcmsg");
     }
@@ -346,12 +360,7 @@ void server_process_channel_thread(void *parm)
     mesg = NULL;
 
     tcp_manager_channel_release(channel_parm->tmc);
-    /*
-    #if SERVER_TCP_USE_LAZY_MAPPING
-        formatln("thread: %p: madvise(%p, %d = %x, MADV_DONTNEED)", pthread_self(), thread_memory,
-    (sizeof(tcp_thread_memory_t) + 4095) & ~4095, (sizeof(tcp_thread_memory_t) + 4095) & ~4095); madvise(thread_memory,
-    (sizeof(tcp_thread_memory_t) + 4095) & ~4095, MADV_DONTNEED); #endif
-    */
+
     ZFREE_OBJECT(channel_parm);
 
 #if DEBUG
@@ -413,6 +422,10 @@ static int server_dns_tcp_worker_thread(struct service_worker_s *worker)
 
         if(ISOK(ret))
         {
+#if DEBUG
+            log_debug("server_dns_tcp_worker_thread: accept %{sockaddr}", &tmc->ss.sa);
+#endif
+
             TCPSTATS(tcp_input_count++);
 
             error_state_clear(&server_process_tcp_error_state, MODULE_MSG_HANDLE, MSG_NOTICE, "tcp: accept call");
@@ -425,12 +438,19 @@ static int server_dns_tcp_worker_thread(struct service_worker_s *worker)
             parm->tmc = tmc; // socket, rc = 1
             parm->ctx = ctx; // server fd to find the ip back
 
+#if DEBUG
+            log_debug("server_dns_tcp_worker_thread: queuing query from %{sockaddr}", &tmc->ss.sa);
+#endif
+
             thread_pool_enqueue_call(server_tcp_thread_pool, server_process_channel_thread, parm, NULL, "srvprctcp");
         }
         else
         {
             if(ret != MAKE_ERRNO_ERROR(ETIMEDOUT))
             {
+#if DEBUG
+                log_debug("server_dns_tcp_worker_thread: accept error: %r", ret);
+#endif
                 if((ret & 0xffff0000) == ERRNO_ERROR_BASE)
                 {
                     if(error_state_log(&server_process_tcp_error_state, ret))

@@ -102,6 +102,7 @@ static int item_match_delete(void *item_, void *parm_)
 */
 static int list_sl_debug_test()
 {
+    int return_code = 0;
     char *items[8];
     dnscore_init();
 
@@ -119,7 +120,7 @@ static int list_sl_debug_test()
     if(list_sl_debug_size(list) != 4)
     {
         yatest_err("expected size 4, got %i", list_sl_debug_size(list));
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     for(int i = 0; i < 4; ++i)
@@ -130,14 +131,14 @@ static int list_sl_debug_test()
         if(popped != items[i])
         {
             yatest_err("popped #%i expected %s got %s", i, items[i], popped);
-            return 1;
+            return_code = 1; goto list_sl_debug_test_end;
         }
     }
 
     if(list_sl_debug_size(list) != 0)
     {
         yatest_err("expected size 0, got %i", list_sl_debug_size(list));
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     for(int i = 0; i < 8; ++i)
@@ -148,61 +149,61 @@ static int list_sl_debug_test()
     if(!list_sl_debug_remove(list, items[2]))
     {
         yatest_err("list_sl_debug_remove 2 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove(list, items[2]))
     {
         yatest_err("list_sl_debug_remove 2 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove(list, items[1]))
     {
         yatest_err("list_sl_debug_remove 1 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove(list, items[1]))
     {
         yatest_err("list_sl_debug_remove 1 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove(list, items[6]))
     {
         yatest_err("list_sl_debug_remove 6 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove(list, items[6]))
     {
         yatest_err("list_sl_debug_remove 6 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove(list, items[7]))
     {
         yatest_err("list_sl_debug_remove 7 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove(list, items[7]))
     {
         yatest_err("list_sl_debug_remove 7 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove(list, items[0]))
     {
         yatest_err("list_sl_debug_remove 0 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove(list, items[0]))
     {
         yatest_err("list_sl_debug_remove 0 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     list_sl_debug_clear(list);
@@ -215,7 +216,7 @@ static int list_sl_debug_test()
     if(list_sl_debug_size(list) != 8)
     {
         yatest_err("expected size 8, got %i", list_sl_debug_size(list));
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     for(int i = 0; i < 8; ++i)
@@ -226,7 +227,7 @@ static int list_sl_debug_test()
         if(popped != items[i])
         {
             yatest_err("popped #%i expected %s got %s", i, items[i], popped);
-            return 1;
+            return_code = 1; goto list_sl_debug_test_end;
         }
     }
     {
@@ -235,7 +236,7 @@ static int list_sl_debug_test()
         if(popped != NULL)
         {
             yatest_err("popped #%i expected NULL got %s", 9, popped);
-            return 1;
+            return_code = 1; goto list_sl_debug_test_end;
         }
     }
 
@@ -247,61 +248,61 @@ static int list_sl_debug_test()
     if(!list_sl_debug_remove_match(list, item_search_comparator, items[2]))
     {
         yatest_err("list_sl_debug_remove_match 2 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove_match(list, item_search_comparator, items[2]))
     {
         yatest_err("list_sl_debug_remove_match 2 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove_match(list, item_search_comparator, items[1]))
     {
         yatest_err("list_sl_debug_remove_match 1 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove_match(list, item_search_comparator, items[1]))
     {
         yatest_err("list_sl_debug_remove_match 1 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove_match(list, item_search_comparator, items[6]))
     {
         yatest_err("list_sl_debug_remove_match 6 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove_match(list, item_search_comparator, items[6]))
     {
         yatest_err("list_sl_debug_remove_match 6 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove_match(list, item_search_comparator, items[7]))
     {
         yatest_err("list_sl_debug_remove_match 7 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove_match(list, item_search_comparator, items[7]))
     {
         yatest_err("list_sl_debug_remove_match 7 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(!list_sl_debug_remove_match(list, item_search_comparator, items[0]))
     {
         yatest_err("list_sl_debug_remove_match 0 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove_match(list, item_search_comparator, items[0]))
     {
         yatest_err("list_sl_debug_remove_match 0 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     list_sl_debug_push(list, items[0]);
@@ -311,13 +312,13 @@ static int list_sl_debug_test()
     if(!list_sl_debug_remove_match(list, item_search_comparator_multiple, items[0]))
     {
         yatest_err("list_sl_debug_remove_match 0 failed");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     if(list_sl_debug_remove_match(list, item_search_comparator_multiple, items[0]))
     {
         yatest_err("list_sl_debug_remove_match 0 succeeded");
-        return 1;
+        return_code = 1; goto list_sl_debug_test_end;
     }
 
     for(int i = 0; i < 8; ++i)
@@ -331,10 +332,12 @@ static int list_sl_debug_test()
         if(item != items[i])
         {
             yatest_err("list_sl_debug_search %i didn't return the expected item");
-            return 1;
+            return_code = 1; goto list_sl_debug_test_end;
         }
     }
 
+list_sl_debug_test_end:
+    
     list_sl_debug_delete(list);
 
     for(int i = 0; i < 8; ++i)
@@ -343,7 +346,7 @@ static int list_sl_debug_test()
     }
 
     dnscore_finalize();
-    return 0;
+    return return_code;
 }
 
 YATEST_TABLE_BEGIN

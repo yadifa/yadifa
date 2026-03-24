@@ -338,6 +338,7 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
     if(ret != (int)model_size)
     {
         yatest_err("yatest_input_stream_read_consistency_test: %s: failed to read model: size=%u, real=%u, ret=%i/%08x", name, size, model_size, ret, ret);
+        free(model);
         return ret;
     }
 
@@ -345,6 +346,7 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
     if(ret != 0)
     {
         yatest_err("yatest_input_stream_read_consistency_test: %s: expected to read exacly 0 bytes, got %i/%08x", name, ret, ret);
+        free(model);
         return ret;
     }
 
@@ -368,6 +370,8 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
         if(ret != 0)
         {
             yatest_err("yatest_input_stream_read_consistency_test: %s: failed to instantiate sample", name);
+            free(sample);
+            free(model);
             return ret;
         }
 
@@ -380,6 +384,8 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
                 sample_size,
                 model_size);
             input_stream_close(&is);
+            free(sample);
+            free(model);
             return 1;
         }
 
@@ -397,6 +403,8 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
                     ret,
                     chunk_size);
                 input_stream_close(&is);
+                free(sample);
+                free(model);
                 return 2;
             }
             p += ret;
@@ -413,6 +421,8 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
                 ret,
                 read,
                 chunk_size);
+            free(sample);
+            free(model);
             return 1;
         }
 
@@ -421,6 +431,8 @@ int yatest_input_stream_read_consistency_test(yatest_input_stream_factory *facto
         if(memcmp(model, sample, model_size) != 0)
         {
             yatest_err("yatest_input_stream_read_consistency_test: %s: model and sample differ for chunk size %u", name, chunk_size);
+            free(sample);
+            free(model);
             return 3;
         }
     }
@@ -466,6 +478,7 @@ int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *fa
     if((ret = output_stream_write(&os, &ret, 0)) != 0)
     {
         yatest_err("yatest_output_stream_write_consistency_test: %s: writing 0 bytes returned %i instead of 0", name, ret);
+        free(random_array);
         return ret;
     }
 
@@ -476,18 +489,24 @@ int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *fa
     if(ret != 0)
     {
         yatest_err("yatest_output_stream_write_consistency_test: %s: failed to read-back model with %i/%08x", name, ret, ret);
+        free(stream_array);
+        free(random_array);
         return ret;
     }
 
     if(stream_array_size != model_size)
     {
         yatest_err("yatest_output_stream_write_consistency_test: %s: model (%i) and read-back size (%i) differ", name, model_size, stream_array_size);
+        free(stream_array);
+        free(random_array);
         return 1;
     }
 
     if(memcmp(stream_array, random_array, model_size) != 0)
     {
         yatest_err("yatest_output_stream_write_consistency_test: %s: model and read-back content differ for size %i", name, model_size);
+        free(stream_array);
+        free(random_array);
         return 1;
     }
 
@@ -515,6 +534,7 @@ int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *fa
                     chunk_size,
                     model_size,
                     sample_size);
+                free(random_array);
                 return 1;
             }
             for(uint32_t offset = 0; offset < model_size; offset += chunk_size)
@@ -523,6 +543,7 @@ int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *fa
                 if(FAIL(ret))
                 {
                     yatest_err("yatest_output_stream_write_consistency_test: %s: chunk_size=%i, write at %i failed with %s", name, chunk_size, offset, error_gettext(ret));
+                    free(random_array);
                     return 1;
                 }
                 if(flushes)
@@ -534,17 +555,23 @@ int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *fa
             if(ret != 0)
             {
                 yatest_err("yatest_output_stream_write_consistency_test: %s: chunk_size=%i, failed to read-back model with %s", name, chunk_size, error_gettext(ret));
+                free(stream_array);
+                free(random_array);
                 return ret;
             }
             if(stream_array_size != model_size)
             {
                 yatest_err("yatest_output_stream_write_consistency_test: %s: model (%i) and read-back size (%i) differ", name, model_size, stream_array_size);
+                free(stream_array);
+                free(random_array);
                 return 1;
             }
 
             if(memcmp(stream_array, random_array, model_size) != 0)
             {
                 yatest_err("yatest_output_stream_write_consistency_test: %s: model and read-back content differ for size %i", name, model_size);
+                free(stream_array);
+                free(random_array);
                 return 1;
             }
 
@@ -553,6 +580,9 @@ int yatest_output_stream_write_consistency_test(yatest_output_stream_factory *fa
             stream_array_size = 0;
         }
     }
+
+    free(random_array);
+
     return 0;
 }
 
@@ -579,6 +609,7 @@ int yatest_input_stream_skip_consistency_test(yatest_input_stream_factory *facto
     if(ret != (int)model_size)
     {
         yatest_err("yatest_input_stream_read: %s: failed to read model: size=%u, real=%u, ret=%i", name, size, model_size, ret);
+        free(model);
         return ret;
     }
 
@@ -586,6 +617,7 @@ int yatest_input_stream_skip_consistency_test(yatest_input_stream_factory *facto
     if(ret != 0)
     {
         yatest_err("yatest_input_stream_read: %s: expected to read exacly 0 bytes, got %i/%08x", name, ret, ret);
+        free(model);
         return ret;
     }
 
@@ -611,6 +643,8 @@ int yatest_input_stream_skip_consistency_test(yatest_input_stream_factory *facto
             if(ret != 0)
             {
                 yatest_err("yatest_input_stream_read: %s: failed to instantiate sample with size %u", name, model_size);
+                free(sample);
+                free(model);
                 return ret;
             }
 
@@ -618,6 +652,8 @@ int yatest_input_stream_skip_consistency_test(yatest_input_stream_factory *facto
             {
                 yatest_err("yatest_input_stream_read: %s: failed to instantiate a sample of the right size: %u instead of %u", name, sample_size, model_size);
                 input_stream_close(&is);
+                free(sample);
+                free(model);
                 return 1;
             }
 
@@ -638,6 +674,8 @@ int yatest_input_stream_skip_consistency_test(yatest_input_stream_factory *facto
                 {
                     yatest_err("yatest_input_stream_read: %s: unexpected error or EOF %s sample: %i=%08x instead of %u", name, (alt == 0) ? "reading" : "skipping", ret, ret, chunk_size);
                     input_stream_close(&is);
+                    free(sample);
+                    free(model);
                     return 2;
                 }
                 p += ret;
@@ -649,6 +687,8 @@ int yatest_input_stream_skip_consistency_test(yatest_input_stream_factory *facto
         if(memcmp(model, sample, model_size) != 0)
         {
             yatest_err("yatest_input_stream_read: %s: model and sample differ for chunk size %u", name, chunk_size);
+            free(sample);
+            free(model);
             return 3;
         }
     }

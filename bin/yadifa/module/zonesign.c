@@ -1352,7 +1352,7 @@ static ya_result zonesign_setup_dnskey_records(zdb_zone_t *zone, time_t epoch)
 
     // for all keys in the zone, remove the ones not in the keystore, or load them if we are not using smart signing
 
-    if((ret = zonezign_remove_dnskey_not_in_keystore(zone)) < 0)
+    if(zonezign_remove_dnskey_not_in_keystore(zone) < 0)
     {
         exit(1);
     }
@@ -1797,8 +1797,6 @@ static ya_result zonesign_run()
     }
     else
     {
-        ret = ERROR;
-
         const char *dnssec_mode_name = "?";
 
         g_yadifa_zonesign_settings.nsec3_optout = (g_yadifa_zonesign_settings.dnssec_mode == ZDB_ZONE_MAINTAIN_NSEC3_OPTOUT);

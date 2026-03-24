@@ -440,6 +440,7 @@ static int dns_packet_reader_read_dns_resource_record_test()
 
 static int dns_packet_reader_read_test()
 {
+    int return_code = 0;
     int ret;
     init(2);
     size_t   buffer_size = 65536;
@@ -449,7 +450,7 @@ static int dns_packet_reader_read_test()
     if(ret < 0)
     {
         yatest_err("dns_packet_reader_skip_query failed with %08x = %s", ret, error_gettext(ret));
-        return 1;
+        return_code = 1; goto dns_packet_reader_read_test_end;
     }
 
     int an = dns_message_get_answer_count(mesg);
@@ -460,20 +461,20 @@ static int dns_packet_reader_read_test()
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_fqdn failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_read_test_end;
         }
         ret = dns_packet_reader_read_dnstype(&pr);
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_dnstype failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_read_test_end;
         }
         uint16_t rtype = ntohs(ret);
         ret = dns_packet_reader_read_dnsclass(&pr);
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_dnsclass failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_read_test_end;
         }
         // uint16_t rclass = ntohs(ret);
         int32_t ttl;
@@ -481,7 +482,7 @@ static int dns_packet_reader_read_test()
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_dnsclass failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_read_test_end;
         }
         ttl = ntohl(ttl);
         uint16_t rdata_size;
@@ -489,29 +490,34 @@ static int dns_packet_reader_read_test()
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_u16 failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_read_test_end;
         }
         rdata_size = ntohs(rdata_size);
         ret = dns_packet_reader_read_rdata(&pr, rtype, rdata_size, buffer, buffer_size);
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_rdata failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_read_test_end;
         }
     }
 
     if(!dns_packet_reader_eof(&pr))
     {
         yatest_err("dns_packet_reader_eof did not return true");
-        return 1;
+        return_code = 1; goto dns_packet_reader_read_test_end;
     }
 
+dns_packet_reader_read_test_end:
+    
+    free(buffer);
+
     finalise();
-    return 0;
+    return return_code;
 }
 
 static int dns_packet_reader_skip_bytes_test()
 {
+    int return_code = 0;
     int ret;
     init(2);
     size_t   buffer_size = 65536;
@@ -521,7 +527,7 @@ static int dns_packet_reader_skip_bytes_test()
     if(ret < 0)
     {
         yatest_err("dns_packet_reader_skip_query failed with %08x = %s", ret, error_gettext(ret));
-        return 1;
+        return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
     }
 
     int an = dns_message_get_answer_count(mesg);
@@ -532,20 +538,20 @@ static int dns_packet_reader_skip_bytes_test()
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_fqdn failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
         }
         ret = dns_packet_reader_read_dnstype(&pr);
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_dnstype failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
         }
         // uint16_t rtype = ntohs(ret);
         ret = dns_packet_reader_read_dnsclass(&pr);
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_dnsclass failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
         }
         // uint16_t rclass = ntohs(ret);
         int32_t ttl;
@@ -553,7 +559,7 @@ static int dns_packet_reader_skip_bytes_test()
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_dnsclass failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
         }
         ttl = ntohl(ttl);
         uint16_t rdata_size;
@@ -561,25 +567,29 @@ static int dns_packet_reader_skip_bytes_test()
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_read_u16 failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
         }
         rdata_size = ntohs(rdata_size);
         ret = dns_packet_reader_skip_bytes(&pr, rdata_size);
         if(ret < 0)
         {
             yatest_err("dns_packet_reader_skip_bytes failed with %08x = %s", ret, error_gettext(ret));
-            return 1;
+            return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
         }
     }
 
     if(!dns_packet_reader_eof(&pr))
     {
         yatest_err("dns_packet_reader_eof did not return true");
-        return 1;
+        return_code = 1; goto dns_packet_reader_skip_bytes_test_end;
     }
 
+dns_packet_reader_skip_bytes_test_end:
+    
+    free(buffer);
+
     finalise();
-    return 0;
+    return return_code;
 }
 
 static int dns_packet_reader_read_utf8_test()

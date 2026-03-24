@@ -251,18 +251,18 @@ static int file_pool_operations_test()
 
     for(int32_t i = 0; i < P; ++i)
     {
-        int l = snprintf(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt", i);
+        snprintf(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt", i);
         file_array[i] = file_pool_open(fp, tmp);
-        l = snprintf(tmp, sizeof(tmp), "File %i close test start write\n", i);
+        int l = snprintf(tmp, sizeof(tmp), "File %i close test start write\n", i);
         file_pool_write(file_array[i], tmp, l);
         file_pool_close(file_array[i]);
     }
 
     for(int32_t i = 0; i < P; ++i)
     {
-        int l = snprintf(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt", i);
+        snprintf(tmp, sizeof(tmp), DIR_PREFIX "myfile-%06i.txt", i);
         file_array[i] = file_pool_open(fp, tmp);
-        l = snprintf(tmp, sizeof(tmp), "File %i close test middle .\n", i);
+        int l = snprintf(tmp, sizeof(tmp), "File %i close test middle .\n", i);
         file_pool_write(file_array[i], tmp, l);
         file_pool_close(file_array[i]);
     }
@@ -543,6 +543,7 @@ static int file_pool_get_size_test()
 
 static int file_pool_resize_test()
 {
+    int return_code = 0;
     ya_result ret;
     char      filename[64];
     yatest_file_getname(0, filename, sizeof(filename));
@@ -609,14 +610,14 @@ static int file_pool_resize_test()
     if(pos != 0)
     {
         yatest_err("file_pool_seek didn't return 0 (after shrink)");
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     ret = file_pool_read(fpf, buffer, smaller_size * 2);
     if(ret != (ssize_t)smaller_size)
     {
         yatest_err("file_pool_read returned %08x, expected %08x (after shrink)", ret, smaller_size);
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     const size_t bigger_size = sizeof(yatest_lorem_ipsum) * 2;
@@ -625,20 +626,20 @@ static int file_pool_resize_test()
     if(ret < 0)
     {
         yatest_err("file_pool_resize failed with %08x = %s (grow)", ret, error_gettext(ret));
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     ret = file_pool_get_size(fpf, &size);
     if(ret < 0)
     {
         yatest_err("file_pool_get_size failed with %08x = %s (after grow)", ret, error_gettext(ret));
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     if(size != bigger_size)
     {
         yatest_err("file_pool_get_size returned %llu, expected %llu (after grow)", size, bigger_size);
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     pos = file_pool_seek(fpf, 0, SEEK_SET);
@@ -646,40 +647,42 @@ static int file_pool_resize_test()
     if(pos != 0)
     {
         yatest_err("file_pool_seek didn't return 0 (after grow)");
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     ret = file_pool_writefully(fpf, yatest_lorem_ipsum, sizeof(yatest_lorem_ipsum));
     if(ret < 0)
     {
         yatest_err("file_pool_writefully failed with %08x = %s (after grow, 0)", ret, error_gettext(ret));
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     ret = file_pool_writefully(fpf, yatest_lorem_ipsum, sizeof(yatest_lorem_ipsum));
     if(ret < 0)
     {
         yatest_err("file_pool_writefully failed with %08x = %s (after grow, 1)", ret, error_gettext(ret));
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     ret = file_pool_tell(fpf, (size_t *)&pos);
     if(ret < 0)
     {
         yatest_err("file_pool_tell returned %i (after grow)", ret);
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
 
     if(pos != sizeof(yatest_lorem_ipsum) * 2)
     {
         yatest_err("file_pool_get_size returned %llu, expected %llu (after grow)", size, bigger_size);
-        return 1;
+        return_code = 1; goto file_pool_resize_test_end;
     }
+
+file_pool_resize_test_end:
 
     file_pool_close(fpf);
     free(buffer);
     finalise();
-    return 0;
+    return return_code;
 }
 
 static int file_pool_seek_test()
@@ -846,6 +849,7 @@ static int file_pool_file_input_stream_test()
         if(fpf == NULL)
         {
             yatest_err("file_pool_open %s returned NULL", filename);
+            free(buffer);
             return 1;
         }
         input_stream_t is;

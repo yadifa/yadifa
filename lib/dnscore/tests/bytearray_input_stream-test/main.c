@@ -152,13 +152,14 @@ static int skip_consistency1_test()
 static int features_test()
 {
     int ret;
+    int return_code = 0;
     dnscore_init();
 
     input_stream_t ris;
     yatest_random_input_stream_init(&ris, 4096);
 
     input_stream_t  bis;
-    input_stream_t *bis_clone;
+    input_stream_t *bis_clone = NULL;
     const size_t    buffer_size = 4096;
     uint32_t        bis_size = buffer_size;
     uint8_t         buffer[buffer_size];
@@ -166,57 +167,57 @@ static int features_test()
     if((ret != 0) || (bis_size != buffer_size))
     {
         yatest_err("skip_features_test: failed to initialise: %i, %u", ret, bis_size);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     if(!bytearray_input_stream_is_instance_of(&bis))
     {
         yatest_err("skip_features_test: bytearray_input_stream_is_instance_of wrongly said false");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     if(bytearray_input_stream_is_instance_of(&ris))
     {
         yatest_err("skip_features_test: bytearray_input_stream_is_instance_of wrongly said true");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     if(bytearray_input_stream_clone(&ris) != NULL)
     {
         yatest_err("skip_features_test: clone of the wrong stream didn't return NULL");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     bis_clone = bytearray_input_stream_clone(&bis);
     if(bis_clone == NULL)
     {
         yatest_err("skip_features_test: clone returned NULL");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     if(bytearray_input_stream_size(&bis) != buffer_size)
     {
         yatest_err("skip_features_test: buffer size differs from expectations: %u, %u", bytearray_input_stream_size(&bis), buffer_size);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     if(bytearray_input_stream_size(&bis) != bytearray_input_stream_size(bis_clone))
     {
         yatest_err("skip_features_test: clone size differs from original");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     ret = input_stream_read_fully(&bis, buffer, buffer_size / 2);
     if(ret != (int)buffer_size / 2)
     {
         yatest_err("skip_features_test: failed to read: expected %u, got %i (init)", buffer_size / 2, ret);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     if(bytearray_input_stream_remaining(&bis) != buffer_size / 2)
     {
         yatest_err("skip_features_test: expected remaining bytes to be %u, got %i)", buffer_size / 2, bytearray_input_stream_remaining(&bis));
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     // try reset
@@ -226,14 +227,14 @@ static int features_test()
     if(ret != (int)buffer_size / 2)
     {
         yatest_err("skip_features_test: failed to read: expected %u, got %i (reset)", buffer_size / 2, ret);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     ret = memcmp(buffer, &buffer[buffer_size / 2], buffer_size / 2);
     if(ret != 0)
     {
         yatest_err("skip_features_test: halves of the buffer don't match (reset)");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     // try set offset
@@ -243,7 +244,7 @@ static int features_test()
     if((ret = bytearray_input_stream_offset(&bis)) != ((int)buffer_size / 2))
     {
         yatest_err("skip_features_test: bytearray_input_stream_offset returned %i instead of %u", ret, buffer_size / 2);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     bytearray_input_stream_set_offset(&bis, 0);
@@ -251,21 +252,21 @@ static int features_test()
     if((ret = bytearray_input_stream_offset(&bis)) != 0)
     {
         yatest_err("skip_features_test: bytearray_input_stream_offset returned %i instead of zero", ret);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     ret = input_stream_read_fully(&bis, &buffer[buffer_size / 2], buffer_size / 2);
     if(ret != (int)buffer_size / 2)
     {
         yatest_err("skip_features_test: failed to read: expected %u, got %i (offset)", buffer_size / 2, ret);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     ret = memcmp(buffer, &buffer[buffer_size / 2], buffer_size / 2);
     if(ret != 0)
     {
         yatest_err("skip_features_test: halves of the buffer don't match (offset)");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     // try the clone
@@ -276,14 +277,14 @@ static int features_test()
     if(clone_buffer != detached_clone_buffer)
     {
         yatest_err("skip_features_test: buffer and detached buffer differs");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     ret = memcmp(buffer, clone_buffer, buffer_size / 2);
     if(ret != 0)
     {
         yatest_err("skip_features_test: buffer didn't match what was read");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     uint8_t *double_buffer = (uint8_t *)malloc(buffer_size * 2);
@@ -293,7 +294,7 @@ static int features_test()
     if(bytearray_input_stream_offset(bis_clone) != buffer_size * 2)
     {
         yatest_err("skip_features_test: bytearray_input_stream_offset outside of bounds didn't properly truncate");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     bytearray_input_stream_update(bis_clone, detached_clone_buffer, buffer_size, true);
@@ -301,7 +302,7 @@ static int features_test()
     if(bytearray_input_stream_offset(bis_clone) != buffer_size)
     {
         yatest_err("skip_features_test: bytearray_input_stream_update outside of bounds didn't properly truncate");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
     bytearray_input_stream_reset(bis_clone);
 
@@ -311,21 +312,28 @@ static int features_test()
     if(ret != (int)buffer_size / 2)
     {
         yatest_err("skip_features_test: failed to read: expected %u, got %i (clone)", buffer_size / 2, ret);
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
     ret = memcmp(buffer, &buffer[buffer_size / 2], buffer_size / 2);
     if(ret != 0)
     {
         yatest_err("skip_features_test: halves of the buffer don't match (clone)");
-        return 1;
+        return_code = 1; goto features_test_end;
     }
 
-    input_stream_close(bis_clone);
-    ZFREE_OBJECT(bis_clone);
+features_test_end:
+
+    if(bis_clone != NULL)
+    {
+        input_stream_close(bis_clone);
+        ZFREE_OBJECT(bis_clone);
+    }
+    input_stream_close(&ris);
+
     input_stream_close(&bis);
 
-    return 0;
+    return return_code;
 }
 
 YATEST_TABLE_BEGIN

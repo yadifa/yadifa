@@ -694,7 +694,7 @@ static ya_result    test_message_reader(test_message *m)
                             return RCODE_ERROR_CODE(RCODE_NOTZONE);
                         }
             */
-            if((ret = dns_packet_reader_read(&pr, p, 10)) != 10) // exact
+            if(dns_packet_reader_read(&pr, p, TYPE_CLASS_TTL_RDLEN_SIZE) != TYPE_CLASS_TTL_RDLEN_SIZE) // exact
             {
                 ret = UNEXPECTED_EOF;
 

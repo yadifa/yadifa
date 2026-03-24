@@ -993,7 +993,7 @@ static void zdb_zone_answer_axfr_thread(void *data_)
                     rdata_len,
                     buffer_size);
 #if DEBUG
-                log_memdump(g_database_logger, MSG_DEBUG, &tctrl, 10, 16);
+                log_memdump(g_database_logger, MSG_DEBUG, &tctrl, TYPE_CLASS_TTL_RDLEN_SIZE, 16);
 #endif
                 break;
             }

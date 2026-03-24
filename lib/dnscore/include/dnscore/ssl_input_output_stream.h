@@ -50,6 +50,70 @@ extern "C"
 #endif
 
 /**
+ * SSL read helper.
+ * Reads from an SSL connection.
+ * Handles retries.
+ * Can short-read.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to read to
+ * @param len the number of bytes to read
+ * @return the number of bytes read or an error code
+ */
+ya_result ssl_read(void *ssl_, void *buffer, uint32_t len);
+
+/**
+ * SSL write helper.
+ * Writes to an SSL connection.
+ * Handles retries.
+ * Can short-write.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to write
+ * @param len the number of bytes to write
+ * @return the number of bytes written or an error code
+ */
+ya_result ssl_write(void *ssl_, const uint8_t *buffer, uint32_t len);
+
+/**
+ * SSL skip helper.
+ * Skip bytes from an SSL connection.
+ * Handles retries.
+ * May skip less in case of connection closed or error.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param len the number of bytes to skip
+ * @return the number of bytes skipped or an error code
+ */
+ya_result ssl_skip(void *ssl_, uint32_t len);  // no need to skip fully as this one already does it
+
+/**
+ * SSL read helper.
+ * Reads from an SSL connection.
+ * Handles retries.
+ * May short read in case of connection closed or error.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to read to
+ * @param len the number of bytes to read
+ * @return the number of bytes read or an error code
+ */
+ya_result ssl_readfully(void *ssl_, void *buffer, uint32_t len);
+
+/**
+ * SSL write helper.
+ * Writes to an SSL connection.
+ * Handles retries.
+ * May short write in case of connection closed or error.
+ *
+ * @param ssl_ the connection (SSL*)
+ * @param buffer the buffer to write
+ * @param len the number of bytes to write
+ * @return the number of bytes written or an error code
+ */
+ya_result ssl_writefully(void *ssl_, const void *buffer, uint32_t len);
+
+/**
  * Adds the SSL protocol with the 3dot ALPN on an open TCP connection.
  *
  * @param in_stream the SSL input stream

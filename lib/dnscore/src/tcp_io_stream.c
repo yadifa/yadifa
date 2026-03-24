@@ -370,8 +370,6 @@ void tcp_set_cork(int fd, bool enable)
  * @param enable
  */
 
-// #error THIS NEEDS TO BE TESTED ON BSD (This error message is to remind you that)
-
 void tcp_set_cork(int fd, bool enable)
 {
     int flag = (enable) ? 1 : 0;

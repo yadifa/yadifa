@@ -474,9 +474,9 @@ static int server_rw_udp_receiver_thread(struct service_worker_s *worker)
         }
         else // n < 0
         {
-            int err = errno;
+            int err = ERRNO_ERROR_GET_ERRNO(n);
 
-            if((err != EINTR) && (err != EAGAIN))
+            if(err != EAGAIN)
             {
                 /*
                  * EAGAIN
@@ -484,11 +484,11 @@ static int server_rw_udp_receiver_thread(struct service_worker_s *worker)
                  */
                 if(err != EBADF)
                 {
-                    log_warn("server-rw: receiver: %r (%i)", MAKE_ERRNO_ERROR(err), fd);
+                    log_warn("server-rw: receiver: %r (%i)", (int32_t)n, fd);
                 }
                 // else we are shutting down
 
-                log_debug("server_rw_udp_receiver_thread(%i, %i): recvfrom error: %r", ctx->base.idx, fd, MAKE_ERRNO_ERROR(err)); /* most likely: timeout/resource temporarily unavailable */
+                log_debug("server_rw_udp_receiver_thread(%i, %i): recvfrom error: %r", ctx->base.idx, fd, (int32_t)n); /* most likely: timeout/resource temporarily unavailable */
                 break;
             }
 

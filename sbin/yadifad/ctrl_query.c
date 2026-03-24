@@ -396,7 +396,7 @@ static ya_result ctrl_query_parse_bytes(dns_packet_reader_t *pr, void *out, uint
         return ret;
     }
 
-    if(FAIL(ret = dns_packet_reader_read(pr, &cmd_tctr, 10))) // exact
+    if(FAIL(ret = dns_packet_reader_read(pr, &cmd_tctr, TYPE_CLASS_TTL_RDLEN_SIZE))) // exact
     {
         return ret;
     }
@@ -433,7 +433,7 @@ static ya_result ctrl_query_parse_fqdn_class_view(dns_packet_reader_t *pr, uint8
         return ret;
     }
 
-    if(FAIL(ret = dns_packet_reader_read(pr, &cmd_tctr, 10))) // exact
+    if(FAIL(ret = dns_packet_reader_read(pr, &cmd_tctr, TYPE_CLASS_TTL_RDLEN_SIZE))) // exact
     {
         return ret;
     }
@@ -502,7 +502,7 @@ static ya_result ctrl_query_parse_byte_fqdn_class_view(dns_packet_reader_t *pr, 
         return ret;
     }
 
-    if(FAIL(ret = dns_packet_reader_read(pr, &cmd_tctr, 10))) // exact
+    if(FAIL(ret = dns_packet_reader_read(pr, &cmd_tctr, TYPE_CLASS_TTL_RDLEN_SIZE))) // exact
     {
         return ret;
     }

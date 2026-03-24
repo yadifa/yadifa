@@ -30,13 +30,9 @@
 #
 ################################################################################
 
-20260224:
-    YADIFA 3.0.7
+20260324:
+    YADIFA 3.0.8
 
-    The changes the minimum key sizes for RSA and DSA from 512 to 1024 bits.
-
-    Supports liboqs up to 0.15 (experimental)
-
-    Fixes an issue that could occur when replying to badly formatted messages.
-
-    Fixes an issue that would occur for TLS with some settings.
+    Now builds with LibreSSL 4.x
+    Improves DoT handling (experimental)
+    Fixes an issue in handling broken messages that could lead to a crash.

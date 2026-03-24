@@ -394,15 +394,33 @@ static ya_result server_dns_tls_configure(network_server_t *server)
     uint32_t       tcp_interface_count = server_context_tcp_interface_count();
     const uint32_t worker_per_interface = 1;
     int            socket_count = tcp_interface_count * worker_per_interface;
+
     if(socket_count <= 0)
     {
         return INVALID_STATE_ERROR;
     }
+
     int *sockets;
     MALLOC_OBJECT_ARRAY_OR_DIE(sockets, int, socket_count, SOCKET_TAG);
+
     for(uint_fast32_t i = 0; i < tcp_interface_count; ++i)
     {
-        if(FAIL(ret = server_context_socket_open_bind_multiple(server_context_tcp_interface(i), SOCK_STREAM, true, &sockets[i * worker_per_interface], worker_per_interface)))
+        // get the TCP interface and replace the port by the TLS port
+        struct addrinfo *addr;
+        if(FAIL(ret = addrinfo_dup(server_context_tcp_interface(i), &addr)))
+        {
+            log_err("tls tcp interface initialisation issue: %r", ret);
+            free(sockets);
+            return INVALID_STATE_ERROR;
+        }
+
+        sockaddr_set_inet_port(addr->ai_addr, htons(g_config->server_tls_port_value));
+
+        ret = server_context_socket_open_bind_multiple(addr, SOCK_STREAM, true, &sockets[i * worker_per_interface], worker_per_interface);
+
+        free(addr);
+
+        if(FAIL(ret))
         {
             server_context_socket_close_multiple(sockets, i * worker_per_interface);
             free(sockets);
@@ -424,7 +442,7 @@ static ya_result server_dns_tls_configure(network_server_t *server)
 
         if(server_tls_thread_pool == NULL)
         {
-            log_err("tcp thread pool init failed");
+            log_err("tls thread pool init failed");
 
             server_context_socket_close_multiple(sockets, tcp_interface_count);
             free(sockets);

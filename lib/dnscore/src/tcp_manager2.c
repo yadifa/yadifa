@@ -322,12 +322,19 @@ ya_result tcp_manager_channel_accept(int sockfd, tcp_manager_channel_t **tmcp)
     {
         // don't care about quotas now
 
+#if DEBUG
+        log_debug("tcp_manager_channel_accept(%i, %p) for %{sockaddr} = %i", sockfd, tmcp, &tmc->ss.sa, ret);
+#endif
+
         mutex_lock(&tcp_manager_channel_quota_map_mtx);
 
         tcp_manager_channel_quota_t *tmcq;
         ptr_treemap_node_t          *node = ptr_treemap_insert(&tcp_manager_channel_quota_map, &tmc->ss.sa);
         if(node->value == NULL)
         {
+#if DEBUG
+            log_debug("tcp_manager_channel_accept(%i, %p) new %{sockaddr}", sockfd, tmcp, &tmc->ss.sa);
+#endif
             ZALLOC_OBJECT_OR_DIE(tmcq, tcp_manager_channel_quota_t, TCPM2CQU_TAG);
             mutex_init(&tmcq->mtx);
             socketaddress_copy(&tmcq->sa, &tmc->ss);
@@ -345,11 +352,18 @@ ya_result tcp_manager_channel_accept(int sockfd, tcp_manager_channel_t **tmcp)
             tmcq = (tcp_manager_channel_quota_t *)node->value;
             // log_info("accept: %{sockaddr} is old: %i/%i", &tmc->ss.sa, ptr_vector_size(&tmcq->channels),
             // tmcq->connection_max);
+#if DEBUG
+            log_debug("tcp_manager_channel_accept(%i, %p) old %{sockaddr}", sockfd, tmcp, node->key);
+#endif
         }
 
         if(ptr_vector_size(&tmcq->channels) < tmcq->connection_max)
         {
             // quotas allow for more
+
+#if DEBUG
+            log_debug("tcp_manager_channel_accept(%i, %p) allowed %{sockaddr} (%i < %i)", sockfd, tmcp, node->key, ptr_vector_size(&tmcq->channels), tmcq->connection_max);
+#endif
 
             mutex_init(&tmc->rd_mtx);
             mutex_init(&tmc->wr_mtx);
@@ -369,11 +383,18 @@ ya_result tcp_manager_channel_accept(int sockfd, tcp_manager_channel_t **tmcp)
             mutex_unlock(&tcp_manager_channel_quota_map_mtx);
 
             *tmcp = tmc;
+#if DEBUG
+            log_debug("tcp_manager_channel_accept(%i, %p) success %{sockaddr} = %i", sockfd, tmcp, &tmc->ss.sa, ret);
+#endif
             return SUCCESS;
         }
         else
         {
             // quotas don't allow for more
+
+#if DEBUG
+            log_debug("tcp_manager_channel_accept(%i, %p) disallowed %{sockaddr} (%i >= %i)", sockfd, tmcp, node->key, ptr_vector_size(&tmcq->channels), tmcq->connection_max);
+#endif
 
             mutex_unlock(&tcp_manager_channel_quota_map_mtx);
 
@@ -386,6 +407,10 @@ ya_result tcp_manager_channel_accept(int sockfd, tcp_manager_channel_t **tmcp)
     }
     else
     {
+#if DEBUG
+        log_debug("tcp_manager_channel_accept(%i, %p) error %r", sockfd, tmcp, ret);
+#endif
+
         ZFREE_OBJECT(tmc);
 
         return ERRNO_ERROR;

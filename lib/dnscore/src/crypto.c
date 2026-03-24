@@ -63,6 +63,12 @@ void EVP_cleanup(void) {}
 void CRYPTO_cleanup_all_ex_data(void) {}
 #endif
 
+
+#ifndef ERR_REASON_MASK
+// not defined on older versions
+#define ERR_REASON_MASK 0x7fffff
+#endif
+
 /*
 #ifndef SSL_API
 #error "SSL_API not defined"
@@ -80,7 +86,7 @@ ya_result crypto_init()
     SSL_library_init();
     SSL_load_error_strings();
 
-#if SSL_API_LT_300
+#if SSL_API_LT_110
     ENGINE_load_builtin_engines();
 #endif
 
@@ -178,14 +184,34 @@ static const char *ya_ssl_error_text_list[13] = {"SSL_ERROR_NONE",
 };
 #endif
 
-void crypto_ssl_error(void *ssl_, int n)
+/**
+ * Decodes an SSL error.
+ *
+ * Logs the error on the system logger if the feature isn't disabled,
+ * else prints on stderr using osformatln.
+ *
+ * Returns a proper YADIFA error code.
+ *
+ * The error may be translated.
+ * e.g.
+ *    0 for EOF
+ *    MAKE_ERRNO_ERROR(EAGAIN) for non-blocking calls (but not exclusively)
+ *    INVALID_STATE
+ *    SSL-specific error code (SSL_ERROR_BASE + something)
+ *
+ * @param ssl the ssl object
+ * @param n the code returned by the SSL function ( <= 0)
+ * @return an error code
+ */
+
+ya_result crypto_ssl_error(void *ssl_, int n)
 {
     SSL *ssl = (SSL *)ssl_;
     int  code = SSL_get_error(ssl, n);
-    int  err = 0;
+    int  err = -1;
     if(code == SSL_ERROR_SYSCALL)
     {
-        err = errno;
+        err = ERRNO_ERROR; // >= 0
     }
 
 #if !DNSCORE_HAS_LOGGING_DISABLED
@@ -196,19 +222,41 @@ void crypto_ssl_error(void *ssl_, int n)
     }
 #endif
 
-    if(err == 0)
-    {
-        log_err("ssl: SSL_get_error(%p, %x) = %x %s", ssl, n, code, code_text);
-    }
-    else
+    if(err >= 0)
     {
         log_err("ssl: SSL_get_error(%p, %x) = %x %s %r", ssl, n, code, code_text, err);
+        return err;
     }
 
-    if(code == SSL_ERROR_SSL)
+    log_err("ssl: SSL_get_error(%p, %x) = %x %s", ssl, n, code, code_text);
+
+    switch(code)
     {
-        crypto_openssl_error();
+        case SSL_ERROR_SSL:
+            err = crypto_openssl_error();
+            break;
+        case SSL_ERROR_WANT_CONNECT:
+        case SSL_ERROR_WANT_ACCEPT:
+        case SSL_ERROR_WANT_READ:
+        case SSL_ERROR_WANT_WRITE:
+            err = MAKE_ERRNO_ERROR(EAGAIN);
+            break;
+        case SSL_ERROR_ZERO_RETURN:
+            err = 0;  // EOF
+            break;
+        default:
+            if(code <= SSL_ERROR_CATEGORY_MAX)
+            {
+                err = SSL_ERROR_MAKE_FROM_CATEGORY_ONLY(code);
+            }
+            else
+            {
+                err = INVALID_STATE_ERROR;
+            }
+            break;
     }
+
+    return err;
 }
 
 ya_result crypto_openssl_error()
@@ -220,53 +268,63 @@ ya_result crypto_openssl_error()
         return SUCCESS;
     }
 
+    char buffer[256];
+
 #if !DNSCORE_HAS_LOGGING_DISABLED
+
+#if !DEBUG  // if DEBUG, always do it, else only do it if the relevant error channel has at least one output
     LOGGER_EARLY_CULL_PREFIX(MSG_ERR)
+#endif
     {
-        char buffer[256];
         ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
         log_err("ssl: %i, %s", ssl_err, buffer);
+#if DEBUG
+        formatln("ssl: %i, %s", ssl_err, buffer);
+#endif
+
+        if((ssl_err & ERR_REASON_MASK) > 0xffff)
+        {
+            log_err("ssl: error: reason %08x out of supported bounds", ssl_err & ERR_REASON_MASK);
+#if DEBUG
+            formatln("ssl: error: reason %08x out of supported bounds", ssl_err & ERR_REASON_MASK);
+#endif
+            ssl_err = SSL_ERROR_MAKE_FROM_CATEGORY_ONLY(SSL_ERROR_SSL);
+        }
 
         unsigned long next_ssl_err;
         while((next_ssl_err = ERR_get_error()) != 0)
         {
             ERR_error_string_n(next_ssl_err, buffer, sizeof(buffer));
             log_err("ssl: %i, %s", next_ssl_err, buffer);
+#if DEBUG
+            formatln("ssl: %i, %s", next_ssl_err, buffer);
+#endif
         }
 
-        ERR_clear_error();
-    }
+#if DEBUG
+        flusherr();
+#endif
+    } // end of the logging block
 #else
-    char buffer[256];
     ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-    fprintf(stderr, "ssl: %i, %s", ssl_err, buffer);
+    osformatln(termerr, "ssl: %i, %s", ssl_err, buffer);
+
+    if((ssl_err & ERR_REASON_MASK) > 0xffff)
+    {
+        osformatln(termerr, "ssl: error: reason %08x out of supported bounds", ssl_err & ERR_REASON_MASK);
+        ssl_err = SSL_ERROR_MAKE_FROM_CATEGORY_ONLY(SSL_ERROR_SSL);
+    }
 
     unsigned long next_ssl_err;
     while((next_ssl_err = ERR_get_error()) != 0)
     {
         ERR_error_string_n(next_ssl_err, buffer, sizeof(buffer));
-        fprintf(stderr, "ssl: %i, %s", next_ssl_err, buffer);
+        osformatln(termerr, "ssl: %i, %s", next_ssl_err, buffer);
     }
-    fflush(stderr);
+    flusherr();
+#endif
+
     ERR_clear_error();
-#endif
-#if DEBUG
-    else
-    {
-        char buffer[256];
-        ERR_error_string_n(ssl_err, buffer, sizeof(buffer));
-        formatln("ssl: %i, %s", ssl_err, buffer);
-
-        unsigned long next_ssl_err;
-        while((next_ssl_err = ERR_get_error()) != 0)
-        {
-            ERR_error_string_n(next_ssl_err, buffer, sizeof(buffer));
-            formatln("ssl: %i, %s", next_ssl_err, buffer);
-        }
-
-        ERR_clear_error();
-    }
-#endif
 
     return SSL_ERROR_CODE(ssl_err);
 }

@@ -253,6 +253,14 @@ static inline void message_process_adjust_buffer_size(dns_message_t *mesg, uint1
     dns_message_set_buffer_size(mesg, mesg_buffer_size);
 }
 
+/**
+ * Parses the additional section.
+ *
+ * @param mesg
+ * @param ar_count NE additional count.
+ *
+ * @return
+ */
 static ya_result dns_message_process_additionals(dns_message_t *mesg, uint16_t ar_count)
 {
     uint8_t *buffer = dns_message_get_buffer(mesg);
@@ -343,7 +351,7 @@ static ya_result dns_message_process_additionals(dns_message_t *mesg, uint16_t a
             return UNPROCESSABLE_MESSAGE;
         }
 
-        if(dns_packet_reader_read(&purd, &tctr, 10) != 10) // exact
+        if(dns_packet_reader_read(&purd, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE) != TYPE_CLASS_TTL_RDLEN_SIZE) // exact
         {
             /* oops */
 
@@ -633,7 +641,15 @@ static ya_result dns_message_process_answer_additionals(dns_message_t *mesg, uin
     purd.packet_size = message_size;
     // uint16_t ar_sub = 0;
 
-    purd.packet_offset = dns_message_get_additional_section_ptr(mesg) - mesg->_buffer; // size up to additional sections
+    if(dns_message_get_additional_section_ptr(mesg) != NULL) // this should always be true
+    {
+        purd.packet_offset = dns_message_get_additional_section_ptr(mesg) - mesg->_buffer; // size up to additional sections
+    }
+    else
+    {
+        purd.packet_offset = message_size;
+    }
+
     message_size = purd.packet_offset;
 
     /* We are now at the start of the ar */
@@ -659,7 +675,7 @@ static ya_result dns_message_process_answer_additionals(dns_message_t *mesg, uin
             return UNPROCESSABLE_MESSAGE;
         }
 
-        if(dns_packet_reader_read(&purd, &tctr, 10) == 10) // exact
+        if(dns_packet_reader_read(&purd, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE) == TYPE_CLASS_TTL_RDLEN_SIZE) // exact
         {
             /*
              * EDNS (0)
@@ -959,7 +975,7 @@ static inline uint8_t *dns_message_process_copy_fqdn(dns_message_t *mesg)
 
     return &src[4];
 }
-
+// dig -p 15353 @127.0.53.2 -y hmac-sha256:rndc-key:YkP87DGnGVOarzXsbx4eFZuwKNs= dnssec-none.eu ANY +tcp +tries=1 +time=1
 ya_result dns_message_process_query(dns_message_t *mesg)
 {
     uint8_t *buffer = dns_message_get_buffer(mesg);
@@ -971,9 +987,9 @@ ya_result dns_message_process_query(dns_message_t *mesg)
      * +5 <=> 1 qd record ar least
      */
 
-    uint64_t *h64 = (uint64_t *)buffer;
-    uint64_t  m64 = MESSAGE_HEADER_MASK;
-    uint64_t  r64 = MESSAGE_HEADER_RESULT;
+    const uint64_t *h64 = (uint64_t *)buffer;  // note: the buffer is aligned
+    const uint64_t  m64 = MESSAGE_HEADER_MASK;
+    const uint64_t  r64 = MESSAGE_HEADER_RESULT;
 
     if((dns_message_get_size(mesg) < DNS_HEADER_LENGTH + 5) || ((*h64 & m64) != r64))
     {
@@ -1017,13 +1033,6 @@ ya_result dns_message_process_query(dns_message_t *mesg)
         return UNPROCESSABLE_MESSAGE;
     }
     */
-    const uint8_t *s = dns_message_process_copy_fqdn(mesg);
-
-    if(s == NULL)
-    {
-        dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
-        return UNPROCESSABLE_MESSAGE;
-    }
 
     /**
      * @note Past this point, a message could be processable.
@@ -1042,20 +1051,24 @@ ya_result dns_message_process_query(dns_message_t *mesg)
     dns_message_clear_nsid(mesg);
 #endif
 
+    const uint8_t *s = dns_message_process_copy_fqdn(mesg);
+
+    if(s == NULL)
+    {
+        dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
+        return UNPROCESSABLE_MESSAGE;
+    }
+
     /*
      * Handle the OPT and TSIG records
      */
 
     {
         ya_result return_code;
-        uint16_t  ar_count;
 
-        if((ar_count = MESSAGE_AR(buffer)) != 0)
+        if(FAIL(return_code = dns_message_process_additionals(mesg, MESSAGE_AR(buffer))))
         {
-            if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
-            {
-                return return_code;
-            }
+            return return_code;
         }
 
         if(dns_message_get_query_type(mesg) != TYPE_IXFR)
@@ -1114,15 +1127,12 @@ int dns_message_process(dns_message_t *mesg)
                 {
                     if(0 == MESSAGE_QD(buffer))
                     {
-                        DERROR_MSG("FP_QDCOUNT_IS_0");
                         dns_message_set_status(mesg, FP_QDCOUNT_IS_0);
                         return INVALID_MESSAGE; /* will be dropped */
                     }
                     else
                     {
                         dns_message_set_status(mesg, FP_QDCOUNT_BIG_1);
-
-                        DERROR_MSG("FP_QDCOUNT_BIG_1");
                     }
                 }
                 else
@@ -1132,6 +1142,7 @@ int dns_message_process(dns_message_t *mesg)
 
                 return UNPROCESSABLE_MESSAGE;
             }
+
             if(MESSAGE_NS(buffer) != 0)
             {
                 dns_message_set_status(mesg, FP_NSCOUNT_NOT_0);
@@ -1168,16 +1179,10 @@ int dns_message_process(dns_message_t *mesg)
 
             {
                 ya_result return_code;
-                uint16_t  ar_count;
 
-                if((ar_count = MESSAGE_AR(buffer)) != 0)
+                if(FAIL(return_code = dns_message_process_additionals(mesg, MESSAGE_AR(buffer))))
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
-                    {
-                        dns_message_set_size(mesg, s - buffer);
-
-                        return return_code;
-                    }
+                    return return_code;
                 }
 
                 if(dns_message_get_query_type(mesg) != TYPE_IXFR)
@@ -1187,12 +1192,11 @@ int dns_message_process(dns_message_t *mesg)
             }
 
             /* At this point the TSIG has been computed and removed */
-            /* Clear zome bits */
-            dns_message_apply_mask(mesg, ~(QR_BITS | TC_BITS | AA_BITS), ~(Z_BITS | RA_BITS | AD_BITS | CD_BITS | RCODE_BITS));
-
+            /* Clear some bits */
+            dns_message_apply_mask(mesg, ~(QR_BITS | TC_BITS | AA_BITS), ~(Z_BITS | AD_BITS | CD_BITS | RA_BITS | RCODE_BITS));
             dns_message_set_status(mesg, FP_MESG_OK);
 
-            return OK;
+            return SUCCESS;
         }
         case OPCODE_NOTIFY:
         {
@@ -1222,15 +1226,12 @@ int dns_message_process(dns_message_t *mesg)
                 {
                     if(0 == MESSAGE_QD(buffer))
                     {
-                        DERROR_MSG("FP_QDCOUNT_IS_0");
                         dns_message_set_status(mesg, FP_QDCOUNT_IS_0);
                         return INVALID_MESSAGE;
                     }
                     else
                     {
                         dns_message_set_status(mesg, FP_QDCOUNT_BIG_1);
-
-                        DERROR_MSG("FP_QDCOUNT_BIG_1");
                     }
                 }
                 else
@@ -1238,14 +1239,6 @@ int dns_message_process(dns_message_t *mesg)
                     dns_message_set_status(mesg, FP_PACKET_DROPPED);
                 }
 
-                return UNPROCESSABLE_MESSAGE;
-            }
-
-            uint8_t *s = dns_message_process_copy_fqdn(mesg);
-
-            if(s == NULL)
-            {
-                dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
                 return UNPROCESSABLE_MESSAGE;
             }
 
@@ -1265,6 +1258,15 @@ int dns_message_process(dns_message_t *mesg)
 #if DNSCORE_HAS_NSID_SUPPORT
             dns_message_clear_nsid(mesg);
 #endif
+
+            uint8_t *s = dns_message_process_copy_fqdn(mesg);
+
+            if(s == NULL)
+            {
+                dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
+                return UNPROCESSABLE_MESSAGE;
+            }
+
             /*
              * If there is a TSIG, it is here ...
              */
@@ -1272,14 +1274,10 @@ int dns_message_process(dns_message_t *mesg)
 #if DNSCORE_HAS_TSIG_SUPPORT
             {
                 ya_result return_code;
-                uint16_t  ar_count;
 
-                if((ar_count = MESSAGE_AR(buffer)) != 0)
+                if(FAIL(return_code = dns_message_process_additionals(mesg, MESSAGE_AR(buffer))))
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
-                    {
-                        return return_code;
-                    }
+                    return return_code;
                 }
             }
 #endif
@@ -1287,7 +1285,7 @@ int dns_message_process(dns_message_t *mesg)
 
             dns_message_set_status(mesg, FP_MESG_OK);
 
-            return OK;
+            return SUCCESS;
         }
         case OPCODE_UPDATE:
         {
@@ -1324,13 +1322,11 @@ int dns_message_process(dns_message_t *mesg)
                 {
                     if(0 == MESSAGE_QD(buffer))
                     {
-                        DERROR_MSG("FP_QDCOUNT_IS_0");
                         dns_message_set_status(mesg, FP_QDCOUNT_IS_0);
                         return INVALID_MESSAGE;
                     }
                     else
                     {
-                        DERROR_MSG("FP_QDCOUNT_BIG_1");
                         dns_message_set_status(mesg, FP_QDCOUNT_BIG_1);
                     }
 
@@ -1339,14 +1335,6 @@ int dns_message_process(dns_message_t *mesg)
 
                 dns_message_set_status(mesg, FP_PACKET_DROPPED);
 
-                return UNPROCESSABLE_MESSAGE;
-            }
-
-            uint8_t *s = dns_message_process_copy_fqdn(mesg);
-
-            if(s == NULL)
-            {
-                dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
                 return UNPROCESSABLE_MESSAGE;
             }
 
@@ -1366,6 +1354,15 @@ int dns_message_process(dns_message_t *mesg)
 #if DNSCORE_HAS_NSID_SUPPORT
             dns_message_clear_nsid(mesg);
 #endif
+
+            uint8_t *s = dns_message_process_copy_fqdn(mesg);
+
+            if(s == NULL)
+            {
+                dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
+                return UNPROCESSABLE_MESSAGE;
+            }
+
             /*
              * If there is a TSIG, it is here ...
              */
@@ -1373,14 +1370,10 @@ int dns_message_process(dns_message_t *mesg)
 #if DNSCORE_HAS_TSIG_SUPPORT
             {
                 ya_result return_code;
-                uint16_t  ar_count;
 
-                if((ar_count = MESSAGE_AR(buffer)) != 0)
+                if(FAIL(return_code = dns_message_process_additionals(mesg, MESSAGE_AR(buffer))))
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
-                    {
-                        return return_code;
-                    }
+                    return return_code;
                 }
             }
 #endif
@@ -1432,13 +1425,11 @@ int dns_message_process(dns_message_t *mesg)
                 {
                     if(0 == MESSAGE_QD(buffer))
                     {
-                        DERROR_MSG("FP_QDCOUNT_IS_0");
                         dns_message_set_status(mesg, FP_QDCOUNT_IS_0);
                         return INVALID_MESSAGE;
                     }
                     else
                     {
-                        DERROR_MSG("FP_QDCOUNT_BIG_1");
                         dns_message_set_status(mesg, FP_QDCOUNT_BIG_1);
                     }
 
@@ -1447,14 +1438,6 @@ int dns_message_process(dns_message_t *mesg)
 
                 dns_message_set_status(mesg, FP_PACKET_DROPPED);
 
-                return UNPROCESSABLE_MESSAGE;
-            }
-
-            uint8_t *s = dns_message_process_copy_fqdn(mesg);
-
-            if(s == NULL)
-            {
-                dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
                 return UNPROCESSABLE_MESSAGE;
             }
 
@@ -1474,6 +1457,15 @@ int dns_message_process(dns_message_t *mesg)
 #if DNSCORE_HAS_NSID_SUPPORT
             dns_message_clear_nsid(mesg);
 #endif
+
+            uint8_t *s = dns_message_process_copy_fqdn(mesg);
+
+            if(s == NULL)
+            {
+                dns_message_set_status(mesg, FP_NAME_FORMAT_ERROR);
+                return UNPROCESSABLE_MESSAGE;
+            }
+
             /*
              * If there is a TSIG, it is here ...
              */
@@ -1481,21 +1473,16 @@ int dns_message_process(dns_message_t *mesg)
 #if DNSCORE_HAS_TSIG_SUPPORT
             {
                 ya_result return_code;
-                uint16_t  ar_count;
 
-                if((ar_count = MESSAGE_AR(buffer)) != 0)
+                if(FAIL(return_code = dns_message_process_additionals(mesg, MESSAGE_AR(buffer))))
                 {
-                    if(FAIL(return_code = dns_message_process_additionals(mesg, ar_count)))
-                    {
-                        return return_code;
-                    }
+                    return return_code;
                 }
             }
 #endif
             // At this point the TSIG has been computed and removed
 
             dns_message_apply_mask(mesg, ~(QR_BITS | TC_BITS | AA_BITS), ~(RA_BITS | RCODE_BITS));
-
             dns_message_set_status(mesg, FP_MESG_OK);
 
             return OK;
@@ -1523,17 +1510,13 @@ int dns_message_process(dns_message_t *mesg)
                 dns_message_set_size(mesg, DNS_HEADER_LENGTH);
                 SET_U32_AT(mesg->_buffer[4], 0); /* aligned to 32 bits, so two 32 bits instead of one 64 */
                 SET_U32_AT(mesg->_buffer[8], 0);
-
-                /* reserved for future use */
-
-                return UNPROCESSABLE_MESSAGE;
             }
             else
             {
                 dns_message_set_status(mesg, FP_PACKET_DROPPED);
-
-                return INVALID_MESSAGE;
             }
+
+            return UNPROCESSABLE_MESSAGE;
         }
     }
 }
@@ -1679,7 +1662,7 @@ static ya_result dns_message_answer_verify_additionals(dns_message_t *mesg, dns_
             return UNPROCESSABLE_MESSAGE;
         }
 
-        if(dns_packet_reader_available(purd) < 10)
+        if(dns_packet_reader_available(purd) < TYPE_CLASS_TTL_RDLEN_SIZE)
         {
             dns_message_set_status(mesg, FP_ERROR_READING_QUERY);
 
@@ -1688,7 +1671,7 @@ static ya_result dns_message_answer_verify_additionals(dns_message_t *mesg, dns_
 
         tctr = (struct type_class_ttl_rdlen *)dns_packet_reader_get_next_u8_ptr_const(purd);
 
-        purd->offset += 10;
+        purd->offset += TYPE_CLASS_TTL_RDLEN_SIZE;
 
         switch(tctr->qtype)
         {
@@ -1899,7 +1882,7 @@ ya_result dns_message_add_opt(dns_message_t *mesg)
     // try to add the record
     // if it doesn't overflow, add the record and increment the AR count
 
-    uint8_t *buffer_end = dns_message_get_buffer_limit(mesg);
+    uint8_t *buffer_end = dns_message_get_message_limit(mesg);
     uint8_t *buffer_limit = dns_message_get_buffer(mesg) + dns_message_get_buffer_size_max(mesg);
     size_t   avail = buffer_limit - buffer_end;
 
@@ -1964,10 +1947,22 @@ ya_result dns_message_add_opt(dns_message_t *mesg)
     return SUCCESS;
 }
 
+/**
+ * Updates the message wire to make it an error.
+ * _ Truncates FORMERR
+ * _ Adds the OPT record with all the fields.
+ *
+ * Doesn't sign the message.
+ *
+ * @param mesg
+ */
+
 void dns_message_transform_to_error(dns_message_t *mesg)
 {
     dns_message_set_answer(mesg);
     dns_message_set_rcode(mesg, dns_message_get_status(mesg));
+
+    // FORMERR -> trunkate the message
 
     if(dns_message_get_status(mesg) == RCODE_FORMERR)
     {
@@ -1976,15 +1971,33 @@ void dns_message_transform_to_error(dns_message_t *mesg)
     }
     else
     {
-        dns_message_set_size(mesg, dns_message_get_additional_section_ptr(mesg) - mesg->_buffer);
+        if(dns_message_get_additional_section_ptr(mesg) != NULL)
+        {
+            dns_message_set_size(mesg, dns_message_get_additional_section_ptr(mesg) - mesg->_buffer);
+        }
+        else
+        {
+            SET_U64_AT(mesg->_buffer[4], 0);  // sets all the record counts for all sections to 0
+            dns_message_set_size(mesg, DNS_HEADER_LENGTH);
+        }
     }
 
     dns_message_edns0_append(mesg);
 }
 
+/**
+ * Updates the message wire to make it an error.
+ * _ Truncates FORMERR
+ * _ Adds the OPT record with all the fields.
+ *
+ * Signs the message when appropriate.
+ *
+ * @param mesg
+ */
+
 void dns_message_transform_to_signed_error(dns_message_t *mesg)
 {
-    dns_message_transform_to_error(mesg);
+    dns_message_transform_to_error(mesg); // inside dns_message_transform_to_signed_error
 
     if(dns_message_has_tsig(mesg))
     {
@@ -1992,6 +2005,15 @@ void dns_message_transform_to_signed_error(dns_message_t *mesg)
     }
 }
 
+/**
+ * Updates the message wire to make it an error.
+ * _ Truncates FORMERR
+ * _ Adds the OPT record with all the fields.
+ *
+ * Signs the message with an empty signature when appropriate.
+ *
+ * @param mesg
+ */
 
 ya_result dns_message_transform_to_unsigned_error(dns_message_t *mesg)
 {
@@ -2030,13 +2052,13 @@ ya_result dns_message_transform_to_unsigned_error(dns_message_t *mesg)
         const uint8_t *algorithm_name = tsig_get_algorithm_name(mesg->_tsig.mac_algorithm);
 
         uint32_t algorithm_name_len = dnsname_len(algorithm_name);
-
-        if(dns_message_get_size(mesg) + algorithm_name_len + mesg->_tsig.tsig->name_len + 10 + 16 > dns_message_get_buffer_size(mesg))
+        // note: dns_message_get_size is correct, dns_message_buffer() + dns_message_get_size() = dns_message_get_message_limit()
+        if(dns_message_get_size(mesg) + algorithm_name_len + mesg->_tsig.tsig->name_len + TYPE_CLASS_TTL_RDLEN_SIZE + 16 > dns_message_get_buffer_size(mesg))
         {
             return BUFFER_WOULD_OVERFLOW;
         }
 
-        uint8_t *tsig_ptr = dns_message_get_buffer_limit(mesg);
+        uint8_t *tsig_ptr = dns_message_get_message_limit(mesg);
         uint8_t *p = tsig_ptr;
         memcpy(p, mesg->_tsig.tsig->name, mesg->_tsig.tsig->name_len);
         p += mesg->_tsig.tsig->name_len;
@@ -2101,7 +2123,7 @@ ya_result dns_message_transform_to_unsigned_error(dns_message_t *mesg)
         p += ret;
         buffer_available_len -= ret;
 
-        if(FAIL(ret = dns_packet_reader_read(&purd, p, 10)))
+        if(FAIL(ret = dns_packet_reader_read(&purd, p, TYPE_CLASS_TTL_RDLEN_SIZE)))
         {
             return ret;
         }
@@ -2116,8 +2138,8 @@ ya_result dns_message_transform_to_unsigned_error(dns_message_t *mesg)
 
         uint8_t *rdata_size_ptr = &p[8];
 
-        p += 10;
-        buffer_available_len -= 10;
+        p += TYPE_CLASS_TTL_RDLEN_SIZE;
+        buffer_available_len -= TYPE_CLASS_TTL_RDLEN_SIZE;
 
         // algorithm name
         if(FAIL(ret = dns_packet_reader_read_fqdn(&purd, p, buffer_available_len)))
@@ -2264,7 +2286,7 @@ void dns_message_make_query_ex(dns_message_t *mesg, uint16_t id, const uint8_t *
 
         mesg->_edns0_opt_ttl.as_u32 |= MESSAGE_EDNS0_DNSSEC;
 
-        uint8_t *buffer = dns_message_get_buffer_limit(mesg);
+        uint8_t *buffer = dns_message_get_message_limit(mesg);
         buffer[0] = 0;
         buffer[1] = 0;                                 // TYPE
         buffer[2] = 0x29;                              // no alternative for now
@@ -2315,7 +2337,7 @@ void dns_message_make_query_ex_with_edns0(dns_message_t *mesg, uint16_t id, cons
     dns_message_set_additional_count_ne(mesg, NETWORK_ONE_16);
     // mesg->_rcode_ext |= MESSAGE_EDNS0_DNSSEC;
 
-    uint8_t *buffer = dns_message_get_buffer_limit(mesg);
+    uint8_t *buffer = dns_message_get_message_limit(mesg);
     buffer[0] = 0;
     buffer[1] = 0;                                 // TYPE
     buffer[2] = 0x29;                              // no alternative for now
@@ -2357,7 +2379,7 @@ void dns_message_make_message(dns_message_t *mesg, uint16_t id, const uint8_t *q
 #endif
 
     dns_message_set_size(mesg, dns_packet_writer_get_offset(uninitialised_packet_writer));
-    mesg->_ar_start = dns_message_get_buffer_limit(mesg);
+    mesg->_ar_start = dns_message_get_message_limit(mesg);
 
     dns_message_reset_buffer_size(mesg);
 
@@ -2524,7 +2546,7 @@ void dns_message_make_error(dns_message_t *mesg, uint16_t error_code)
     dns_message_reset_buffer_size(mesg);
     // + 4 is for TYPE + CLASS
     dns_message_set_size(mesg, DNS_HEADER_LENGTH + 4 + dnsname_len(dns_message_get_query_section_ptr(mesg)));
-    mesg->_ar_start = dns_message_get_buffer_limit(mesg);
+    mesg->_ar_start = dns_message_get_message_limit(mesg);
     dns_message_set_status(mesg, (finger_print)error_code);
 }
 
@@ -3089,7 +3111,7 @@ ya_result dns_message_query_udp_with_timeout(dns_message_t *mesg, const host_add
                 if(dns_message_get_query_count_ne(mesg) != 0)
                 {
                     has_fqdn = true;
-                    dnsname_copy(fqdn, dns_message_get_buffer_const(mesg) + 12);
+                    dnsname_copy(fqdn, dns_message_get_buffer_const(mesg) + DNS_HEADER_LENGTH);
                 }
 
                 dns_message_with_buffer_t recv_mesg_buff;
@@ -3127,29 +3149,44 @@ ya_result dns_message_query_udp_with_timeout(dns_message_t *mesg, const host_add
                                 {
                                     // everything checks up
 
-                                    dns_message_copy_sender_from(mesg, recv_mesg);
-                                    mesg->_ar_start = &mesg->_buffer[recv_mesg->_ar_start - recv_mesg->_buffer];
-                                    mesg->_iovec.iov_len = recv_mesg->_iovec.iov_len;
-                                    mesg->_edns0_opt_ttl.as_u32 = recv_mesg->_edns0_opt_ttl.as_u32;
-                                    mesg->_status = recv_mesg->_status;
-
-                                    if(mesg->_buffer_size < mesg->_iovec.iov_len)
+                                    if(dns_message_get_buffer_size_max(mesg) >= dns_message_get_size(recv_mesg))
                                     {
-                                        mesg->_buffer_size = mesg->_iovec.iov_len;
+                                        dns_message_copy_sender_from(mesg, recv_mesg);
+
+                                        if(dns_message_get_additional_section_ptr(mesg) != NULL)
+                                        {
+                                            mesg->_ar_start = &mesg->_buffer[dns_message_get_additional_section_ptr(mesg) - recv_mesg->_buffer];
+                                        }
+                                        else
+                                        {
+                                            mesg->_ar_start = NULL;
+                                        }
+                                        mesg->_iovec.iov_len = recv_mesg->_iovec.iov_len;
+                                        mesg->_edns0_opt_ttl.as_u32 = recv_mesg->_edns0_opt_ttl.as_u32;
+                                        mesg->_status = recv_mesg->_status;
+
+                                        if(mesg->_buffer_size < mesg->_iovec.iov_len)
+                                        {
+                                            mesg->_buffer_size = mesg->_iovec.iov_len;
+                                        }
+
+                                        mesg->_query_type = recv_mesg->_query_type;
+                                        mesg->_query_class = recv_mesg->_query_class;
+                                        dns_message_opt_copy_from(mesg, recv_mesg);
+
+                                        if((mesg->_control_buffer_size = recv_mesg->_control_buffer_size) > 0)
+                                        {
+                                            memcpy(mesg->_msghdr_control_buffer, recv_mesg->_msghdr_control_buffer, recv_mesg->_control_buffer_size);
+                                        }
+
+                                        dnsname_copy(mesg->_canonised_fqdn, recv_mesg->_canonised_fqdn);
+
+                                        memcpy(dns_message_get_buffer(mesg), dns_message_get_buffer_const(recv_mesg), dns_message_get_size(recv_mesg));
                                     }
-
-                                    mesg->_query_type = recv_mesg->_query_type;
-                                    mesg->_query_class = recv_mesg->_query_class;
-                                    dns_message_opt_copy_from(mesg, recv_mesg);
-
-                                    if((mesg->_control_buffer_size = recv_mesg->_control_buffer_size) > 0)
+                                    else
                                     {
-                                        memcpy(mesg->_msghdr_control_buffer, recv_mesg->_msghdr_control_buffer, recv_mesg->_control_buffer_size);
+                                        ret = BUFFER_WOULD_OVERFLOW;
                                     }
-
-                                    dnsname_copy(mesg->_canonised_fqdn, recv_mesg->_canonised_fqdn);
-
-                                    memcpy(mesg->_buffer, recv_mesg->_buffer, recv_mesg->_iovec.iov_len);
 
                                     break;
                                 }
@@ -3358,7 +3395,7 @@ ya_result dns_message_query_serial(const uint8_t *origin, const host_address_t *
                                     {
                                         struct type_class_ttl_rdlen_s tctr;
 
-                                        if(dns_packet_reader_read(&pr, &tctr, 10) == 10) // exact
+                                        if(dns_packet_reader_read(&pr, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE) == TYPE_CLASS_TTL_RDLEN_SIZE) // exact
                                         {
                                             if((tctr.rtype == TYPE_SOA) && (tctr.rclass == CLASS_IN))
                                             {
@@ -3528,8 +3565,9 @@ void message_init(message_data *mesg)
 #endif
 
 /**
- * If pointer is NULL, the structure and buffer will be allocated together
- * Note that in the current implementation, 8 bytes are reserved for TCP
+ * Creates an instance of dns_message on the heap.
+ * If pointer is NULL, the structure and buffer will be allocated together.
+ * Otherwise, the dns_message doesn't take possession of the buffer.
  */
 
 dns_message_t *dns_message_new_instance_ex(void *ptr, uint32_t message_size) // should be size of edns0 or 64K for TCP
@@ -3680,7 +3718,7 @@ void dns_message_log(logger_handle_t *logger, int level, const dns_message_t *me
                 tctrp = (struct type_class_ttl_rdlen_s *)&rr[dnsname_len(rr)];
                 rrdesc.type = tctrp->rtype;
                 rrdesc.len = ntohs(tctrp->rdlen);
-                rrdesc.rdata = &((uint8_t *)tctrp)[10];
+                rrdesc.rdata = &((uint8_t *)tctrp)[TYPE_CLASS_TTL_RDLEN_SIZE];
 
                 logger_handle_msg(logger, level, "%c%3i: %{dnsname} %i %{typerdatadesc}", "QANa"[section], index++, rr, ntohl(tctrp->ttl), &rrdesc);
             }
@@ -3801,7 +3839,7 @@ ya_result dns_message_get_ixfr_query_serial(dns_message_t *mesg, uint32_t *seria
         return ret;
     }
 
-    if(FAIL(ret = dns_packet_reader_skip(&purd, 10)))
+    if(FAIL(ret = dns_packet_reader_skip(&purd, TYPE_CLASS_TTL_RDLEN_SIZE)))
     {
         return ret;
     }
@@ -3848,7 +3886,7 @@ ya_result dns_message_terminate_then_write(dns_message_t *mesg, output_stream_t 
     {
         /* 00 00 29 SS SS rr vv 80 00 00 00 */
 
-        uint8_t *buffer = dns_message_get_buffer_limit(mesg);
+        uint8_t *buffer = dns_message_get_message_limit(mesg);
         buffer[0] = 0;
         buffer[1] = 0;
         buffer[2] = 0x29; // no alternative for now
@@ -4002,16 +4040,16 @@ ya_result dns_message_map_get_tctr(const dns_message_map_t *map, int index, stru
         {
             if(index >= map->section_base[1])
             {
-                if(dns_message_get_buffer_limit_const(map->mesg) - p >= 10)
+                if(dns_message_get_message_limit_const(map->mesg) - p >= TYPE_CLASS_TTL_RDLEN_SIZE)
                 {
-                    memcpy(tctr, p, 10);
+                    memcpy(tctr, p, TYPE_CLASS_TTL_RDLEN_SIZE);
 
                     return SUCCESS;
                 }
             }
             else
             {
-                if(dns_message_get_buffer_limit_const(map->mesg) - p >= 4)
+                if(dns_message_get_message_limit_const(map->mesg) - p >= 4)
                 {
                     memcpy(tctr, p, 4);
                     tctr->ttl = 0;
@@ -4044,7 +4082,7 @@ ya_result dns_message_map_get_rdata(const dns_message_map_t *map, int index, uin
         const uint8_t *p;
         if((p = dnsname_skip_compressed(dns_message_get_buffer_const(map->mesg), dns_message_get_size(map->mesg), ptr_vector_get(&map->records, index))) != NULL)
         {
-            if(dns_message_get_buffer_limit_const(map->mesg) - p >= 10)
+            if(dns_message_get_message_limit_const(map->mesg) - p >= TYPE_CLASS_TTL_RDLEN_SIZE)
             {
                 const uint8_t *rdata_base = rdata;
                 size_t         d;
@@ -4054,7 +4092,7 @@ ya_result dns_message_map_get_rdata(const dns_message_map_t *map, int index, uin
                 uint16_t n = ntohs(GET_U16_AT_P(p));
                 p += 2;
 
-                if(dns_message_get_buffer_limit_const(map->mesg) - p >= n)
+                if(dns_message_get_message_limit_const(map->mesg) - p >= n)
                 {
                     switch(rtype)
                     {
@@ -4201,7 +4239,7 @@ ya_result dns_message_map_get_type(const dns_message_map_t *map, int index)
         const uint8_t *p;
         if((p = dnsname_skip_compressed(dns_message_get_buffer_const(map->mesg), dns_message_get_size(map->mesg), ptr_vector_get(&map->records, index))) != NULL)
         {
-            if(dns_message_get_buffer_limit_const(map->mesg) - p >= 2)
+            if(dns_message_get_message_limit_const(map->mesg) - p >= 2)
             {
                 uint16_t rtype = GET_U16_AT_P(p);
 
@@ -4229,7 +4267,7 @@ ya_result dns_message_map_get_class(const dns_message_map_t *map, int index)
         const uint8_t *p;
         if((p = dnsname_skip_compressed(dns_message_get_buffer_const(map->mesg), dns_message_get_size(map->mesg), ptr_vector_get(&map->records, index))) != NULL)
         {
-            if(dns_message_get_buffer_limit_const(map->mesg) - p >= 4)
+            if(dns_message_get_message_limit_const(map->mesg) - p >= 4)
             {
                 uint16_t rclass = GET_U16_AT_P(p + 2);
 
@@ -4382,8 +4420,8 @@ static int dns_message_map_reorder_comparator(const void *rra, const void *rrb, 
     }
 
     pa = dnsname_expand_compressed(dns_message_get_buffer_const(map->mesg), dns_message_get_size(map->mesg), rra, fqdna, sizeof(fqdna));
-    memcpy(&tctra, pa, 10);
-    pa += 10;
+    memcpy(&tctra, pa, TYPE_CLASS_TTL_RDLEN_SIZE);
+    pa += TYPE_CLASS_TTL_RDLEN_SIZE;
     if(tctra.rtype == TYPE_RRSIG)
     {
         ctypea = GET_U16_AT_P(pa);
@@ -4393,11 +4431,9 @@ static int dns_message_map_reorder_comparator(const void *rra, const void *rrb, 
         ctypea = 0;
     }
 
-    pa += 10;
-
     pb = dnsname_expand_compressed(dns_message_get_buffer_const(map->mesg), dns_message_get_size(map->mesg), rrb, fqdnb, sizeof(fqdnb));
-    memcpy(&tctrb, pb, 10);
-    pb += 10;
+    memcpy(&tctrb, pb, TYPE_CLASS_TTL_RDLEN_SIZE);
+    pb += TYPE_CLASS_TTL_RDLEN_SIZE;
     if(tctrb.rtype == TYPE_RRSIG)
     {
         ctypeb = GET_U16_AT_P(pb);
@@ -4590,8 +4626,6 @@ int32_t dns_message_send_udp_debug(const dns_message_t *mesg, int sockfd)
     log_info("dns_message_send_udp(%p, %i) through %{sockaddr}", mesg, sockfd, mesg->_msghdr.msg_name);
 
     int32_t n;
-    void  **p = (void **)&mesg->_msghdr.msg_control;
-    *p = NULL;
     while((n = sendmsg(sockfd, &mesg->_msghdr, 0)) < 0)
     {
         int err = errno;

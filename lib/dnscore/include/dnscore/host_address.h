@@ -268,6 +268,15 @@ uint32_t           host_address_count(const host_address_t *address);
 static inline bool host_address_empty(host_address_t *address) { return (address == NULL); }
 
 /**
+ * Duplicates an addrinfo, must be freed.
+ *
+ * @param src
+ * @param addrp
+ * @return
+ */
+ya_result addrinfo_dup(const struct addrinfo *src, struct addrinfo **addrp);
+
+/**
  * Converts an host_address to a addrinfo
  * Must can be freed by "free"
  */

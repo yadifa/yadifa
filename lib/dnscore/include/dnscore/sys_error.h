@@ -373,8 +373,28 @@ void error_writetext(struct output_stream_s *os, ya_result code);
 
 void dnscore_register_errors();
 
+/**
+ * Decodes an SSL error.
+ *
+ * Logs the error on the system logger if the feature isn't disabled,
+ * else prints on stderr using osformatln.
+ *
+ * Returns a proper YADIFA error code.
+ *
+ * The error may be translated.
+ * e.g.
+ *    0 for EOF
+ *    MAKE_ERRNO_ERROR(EAGAIN) for non-blocking calls (but not exclusively)
+ *    INVALID_STATE
+ *    SSL-specific error code (SSL_ERROR_BASE + something)
+ *
+ * @param ssl the ssl object
+ * @param n the code returned by the SSL function ( <= 0)
+ * @return an error code
+ */
+
 // the first parameter is a SSL*
-void      crypto_ssl_error(void *ssl, int n);
+ya_result crypto_ssl_error(void *ssl, int n);
 
 ya_result crypto_openssl_error();
 

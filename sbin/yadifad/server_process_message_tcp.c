@@ -334,9 +334,11 @@ int server_process_channel_message(tcp_manager_channel_t *tmc, dns_message_t *me
 
                 if((ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (dns_message_get_status(mesg) != RCODE_FORMERR)) && received_query)
                 {
-                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    dns_message_edns0_clear_undefined_flags(mesg);
+
+                    if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                     {
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                     }
 
                     ret = server_tcp_reply(mesg, tmc);
@@ -413,9 +415,11 @@ int server_process_channel_message(tcp_manager_channel_t *tmc, dns_message_t *me
 
                 if((ret != INVALID_MESSAGE) && ((dns_message_get_status(mesg) != RCODE_FORMERR) || ((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0)) && received_query)
                 {
-                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    dns_message_edns0_clear_undefined_flags(mesg);
+
+                    if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                     {
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                     }
 
                     ret = server_tcp_reply(mesg, tmc);
@@ -527,9 +531,10 @@ int server_process_channel_message(tcp_manager_channel_t *tmc, dns_message_t *me
 
                 if((ret != INVALID_MESSAGE) && (((g_config->server_flags & SERVER_FL_ANSWER_FORMERR) != 0) || (dns_message_get_status(mesg) != RCODE_FORMERR)) && received_query)
                 {
-                    if(!dns_message_has_tsig(mesg) && (dns_message_get_status(mesg) != FP_RCODE_NOTAUTH))
+                    dns_message_edns0_clear_undefined_flags(mesg);
+                    if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                     {
-                        dns_message_transform_to_error(mesg);
+                        dns_message_transform_to_signed_error(mesg);
                     }
 
                     ret = server_tcp_reply(mesg, tmc);
@@ -632,12 +637,6 @@ int server_process_channel_message(tcp_manager_channel_t *tmc, dns_message_t *me
             {
                 dns_message_set_status(mesg, FP_RCODE_NOTIMP);
                 dns_message_update_answer_status(mesg);
-#if DNSCORE_HAS_TSIG_SUPPORT
-                if(dns_message_has_tsig(mesg))
-                {
-                    tsig_sign_answer(mesg);
-                }
-#endif
             }
 
             if(g_config->server_flags & SERVER_FL_LOG_UNPROCESSABLE)
@@ -650,7 +649,7 @@ int server_process_channel_message(tcp_manager_channel_t *tmc, dns_message_t *me
                 if(dns_message_get_status(mesg) != FP_RCODE_NOTAUTH)
                 {
                     dns_message_edns0_clear_undefined_flags(mesg);
-                    dns_message_transform_to_error(mesg);
+                    dns_message_transform_to_signed_error(mesg);
                 }
 
                 ret = server_tcp_reply(mesg, tmc);

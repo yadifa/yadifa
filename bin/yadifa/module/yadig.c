@@ -860,7 +860,7 @@ static ya_result yadig_query_message_process(dns_message_t *mesg, dns_message_t 
     if(dns_message_get_query_count_ne(mesg) != 0)
     {
         has_fqdn = true;
-        dnsname_copy(fqdn, dns_message_get_buffer_const(mesg) + 12);
+        dnsname_copy(fqdn, dns_message_get_buffer_const(mesg) + DNS_HEADER_LENGTH);
     }
 
     // copy TSIG signature information from the query to the receiver
@@ -889,29 +889,43 @@ static ya_result yadig_query_message_process(dns_message_t *mesg, dns_message_t 
         {
             // everything checks up
 
-            dns_message_copy_sender_from(mesg, recv_mesg);
-            mesg->_ar_start = &mesg->_buffer[recv_mesg->_ar_start - recv_mesg->_buffer];
-            mesg->_iovec.iov_len = recv_mesg->_iovec.iov_len;
-            mesg->_edns0_opt_ttl.as_u32 = recv_mesg->_edns0_opt_ttl.as_u32;
-            mesg->_status = recv_mesg->_status;
-
-            if(mesg->_buffer_size < mesg->_iovec.iov_len)
+            if(dns_message_get_buffer_size_max(mesg) >= dns_message_get_size(recv_mesg))
             {
-                mesg->_buffer_size = mesg->_iovec.iov_len;
+                dns_message_copy_sender_from(mesg, recv_mesg);
+                if(dns_message_get_additional_section_ptr(mesg) != NULL)
+                {
+                    mesg->_ar_start = &mesg->_buffer[dns_message_get_additional_section_ptr(mesg) - recv_mesg->_buffer];
+                }
+                else
+                {
+                    mesg->_ar_start = NULL;
+                }
+                mesg->_iovec.iov_len = recv_mesg->_iovec.iov_len;
+                mesg->_edns0_opt_ttl.as_u32 = recv_mesg->_edns0_opt_ttl.as_u32;
+                mesg->_status = recv_mesg->_status;
+
+                if(mesg->_buffer_size < mesg->_iovec.iov_len)
+                {
+                    mesg->_buffer_size = mesg->_iovec.iov_len;
+                }
+
+                mesg->_query_type = recv_mesg->_query_type;
+                mesg->_query_class = recv_mesg->_query_class;
+                dns_message_opt_copy_from(mesg, recv_mesg);
+
+                if((mesg->_control_buffer_size = recv_mesg->_control_buffer_size) > 0)
+                {
+                    memcpy(mesg->_msghdr_control_buffer, recv_mesg->_msghdr_control_buffer, recv_mesg->_control_buffer_size);
+                }
+
+                dnsname_copy(mesg->_canonised_fqdn, recv_mesg->_canonised_fqdn);
+
+                memcpy(mesg->_buffer, recv_mesg->_buffer, recv_mesg->_iovec.iov_len);
             }
-
-            mesg->_query_type = recv_mesg->_query_type;
-            mesg->_query_class = recv_mesg->_query_class;
-            dns_message_opt_copy_from(mesg, recv_mesg);
-
-            if((mesg->_control_buffer_size = recv_mesg->_control_buffer_size) > 0)
+            else
             {
-                memcpy(mesg->_msghdr_control_buffer, recv_mesg->_msghdr_control_buffer, recv_mesg->_control_buffer_size);
+                ret = BUFFER_WOULD_OVERFLOW;
             }
-
-            dnsname_copy(mesg->_canonised_fqdn, recv_mesg->_canonised_fqdn);
-
-            memcpy(mesg->_buffer, recv_mesg->_buffer, recv_mesg->_iovec.iov_len);
         }
         else
         {

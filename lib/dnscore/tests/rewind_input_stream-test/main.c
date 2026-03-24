@@ -155,6 +155,13 @@ static int rewind_test()
         return 1;
     }
     ret = input_stream_read(&is, &buffer[REWIND_BUFFER_SIZE - 1], 1);
+
+    if(ret != 1)
+    {
+        yatest_err("rewind_test: input_stream_read failed reading 1: %08x", ret);
+        return 1;
+    }
+
     for(int i = REWIND_BUFFER_SIZE - 2; i >= 0; --i)
     {
         ret = rewind_input_stream_rewind(&is, 2);

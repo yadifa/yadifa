@@ -6103,7 +6103,7 @@ ya_result dynupdate_diff(zdb_zone_t *zone, dns_packet_reader_t *reader, uint16_t
             return RCODE_ERROR_CODE(RCODE_NOTZONE);
         }
 
-        if((ret = dns_packet_reader_read(reader, p, 10)) != 10)
+        if((ret = dns_packet_reader_read(reader, p, TYPE_CLASS_TTL_RDLEN_SIZE)) != TYPE_CLASS_TTL_RDLEN_SIZE)
         {
             ret = UNEXPECTED_EOF;
 

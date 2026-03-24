@@ -321,7 +321,7 @@ ya_result dns_message_update_finalize(dns_message_t *mesg, dns_packet_writer_t *
             mesg->_buffer[DNS_HEADER_LENGTH - 1] = 1; /* AR count was 0, now it is 1 */
 
             /* append opt */ /* */
-            uint8_t *buffer = dns_message_get_buffer_limit(mesg);
+            uint8_t *buffer = dns_message_get_message_limit(mesg);
 
             buffer[0] = 0;
             buffer[1] = 0;

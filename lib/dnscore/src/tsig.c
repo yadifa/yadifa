@@ -487,7 +487,7 @@ static ya_result tsig_verify_query(dns_message_t *mesg)
         SET_U16_AT_P(mesg->_tsig.other, 0);
         SET_U32_AT_P(mesg->_tsig.other + 2, htonl(time(NULL)));
 
-        dns_message_tsig_set_error(mesg, NU16(RCODE_BADTIME)); 
+        dns_message_tsig_set_error(mesg, NU16(RCODE_BADTIME));
         tsig_digest_answer(mesg);
         tsig_add_tsig(mesg);
 
@@ -571,7 +571,7 @@ ya_result tsig_verify_answer(dns_message_t *mesg, const uint8_t *mac, uint16_t m
 
     if(llabs((int64_t)((int64_t)then - now)) > fudge) // cast to signed in case now > then
     {
-        dns_message_tsig_set_error(mesg, NU16(RCODE_BADTIME)); 
+        dns_message_tsig_set_error(mesg, NU16(RCODE_BADTIME));
         dns_message_set_status(mesg, FP_TSIG_ERROR); // MUST be NOTAUTH
         return TSIG_BADTIME;
     }
@@ -839,7 +839,8 @@ ya_result tsig_process(dns_message_t *mesg, dns_packet_reader_t *purd, uint32_t 
         mesg->_tsig.tsig = tsig;
         mesg->_tsig.mac_algorithm = alg;
 
-        if(FAIL(return_code = dns_packet_reader_read(purd, &mesg->_tsig.timehi, 10)))
+        // read: timehi + timelo + fudge + mac_size = 10 bytes
+        if(FAIL(return_code = dns_packet_reader_read(purd, &mesg->_tsig.timehi, 2 + 4 + 2 + 2)))
         {
             /* oops */
             dns_message_set_status(mesg, FP_TSIG_BROKEN);
@@ -986,7 +987,7 @@ ya_result tsig_process_answer(dns_message_t *mesg, dns_packet_reader_t *purd, ui
                 free(mesg->_tsig.other);
                 mesg->_tsig.other = NULL;
                 mesg->_tsig.other_len = 0;
-                dns_message_tsig_set_error(mesg, NU16(RCODE_BADSIG)); 
+                dns_message_tsig_set_error(mesg, NU16(RCODE_BADSIG));
 
                 tsig_append_error(mesg);
             }
@@ -1023,7 +1024,7 @@ static ya_result tsig_add_tsig(dns_message_t *mesg)
         return TSIG_SIZE_LIMIT_ERROR;
     }
 
-    uint8_t *tsig_ptr = dns_message_get_buffer_limit(mesg);
+    uint8_t *tsig_ptr = dns_message_get_message_limit(mesg);
 
     /* record */
 
@@ -1578,7 +1579,7 @@ ya_result tsig_message_extract(struct dns_message_s *mesg)
 
     struct type_class_ttl_rdlen_s tctr;
 
-    if(FAIL(return_value = dns_packet_reader_read(&reader, &tctr, 10)))
+    if(FAIL(return_value = dns_packet_reader_read(&reader, &tctr, TYPE_CLASS_TTL_RDLEN_SIZE)))
     {
         return return_value;
     }

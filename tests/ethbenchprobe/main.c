@@ -176,41 +176,41 @@ static void             signal_handler(uint8_t signum)
 
 static ya_result interface_metrics_json_write(output_stream_t *os, const interface_metrics_t *itfm)
 {
-    ya_result ret = ret = osformat(os,
-                                   "{"
-                                   "\"rx_bytes\": %lli,"
-                                   "\"rx_packets\": %lli,"
-                                   "\"rx_errs\": %lli,"
-                                   "\"rx_drop\": %lli,"
-                                   "\"rx_fifo\": %lli,"
-                                   "\"rx_frame\": %lli,"
-                                   "\"rx_compressed\": %lli,"
-                                   "\"rx_multicast\": %lli,"
-                                   "\"tx_bytes\": %lli,"
-                                   "\"tx_packets\": %lli,"
-                                   "\"tx_errs\": %lli,"
-                                   "\"tx_drop\": %lli,"
-                                   "\"tx_fifo\": %lli,"
-                                   "\"tx_colls\": %lli,"
-                                   "\"tx_carrier\": %lli,"
-                                   "\"tx_compressed\": %lli"
-                                   "}",
-                                   itfm->rx_bytes,
-                                   itfm->rx_packets,
-                                   itfm->rx_errs,
-                                   itfm->rx_drop,
-                                   itfm->rx_fifo,
-                                   itfm->rx_frame,
-                                   itfm->rx_compressed,
-                                   itfm->rx_multicast,
-                                   itfm->tx_bytes,
-                                   itfm->tx_packets,
-                                   itfm->tx_errs,
-                                   itfm->tx_drop,
-                                   itfm->tx_fifo,
-                                   itfm->tx_colls,
-                                   itfm->tx_carrier,
-                                   itfm->tx_compressed);
+    ya_result ret = osformat(os,
+        "{"
+        "\"rx_bytes\": %lli,"
+        "\"rx_packets\": %lli,"
+        "\"rx_errs\": %lli,"
+        "\"rx_drop\": %lli,"
+        "\"rx_fifo\": %lli,"
+        "\"rx_frame\": %lli,"
+        "\"rx_compressed\": %lli,"
+        "\"rx_multicast\": %lli,"
+        "\"tx_bytes\": %lli,"
+        "\"tx_packets\": %lli,"
+        "\"tx_errs\": %lli,"
+        "\"tx_drop\": %lli,"
+        "\"tx_fifo\": %lli,"
+        "\"tx_colls\": %lli,"
+        "\"tx_carrier\": %lli,"
+        "\"tx_compressed\": %lli"
+        "}",
+        itfm->rx_bytes,
+        itfm->rx_packets,
+        itfm->rx_errs,
+        itfm->rx_drop,
+        itfm->rx_fifo,
+        itfm->rx_frame,
+        itfm->rx_compressed,
+        itfm->rx_multicast,
+        itfm->tx_bytes,
+        itfm->tx_packets,
+        itfm->tx_errs,
+        itfm->tx_drop,
+        itfm->tx_fifo,
+        itfm->tx_colls,
+        itfm->tx_carrier,
+        itfm->tx_compressed);
     return ret;
 }
 
@@ -285,11 +285,11 @@ ya_result interface_probe(interface_t *intf, const char *ifname, interface_metri
                     if(line_end != NULL)
                     {
                         *line_end = '\0';
-                        p = line_end + 1;
+                        //p = line_end + 1;
                     }
                     else
                     {
-                        line_end = &intf->buffer[text_size];
+                        //line_end = &intf->buffer[text_size];
                     }
 
                     if(strcmp(itf_start, ifname) == 0)
@@ -384,12 +384,14 @@ static ya_result interface_follow(const char *rx_interface, const char *tx_inter
     if(interface_probe(&intf, rx_interface, &rx_im_begin) != 1)
     {
         interface_close(&intf);
+        free(samples);
         return INVALID_STATE_ERROR;
     }
 
     if(interface_probe(&intf, tx_interface, &tx_im_begin) != 1)
     {
         interface_close(&intf);
+        free(samples);
         return INVALID_STATE_ERROR;
     }
 
@@ -570,9 +572,12 @@ static ya_result interface_follow(const char *rx_interface, const char *tx_inter
         else
         {
             formatln("failed to create '%s': %r", sampling_file, ret);
+            free(samples);
             return ret;
         }
     }
+
+    free(samples);
 
     return SUCCESS;
 }

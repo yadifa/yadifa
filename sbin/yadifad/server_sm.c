@@ -264,8 +264,7 @@ static int server_sm_udp_worker_thread(struct service_worker_s *worker)
         if(FAIL(ret))
         {
 #if DEBUG
-            int err = ERRNO_ERROR;
-            log_debug("dns_message_recv_udp %i returned %i : %r", fd, ret, err);
+            log_debug("dns_message_recv_udp %i returned: %r", fd, ret);
 #endif
             if(service_should_reconfigure_or_stop(ctx->base.worker))
             {
