@@ -140,7 +140,7 @@ from the sources.
 .SH VERSION
 
 .PP
-Version: 3.0.8 of 2026\-03\-24 
+Version: 3.0.9 of 2026\-03\-24 
 .PP
 .SH MAILING LISTS
 

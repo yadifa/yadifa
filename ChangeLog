@@ -31,6 +31,11 @@
 ################################################################################
 
 20260324:
+    YADIFA 3.0.9
+
+    fixes issue during shutdown
+    
+20260324:
     YADIFA 3.0.8
 
     Now builds with LibreSSL 4.x

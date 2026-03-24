@@ -375,7 +375,6 @@ void server_context_stop()
         {
             if(g_server_context.udp_interface[i] != NULL)
             {
-                free(g_server_context.udp_interface[i]->ai_addr);
                 free(g_server_context.udp_interface[i]); // not obtained through getaddrinfo
                 g_server_context.udp_interface[i] = NULL;
                 // memset(&g_server_context.udp_interface[i], 0, sizeof(g_server_context.udp_interface[i]));
@@ -392,7 +391,6 @@ void server_context_stop()
         {
             if(g_server_context.tcp_interface[i] != NULL)
             {
-                free(g_server_context.tcp_interface[i]->ai_addr);
                 free(g_server_context.tcp_interface[i]); // not obtained through getaddrinfo
                 g_server_context.tcp_interface[i] = NULL;
                 // memset(&g_server_context.tcp_interface[i], 0, sizeof(g_server_context.tcp_interface[i]));

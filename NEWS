@@ -31,8 +31,6 @@
 ################################################################################
 
 20260324:
-    YADIFA 3.0.8
+    YADIFA 3.0.9
 
-    Now builds with LibreSSL 4.x
-    Improves DoT handling (experimental)
-    Fixes an issue in handling broken messages that could lead to a crash.
+    fixes issue during shutdown
