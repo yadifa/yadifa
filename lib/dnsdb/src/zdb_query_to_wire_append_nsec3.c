@@ -161,9 +161,16 @@ uint16_t zdb_query_to_wire_append_nsec3_record(zdb_query_to_wire_context_t *cont
     int32_t                  ne_ttl = (int32_t)htonl(nsec3_parms->ttl);
 
     uint16_t                 last_good_offset = pw->packet_offset;
-    uint16_t                 code = last_good_offset;
+    uint16_t                 code;
 
-    code = htons(code | 0xc000);
+    if(last_good_offset < 0x4000)
+    {
+        code = htons(last_good_offset | 0xc000);
+    }
+    else
+    {
+        code = 0;
+    }
 
     if(dns_packet_writer_get_remaining_capacity(pw) < (BASE32HEX_ENCODED_LEN(SHA_DIGEST_LENGTH) + 1))
     {
@@ -214,30 +221,61 @@ uint16_t zdb_query_to_wire_append_nsec3_record(zdb_query_to_wire_context_t *cont
 #else
         last_good_offset = pw->packet_offset;
 
+        uint_fast16_t count = 1;
+
         zdb_resource_record_set_const_iterator iter;
         zdb_resource_record_set_const_iterator_init(item->rrsig_rrset, &iter);
         while(zdb_resource_record_set_const_iterator_has_next(&iter))
         {
             const zdb_resource_record_data_t *rrsig_record = zdb_resource_record_set_const_iterator_next(&iter);
 
-            if(dns_packet_writer_get_remaining_capacity(pw) < 12 + zdb_resource_record_data_rdata_size(rrsig_record))
+            if(code != 0)
             {
-                pw->packet_offset = last_good_offset;
-                zdb_query_to_wire_context_set_truncated(context);
-                break;
+                // the 2 is for the 16 bits compression code
+                if(dns_packet_writer_get_remaining_capacity(pw) < 2 + TYPE_CLASS_TTL_RDLEN_SIZE + zdb_resource_record_data_rdata_size(rrsig_record))
+                {
+                    pw->packet_offset = last_good_offset;
+                    zdb_query_to_wire_context_set_truncated(context);
+                    break;
+                }
+                dns_packet_writer_add_u16(pw, code);
+                dns_packet_writer_add_u16(pw, TYPE_RRSIG);
+                dns_packet_writer_add_u16(pw, CLASS_IN);
+                dns_packet_writer_add_u32(pw, ne_ttl);
+                dns_packet_writer_add_u16(pw, ntohs(zdb_resource_record_data_rdata_size(rrsig_record)));
+                dns_packet_writer_add_bytes(pw, zdb_resource_record_data_rdata_const(rrsig_record), zdb_resource_record_data_rdata_size(rrsig_record));
+            }
+            else
+            {
+                dns_packet_writer_encode_base32hex_digest(&context->pw, &item->digest[1]);
+
+                if(FAIL(dns_packet_writer_add_fqdn(pw, nsec3_parms->origin)))
+                {
+                    pw->packet_offset = last_good_offset;
+                    zdb_query_to_wire_context_set_truncated(context);
+                    break;
+                }
+
+                if(dns_packet_writer_get_remaining_capacity(pw) < zdb_resource_record_data_rdata_size(rrsig_record) + TYPE_CLASS_TTL_RDLEN_SIZE)
+                {
+                    pw->packet_offset = last_good_offset;
+                    zdb_query_to_wire_context_set_truncated(context);
+                    break;
+                }
+
+                dns_packet_writer_add_u16(pw, TYPE_RRSIG);
+                dns_packet_writer_add_u16(pw, CLASS_IN);
+                dns_packet_writer_add_u32(pw, ne_ttl);
+                dns_packet_writer_add_u16(pw, ntohs(zdb_resource_record_data_rdata_size(rrsig_record)));
+
+                dns_packet_writer_add_bytes(pw, zdb_resource_record_data_rdata_const(rrsig_record), zdb_resource_record_data_rdata_size(rrsig_record));
             }
 
-            dns_packet_writer_add_u16(pw, code);
-            dns_packet_writer_add_u16(pw, TYPE_RRSIG);
-            dns_packet_writer_add_u16(pw, CLASS_IN);
-            dns_packet_writer_add_u32(pw, ne_ttl);
-            dns_packet_writer_add_u16(pw, ntohs(zdb_resource_record_data_rdata_size(rrsig_record)));
-            dns_packet_writer_add_bytes(pw, zdb_resource_record_data_rdata_const(rrsig_record), zdb_resource_record_data_rdata_size(rrsig_record));
-
             last_good_offset = pw->packet_offset;
+            count += 1;
         }
 #endif
-        return zdb_resource_record_set_size(item->rrsig_rrset) + 1;
+        return count;
     }
 
     return 1;

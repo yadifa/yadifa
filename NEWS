@@ -30,7 +30,11 @@
 #
 ################################################################################
 
-20260324:
-    YADIFA 3.0.9
+20260513:
+    YADIFA 3.0.10
 
-    fixes issue during shutdown
+    fixes an issue that could happen encoding experimental messages (PQC + CROSS)
+
+    adds a workaround for an issue that could randomly trigger with some PQC algorithms (e.g. SNOVA)
+
+    hardens FQDN decompression logic

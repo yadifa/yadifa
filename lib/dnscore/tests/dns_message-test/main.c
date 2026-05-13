@@ -35,12 +35,14 @@
 #include "yatest.h"
 #include "yatest_dns.h"
 #include "yatest_socket.h"
+#include "dnscore/dnscore.h"
 #include "dnscore/file_input_stream.h"
 #include "dnscore/file_output_stream.h"
 #include "dnscore/dns_message_writer.h"
 #include "dnscore/ctrl_rfc.h"
 #include "dnscore/config_settings.h"
 #include "dnscore/dnskey_signature.h"
+#include "dnscore/nsid.h"
 
 #include <dnscore/dnscore.h>
 #include <dnscore/dns_message.h>
@@ -303,16 +305,19 @@ static int header_test()
 {
     int ret;
     init();
-    dns_message_t *mesg = mesg64K;
     const uint16_t query_type_const = TYPE_A;
     const uint16_t query_class_const = CLASS_IN;
 
-    dns_message_make_query(mesg, 0x1234, www_yadifa_eu, query_type_const, query_class_const);
+    dns_message_make_query(mesg64K, 0x1234, www_yadifa_eu, query_type_const, query_class_const);
+
+    dns_message_t *mesg = dns_message_new_instance();
+    dns_message_copy_into_buffer(mesg, dns_message_get_buffer_const(mesg64K), dns_message_get_size(mesg64K));
 
     ret = dns_message_process_query(mesg);
     if(FAIL(ret))
     {
         yatest_err("dns_message_process_query failed with %s", error_gettext(ret));
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -323,6 +328,7 @@ static int header_test()
     if((query_count != 1) || ((answer_count | authority_count | additional_count) != 0))
     {
         yatest_err("dns_message_make_query: expected 1,0,0,0, got %i,%i,%i,%i", query_count, answer_count, authority_count, additional_count);
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_query_answer_authority_additional_counts(mesg, 1, 2, 3, 4);
@@ -348,12 +354,14 @@ static int header_test()
     if(dns_message_get_update_count_ne(mesg) != htons(17))
     {
         yatest_err("dns_message_set_update_count_ne: expected %04x, got %04x", htons(17), dns_message_get_update_count_ne(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_update_count(mesg, 18); // same as authority
     if(dns_message_get_update_count(mesg) != 18)
     {
         yatest_err("dns_message_set_update_count: expected %04x, got %04x", htons(18), dns_message_get_update_count(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -374,6 +382,7 @@ static int header_test()
     if(dns_message_get_opcode(mesg) != OPCODE_QUERY)
     {
         yatest_err("dns_message_make_query: opcode expected to be QUERY=%i, got %i", OPCODE_QUERY, dns_message_get_opcode(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -383,6 +392,7 @@ static int header_test()
         if(dns_message_get_opcode(mesg) != dns_message_make_opcode(i))
         {
             yatest_err("dns_message_make_query: opcode expected to be %s=%i, got %i", dns_message_opcode_get_name(i), i, dns_message_get_opcode(mesg));
+            dns_message_delete(mesg);
             return 1;
         }
     }
@@ -390,12 +400,14 @@ static int header_test()
     if(dns_message_get_referral(mesg) != 0)
     {
         yatest_err("dns_message_make_query: referral expected to be 0, got %i", dns_message_get_referral(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_referral(mesg, 1);
     if(dns_message_get_referral(mesg) != 1)
     {
         yatest_err("dns_message_make_query: referral expected to be 1, got %i", dns_message_get_referral(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_referral(mesg, 0);
@@ -403,18 +415,21 @@ static int header_test()
     if(!dns_message_is_query(mesg))
     {
         yatest_err("dns_message_is_query returned false");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_is_truncated(mesg))
     {
         yatest_err("dns_message_is_truncated returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -423,12 +438,14 @@ static int header_test()
     if(dns_message_is_query(mesg))
     {
         yatest_err("dns_message_is_query returned true (dns_message_set_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(!dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned false (dns_message_set_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -437,6 +454,7 @@ static int header_test()
     if(!dns_message_is_truncated(mesg))
     {
         yatest_err("dns_message_is_truncated returned false (dns_message_set_truncated true)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -445,6 +463,7 @@ static int header_test()
     if(dns_message_is_truncated(mesg))
     {
         yatest_err("dns_message_is_truncated returned true (dns_message_set_truncated false)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -453,12 +472,14 @@ static int header_test()
     if(!dns_message_is_query(mesg))
     {
         yatest_err("dns_message_is_query returned false (dns_message_clear_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned true (dns_message_clear_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -467,18 +488,21 @@ static int header_test()
     if(dns_message_is_query(mesg))
     {
         yatest_err("dns_message_is_query returned true (dns_message_set_authoritative_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(!dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned false (dns_message_set_authoritative_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(!dns_message_is_authoritative(mesg))
     {
         yatest_err("dns_message_is_authoritative returned false (dns_message_set_authoritative_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -489,6 +513,7 @@ static int header_test()
     if(dns_message_is_authoritative(mesg))
     {
         yatest_err("dns_message_is_authoritative returned true (dns_message_is_authoritative)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -497,12 +522,14 @@ static int header_test()
     if(dns_message_is_query(mesg))
     {
         yatest_err("dns_message_is_query returned true (dns_message_set_truncated_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(!dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned false (dns_message_set_truncated_answer)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -510,6 +537,7 @@ static int header_test()
     if(dns_message_has_recursion_desired(mesg))
     {
         yatest_err("dns_message_has_recursion_desired returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -517,36 +545,42 @@ static int header_test()
     if(!dns_message_has_recursion_desired(mesg))
     {
         yatest_err("dns_message_has_recursion_desired returned false (dns_message_set_recursion_desired)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_has_recursion_available(mesg))
     {
         yatest_err("dns_message_has_recursion_available returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_has_authenticated_data(mesg))
     {
         yatest_err("dns_message_has_authenticated_data returned true");
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_authenticated_data(mesg);
     if(!dns_message_has_authenticated_data(mesg))
     {
         yatest_err("dns_message_has_authenticated_data returned false (dns_message_set_authenticated_data)");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_has_checking_disabled(mesg))
     {
         yatest_err("dns_message_has_checking_disabled returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_get_rcode(mesg) != RCODE_OK)
     {
         yatest_err("dns_message_get_rcode expected OK, got %i=%s", dns_message_get_rcode(mesg), dns_message_rcode_get_name(dns_message_get_rcode(mesg)));
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -555,6 +589,7 @@ static int header_test()
     if(dns_message_get_rcode(mesg) != RCODE_NOTZONE)
     {
         yatest_err("dns_message_get_rcode expected NOTZONE, got %i=%s", dns_message_get_rcode(mesg), dns_message_rcode_get_name(dns_message_get_rcode(mesg)));
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -568,6 +603,7 @@ static int header_test()
     if((flags_org & flags_mask) != flags_after)
     {
         yatest_err("dns_message_apply_mask failed (%04x & %04x != %04x)", flags_org, flags_mask, flags_after);
+        dns_message_delete(mesg);
         return 1;
     }
     uint8_t  flags_lo_org = dns_message_get_flags_lo(mesg);
@@ -576,6 +612,7 @@ static int header_test()
     if(flags_after != flags_hilo_org)
     {
         yatest_err("flags mismatch %04x != %04x", flags_hilo_org, flags_after);
+        dns_message_delete(mesg);
         return 1;
     }
     const uint8_t lo_mask = 0xdf;
@@ -584,6 +621,7 @@ static int header_test()
     if((flags_lo_org & lo_mask) != flags_lo_after)
     {
         yatest_err("dns_message_apply_lo_mask failed: (%02x & %02x != %02x)", flags_lo_org, lo_mask, flags_lo_after);
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -592,18 +630,21 @@ static int header_test()
     if(flags_org != dns_message_get_flags(mesg))
     {
         yatest_err("dns_message_set_flags_hi or dns_message_set_flags_lo failed : %04x != %04x", flags_org, dns_message_get_flags(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_get_edns0_opt_ttl(mesg) != 0)
     {
         yatest_err("dns_message_get_edns0_opt_ttl expected 0, got %08x", dns_message_get_edns0_opt_ttl(mesg));
+        dns_message_delete(mesg);
         return 1;
     }
 
     if(dns_message_has_edns0_dnssec(mesg))
     {
         yatest_err("dns_message_has_edns0_dnssec returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -611,11 +652,13 @@ static int header_test()
     if(query_type != *dns_message_get_query_type_ptr(mesg))
     {
         yatest_err("dns_message_get_query_type != dns_message_get_query_type_ptr");
+        dns_message_delete(mesg);
         return 1;
     }
     if(query_type != query_type_const)
     {
         yatest_err("query_type != query_type_const (%04x != %04x)", query_type, query_type_const);
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -623,6 +666,7 @@ static int header_test()
     if(dns_message_get_query_type(mesg) != query_type + 1)
     {
         yatest_err("dns_message_set_query_type didn't set the query type");
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_query_type(mesg, query_type);
@@ -631,11 +675,13 @@ static int header_test()
     if(query_class != *dns_message_get_query_class_ptr(mesg))
     {
         yatest_err("dns_message_get_query_class != dns_message_get_query_class_ptr");
+        dns_message_delete(mesg);
         return 1;
     }
     if(query_class != query_class_const)
     {
         yatest_err("query_class != query_class_const (%04x != %04x)", query_class, query_class_const);
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -643,6 +689,7 @@ static int header_test()
     if(dns_message_get_query_class(mesg) != query_class + 1)
     {
         yatest_err("dns_message_set_query_class didn't set the query class");
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_query_class(mesg, query_class);
@@ -652,6 +699,7 @@ static int header_test()
     if(dns_message_has_recursion_desired(mesg))
     {
         yatest_err("dns_message_has_recursion_desired returned true");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -660,6 +708,7 @@ static int header_test()
     if(!dns_message_has_recursion_desired(mesg))
     {
         yatest_err("dns_message_has_recursion_desired returned false");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -673,12 +722,14 @@ static int header_test()
     if(!dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned false after dns_message_update_answer_status");
+        dns_message_delete(mesg);
         return 1;
     }
     rcode = dns_message_get_rcode(mesg);
     if(rcode != FP_RCODE_FORMERR)
     {
         yatest_err("dns_message_update_answer_status didn't set the rcode properly");
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_rcode(mesg, 0);
@@ -686,6 +737,7 @@ static int header_test()
     if(rcode != 0)
     {
         yatest_err("dns_message_set_rcode didn't set the rcode properly");
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_set_status(mesg, FP_RCODE_NOTIMP);
@@ -693,12 +745,14 @@ static int header_test()
     if(!dns_message_is_answer(mesg))
     {
         yatest_err("dns_message_is_answer returned false after dns_message_update_truncated_answer_status");
+        dns_message_delete(mesg);
         return 1;
     }
     rcode = dns_message_get_rcode(mesg);
     if(rcode != FP_RCODE_NOTIMP)
     {
         yatest_err("dns_message_update_truncated_answer_status didn't set the rcode properly");
+        dns_message_delete(mesg);
         return 1;
     }
     dns_message_clear_answer(mesg);
@@ -709,6 +763,7 @@ static int header_test()
     if(dns_message_get_status(mesg) != RCODE_NOTAUTH)
     {
         yatest_err("dns_message_set_error_status_from_result didn't set the status properly");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -716,18 +771,22 @@ static int header_test()
     if(dns_message_get_status(mesg) != RCODE_SERVFAIL)
     {
         yatest_err("dns_message_set_error_status_from_result didn't set the status properly");
+        dns_message_delete(mesg);
         return 1;
     }
 
-    if(dns_message_get_additional_section_ptr(mesg) != NULL)
+    // this behavior has been changed. Now it gives the limit of the buffer.
+    if(dns_message_get_additional_section_ptr(mesg) != dns_message_get_buffer_const(mesg) + dns_message_get_size(mesg))
     {
-        yatest_err("expected dns_message_get_additional_section_ptr to return NULL");
+        yatest_err("expected dns_message_get_additional_section_ptr to return the limit of the message buffer");
+        dns_message_delete(mesg);
         return 1;
     }
 
-    if(dns_message_get_additional_section_ptr_const(mesg) != NULL)
+    if(dns_message_get_additional_section_ptr_const(mesg) != dns_message_get_buffer_const(mesg) + dns_message_get_size(mesg))
     {
-        yatest_err("expected dns_message_get_additional_section_ptr_const to return NULL");
+        yatest_err("expected dns_message_get_additional_section_ptr_const to return the limit of the message buffer");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -738,6 +797,7 @@ static int header_test()
         yatest_err(
             "dns_message_set_additional_section_ptr didn't set the pointer properly "
             "(dns_message_get_additional_section_ptr)");
+        dns_message_delete(mesg);
         return 1;
     }
 
@@ -746,9 +806,11 @@ static int header_test()
         yatest_err(
             "dns_message_set_additional_section_ptr didn't set the pointer properly "
             "(dns_message_get_additional_section_ptr_const)");
+        dns_message_delete(mesg);
         return 1;
     }
 
+    dns_message_delete(mesg);
     finalise();
     return 0;
 }
@@ -1111,7 +1173,12 @@ static int opt_test()
     dns_message_make_query(mesg, 0x1234, www_yadifa_eu, query_type_const, query_class_const);
     dns_message_set_client_cookie_for_server_sockaddr(mesg, &dummy_sa[0]);
     dns_message_add_opt(mesg);
-    dns_message_sign_query(mesg, tsig_get(MYKEY_NAME));
+    ret = dns_message_sign_query(mesg, tsig_get(MYKEY_NAME));
+    if(FAIL(ret))
+    {
+        yatest_err("opt_test: dns_message_sign_query failed with %08x", ret);
+        exit(1);
+    }
 
     yatest_log("before dns_message_process");
     dns_message_print_format_dig(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 0xff, 0);
@@ -2678,7 +2745,7 @@ static int dns_message_with_buffer()
 static int dns_message_map_test()
 {
     init();
-    int return_code = 1;
+    int return_code = 0;
     int            ret;
     dns_message_t *mesg = mesg64K;
     const uint16_t query_type_const = TYPE_ANY;
@@ -2827,6 +2894,7 @@ struct dns_message_generated_flags_s
     bool     is_answer;
     bool     is_truncated;
     bool     has_broken_qd;
+    bool     has_no_qd;
     bool     has_broken_an;
     bool     has_broken_ns;
     bool     has_broken_ar;
@@ -2848,7 +2916,7 @@ static int                                   dns_message_generated_test(int opco
 
     ya_result      ret;
 
-    for(uint64_t options = 0; options < (1ULL << 10); ++options)
+    for(uint64_t options = 0; options < (1ULL << 12); ++options)
     {
         dns_message_t                *mesg = dns_message_new_instance();
 
@@ -2921,6 +2989,7 @@ static int                                   dns_message_generated_test(int opco
             dns_packet_writer_add_u16(&pw, CLASS_IN);
         }
         generated_flags.has_broken_qd = qd_count != 1;
+        generated_flags.has_no_qd = qd_count == 0;
 
         // adds an AN record
 
@@ -2947,7 +3016,7 @@ static int                                   dns_message_generated_test(int opco
             dns_packet_writer_add_record(&pw, ns1_yadifa_eu, TYPE_A, CLASS_IN, NU32(86400), localhost_a_wire, sizeof(localhost_a_wire));
             dns_message_set_additional_count(mesg, 1);
             yatest_log("%s: generated AR > 0", callback_name);
-            generated_flags.has_broken_ar = true;
+            //generated_flags.has_broken_ar = true;
         }
 
         if((options & 256) && (qd_count > 0))
@@ -2962,16 +3031,41 @@ static int                                   dns_message_generated_test(int opco
         if(options & 512)
         {
             dns_message_set_client_cookie(mesg, 0x123456789abcdefULL); // option
-            dns_message_add_opt(mesg);
             yatest_log("%s: COOKIE", callback_name);
             generated_flags.has_cookie = true;
+            dns_message_set_edns0(mesg, true);
+            options |= 1;
+        }
+
+        if(options & 1)
+        {
+            dns_message_add_opt(mesg);
+            generated_flags.has_edns0 = true;
         }
 
         if(options & 1024)
         {
-            dns_message_sign_query(mesg, tsig_get(MYKEY_NAME)); // option
-            yatest_log("%s: signed", callback_name);
-            generated_flags.has_tsig = true;
+            if(dns_message_is_query(mesg))
+            {
+                ret = dns_message_sign_query(mesg, tsig_get(MYKEY_NAME)); // option
+                if(FAIL(ret))
+                {
+                    yatest_err("%s: failed to sign query", ret);
+                    exit(1);
+                }
+                yatest_log("%s: signed (%08x)", callback_name, ret);
+                generated_flags.has_tsig = true;
+            }
+        }
+
+        if(options & 2048)
+        {
+            dns_packet_writer_set_offset(&pw, dns_message_get_size(mesg));
+            dns_packet_writer_add_record(&pw, ns1_yadifa_eu, TYPE_A, CLASS_IN, NU32(86400), localhost_a_wire, sizeof(localhost_a_wire));
+            dns_message_set_additional_count(mesg, dns_message_get_additional_count(mesg) + 1);
+            dns_message_set_size(mesg, dns_packet_writer_get_offset(&pw));
+            yatest_log("%s: generated additional after OPT/TSIG", callback_name);
+            generated_flags.has_broken_ar = true;
         }
 
         dns_message_print_format_dig(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 0xff, 0);
@@ -3009,13 +3103,11 @@ static int dns_message_process_over_query_test_callback(dns_message_t *mesg, dns
             return 1;
         }
     }
-    else if(generated_flags->has_broken_ar)
+    else if((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar)
     {
         if(ISOK(ret))
         {
-            yatest_err(
-                "dns_message_process_over_query_test: should not be able to process a message with a AR records not "
-                "OPT nor TSIG");
+            yatest_err("dns_message_process_over_query_test: should not be able to process a message with a AR records after OPT or TSIG");
             return 1;
         }
     }
@@ -3055,7 +3147,7 @@ static int dns_message_process_over_query_test_callback(dns_message_t *mesg, dns
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_over_query_test: should be able to process a query");
+            yatest_err("dns_message_process_over_query_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3081,13 +3173,11 @@ static int dns_message_process_over_notify_test_callback(dns_message_t *mesg, dn
             return 1;
         }
     }
-    else if(generated_flags->has_broken_ar)
+    else if((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar)
     {
         if(ISOK(ret))
         {
-            yatest_err(
-                "dns_message_process_over_notify_test: should not be able to process a message with a AR records not "
-                "OPT nor TSIG");
+            yatest_err("dns_message_process_over_notify_test: should not be able to process a message with a AR records not OPT nor TSIG");
             return 1;
         }
     }
@@ -3111,7 +3201,7 @@ static int dns_message_process_over_notify_test_callback(dns_message_t *mesg, dn
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_over_notify_test: should be able to process a query");
+            yatest_err("dns_message_process_over_notify_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3137,7 +3227,7 @@ static int dns_message_process_over_update_test_callback(dns_message_t *mesg, dn
             return 1;
         }
     }
-    else if(generated_flags->has_broken_ar)
+    else if((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar)
     {
         if(ISOK(ret))
         {
@@ -3175,7 +3265,7 @@ static int dns_message_process_over_update_test_callback(dns_message_t *mesg, dn
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_over_update_test: should be able to process a query");
+            yatest_err("dns_message_process_over_update_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3201,7 +3291,7 @@ static int dns_message_process_over_ctrl_test_callback(dns_message_t *mesg, dns_
             return 1;
         }
     }
-    else if(generated_flags->has_broken_ar)
+    else if((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar)
     {
         if(ISOK(ret))
         {
@@ -3239,7 +3329,7 @@ static int dns_message_process_over_ctrl_test_callback(dns_message_t *mesg, dns_
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_over_ctrl_test: should be able to process a query");
+            yatest_err("dns_message_process_over_ctrl_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3306,13 +3396,19 @@ static int dns_message_process_lenient_over_query_test_callback(dns_message_t *m
 
     yatest_log("dns_message_process_lenient_over_query_test: process returned %08x: %s", ret, error_gettext(ret));
 
-    if(generated_flags->has_broken_fqdn)
+    if(((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar))
     {
         if(ISOK(ret))
         {
-            yatest_err(
-                "dns_message_process_lenient_over_query_test: should not be able to process a message with a generated "
-                "FQDN");
+            yatest_err("dns_message_process_lenient_over_query_test: should not be able to process a message with a AR records after OPT or TSIG");
+            return 1;
+        }
+    }
+    else if(generated_flags->has_broken_fqdn && !generated_flags->has_no_qd)
+    {
+        if(ISOK(ret))
+        {
+            yatest_err("dns_message_process_lenient_over_query_test: should not be able to process a message with a broken FQDN");
             return 1;
         }
     }
@@ -3320,7 +3416,7 @@ static int dns_message_process_lenient_over_query_test_callback(dns_message_t *m
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_lenient_over_query_test: should be able to process a query");
+            yatest_err("dns_message_process_lenient_over_query_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3338,13 +3434,19 @@ static int dns_message_process_lenient_over_notify_test_callback(dns_message_t *
 
     yatest_log("dns_message_process_lenient_over_notify_test: process returned %08x: %s", ret, error_gettext(ret));
 
-    if(generated_flags->has_broken_fqdn)
+    if(((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar))
     {
         if(ISOK(ret))
         {
-            yatest_err(
-                "dns_message_process_lenient_over_notify_test: should not be able to process a message with a "
-                "generated FQDN");
+            yatest_err("dns_message_process_lenient_over_notify_test: should not be able to process a message with a AR records after OPT or TSIG");
+            return 1;
+        }
+    }
+    else if(generated_flags->has_broken_fqdn && !generated_flags->has_no_qd)
+    {
+        if(ISOK(ret))
+        {
+            yatest_err("dns_message_process_lenient_over_notify_test: should not be able to process a message with a broken FQDN");
             return 1;
         }
     }
@@ -3352,7 +3454,7 @@ static int dns_message_process_lenient_over_notify_test_callback(dns_message_t *
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_lenient_over_notify_test: should be able to process a query");
+            yatest_err("dns_message_process_lenient_over_notify_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3370,13 +3472,19 @@ static int dns_message_process_lenient_over_update_test_callback(dns_message_t *
 
     yatest_log("dns_message_process_lenient_over_update_test: process returned %08x: %s", ret, error_gettext(ret));
 
-    if(generated_flags->has_broken_fqdn)
+    if(((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar))
     {
         if(ISOK(ret))
         {
-            yatest_err(
-                "dns_message_process_lenient_over_update_test: should not be able to process a message with a "
-                "generated FQDN");
+            yatest_err("dns_message_process_lenient_over_update_test: should not be able to process a message with a AR records after OPT or TSIG");
+            return 1;
+        }
+    }
+    else if(generated_flags->has_broken_fqdn && !generated_flags->has_no_qd)
+    {
+        if(ISOK(ret))
+        {
+            yatest_err("dns_message_process_lenient_over_update_test: should not be able to process a message with a broken FQDN");
             return 1;
         }
     }
@@ -3384,7 +3492,7 @@ static int dns_message_process_lenient_over_update_test_callback(dns_message_t *
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_lenient_over_update_test: should be able to process a query");
+            yatest_err("dns_message_process_lenient_over_update_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3402,13 +3510,19 @@ static int dns_message_process_lenient_over_ctrl_test_callback(dns_message_t *me
 
     yatest_log("dns_message_process_lenient_over_ctrl_test: process returned %08x: %s", ret, error_gettext(ret));
 
-    if(generated_flags->has_broken_fqdn)
+    if(((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar))
     {
         if(ISOK(ret))
         {
-            yatest_err(
-                "dns_message_process_lenient_over_ctrl_test: should not be able to process a message with a generated "
-                "FQDN");
+            yatest_err("dns_message_process_lenient_over_ctrl_test: should not be able to process a message with a AR records after OPT or TSIG");
+            return 1;
+        }
+    }
+    else if(generated_flags->has_broken_fqdn && !generated_flags->has_no_qd)
+    {
+        if(ISOK(ret))
+        {
+            yatest_err("dns_message_process_lenient_over_ctrl_test: should not be able to process a message with a broken FQDN");
             return 1;
         }
     }
@@ -3416,7 +3530,7 @@ static int dns_message_process_lenient_over_ctrl_test_callback(dns_message_t *me
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_lenient_over_ctrl_test: should be able to process a query");
+            yatest_err("dns_message_process_lenient_over_ctrl_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }
@@ -3450,7 +3564,7 @@ static int dns_message_process_query_over_query_test_callback(dns_message_t *mes
             return 1;
         }
     }
-    else if(generated_flags->has_broken_ar)
+    else if((generated_flags->has_tsig || generated_flags->has_edns0) && generated_flags->has_broken_ar)
     {
         if(ISOK(ret))
         {
@@ -3502,7 +3616,7 @@ static int dns_message_process_query_over_query_test_callback(dns_message_t *mes
     {
         if(FAIL(ret))
         {
-            yatest_err("dns_message_process_query_over_query_test: should be able to process a query");
+            yatest_err("dns_message_process_query_over_query_test: should be able to process a query (%u)", generated_flags->options);
             return 1;
         }
     }

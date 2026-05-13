@@ -46,4 +46,4 @@ add_executable(${NAME} ${SOURCE_FILES})
 target_coverage_test(${NAME})
 target_link_libraries(${NAME} PUBLIC ${DNSCORELIB_NAME})
 
-add_test(NAME "${NAME}-packet_writer_add_test"  COMMAND ${NAME} dns_packet_writer_add_test)
+add_test(NAME "${NAME}-dns_packet_writer_add_test"  COMMAND ${NAME} dns_packet_writer_add_test)

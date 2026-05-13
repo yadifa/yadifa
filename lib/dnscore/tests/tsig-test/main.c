@@ -619,6 +619,87 @@ static int xfr_badsig_test()
     return 0;
 }
 
+/**
+ * Tests that a crafted empty signature is being rejected.
+ *
+ * @return
+ */
+static int xfr_empty_test()
+{
+    int ret;
+
+    dnscore_init();
+
+    ret = tsig_register(MYKEY_NAME, mykey_mac, sizeof(mykey_mac), HMAC_SHA256);
+    if(ret != SUCCESS)
+    {
+        yatest_err("tsig_register MYKEY_NAME failed with %08x = %s", ret, error_gettext(ret));
+        return 1;
+    }
+
+    dns_message_t *mesg_query = dns_message_new_instance();
+    dns_message_t *mesg_svrsd = dns_message_new_instance(); // server-side
+
+    dns_message_make_query(mesg_query, 0x1234, (const uint8_t *)"\006yadifa\002eu", TYPE_AXFR, CLASS_IN);
+    tsig_key_t *tsig = tsig_get(MYKEY_NAME);
+
+    // crafting an empty signature
+
+    uint8_t *tsig_ptr = dns_message_get_message_limit(mesg_query);
+    uint8_t *p = tsig_ptr;
+    memcpy(p, tsig->name, tsig->name_len);
+    p +=tsig->name_len;
+    SET_U16_AT_P(p, TYPE_TSIG);
+    p += 2;
+    SET_U16_AT_P(p, CLASS_ANY);
+    p += 2;
+    SET_U32_AT_P(p, 0);
+    p += 4;
+    uint8_t *rdata_size_ptr = p;
+    SET_U16_AT_P(p, 0);
+    p += 2;
+
+    memcpy(p, tsig->mac_algorithm_name, tsig->mac_algorithm_name_len);
+    p += tsig->mac_algorithm_name_len;
+
+    uint64_t now = time(NULL);
+    SET_U16_AT(p[0], htons((uint16_t)(now >> 32)));
+    SET_U32_AT(p[2], htonl((uint32_t)now));
+    SET_U16_AT(p[6], NU16(300));
+    SET_U16_AT(p[8], 0);
+    SET_U16_AT(p[10], dns_message_get_id(mesg_query));
+    SET_U16_AT(p[12], 0);
+    SET_U16_AT(p[14], 0);
+    p += 16;
+
+    dns_message_set_additional_count(mesg_query, dns_message_get_additional_count(mesg_query) + 1);
+
+    size_t rdata_len = p - rdata_size_ptr - 2;
+    SET_U16_AT_P(rdata_size_ptr, ntohs(rdata_len));
+
+    dns_message_set_size(mesg_query, p - dns_message_get_buffer(mesg_query));
+
+    //
+
+    send_receive_message(mesg_query, mesg_svrsd);
+
+    // corrupt the message: (changes the second letter of the query fqdn)
+    dns_message_get_buffer(mesg_svrsd)[DNS_HEADER_LENGTH + 2]++;
+
+    ret = dns_message_process(mesg_svrsd);
+
+    if(ret != TSIG_BADSIG)
+    {
+        yatest_err("ERROR: expected TSIG_BADSIG, got %08x = %s", ret, error_gettext(ret));
+        return 1;
+    }
+
+    yatest_log("SUCCESS: crafted empty signature rejected as expected");
+
+    dnscore_finalize();
+    return 0;
+}
+
 YATEST_TABLE_BEGIN
 YATEST(tsig_register_test)
 YATEST(algorithms_test)
@@ -626,4 +707,5 @@ YATEST(xfr_test)
 YATEST(xfr_unknown_test)
 YATEST(xfr_fudge_test)
 YATEST(xfr_badsig_test)
+YATEST(xfr_empty_test)
 YATEST_TABLE_END

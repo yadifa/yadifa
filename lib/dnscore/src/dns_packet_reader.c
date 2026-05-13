@@ -75,34 +75,34 @@ ya_result dns_packet_reader_read_fqdn(dns_packet_reader_t *reader, uint8_t *outp
     for(;;)
     {
         uint8_t len = *p++;
-
-        if((len & 0xc0) == 0xc0)
+        const uint8_t len_type = len & 0xc0;
+        if(len_type != 0x00)
         {
-            if(p >= p_limit)
+            if(len_type == 0xc0)
             {
-                reader->packet_offset = reader->packet_size;
-                return UNEXPECTED_EOF; /* EOF */
+                if(p >= p_limit)
+                {
+                    reader->packet_offset = reader->packet_size;
+                    return UNEXPECTED_EOF; /* EOF */
+                }
+
+                /* reposition the pointer */
+                uint32_t new_offset = len & 0x3f;
+                new_offset <<= 8;
+                new_offset |= *p;
+
+                const uint8_t *q = &reader->packet[new_offset];
+
+                if(q < p)
+                {
+                    p_limit = &reader->packet[reader->packet_offset];
+                    reader->packet_offset = p - reader->packet + 1;
+                    p = q;
+                    break;
+                }
             }
 
-            reader->packet_offset = p - reader->packet;
-
-            /* reposition the pointer */
-            uint32_t new_offset = len & 0x3f;
-            new_offset <<= 8;
-            new_offset |= *p;
-
-            const uint8_t *q = &reader->packet[new_offset];
-
-            if(q >= p)
-            {
-                return RCODE_ERROR_CODE(RCODE_FORMERR);
-            }
-
-            p = q;
-
-            reader->packet_offset++;
-
-            break;
+            return RCODE_ERROR_CODE(RCODE_FORMERR);
         }
 
         *buffer++ = len;
@@ -110,37 +110,49 @@ ya_result dns_packet_reader_read_fqdn(dns_packet_reader_t *reader, uint8_t *outp
         if(len == 0)
         {
             reader->packet_offset = p - reader->packet;
-            return buffer - output_buffer;
+
+            size_t fqdn_len = buffer - output_buffer;
+            if(fqdn_len < DOMAIN_LENGTH_MAX)
+            {
+                return fqdn_len;
+            }
+            else
+            {
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
+            }
         }
 
-        if(p + len >= p_limit)
+        if(p + len >= p_limit)  // read limit
         {
             reader->packet_offset = reader->packet_size;
             return UNEXPECTED_EOF;
         }
 
-        if(buffer + len >= buffer_limit)
+        if(buffer + len >= buffer_limit) // write limit
         {
             return BUFFER_WOULD_OVERFLOW;
         }
-        /*
-        MEMCOPY(buffer, p, len);
-        buffer += len;
-        p += len;
-        */
-        uint8_t *buffer_limit = &buffer[len];
+
+        const uint8_t *buffer_label_limit = &buffer[len];
+
         do
         {
             *buffer++ = tolower(*p++);
-        } while(buffer < buffer_limit);
+        }
+        while(buffer < buffer_label_limit);
     }
 
     for(;;)
     {
         uint8_t len = *p;
-
-        if((len & 0xc0) == 0xc0) /* EDF: better yet: cmp len, 192; jge  */
+        const uint8_t len_type = len & 0xc0;
+        if(len_type != 0x00)
         {
+            if(len_type != 0xc0)
+            {
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
+            }
+
             /* reposition the pointer */
             uint32_t new_offset = len & 0x3f;
             new_offset <<= 8;
@@ -161,7 +173,15 @@ ya_result dns_packet_reader_read_fqdn(dns_packet_reader_t *reader, uint8_t *outp
 
         if(len == 0)
         {
-            return buffer - output_buffer;
+            size_t fqdn_len = buffer - output_buffer;
+            if(fqdn_len < DOMAIN_LENGTH_MAX)
+            {
+                return fqdn_len;
+            }
+            else
+            {
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
+            }
         }
 
         ++p;
@@ -177,12 +197,13 @@ ya_result dns_packet_reader_read_fqdn(dns_packet_reader_t *reader, uint8_t *outp
             return BUFFER_WOULD_OVERFLOW;
         }
 
-        uint8_t *buffer_limit = &buffer[len];
+        const uint8_t *buffer_label_limit = &buffer[len];
 
         do
         {
             *buffer++ = tolower(*p++);
-        } while(buffer < buffer_limit);
+        }
+        while(buffer < buffer_label_limit);
     }
 
     // never reached
@@ -470,7 +491,7 @@ ya_result dns_packet_reader_read_rdata(dns_packet_reader_t *reader, uint16_t typ
             buffer_size -= 2;
             rdata_size -= 2;
 
-            if(buffer_size == 0 || rdata_size > DOMAIN_LENGTH_MAX)
+            if((buffer_size <= 0) || (rdata_size <= 0) || (rdata_size > DOMAIN_LENGTH_MAX))
             {
                 return INVALID_RECORD; /* wrong size */
             }
@@ -687,11 +708,12 @@ ya_result dns_packet_reader_read_rdata(dns_packet_reader_t *reader, uint16_t typ
  * @note DOES NOT AND SHOULD NOT WORK FOR CTRL TYPES !
  */
 
-ya_result dns_packet_reader_read_record(dns_packet_reader_t *reader, uint8_t *output_buffer, uint32_t len)
+ya_result dns_packet_reader_read_record(dns_packet_reader_t *reader, uint8_t *output_buffer, uint32_t output_buffer_len)
 {
     ya_result ret;
 
     uint8_t  *buffer = output_buffer;
+    int_fast32_t len = (int_fast32_t)output_buffer_len;
 
     /* Read the name */
 
@@ -724,7 +746,7 @@ ya_result dns_packet_reader_read_record(dns_packet_reader_t *reader, uint8_t *ou
      *       return UNEXPECTED_EOF;
      *  }
      */
-    uint16_t rdata_size = ntohs(GET_U16_AT(buffer[8]));
+    int_fast32_t rdata_size = ntohs(GET_U16_AT(buffer[8]));
 
     if(rdata_size == 0) /* Can occur for dynupdate record set delete */
     {
@@ -744,7 +766,8 @@ ya_result dns_packet_reader_read_record(dns_packet_reader_t *reader, uint8_t *ou
 
     uint16_t rtype = (GET_U16_AT(buffer[0])); /** @note : NATIVETYPE */
 
-    buffer += 10;
+    buffer += TYPE_CLASS_TTL_RDLEN_SIZE;
+    len -= TYPE_CLASS_TTL_RDLEN_SIZE;
 
     /*
      * EDF: No need to cut the len short, especially since what is returned
@@ -768,7 +791,7 @@ ya_result dns_packet_reader_read_record(dns_packet_reader_t *reader, uint8_t *ou
             len -= 2;
             rdata_size -= 2;
 
-            if(len == 0 || rdata_size > DOMAIN_LENGTH_MAX)
+            if((len <= 0) || (rdata_size <= 0) || (rdata_size > DOMAIN_LENGTH_MAX))
             {
                 return INVALID_RECORD; /* wrong rdata_size */
             }
@@ -1042,18 +1065,32 @@ ya_result dns_packet_reader_skip_fqdn(dns_packet_reader_t *reader)
     for(;;)
     {
         uint8_t len = *p++;
-
-        if((len & 0xc0) == 0xc0)
+        const uint8_t len_type = len & 0xc0;
+        if(len_type != 0x00)
         {
-            p++;
-            reader->packet_offset = p - reader->packet;
-            return reader->packet_offset - from;
+            if((len_type == 0xc0) && (p < p_limit))
+            {
+                p++;
+                reader->packet_offset = p - reader->packet;
+                return reader->packet_offset - from;
+            }
+
+            return RCODE_ERROR_CODE(RCODE_FORMERR);
         }
 
         if(len == 0)
         {
-            reader->packet_offset = p - reader->packet;
-            return reader->packet_offset - from;
+            uint32_t packet_offset = p - reader->packet;
+            uint32_t len = packet_offset - from;
+            if(len <= DOMAIN_LENGTH_MAX)
+            {
+                reader->packet_offset = packet_offset;
+                return len;
+            }
+            else
+            {
+                return RCODE_ERROR_CODE(RCODE_FORMERR);
+            }
         }
 
         if(p + len >= p_limit)

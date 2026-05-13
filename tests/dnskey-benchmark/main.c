@@ -59,7 +59,20 @@
 #define DUMP_DNSKEY_PRIVATE_TEXT 0
 #define DUMP_DNSKEY_PUBLIC_TEXT 0
 
-static const uint32_t signature_batch_count = 300; // kept low because some algorithms are very slow
+#define LOOP_ITERATION_MIN 1
+#define LOOP_ITERATION_MAX 1000000
+
+#define SIGNATURE_BATCH_COUNT_DEFAULT 300
+
+#define RECORD_COUNT_MAX_DEFAULT 4
+
+#define ALGORITHM_FIRST_DEFAULT 1
+
+#define ALGORITHM_LAST_DEFAULT 255
+
+static uint32_t signature_batch_count = SIGNATURE_BATCH_COUNT_DEFAULT; // kept low because some algorithms are very slow
+
+static uint32_t record_count_max = RECORD_COUNT_MAX_DEFAULT;
 
 static const uint8_t ns1_yadifa_eu[] = {
     6, 'y', 'a', 'd', 'i', 'f', 'a', 2, 'e', 'u', 0,                //  0 .. 11
@@ -87,6 +100,16 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
         return DNSSEC_ERROR_KEYRING_KEY_IS_NOT_PRIVATE; // not private
     }
 
+    size_t dnskey_rdata_size = 1000000;
+    uint8_t *dnskey_rdata_buffer = malloc(dnskey_rdata_size);
+    if(dnskey_rdata_buffer == NULL)
+    {
+        return MAKE_ERRNO_ERROR(ENOMEM);
+    }
+    dnskey_rdata_size = key->vtbl->dnskey_writerdata(key, dnskey_rdata_buffer, dnskey_rdata_size);
+    free(dnskey_rdata_buffer);
+    dnskey_rdata_buffer = NULL;
+
     int      buffer_size = 65535;
     uint8_t *buffer = malloc(buffer_size);
     if(buffer == NULL)
@@ -101,7 +124,11 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
         return MAKE_ERRNO_ERROR(ENOMEM);
     }
 
-    for(uint_fast8_t record_count = 1; record_count < 5; ++record_count)
+    double signature_time_total_s = 0.0;
+    double verification_time_total_s = 0.0;
+    double fail_verification_time_total_s = 0.0;
+
+    for(uint_fast8_t record_count = 1; record_count <= record_count_max; ++record_count)
     {
         formatln("algorithm: %s record_count: %u wire_size: %u", tag, (uint32_t)record_count, (uint32_t)(sizeof(ns1_yadifa_eu) * record_count));
 
@@ -134,6 +161,9 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
         {
             const double signatures_time = (signature_stop - signature_start) / ONE_SECOND_US_F;
             const double signature_time_s = signatures_time / signature_batch_count;
+
+            signature_time_total_s += signature_time_s;
+
             formatln("algorithm: %s signature_size: %u", tag, signature_size);
             formatln("algorithm: %s signature_count: %u signatures_time_s: %12.9f signature_time: %12.9f",
                 tag,
@@ -150,7 +180,7 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
                 key->vtbl->verifier_init(key, &bytes_verifier);
                 bytes_verifier.vtbl->update(&bytes_verifier, buffer, rrset_size);
 
-                if(FAIL(signature_verified = bytes_verifier.vtbl->verify(&bytes_verifier, signature, signature_size)))
+                if(!(signature_verified = bytes_verifier.vtbl->verify(&bytes_verifier, signature, signature_size)))
                 {
                     break;
                 }
@@ -158,10 +188,13 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
 
             int64_t verify_stop = timeus();
 
-            if(ISOK(signature_verified))
+            if(signature_verified)
             {
                 const double verifications_time = (verify_stop - verify_start) / ONE_SECOND_US_F;
                 const double verification_time_s = verifications_time / signature_batch_count;
+
+                verification_time_total_s += verification_time_s;
+
                 formatln("algorithm: %s verification_count: %u verifications_time: %12.9f verification_time: %12.9f",
                     tag,
                     signature_batch_count,
@@ -176,17 +209,20 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
                     key->vtbl->verifier_init(key, &bytes_verifier);
                     bytes_verifier.vtbl->update(&bytes_verifier, buffer, rrset_size);
 
-                    if(ISOK(signature_verified = bytes_verifier.vtbl->verify(&bytes_verifier, signature, signature_size)))
+                    if((signature_verified = bytes_verifier.vtbl->verify(&bytes_verifier, signature, signature_size)))
                     {
                         break;
                     }
                 }
                 int64_t fail_verify_stop = timeus();
 
-                if(ISOK(signature_verified))
+                if(!signature_verified)
                 {
                     const double fail_verifications_time = (fail_verify_stop - fail_verify_start) / ONE_SECOND_US_F;
                     const double fail_verification_time_s = fail_verifications_time / signature_batch_count;
+
+                    fail_verification_time_total_s += fail_verification_time_s;
+
                     formatln("algorithm: %s fail_verification_count: %u fail_verifications_time: %12.9f fail_verification_time: %12.9f",
                         tag,
                         signature_batch_count,
@@ -208,6 +244,20 @@ static ya_result dnskey_signature_benchmark(dnskey_t *key, const char *tag)
             osformatln(termerr, "ERROR: %s: dnskey_signature_benchmark: sign: %r", tag, signature_generated);
         }
     }
+
+    signature_time_total_s /= record_count_max;
+    verification_time_total_s /= record_count_max;
+    fail_verification_time_total_s /= record_count_max;
+
+    formatln("algorithm: summary: %s,%u,%u,%u,%.9f,%.9f,%.9f",
+        tag,
+        dnskey_get_algorithm(key),
+        dnskey_rdata_size - 4,      // this is the size of the public key RDATA
+        signature_size,
+        signature_time_total_s,
+        verification_time_total_s,
+        fail_verification_time_total_s
+        );
 
     free(signature);
     free(buffer);
@@ -314,28 +364,78 @@ int main(int argc, char *argv[])
 {
     dnscore_init();
 
-    uint32_t alg_first = 1;
-    uint32_t alg_last = 255;
+    uint32_t alg_first = ALGORITHM_FIRST_DEFAULT;
+    uint32_t alg_last = ALGORITHM_LAST_DEFAULT;
+    uint32_t alg_set = 0;
 
-    if(argc > 1)
+    for(int i = 1; i < argc; ++i)
     {
-        if(FAIL(parse_u32_check_range(argv[1], &alg_first, 1, 255, 10)))
+        if(argv[i][0] == 'n')
         {
-            formatln("failed to parse '%s' as an integer in the [1; 255] range", argv[1]);
-            return EXIT_FAILURE;
-        }
-
-        if(argc > 2)
-        {
-            if(FAIL(parse_u32_check_range(argv[2], &alg_last, alg_first, 255, 10)))
+            const char *number = &argv[i][1];
+            if(FAIL(parse_u32_check_range(number, &signature_batch_count, LOOP_ITERATION_MIN, LOOP_ITERATION_MAX, 10)))
             {
-                formatln("failed to parse '%s' as an integer in the [%i; 255] range", argv[1], alg_first);
+                formatln("nN : N is expected to be an integer in the %lu to %lu range (%s)", LOOP_ITERATION_MIN, LOOP_ITERATION_MAX, number);
                 return EXIT_FAILURE;
             }
         }
+        else if(argv[i][0] == 'l')
+        {
+            const char *number = &argv[i][1];
+            if(FAIL(parse_u32_check_range(number, &alg_first, 1, 255, 10)))
+            {
+                formatln("lN : N is expected to be an integer in the %lu to %lu range (%s)", 1, 255, number);
+                return EXIT_FAILURE;
+            }
+            alg_set |= 1;
+        }
+        else if(argv[i][0] == 'h')
+        {
+            const char *number = &argv[i][1];
+            if(FAIL(parse_u32_check_range(number, &alg_last, 1, 255, 10)))
+            {
+                formatln("hN : N is expected to be an integer in the %lu to %lu range (%s)", 1, 255, number);
+                return EXIT_FAILURE;
+            }
+            alg_set |= 2;
+        }
         else
         {
+            formatln("unexpected parameter '%s'", argv[i]);
+
+            formatln(
+                "paramters can be:\n"
+                "nN : signature count (%u)\n"
+                "lN : first algorithm (%u)\n"
+                "hN : last algorithm (%u)\n",
+                SIGNATURE_BATCH_COUNT_DEFAULT,
+                ALGORITHM_FIRST_DEFAULT,
+                ALGORITHM_LAST_DEFAULT);
+            return EXIT_FAILURE;
+        }
+    }
+
+    switch(alg_set)
+    {
+        case 1:
+        {
             alg_last = alg_first;
+            break;
+        }
+        case 2:
+        {
+            alg_first = alg_last;
+            break;
+        }
+        case 3:
+        {
+            if(alg_first > alg_last)
+            {
+                uint32_t tmp = alg_first;
+                alg_first = alg_last;
+                alg_last = tmp;
+            }
+            break;
         }
     }
 
@@ -344,6 +444,9 @@ int main(int argc, char *argv[])
     formatln("oqs_compile_build_target: %s", OQS_COMPILE_BUILD_TARGET);
 #endif
     formatln("algorithm_range: [%u ;%u]", alg_first, alg_last);
+    formatln("signature_batch_count=%lu", signature_batch_count);
+
+    println("algorithm: summary: tag,id,dnskey size,rrsig size,signature time,verification time,rejection time");
 
 #if DNSCORE_HAS_OQS_SUPPORT
     dnskey_postquantumsafe_info_t pqs_info = {0};

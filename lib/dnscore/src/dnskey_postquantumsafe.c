@@ -1003,7 +1003,12 @@ static int32_t dnskey_postquantumsafe_signer_update(struct bytes_signer_s *signe
 
 static int32_t dnskey_postquantumsafe_signer_sign(struct bytes_signer_s *signer, void *signature, uint32_t *signature_size)
 {
-    digest_t              *digest_ctx = (digest_t *)signer->dctx;
+    if((signer == NULL) || (signature == NULL) || (signature_size == NULL))
+    {
+        return UNEXPECTED_NULL_ARGUMENT_ERROR;
+    }
+
+    digest_t              *digest_ctx = (digest_t *)signer->dctx; // note: the raw digest is being used
     dnskey_t              *key = (dnskey_t *)signer->kctx;
     uint8_t               *digest;
     int32_t                digest_size = digest_get_digest(digest_ctx, (void **)&digest);
@@ -1011,9 +1016,40 @@ static int32_t dnskey_postquantumsafe_signer_sign(struct bytes_signer_s *signer,
 
     postquantumsafe_key_t *pqs_key = key->key.any;
 
+    if(*signature_size < pqs_key->sig->length_signature)
+    {
+        return BUFFER_WOULD_OVERFLOW;
+    }
+
     size_t                 signature_size_ = *signature_size;
 
     OQS_STATUS             rc = OQS_SIG_sign(pqs_key->sig, signature, &signature_size_, digest, digest_size, pqs_key->private_key);
+
+    if(rc != OQS_SUCCESS)
+    {
+        // Workaround for rare signing failures: SNOVA may fail if it cannot find
+        // a solvable linear system within its internal iteration limit.
+        // Restarting the call ensures a new salt is used, bypassing the local failure.
+        //
+        // I quote: "Probability of getting here is about 2^{-1020}"
+        //
+        // This should ensure this "rare" issue doesn't break experiments.
+
+        int tries;
+        for(tries = 1; tries < 100; ++tries)
+        {
+            rc = OQS_SIG_sign(pqs_key->sig, signature, &signature_size_, digest, digest_size, pqs_key->private_key);
+            if(rc == OQS_SUCCESS)
+            {
+                break;
+            }
+        }
+
+        log_notice("dnskey_postquantumsafe_signer_sign() had to retry %i times for algorithm %i '%s'",
+            tries,
+            key->algorithm,
+            STRNULL(dnskey_postquantumsafe_algorithm_to_name(key->algorithm)));
+    }
 
     ret = (rc == OQS_SUCCESS) ? SUCCESS : ERROR;
 
@@ -1038,14 +1074,14 @@ static int32_t dnskey_postquantumsafe_signer_finalise(struct bytes_signer_s *sig
 
 static int32_t dnskey_postquantumsafe_verifier_update(struct bytes_verifier_s *verifier, const void *buffer, uint32_t buffer_size)
 {
-    digest_t *digest_ctx = (digest_t *)verifier->dctx;
+    digest_t *digest_ctx = (digest_t *)verifier->dctx;  // note: the raw digest is being used
     int32_t   ret = digest_update(digest_ctx, buffer, buffer_size);
     return ret;
 }
 
 static bool dnskey_postquantumsafe_verifier_verify(struct bytes_verifier_s *verifier, const void *signature, uint32_t signature_size)
 {
-    digest_t              *digest_ctx = (digest_t *)verifier->dctx;
+    digest_t              *digest_ctx = (digest_t *)verifier->dctx;  // note: the raw digest is being used
     dnskey_t              *key = (dnskey_t *)verifier->kctx;
     uint8_t               *digest;
     int32_t                digest_size = digest_get_digest(digest_ctx, (void **)&digest);
@@ -1059,7 +1095,7 @@ static bool dnskey_postquantumsafe_verifier_verify(struct bytes_verifier_s *veri
 
 static int32_t dnskey_postquantumsafe_verifier_finalise(struct bytes_verifier_s *verifier)
 {
-    digest_t *ctx = (digest_t *)verifier->dctx;
+    digest_t *ctx = (digest_t *)verifier->dctx;  // note: the raw digest is being used
     dnskey_t *key = (dnskey_t *)verifier->kctx;
     dnskey_release(key);
     digest_finalise(ctx);
@@ -1078,6 +1114,10 @@ static ya_result                      dnskey_postquantumsafe_signer_init(dnskey_
     digest_t *ctx;
     ZALLOC_OBJECT_OR_DIE(ctx, digest_t, DIGEST_TAG);
     digest_rawdata_init(ctx);
+
+    // The raw digest is essentially accumulating the message raw
+    // It is called a digest because historically computing a digest was the first step before
+    // having to call the signature method.
 
     dnskey_acquire(key);
     signer->dctx = ctx;

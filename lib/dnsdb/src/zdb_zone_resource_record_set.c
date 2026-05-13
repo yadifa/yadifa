@@ -992,7 +992,7 @@ ya_result dns_packet_writer_add_rrset_rrsig(dns_packet_writer_t *pw, const uint8
 
             if(ISOK(ret))
             {
-                ret = 1;
+                ret = 0;
 
                 if((*p & 0xc0) == 0xc0)
                 {
@@ -1020,6 +1020,7 @@ ya_result dns_packet_writer_add_rrset_rrsig(dns_packet_writer_t *pw, const uint8
                 dns_packet_writer_add_bytes(pw, zdb_resource_record_data_rdata_const(rr), zdb_resource_record_data_rdata_size(rr));
 
                 last_good_offset = pw->packet_offset;
+                ret = 1;
 
                 // now write each rrset using the above compressed code
 
@@ -1045,7 +1046,6 @@ ya_result dns_packet_writer_add_rrset_rrsig(dns_packet_writer_t *pw, const uint8
                         dns_packet_writer_add_bytes(pw, zdb_resource_record_data_rdata_const(rr), zdb_resource_record_data_rdata_size(rr));
 
                         last_good_offset = pw->packet_offset;
-
                         ++ret;
                     }
                 }

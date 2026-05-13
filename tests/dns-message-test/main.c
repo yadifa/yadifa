@@ -77,7 +77,14 @@ static void                dns_message_test_callback(async_message_t *domain_mes
 {
     dns_simple_message_t *simple_message = (dns_simple_message_t *)domain_message->args;
     dns_message_t        *mesg = simple_message->answer;
-    dns_message_print_format_dig(termout, dns_message_get_buffer_const(mesg), dns_message_get_buffer_size(mesg), 0x0f, 0);
+    if(mesg != NULL)
+    {
+        dns_message_print_format_dig(termout, dns_message_get_buffer_const(mesg), dns_message_get_size(mesg), 0x0f, 0);
+    }
+    else
+    {
+        osformatln(termerr, "dns_message_test_callback: NULL message");
+    }
 }
 
 int main(int argc, char *argv[])
@@ -126,8 +133,6 @@ int main(int argc, char *argv[])
             dns_udp_send_recursive_message(server, fqdn, ntohs(i), CLASS_IN, MESSAGE_EDNS0_SIZE, dns_message_test_callback, NULL);
         }
     }
-
-    sleep(600);
 
     flushout();
     flusherr();

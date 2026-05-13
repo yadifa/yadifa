@@ -1273,6 +1273,8 @@ void dnscore_finalize(void)
         fclose(dnscore_finalize_file);
     }
 #endif
+
+    // dnscore_features = 0;
 }
 
 static void dnscore_signature_check_one(const char *name, int should, int is)

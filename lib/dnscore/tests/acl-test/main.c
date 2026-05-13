@@ -1736,6 +1736,151 @@ static int acl_merge_test()
     return 0;
 }
 
+struct acl_check_access_filter_test_expectations_s
+{
+    const char *name;
+    const char *acl;
+    uint32_t expectations;
+};
+
+static int acl_check_access_filter_test()
+{
+    int ret;
+    int error_count = 0;
+
+    acl_test_init();
+
+    static const struct acl_check_access_filter_test_expectations_s cases[] = {
+        {"can-update-ip-key", "127.0.0.128/8; key mykey", 0x000007f7},
+        {"can-update-ip", "127.0.0.128/8", 0x00000777},
+        {"can-update-key", "key mykey", 0x000000f0},
+        {"can-update-wrong-not-bad-ip-key", "127.0.0.0/8;!127.0.0.128;key mykey", 0x000007f7},
+        {"can-update-wrong-not-bad-ip", "127.0.0.0/8;!127.0.0.128", 0x00000777},
+        {"can-update-not-bad-ip-key", "!127.0.0.128;127.0.0.0/8;key mykey", 0x000005d5},
+        {"can-update-not-bad-ip", "!127.0.0.128;127.0.0.0/8", 0x00000555},
+        {"can-update-good-bad-ip", "127.0.0.127;!127.0.0.128", 0x00000111},
+        {"can-update-2key", "key mykey; key notmykey", 0x00000ff0},
+        {"can-update-wrong-not-bad-ip-2key", "127.0.0.0/8;!127.0.0.128;key mykey; key notmykey", 0x00000ff7},
+        {"can-update-not-bad-ip-2key", "!127.0.0.128;127.0.0.0/8;key mykey; key notmykey", 0x00000dd5},
+        {"can-update-2key-not-bad-ip", "key mykey;key notmykey;!127.0.0.128;127.0.0.0/8", 0x00000dd5},
+        {"can-update-ip-no-net", "127.0.0.127;!127.0.0.0/8", 0x00000111},
+        {NULL, NULL, 0}
+    };
+
+    static const uint8_t ips[4][4] = {
+        {127, 0, 0, 127},  // good
+        {127, 0, 0, 128},  // bad
+        {127, 0, 0, 129},  // unspecified
+        {10, 0, 0, 10},    // far
+    };
+
+    static const char *ips_name[4] = {
+        "GOOD",
+        "BAD",
+        "UNSPECIFIED",
+        "FAR",
+    };
+
+    for(int i = 0; i < 4; ++i)
+    {
+        yatest_log("acl_check_access_filter_test: %s key is %i.%i.%i.%i",  ips_name[i], ips[i][0], ips[i][1], ips[i][2], ips[i][3]);
+    }
+
+    tsig_key_t *keys[3] = { NULL, tsig_get(MYKEY_NAME), tsig_get(NOTMYKEY_NAME)};
+
+    static const char *keys_name[3] = {
+        "NONE",
+        "MYKEY",
+        "NOTMYKEY",
+    };
+
+    for(int i = 0; i < 3; ++i)
+    {
+        char tmp[256];
+        if(keys[i] != NULL)
+        {
+            cstr_init_with_dnsname(tmp, keys[i]->name);
+            yatest_log("acl_check_access_filter_test: %s tsig is '%s'", keys_name[i], tmp);
+        }
+        else
+        {
+            yatest_log("acl_check_access_filter_test: %s tsig means there is no signature", keys_name[i], tmp);
+        }
+    }
+
+    yatest_log("acl_check_access_filter_test: note: ANY KEY USED HERE IS KNOWN AND VALID AS ACL DO NOT RECEIVE A MESSAGE WITH A WRONG/UNKNOWN TSIG");
+
+    for(int i = 0; cases[i].name != NULL; ++i)
+    {
+        yatest_log("acl[%i] = '%s' = '%s'", i, cases[i].name, cases[i].acl);
+
+        address_match_set_t ams;
+        ZEROMEMORY(&ams, sizeof(ams));
+        ret = acl_access_control_item_init_from_text(&ams, cases[i].acl);
+        if(FAIL(ret))
+        {
+            yatest_err("acl_check_access_filter_test: ams '%s' = '%s' could not be initialised (%08x)", cases[i].name, cases[i].acl, ret);
+            return 1;
+        }
+
+        uint32_t total_mask = 0;
+        uint32_t mask_index = 0;
+
+        for(int j = 0; j < 3; ++j)
+        {
+            dns_message_t *mesg = dns_message_new_instance();
+            dns_message_make_query(mesg, 0x1248, (const uint8_t*)"\006yadifa\002eu", TYPE_A, CLASS_IN);
+            // note that a wrong signature, be it bad name, bad mac, or empty mac, is being rejected before reaching ACLs
+            // so the only two cases that can be checked are: without key, with key, with another known key
+
+            if(keys[j] != NULL)
+            {
+                ret = dns_message_sign_query(mesg, keys[j]);
+                if(FAIL(ret))
+                {
+                    yatest_err("acl_check_access_filter_test: ams '%s': failed to sign using key %i", cases[i].name, j);
+                    return 1;
+                }
+            }
+
+            for(int k = 0; k < 4; ++k)
+            {
+                host_address_t *ha = host_address_new_instance_ipv4(ips[k], NU16(1234));
+                dns_message_set_sender_from_host_address(mesg, ha);
+
+                ret = acl_check_access_filter(mesg, &ams);
+
+                uint32_t mask = 1 << mask_index;
+                if(ret >= 0)
+                {
+                    total_mask |= mask;
+                }
+
+                yatest_log("acl_check_access_filter_test: ams '%s': %s sig %s ip = %i", cases[i].name, keys_name[j], ips_name[k], ret);
+
+                if((cases[i].expectations & mask) != (total_mask & mask))
+                {
+                    yatest_err("acl_check_access_filter_test: ams '%s': %s sig %s ip = %i : doesn't match expectations", cases[i].name, keys_name[j], ips_name[k], ret);
+                    ++error_count;
+                }
+
+                host_address_delete(ha);
+
+                mask_index += 1;
+            }
+
+            dns_message_delete(mesg);
+        }
+
+        yatest_log("acl_check_access_filter_test: ams '%s': %08x", cases[i].name, total_mask);
+
+        acl_address_match_set_clear(&ams);
+    }
+
+    acl_test_finalise();
+    return error_count;
+}
+
 YATEST_TABLE_BEGIN
 YATEST(acl_simple_test)
 YATEST(acl_parse_error_test)
@@ -1743,4 +1888,5 @@ YATEST(acl_nosuchkey_test)
 YATEST(acl_match_equals_test)
 YATEST(acl_item_print_test)
 YATEST(acl_merge_test)
+YATEST(acl_check_access_filter_test)
 YATEST_TABLE_END

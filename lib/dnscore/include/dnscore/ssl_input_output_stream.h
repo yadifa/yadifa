@@ -114,6 +114,23 @@ ya_result ssl_readfully(void *ssl_, void *buffer, uint32_t len);
 ya_result ssl_writefully(void *ssl_, const void *buffer, uint32_t len);
 
 /**
+ * Adds the SSL protocol with a specified ALPN on an open TCP connection.
+ *
+ * @param in_stream the SSL input stream
+ * @param in_filtered the TCP input stream
+ * @param out_stream the SSL output stream
+ * @param out_filtered the TCP output stream
+ * @param cert_pem the X509 certificate to use
+ * @param key_pem the key of the X509 certificate
+ * @param alpn the alpn byte array
+ * @param alpn_size the size of the alpn byte array in bytes
+ *
+ */
+
+ya_result ssl_input_output_stream_init_ex(input_stream_t *in_stream, input_stream_t *in_filtered, output_stream_t *out_stream, output_stream_t *out_filtered, const char *cert_pem, const char *key_pem, const uint8_t* alpn, uint32_t alpn_size);
+
+
+/**
  * Adds the SSL protocol with the 3dot ALPN on an open TCP connection.
  *
  * @param in_stream the SSL input stream
@@ -137,6 +154,10 @@ input_stream_t *ssl_input_stream_get_filtered(input_stream_t *bis);
  */
 
 bool is_ssl_input_stream(input_stream_t *bos);
+
+void ssl_input_output_stream_set_host_name(input_stream_t *bos, const char *fqdn);
+
+void ssl_input_output_stream_set_alpn_protos(input_stream_t *bos, const unsigned char *proto);
 
 #ifdef __cplusplus
 }

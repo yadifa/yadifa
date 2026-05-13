@@ -36,7 +36,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/CheckCHeaders.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/CheckCompilerFlags.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/EURidToolbox.cmake)
 
-read_version("3.0.9")
+read_version("3.0.10")
 
 project(yadifa VERSION ${VERSION_TEXT} LANGUAGES C)
 
@@ -107,8 +107,8 @@ set(YATEST_INCLUDE_DIRECTORY "${CMAKE_SOURCE_DIR}/tests")
 # settings from subdirectories - START
 
 set(PACKAGE "yadifa")
-set(PACKAGE_VERSION "3.0.9")
-set(VERSION "3.0.9")
+set(PACKAGE_VERSION "3.0.10")
+set(VERSION "3.0.10")
 set(PACKAGE_STRING "${PACKAGE} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "bugreport@yadifa.eu")
 
@@ -182,6 +182,9 @@ option_has(TCP_MANAGER "If set, the TCP manager will be enabled and used to hand
 option_has(LOGGING_DISABLED "If set, the logging macros are no-operations. This is useful for coverage." OFF)
 option_has_support(DNS_OVER_TLS "If set, yadifad will support DNS over TLS (experimental)" ON)
 option_has_support(OQS "If set, yadifad will support experimental post-quantum-safe algorithms" OFF)
+
+option_has(SANITIZE_THREAD "If set, -fsanitize=thread option will be used." OFF)
+option_has(SANITIZE_UNDEFINED "If set, -fsanitize=undefined option will be used." OFF)
 
 option_path(OPENSSL_DIRECTORY "Set to the path of openssl" "")
 
@@ -372,6 +375,19 @@ add_compile_options(-Wextra)
 add_compile_options(-Wno-strict-prototypes)
 add_compile_options(-Wno-address-of-packed-member)
 add_compile_options(-fno-strict-aliasing)
+
+if(SANITIZE_THREAD)
+    kvstatus("sanitize" "thread")
+    add_compile_options(-fsanitize=thread)
+    add_link_options(-fsanitize=thread)
+endif()
+
+if(SANITIZE_UNDEFINED)
+kvstatus("sanitize" "undefined")
+add_compile_options(-fsanitize=undefined)
+add_link_options(-fsanitize=undefined)
+endif()
+
 if(TIME64)
 add_compile_options(-D_TIME_BITS=64)
 endif()

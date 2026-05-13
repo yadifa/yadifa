@@ -31,11 +31,13 @@
  *----------------------------------------------------------------------------*/
 
 #include "yatest.h"
+#include "dnscore/format.h"
 #include "dnscore/host_address.h"
 #include "dnscore/tcp_io_stream.h"
 #include <dnscore/dnscore.h>
 #include <dnscore/crypto.h>
 #include <dnscore/ssl_input_output_stream.h>
+#include <openssl/tls1.h>
 
 static const char *alternate_preferred_ciphers = "!NULL:!SSLv2:!RC4:!aNULL";
 
@@ -74,23 +76,56 @@ static int simple_test()
         return 1;
     }
 
-    const uint8_t   ip[4] = {104, 16, 75, 15}; // www.eurid.eu
+    const struct addrinfo hints = {.ai_family = AF_INET};
+    struct addrinfo *res;
+    const char *fqdn = "www.eurid.eu";
+
+    if(getaddrinfo(fqdn, NULL, &hints, &res) < 0)
+    {
+        int err = errno;
+        yatest_err("getaddrinfo %s failed: %s", fqdn, strerror(err));
+        return 1;
+    }
+
+    struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
+    printf("%s\n", inet_ntoa(addr->sin_addr));
+
+    uint8_t ip[4];
+    memcpy(ip, &((struct sockaddr_in*)res->ai_addr)->sin_addr, 4);
+    freeaddrinfo(res);
+
+    yatest_log("%s: %i.%i.%i.%i", fqdn, ip[0], ip[1], ip[2], ip[3]);
+
     host_address_t *server = host_address_new_instance_ipv4(ip, NU16(443));
     input_stream_t  is;
     output_stream_t os;
 
     if(ISOK(ret = tcp_input_output_stream_connect_host_address(server, &is, &os, 3)))
     {
-        ssl_input_output_stream_init(&is, &is, &os, &os, NULL, NULL);
-        const char *http_query = "GET /\r\n\r\n";
+        static const unsigned char http11_alpn[] = {8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
+        ret = ssl_input_output_stream_init_ex(&is, &is, &os, &os, NULL, NULL, http11_alpn, sizeof(http11_alpn));
+        if(FAIL(ret))
+        {
+            yatest_err("simple_test: failed to write ssl_input_output_stream_init_ex: %08x", ret);
+            exit(1);
+        }
+
+        char *http_query;
+        asformat(&http_query, "GET / HTTP/1.1\r\n"
+            "Host: %s\r\n"
+            "Connection: close\r\n"
+            "\r\n", fqdn);
+
+        yatest_log("http_query='%s'", http_query);
+
         if(FAIL(ret = output_stream_write(&os, http_query, strlen(http_query))))
         {
-            printf("simple_test: failed to write http_query: %08x", ret);
+            yatest_err("simple_test: failed to write http_query: %08x", ret);
             exit(1);
         }
         if(FAIL(ret = output_stream_flush(&os)))
         {
-            printf("simple_test: failed to flush http_query: %08x", ret);
+            yatest_err("simple_test: failed to flush http_query: %08x", ret);
             exit(1);
         }
         size_t line_size = 0x100000;

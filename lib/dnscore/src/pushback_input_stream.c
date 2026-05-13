@@ -46,7 +46,7 @@ struct pushback_input_stream_data
     int32_t        buffer_size;   // size of the pushback buffer
     int32_t        buffer_offset; // amount of the pushback that's filled
     bool           marked;        // true if we are in a pushback;
-    uint8_t        buffer[];      // the pushback buffer
+    uint8_t        buffer[] __attribute__((aligned(8))); // the pushback buffer
 };
 
 static ya_result               pushback_input_stream_read(input_stream_t *stream, void *buffer, uint32_t len);

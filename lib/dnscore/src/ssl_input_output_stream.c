@@ -356,7 +356,7 @@ static int                ssl_input_stream_ssl_context_new_instance_alpn_cb(SSL 
  *
  */
 
-ya_result ssl_input_output_stream_init(input_stream_t *in_stream, input_stream_t *in_filtered, output_stream_t *out_stream, output_stream_t *out_filtered, const char *cert_pem, const char *key_pem)
+ya_result ssl_input_output_stream_init_ex(input_stream_t *in_stream, input_stream_t *in_filtered, output_stream_t *out_stream, output_stream_t *out_filtered, const char *cert_pem, const char *key_pem, const uint8_t* alpn, uint32_t alpn_size)
 {
     ssl_input_output_stream_data *data;
     int                           ret;
@@ -406,10 +406,10 @@ ya_result ssl_input_output_stream_init(input_stream_t *in_stream, input_stream_t
         }
     }
 
-    static const unsigned char alpn_dot_protocol[4] = {3, 'd', 'o', 't'}; // ALPN
-    static const unsigned int  alpn_dot_protocol_size = sizeof(alpn_dot_protocol);
-
-    /*ret = */ SSL_CTX_set_alpn_protos(ssl_ctx, alpn_dot_protocol, alpn_dot_protocol_size);
+    if(alpn != NULL && alpn_size > 0)
+    {
+        /*ret = */ SSL_CTX_set_alpn_protos(ssl_ctx, alpn, alpn_size);
+    }
 
     int  fd = fd_input_stream_get_filedescriptor(in_filtered);
 
@@ -468,6 +468,14 @@ ya_result ssl_input_output_stream_init(input_stream_t *in_stream, input_stream_t
     return SUCCESS;
 }
 
+ya_result ssl_input_output_stream_init(input_stream_t *in_stream, input_stream_t *in_filtered, output_stream_t *out_stream, output_stream_t *out_filtered, const char *cert_pem, const char *key_pem)
+{
+    static const unsigned char alpn_dot_protocol[4] = {3, 'd', 'o', 't'}; // ALPN
+    static const unsigned int  alpn_dot_protocol_size = sizeof(alpn_dot_protocol);
+    return ssl_input_output_stream_init_ex(in_stream, in_filtered, out_stream, out_filtered, cert_pem, key_pem, alpn_dot_protocol, alpn_dot_protocol_size);
+}
+
+
 input_stream_t *ssl_input_stream_get_filtered(input_stream_t *bos)
 {
     ssl_input_output_stream_data *data = (ssl_input_output_stream_data *)bos->data;
@@ -483,5 +491,31 @@ input_stream_t *ssl_input_stream_get_filtered(input_stream_t *bos)
  */
 
 bool is_ssl_input_stream(input_stream_t *bos) { return bos->vtbl == &ssl_input_stream_vtbl; }
+
+void ssl_input_output_stream_set_host_name(input_stream_t *bos, const char *fqdn)
+{
+    if(is_ssl_input_stream(bos))
+    {
+        ssl_input_output_stream_data *data = (ssl_input_output_stream_data *)bos->data;
+        SSL_set_tlsext_host_name(data->ssl, fqdn);
+    }
+}
+
+void ssl_input_output_stream_set_alpn_protos(input_stream_t *bos, const unsigned char *proto)
+{
+    if(is_ssl_input_stream(bos))
+    {
+        size_t proto_len = strlen(proto);
+        if(proto_len < 256)
+        {
+            char *tmp = (char*)malloc(strlen(proto) + 2);
+            tmp[0] = (uint8_t)proto_len;
+            memcpy(&proto[1], proto, proto_len);
+            ssl_input_output_stream_data *data = (ssl_input_output_stream_data *)bos->data;
+            SSL_set_alpn_protos(data->ssl, tmp, proto_len + 1);
+        }
+    }
+}
+
 
 /** @} */

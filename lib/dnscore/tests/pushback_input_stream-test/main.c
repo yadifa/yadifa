@@ -47,7 +47,7 @@ static char          *buffer = NULL;
 static void           init(int pbs)
 {
     dnscore_init();
-    bytearray_input_stream_init_const(&bais, yatest_lorem_ipsum, sizeof(yatest_lorem_ipsum));
+    bytearray_input_stream_init_const(&bais, yatest_lorem_ipsum, sizeof(yatest_lorem_ipsum) - 1);
     pushback_input_stream_init(&pbis, &bais, pbs);
     buffer = (char *)yatest_malloc(buffer_size);
 }
@@ -78,6 +78,7 @@ static int pushback_test()
         return 1;
     }
 
+    memset(buffer, 0x59, buffer_size);
     ret = input_stream_read(&pbis, buffer, sizeof(hello_world) - 1);
     if(ret != sizeof(hello_world) - 1)
     {
@@ -109,6 +110,7 @@ static int pushback_test()
         return 1;
     }
 
+    memset(buffer, 0x5a, buffer_size);
     ret = input_stream_read(&pbis, buffer, sizeof(yatest_lorem_ipsum) + sizeof(hello_world) - 2);
     if(ret != sizeof(yatest_lorem_ipsum) + sizeof(hello_world) - 2)
     {

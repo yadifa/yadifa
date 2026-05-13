@@ -363,7 +363,7 @@ ya_result    dns_message_writer_dig(const dns_message_writer_t *dmw, const dns_m
                             }
                         }
 
-                        return DNS_ERROR_CODE(RCODE_FORMERR);
+                        return RCODE_ERROR_CODE(RCODE_FORMERR);
                     }
                     else
                     {

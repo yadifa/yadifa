@@ -859,6 +859,12 @@ static ya_result dns_message_process_answer_additionals(dns_message_t *mesg, uin
 #if DEBUG
                 log_debug("skipping AR type %{dnstype}", &tctr.rtype);
 #endif
+                if(dns_message_has_edns0(mesg))
+                {
+                    dns_message_set_status(mesg, FP_UNEXPECTED_RR_IN_QUERY);
+                    return UNPROCESSABLE_MESSAGE;
+                }
+
                 purd.packet_offset += ntohs(tctr.rdlen);
 
                 message_size = purd.packet_offset;
@@ -1569,11 +1575,19 @@ int dns_message_process_lenient(dns_message_t *mesg)
         return UNPROCESSABLE_MESSAGE;
     }
 
-    uint8_t *s = dns_message_process_copy_fqdn(mesg);
 
-    if(s == NULL)
+    if(dns_message_get_query_count_ne(mesg) != 0)
     {
-        return UNPROCESSABLE_MESSAGE;
+        uint8_t *s = dns_message_process_copy_fqdn(mesg);
+
+        if(s == NULL)
+        {
+            return UNPROCESSABLE_MESSAGE;
+        }
+    }
+    else
+    {
+        mesg->_canonised_fqdn[0] = 0;
     }
 
     /**

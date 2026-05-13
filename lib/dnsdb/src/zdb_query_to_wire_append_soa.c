@@ -309,23 +309,32 @@ uint16_t zdb_query_to_wire_append_soa_rrsig_nodata_nxdomain(zdb_query_to_wire_co
         soa_ttl = 0;
     }
 
-    dns_packet_writer_add_fqdn(&context->pw, zone->origin);
-    dns_packet_writer_add_u16(&context->pw, TYPE_SOA);
-    dns_packet_writer_add_u16(&context->pw, CLASS_IN);
-    dns_packet_writer_add_u32(&context->pw, htonl(soa_ttl));
-    uint16_t offset = context->pw.packet_offset;
-    context->pw.packet_offset += 2;
-    const uint8_t *rname = zdb_resource_record_data_rdata_const(soa_rr);
-    const uint8_t *mname = rname + dnsname_len(rname);
-    const uint8_t *data = mname + dnsname_len(mname);
-    dns_packet_writer_add_fqdn(&context->pw, rname);
-    dns_packet_writer_add_fqdn(&context->pw, mname);
-    dns_packet_writer_add_bytes(&context->pw, data, 20);
-    dns_packet_writer_set_u16(&context->pw, htons(context->pw.packet_offset - offset - 2), offset);
 
-    uint16_t count = zdb_query_to_wire_append_type_rrsigs(context, zone->apex, zone->origin, TYPE_SOA, soa_ttl) + 1;
+    if(dns_packet_writer_get_remaining_capacity(&context->pw) > (int32_t)(dnsname_len(zone->origin) + TYPE_CLASS_TTL_RDLEN_SIZE + zdb_resource_record_data_rdata_size(soa_rr)))
+    {
+        dns_packet_writer_add_fqdn(&context->pw, zone->origin);
+        dns_packet_writer_add_u16(&context->pw, TYPE_SOA);
+        dns_packet_writer_add_u16(&context->pw, CLASS_IN);
+        dns_packet_writer_add_u32(&context->pw, htonl(soa_ttl));
+        uint16_t offset = context->pw.packet_offset;
+        context->pw.packet_offset += 2;
+        const uint8_t *rname = zdb_resource_record_data_rdata_const(soa_rr);
+        const uint8_t *mname = rname + dnsname_len(rname);
+        const uint8_t *data = mname + dnsname_len(mname);
+        dns_packet_writer_add_fqdn(&context->pw, rname);
+        dns_packet_writer_add_fqdn(&context->pw, mname);
+        dns_packet_writer_add_bytes(&context->pw, data, 20);
+        dns_packet_writer_set_u16(&context->pw, htons(context->pw.packet_offset - offset - 2), offset);
 
-    return count;
+        uint16_t count = zdb_query_to_wire_append_type_rrsigs(context, zone->apex, zone->origin, TYPE_SOA, soa_ttl) + 1;
+
+        return count;
+    }
+    else
+    {
+        dns_message_set_truncated(context->mesg, true);
+        return 0;
+    }
 }
 
 

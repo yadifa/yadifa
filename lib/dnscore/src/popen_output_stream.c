@@ -179,7 +179,7 @@ int popen_output_stream_ex(output_stream_t *os, const char *command, popen_outpu
     formatln("popen_output_stream_ex(%s) (open null)", command);
 #endif
 
-    int fdnull = open_ex(DEV_NULL_PATH, O_WRONLY);
+    int fdnull = open_ex(DEV_NULL_PATH, O_WRONLY|O_CLOEXEC);
     if(fdnull < 0)
     {
         return ERRNO_ERROR;
@@ -196,12 +196,22 @@ int popen_output_stream_ex(output_stream_t *os, const char *command, popen_outpu
         return ret;
     }
 
+    if (FAIL(ret = fd_setcloseonexec(write_pipe[0])) ||
+        FAIL(ret = fd_setcloseonexec(write_pipe[1])))
+    {
+        close(write_pipe[0]);
+        close(write_pipe[1]);
+        close_ex(fdnull);
+        return ret;
+    }
+
+
 #if DEBUG
     formatln("popen_output_stream_ex(%s) (fork)", command);
 #endif
 
     pid_t child;
-    if((child = fork()) > 0)
+    if((child = vfork()) > 0)
     {
         // child + write_pipe[1]
 

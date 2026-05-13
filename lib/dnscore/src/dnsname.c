@@ -2851,7 +2851,10 @@ const uint8_t *dnsname_expand_compressed(const void *wire_base_, size_t wire_siz
     uint8_t       *buffer = output_fqdn;
     uint8_t *const buffer_limit = &buffer[output_fqdn_size]; // pointer to the byte that must never be reached
     const uint8_t *p = (const uint8_t *)compressed_fqdn;
+    uint32_t packet_offset = p - base;
     const uint8_t *ret_ptr;
+
+    /*    ------------------------------------------------------------    */
 
     if((p < base) || (p >= p_limit))
     {
@@ -2860,29 +2863,33 @@ const uint8_t *dnsname_expand_compressed(const void *wire_base_, size_t wire_siz
 
     for(;;)
     {
-        uint8_t len = *p++; // get the next byte (length)
-
-        if((len & 0xc0) == 0xc0) // test if it's a compressed code
+        uint8_t len = *p++;
+        const uint8_t len_type = len & 0xc0;
+        if(len_type != 0x00)
         {
-            ret_ptr = p + 1;
-
-            /* reposition the pointer */
-            uint32_t new_offset = len & 0x3f;
-            new_offset <<= 8;
-            new_offset |= *p;
-
-            p = &base[new_offset];
-
-            if(p < p_limit) // ensure we are not outside the message
+            if(len_type == 0xc0)
             {
-                break;
+                if(p >= p_limit)
+                {
+                    return NULL;
+                }
+
+                /* reposition the pointer */
+                uint32_t new_offset = len & 0x3f;
+                new_offset <<= 8;
+                new_offset |= *p;
+
+                const uint8_t *q = &base[new_offset];
+
+                if(q < p)
+                {
+                    p_limit = &base[packet_offset];
+                    packet_offset = p - base + 1;
+                    p = q;
+                    break;
+                }
             }
 
-            return NULL;
-        }
-
-        if((p + len >= p_limit) || (buffer + len + 1 >= buffer_limit))
-        {
             return NULL;
         }
 
@@ -2890,22 +2897,49 @@ const uint8_t *dnsname_expand_compressed(const void *wire_base_, size_t wire_siz
 
         if(len == 0)
         {
-            return p;
+            packet_offset = p - base;
+
+            size_t fqdn_len = buffer - output_fqdn;
+            if(fqdn_len < DOMAIN_LENGTH_MAX)
+            {
+                return p;
+            }
+            else
+            {
+                return NULL;
+            }
         }
 
-        uint8_t *label_limit = &buffer[len];
+        if(p + len >= p_limit)  // read limit
+        {
+            return NULL;
+        }
+
+        if(buffer + len >= buffer_limit) // write limit
+        {
+            return NULL;
+        }
+
+        const uint8_t *buffer_label_limit = &buffer[len];
+
         do
         {
             *buffer++ = tolower(*p++);
-        } while(buffer < label_limit);
+        }
+        while(buffer < buffer_label_limit);
     }
 
     for(;;)
     {
         uint8_t len = *p;
-
-        if((len & 0xc0) == 0xc0) /* EDF: better yet: cmp len, 192; jge  */
+        const uint8_t len_type = len & 0xc0;
+        if(len_type != 0x00)
         {
+            if(len_type != 0xc0)
+            {
+                return NULL;
+            }
+
             /* reposition the pointer */
             uint32_t new_offset = len & 0x3f;
             new_offset <<= 8;
@@ -2922,25 +2956,40 @@ const uint8_t *dnsname_expand_compressed(const void *wire_base_, size_t wire_siz
             return NULL;
         }
 
-        if((p + len >= p_limit) || (buffer + len + 1 >= buffer_limit))
-        {
-            return NULL;
-        }
-
         *buffer++ = len;
 
         if(len == 0)
         {
-            return ret_ptr;
+            size_t fqdn_len = buffer - output_fqdn;
+            if(fqdn_len < DOMAIN_LENGTH_MAX)
+            {
+                return p;
+            }
+            else
+            {
+                return NULL;
+            }
         }
 
         ++p;
 
-        uint8_t *label_limit = &buffer[len];
+        if(p + len >= p_limit)
+        {
+            return NULL;
+        }
+
+        if(buffer + len >= buffer_limit)
+        {
+            return NULL;
+        }
+
+        const uint8_t *buffer_label_limit = &buffer[len];
+
         do
         {
             *buffer++ = tolower(*p++);
-        } while(buffer < label_limit);
+        }
+        while(buffer < buffer_label_limit);
     }
 
     // never reached
@@ -2973,15 +3022,29 @@ const uint8_t *dnsname_skip_compressed(const void *wire_base_, size_t wire_size,
     for(;;)
     {
         uint8_t len = *p++;
-
-        if((len & 0xc0) == 0xc0)
+        const uint8_t len_type = len & 0xc0;
+        if(len_type != 0x00)
         {
-            return p + 1; // yes, read the purpose of the function
+            if((len_type == 0xc0) && (p < p_limit))
+            {
+                return p + 1; // yes, read the purpose of the function
+            }
+            else
+            {
+                return NULL; // broken
+            }
         }
 
         if(len == 0)
         {
-            return p;
+            if(p - (const uint8_t *)compressed_fqdn <= DOMAIN_LENGTH_MAX)
+            {
+                return p;
+            }
+            else
+            {
+                return NULL;
+            }
         }
 
         p += len;
